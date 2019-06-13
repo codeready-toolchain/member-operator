@@ -13,6 +13,9 @@ include ./make/format.mk
 include ./make/lint.mk
 include ./make/test.mk
 
+GO111MODULE?=on
+export GO111MODULE
+
 .PHONY: build
 ## Build the operator
 build: ./out/operator

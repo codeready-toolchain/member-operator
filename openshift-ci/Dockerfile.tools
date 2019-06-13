@@ -1,7 +1,7 @@
 FROM centos:7 as build-tools
 
-LABEL maintainer "Devtools <devtools@redhat.com>" \
-      author "Devtools <devtools@redhat.com>"
+LABEL maintainer "Devtools <devtools@redhat.com>"
+LABEL author "Devtools <devtools@redhat.com>"
 
 ENV LANG=en_US.utf8 \
     GOPATH=/tmp/go \

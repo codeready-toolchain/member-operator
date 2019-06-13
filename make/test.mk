@@ -7,7 +7,7 @@ include ./make/out.mk
 
 .PHONY: test
 ## Runs Go package tests and stops when the first one fails
-test: ./vendor
+test:
 	$(Q)go test -vet off ${V_FLAG} $(shell go list ./... | grep -v /test/e2e) -failfast
 
 .PHONY: test-coverage
@@ -16,10 +16,10 @@ test-coverage: ./out/cover.out
 
 .PHONY: test-coverage-html
 ## Gather (if needed) coverage information and show it in your browser
-test-coverage-html: ./vendor ./out/cover.out
+test-coverage-html: ./out/cover.out
 	$(Q)go tool cover -html=./out/cover.out
 
-./out/cover.out: ./vendor
+./out/cover.out:
 	$(Q)go test ${V_FLAG} -race $(shell go list ./... | grep -v /test/e2e) -failfast -coverprofile=cover.out -covermode=atomic -outputdir=./out
 
 

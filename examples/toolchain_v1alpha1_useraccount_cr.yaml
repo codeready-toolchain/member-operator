@@ -1,0 +1,17 @@
+apiVersion: toolchain.dev.openshift.com/v1alpha1
+kind: UserAccount
+metadata:
+  name: johnsmith #username
+spec:
+  nsLimit: admin
+  nsTemplateSet:
+    tierName: basic
+    namespaces:
+      - type: ide
+        revision: ab12ef
+      - type: cicd
+        revision: 34efcd
+      - type: stage
+        revision: cdef56
+status:
+  status: provisioned

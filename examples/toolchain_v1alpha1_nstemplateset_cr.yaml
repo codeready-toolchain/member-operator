@@ -1,0 +1,23 @@
+apiVersion: toolchain.dev.openshift.com/v1alpha1
+kind: NSTemplateSet
+metadata:
+  labels:
+    username: johnsmith
+spec:
+  tierName: basic
+  namespaces:
+    - type: ide
+      revision: ab12ef
+    - type: cicd
+      revision: 34efcd
+    - type: stage
+      revision: cdef56
+status:
+  status: provisioning
+  namespaces:
+    - name: johnsmith-ide-project
+      type: ide
+      status: ready
+    - name: johnsmith-cicd-project
+      type: cicd
+      status: ready

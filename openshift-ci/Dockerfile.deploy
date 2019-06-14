@@ -5,7 +5,7 @@ LABEL author "Devtools <devtools@redhat.com>"
 
 ENV LANG=en_US.utf8
 
-COPY out/operator /usr/local/bin/member-operator
+COPY operator /usr/local/bin/member-operator
 USER 10001
 
 ENTRYPOINT [ "/usr/local/bin/member-operator" ]

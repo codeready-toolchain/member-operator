@@ -39,3 +39,10 @@ rules:
   - member-operator
   verbs:
   - "update"
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - nstemplatesets
+  - useraccounts
+  verbs:
+  - '*'

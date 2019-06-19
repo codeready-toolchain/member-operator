@@ -19,6 +19,7 @@ require (
 	github.com/go-logr/logr v0.1.0 // indirect
 	github.com/go-logr/zapr v0.1.0 // indirect
 	github.com/golang/mock v1.2.0 // indirect
+	github.com/golangci/golangci-lint v1.17.1 // indirect
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect
 	github.com/gophercloud/gophercloud v0.0.0-20190318015731-ff9851476e98 // indirect
 	github.com/gorilla/websocket v0.0.0-20170926233335-4201258b820c // indirect

@@ -40,16 +40,14 @@ rules:
   verbs:
   - "update"
 - apiGroups:
-    - core.kubefed.k8s.io
+  - core.kubefed.k8s.io
   resources:
-    - KubeFedCluster
+  - KubeFedCluster
   verbs:
-    - "*"
+  - "*"
 - apiGroups:
-    - ""
+  - ""
   resources:
-    - nodes
+  - nodes
   verbs:
-    - list
-
-
+  - list

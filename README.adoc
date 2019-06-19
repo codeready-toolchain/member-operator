@@ -6,3 +6,59 @@ This is the CodeReady Toolchain Member Operator repository. It contains the Open
 
 This repository uses https://github.com/golang/go/wiki/Modules[Go modules]. You may need to `export GO111MODULE=on` to turn modules support "on".
 
+== Development
+
+To run this operator locally you need to have at least one Minishift profile started:
+
+```bash
+$ minishift start --profile member
+```
+
+Then you can run the operator locally with the help of `operator-sdk`:
+
+```bash
+$ make local
+```
+
+That Makefile target takes care of additional several steps which can be executed separately:
+
+* logging as system:admin user: `$ make login-as-admin`
+* creating local test namespace: `$ make create-namespace`
+* deploy CRDs: `$ make deploy-crd`
+* building the project: `$ make build`
+* deploying ClusterRole/ClusterRoleBinding and creating ServiceAccount: `$ make deploy-rbac`
+
+There are a few more targets that you can find useful:
+
+* to login as system:admin user and enter the local test namespace: `$ make use-namespace`
+* to remove the local test namespace: `$ make clean-namespace`
+* to remove & create the local test namespace, and create ClusterRole/ClusterRoleBinding and ServiceAccount inside of the namespace: `$ make reset-namespace`
+
+
+=== Adding cluster to SaaS
+
+The CodeReady Toolchain architecture contains two types of clusters `host` and `member`.
+To connect these two clusters together it is necessary to run a script link:scripts/add-cluster.sh[] that takes two arguments:
+
+1. type of the cluster to be added
+2. name of the cluster to be added
+
+The script is working with Minishift profiles and expects that there are two clusters (profiles) called `host` and `member`.
+To be able to run the script, you need to have both clusters prepared, which means:
+
+- created CRDs
+- created ServiceAccount with lusterRole/ClusterRoleBinding
+
+When the script is executed with parameters `add-cluster.sh member member-cluster` then it does these steps:
+
+1. goes to the `member` profile
+2. takes a secret of the SA (from the `member`)
+3. takes API endpoint of the `member` cluster from Kube config
+4. goes to `host` profile
+5. creates a secret with the SA token taken from the `member`
+6. creates `KubeFedCluster` CR representing the added `member`
+
+There are also two Makefile targets available:
+
+*  `$ make add-member-to-host` that executes `add-cluster.sh member member-cluster`
+*  `$ make add-host-to-member` that executes `add-cluster.sh host host-cluster`

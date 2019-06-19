@@ -16,7 +16,7 @@ LOCAL_TEST_NAMESPACE ?= "test-saas-control-plane"
 
 .PHONY: local
 ## Run Operator locally
-local: use-namespace deploy-rbac build deploy-crd
+local: login-as-admin create-namespace deploy-rbac build deploy-crd
 	$(Q)-oc new-project $(LOCAL_TEST_NAMESPACE) || true
 	$(Q)OPERATOR_NAMESPACE=$(LOCAL_TEST_NAMESPACE) operator-sdk up local --namespace=$(APP_NAMESPACE) --verbose
 

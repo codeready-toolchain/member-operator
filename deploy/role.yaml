@@ -51,3 +51,10 @@ rules:
   - nodes
   verbs:
   - list
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - nstemplatesets
+  - useraccounts
+  verbs:
+  - '*'

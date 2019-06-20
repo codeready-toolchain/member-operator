@@ -13,6 +13,7 @@ TAG?=$(GIT_COMMIT_ID_SHORT)-$(TIMESTAMP)
 # to watch all namespaces, keep namespace empty
 APP_NAMESPACE ?= ""
 LOCAL_TEST_NAMESPACE ?= "toolchain-member-operator"
+ADD_CLUSTER_SCRIPT_PATH?=../toolchain/scripts/add-cluster.sh
 
 .PHONY: up-local
 ## Run Operator locally
@@ -65,13 +66,13 @@ deploy-crd:
 	$(Q)-oc apply -f deploy/crds/core_v1beta1_kubefedcluster.yaml
 
 .PHONY: add-member-to-host
-## Run script ./scripts/add-cluster.sh member member-cluster
+## Run script add-cluster.sh member member-cluster
 add-member-to-host:
-	@./scripts/add-cluster.sh member member-cluster
+	@${ADD_CLUSTER_SCRIPT_PATH} member member-cluster
 
 .PHONY: add-host-to-member
-## Run script ./scripts/add-cluster.sh host host-cluster
+## Run script add-cluster.sh host host-cluster
 add-host-to-member:
-	@./scripts/add-cluster.sh host host-cluster
+	@${ADD_CLUSTER_SCRIPT_PATH} host host-cluster
 
 endif

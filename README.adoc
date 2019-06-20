@@ -17,7 +17,7 @@ $ minishift start --profile member
 Then you can run the operator locally with the help of `operator-sdk`:
 
 ```bash
-$ make local
+$ make up-local
 ```
 
 That Makefile target takes care of additional several steps which can be executed separately:

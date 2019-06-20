@@ -14,7 +14,7 @@ TAG?=$(GIT_COMMIT_ID_SHORT)-$(TIMESTAMP)
 APP_NAMESPACE ?= ""
 LOCAL_TEST_NAMESPACE ?= "test-saas-control-plane"
 
-.PHONY: local
+.PHONY: up-local
 ## Run Operator locally
 local: login-as-admin create-namespace deploy-rbac build deploy-crd
 	$(Q)-oc new-project $(LOCAL_TEST_NAMESPACE) || true

@@ -35,6 +35,8 @@ kind: KubeFedCluster
 metadata:
   name: ${JOINING_CLUSTER_NAME}
   namespace: ${OPERATOR_NS}
+  labels:
+    type: ${JOINING_CLUSTER_TYPE}
 spec:
   apiEndpoint: ${API_ENDPOINT}
   caBundle: ${SA_CA_CRT}

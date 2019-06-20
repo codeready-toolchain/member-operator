@@ -2,10 +2,16 @@ package useraccount
 
 import (
 	"context"
+	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	userv1 "github.com/openshift/api/user/v1"
+	errs "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -64,8 +70,8 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	reqLogger.Info("Reconciling UserAccount")
 
 	// Fetch the UserAccount instance
-	instance := &toolchainv1alpha1.UserAccount{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	userAcc := &toolchainv1alpha1.UserAccount{}
+	err := r.client.Get(context.TODO(), request.NamespacedName, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -77,5 +83,97 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
+	var user *userv1.User
+	if user, err = r.ensureUser(userAcc); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	var identity *userv1.Identity
+	if identity, err = r.ensureIdentity(userAcc); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err := r.ensureMapping(user, identity); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileUserAccount) ensureUser(userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, error) {
+	user := &userv1.User{}
+	if err := r.client.Get(context.Background(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("creating a new user", "name", userAcc.Name)
+			user = &userv1.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: userAcc.Name,
+				},
+			}
+			if err := r.client.Create(context.Background(), user); err != nil {
+				return nil, errs.Wrapf(err, "failed to create user '%s'", userAcc.Name)
+			}
+			log.Info("user created successfully", "name", userAcc.Name)
+			return user, nil
+		}
+		return nil, errs.Wrapf(err, "failed to get user '%s'", userAcc.Name)
+	}
+	log.Info("user already exists", "name", userAcc.Name)
+	return user, nil
+}
+
+func (r *ReconcileUserAccount) ensureIdentity(userAcc *toolchainv1alpha1.UserAccount) (*userv1.Identity, error) {
+	name := fmt.Sprintf("%s:%s", getIdentityProviderName(), userAcc.Spec.UserID)
+	identity := &userv1.Identity{}
+	if err := r.client.Get(context.Background(), types.NamespacedName{Name: name}, identity); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("creating a new identity", "name", name)
+			identity = &userv1.Identity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				ProviderName:     getIdentityProviderName(),
+				ProviderUserName: userAcc.Spec.UserID,
+			}
+			if err := r.client.Create(context.Background(), identity); err != nil {
+				return nil, errs.Wrapf(err, "failed to create identity '%s'", name)
+			}
+			log.Info("identity created successfully", "name", name)
+			return identity, nil
+		}
+		return nil, errs.Wrapf(err, "failed to get identity '%s'", name)
+	}
+	log.Info("identity already exists", "name", name)
+	return identity, nil
+}
+
+func (r *ReconcileUserAccount) ensureMapping(user *userv1.User, identity *userv1.Identity) error {
+	name := identity.Name
+	mapping := &userv1.UserIdentityMapping{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		User: corev1.ObjectReference{
+			Name: user.Name,
+			UID:  user.UID,
+		},
+		Identity: corev1.ObjectReference{
+			Name: identity.Name,
+			UID:  identity.UID,
+		},
+	}
+	if err := r.client.Create(context.Background(), mapping); err != nil {
+		if errors.IsAlreadyExists(err) {
+			log.Info("user-identity mapping already exists", "name", name)
+			return nil
+		}
+		return errs.Wrapf(err, "failed to create user-identity mapping '%s'", name)
+	}
+	log.Info("user-identity mapping created successfully", "name", name)
+	return nil
+}
+
+// TODO check how to get IdP name
+func getIdentityProviderName() string {
+	return "gh_provider"
 }

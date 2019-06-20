@@ -4,20 +4,24 @@ require (
 	contrib.go.opencensus.io/exporter/ocagent v0.4.9 // indirect
 	github.com/Azure/go-autorest v11.5.2+incompatible // indirect
 	github.com/appscode/jsonpatch v0.0.0-20190108182946-7c0e3b262f30 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190618152925-8dbd7410a053
+	github.com/codeready-toolchain/api v0.0.0-20190620055220-0cc061e96781
 	github.com/coreos/prometheus-operator v0.26.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/go-logr/logr v0.1.0 // indirect
 	github.com/go-logr/zapr v0.1.0 // indirect
+	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/golang/mock v1.2.0 // indirect
 	github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c // indirect
+	github.com/googleapis/gnostic v0.3.0 // indirect
 	github.com/gophercloud/gophercloud v0.0.0-20190318015731-ff9851476e98 // indirect
 	github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.8.5 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
+	github.com/openshift/api v3.9.0+incompatible
 	github.com/operator-framework/operator-sdk v0.8.2-0.20190522220659-031d71ef8154
 	github.com/pborman/uuid v0.0.0-20180906182336-adf5a7427709 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
+	github.com/pkg/errors v0.8.1
 	github.com/spf13/pflag v1.0.3
 	go.opencensus.io v0.19.2 // indirect
 	go.uber.org/atomic v1.3.2 // indirect

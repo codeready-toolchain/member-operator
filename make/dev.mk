@@ -61,7 +61,7 @@ deploy-rbac:
 ## Deploy CRD
 deploy-crd:
 	$(Q)-oc apply -f deploy/crds/toolchain_v1alpha1_nstemplateset.yaml
-	$(Q)-oc apply -f deploy/crds/toolchain_v1alpha1_useraccount_crd.yaml
+	$(Q)-oc apply -f deploy/crds/toolchain_v1alpha1_useraccount.yaml
 	$(Q)-oc apply -f deploy/crds/core_v1beta1_kubefedcluster.yaml
 
 .PHONY: add-member-to-host

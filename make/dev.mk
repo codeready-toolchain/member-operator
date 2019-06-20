@@ -12,7 +12,7 @@ TAG?=$(GIT_COMMIT_ID_SHORT)-$(TIMESTAMP)
 
 # to watch all namespaces, keep namespace empty
 APP_NAMESPACE ?= ""
-LOCAL_TEST_NAMESPACE ?= "test-saas-control-plane"
+LOCAL_TEST_NAMESPACE ?= "toolchain-member-operator"
 
 .PHONY: up-local
 ## Run Operator locally

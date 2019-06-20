@@ -5,7 +5,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: member-operator
-  namespace: test-saas-control-plane
+  namespace: toolchain-member-operator
 roleRef:
   kind: ClusterRole
   name: member-operator

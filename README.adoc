@@ -47,7 +47,7 @@ The script is working with Minishift profiles and expects that there are two clu
 To be able to run the script, you need to have both clusters prepared, which means:
 
 - created CRDs
-- created ServiceAccount with lusterRole/ClusterRoleBinding
+- created ServiceAccount with ClusterRole/ClusterRoleBinding
 
 When the script is executed with parameters `add-cluster.sh member member-cluster` then it does these steps:
 

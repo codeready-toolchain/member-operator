@@ -14,20 +14,22 @@ spec:
     spec:
       serviceAccountName: member-operator
       containers:
-        - name: member-operator
-          # Replace this with the built image name
-          image: REPLACE_IMAGE
-          command:
-          - member-operator
-          imagePullPolicy: Always
-          env:
-            - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: OPERATOR_NAME
-              value: "member-operator"
+      - name: member-operator
+        # Replace this with the built image name
+        image: REPLACE_IMAGE
+        command:
+        - member-operator
+        imagePullPolicy: Always
+        env:
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: WATCH_NAMESPACE
+          value: ""
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: "member-operator"

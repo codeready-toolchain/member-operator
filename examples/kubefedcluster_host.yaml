@@ -1,0 +1,12 @@
+apiVersion: core.kubefed.k8s.io/v1beta1
+kind: KubeFedCluster
+metadata:
+  name: dsaas
+  namespace: toolchain-member-operator
+  labels:
+    type: host
+spec:
+  apiEndpoint: https://192.168.42.156:8443
+  caBundle: LS0tLS1CRUdJTiBDR...1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+  secretRef:
+    name: dsaas-zpgg7

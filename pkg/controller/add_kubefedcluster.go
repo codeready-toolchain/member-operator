@@ -2,19 +2,19 @@ package controller
 
 import (
 	"fmt"
-	"k8s.io/klog"
 	"os"
+
+	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"k8s.io/klog"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/kubefed/pkg/controller/kubefedcluster"
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-const varOperatorNamespace = "OPERATOR_NAMESPACE"
-
 func registerKubeFedClusterController(mgr manager.Manager, stopChan <-chan struct{}) error {
-	ns, found := os.LookupEnv(varOperatorNamespace)
+	ns, found := os.LookupEnv(config.OperatorNamespace)
 	if !found {
-		return fmt.Errorf("%s must be set", varOperatorNamespace)
+		return fmt.Errorf("%s must be set", config.OperatorNamespace)
 	}
 	controllerConfig := &util.ControllerConfig{
 		KubeConfig:              mgr.GetConfig(),

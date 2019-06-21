@@ -2,6 +2,7 @@ apiVersion: toolchain.dev.openshift.com/v1alpha1
 kind: UserAccount
 metadata:
   name: johnsmith #username
+  namespace: toolchain-member-operator
 spec:
   userID: 1a03ecac-7c0b-44fc-b66d-12dd7fb21c40
   nsLimit: admin

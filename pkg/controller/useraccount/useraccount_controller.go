@@ -105,7 +105,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	if _, created, err = r.ensureMapping(userAcc, user, identity); err != nil || created == true {
+	if created, err = r.ensureMapping(userAcc, user, identity); err != nil || created == true {
 		return reconcile.Result{}, err
 	}
 
@@ -155,21 +155,22 @@ func (r *ReconcileUserAccount) ensureIdentity(userAcc *toolchainv1alpha1.UserAcc
 	return identity, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureMapping(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, identity *userv1.Identity) (*userv1.UserIdentityMapping, bool, error) {
-	name := identity.Name
+func (r *ReconcileUserAccount) ensureMapping(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, identity *userv1.Identity) (bool, error) {
 	mapping := newMapping(user, identity)
+	name := mapping.Name
 	if err := controllerutil.SetControllerReference(userAcc, mapping, r.scheme); err != nil {
-		return nil, false, err
+		return false, err
 	}
+
 	if err := r.client.Create(context.TODO(), mapping); err != nil {
 		if errors.IsAlreadyExists(err) {
 			log.Info("user-identity mapping already exists", "name", name)
-			return mapping, false, nil
+			return false, nil
 		}
-		return nil, false, errs.Wrapf(err, "failed to create user-identity mapping '%s'", name)
+		return false, errs.Wrapf(err, "failed to create user-identity mapping '%s'", name)
 	}
 	log.Info("user-identity mapping created successfully", "name", name)
-	return mapping, true, nil
+	return true, nil
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {

@@ -19,7 +19,8 @@ func TestEnsureUser(t *testing.T) {
 	username := "johnsmith"
 	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
 	s := scheme.Scheme
-	apis.AddToScheme(s)
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
 
 	t.Run("create_user", func(t *testing.T) {
 		userAcc := newUserAccount(username, userID)
@@ -58,7 +59,8 @@ func TestEnsureIdentity(t *testing.T) {
 	username := "johnsmith"
 	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
 	s := scheme.Scheme
-	apis.AddToScheme(s)
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
 
 	t.Run("create_identity", func(t *testing.T) {
 		userAcc := newUserAccount(username, userID)

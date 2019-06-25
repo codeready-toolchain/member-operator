@@ -96,16 +96,16 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	var created bool
 	var user *userv1.User
-	if user, created, err = r.ensureUser(userAcc); err != nil || created == true {
+	if user, created, err = r.ensureUser(userAcc); err != nil || created {
 		return reconcile.Result{}, err
 	}
 
 	var identity *userv1.Identity
-	if identity, created, err = r.ensureIdentity(userAcc); err != nil || created == true {
+	if identity, created, err = r.ensureIdentity(userAcc); err != nil || created {
 		return reconcile.Result{}, err
 	}
 
-	if created, err = r.ensureMapping(userAcc, user, identity); err != nil || created == true {
+	if created, err = r.ensureMapping(userAcc, user, identity); err != nil || created {
 		return reconcile.Result{}, err
 	}
 

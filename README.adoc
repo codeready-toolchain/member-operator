@@ -1,5 +1,9 @@
 = Member Operator
 
+image:https://goreportcard.com/badge/github.com/codeready-toolchain/member-operator[Go Report Card, link="https://goreportcard.com/report/github.com/codeready-toolchain/member-operator"]
+image:https://godoc.org/github.com/codeready-toolchain/member-operator?status.png[GoDoc,link="https://godoc.org/github.com/codeready-toolchain/member-operator"]
+image:https://codecov.io/gh/codeready-toolchain/member-operator/branch/master/graph/badge.svg[Codecov.io,link="https://codecov.io/gh/codeready-toolchain/member-operator"]
+
 This is the CodeReady Toolchain Member Operator repository. It contains the OpenShift Operator that is deployed on the "member" cluster in the SaaS.
 
 == Build

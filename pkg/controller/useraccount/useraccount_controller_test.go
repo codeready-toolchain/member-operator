@@ -3,6 +3,8 @@ package useraccount
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/stretchr/testify/assert"
@@ -93,7 +95,8 @@ func TestEnsureMapping(t *testing.T) {
 	username := "johnsmith"
 	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
 	s := scheme.Scheme
-	apis.AddToScheme(s)
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
 
 	t.Run("create_mapping_true", func(t *testing.T) {
 		userAcc := newUserAccount(username, userID)

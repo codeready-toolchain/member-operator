@@ -11,7 +11,6 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-
 func StartKubeFedClusterControllers(mgr manager.Manager, stopChan <-chan struct{}) error {
 	if err := startHealthCheckController(mgr, stopChan); err != nil {
 		return err

@@ -99,7 +99,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	var created bool
 	var user *userv1.User
 	if user, created, err = r.ensureUser(userAcc); err != nil {
-		r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
+		_ = r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
 		return reconcile.Result{}, err
 	} else if created {
 		return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
@@ -107,14 +107,14 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	var identity *userv1.Identity
 	if identity, created, err = r.ensureIdentity(userAcc); err != nil {
-		r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
+		_ = r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
 		return reconcile.Result{}, err
 	} else if created {
 		return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
 	}
 
 	if created, err = r.ensureMapping(userAcc, user, identity); err != nil {
-		r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
+		_ = r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
 		return reconcile.Result{}, err
 	} else if created {
 		return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")

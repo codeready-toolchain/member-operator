@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain/pkg/controller"
 	"k8s.io/klog"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-const varOperatorNamespace = "OPERATOR_NAMESPACE"
 
 func StartKubeFedClusterControllers(mgr manager.Manager, stopChan <-chan struct{}) error {
 	if err := startHealthCheckController(mgr, stopChan); err != nil {
@@ -23,9 +23,9 @@ func StartKubeFedClusterControllers(mgr manager.Manager, stopChan <-chan struct{
 }
 
 func startHealthCheckController(mgr manager.Manager, stopChan <-chan struct{}) error {
-	ns, found := os.LookupEnv(varOperatorNamespace)
+	ns, found := os.LookupEnv(config.OperatorNamespace)
 	if !found {
-		return fmt.Errorf("%s must be set", varOperatorNamespace)
+		return fmt.Errorf("%s must be set", config.OperatorNamespace)
 	}
 	controllerConfig := &util.ControllerConfig{
 		KubeConfig:              mgr.GetConfig(),

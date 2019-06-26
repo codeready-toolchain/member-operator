@@ -1,4 +1,4 @@
-GOFORMAT_FILES := $(shell find  . -name '*.go')
+GOFORMAT_FILES := $(shell find  . -name '*.go' | grep -vEf ./gofmt_exclude)
 
 .PHONY: check-go-format
 ## Exits with an error if there are files that do not match formatting defined by gofmt

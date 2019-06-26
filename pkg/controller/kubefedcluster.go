@@ -3,7 +3,7 @@ package controller
 import (
 	"fmt"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
-	"github.com/codeready-toolchain/toolchain/pkg/controller"
+	"github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"k8s.io/klog"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/manager"

@@ -5,7 +5,7 @@ require (
 	contrib.go.opencensus.io/exporter/ocagent v0.4.9 // indirect
 	github.com/Azure/go-autorest v11.5.2+incompatible // indirect
 	github.com/codeready-toolchain/api v0.0.0-20190626053852-d90a3c11308b
-	github.com/codeready-toolchain/toolchain v0.0.0-20190625083522-155ce61df4d9
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190626080028-fea973f4a1e4
 	github.com/coreos/prometheus-operator v0.26.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/go-openapi/spec v0.19.2 // indirect
@@ -42,7 +42,6 @@ require (
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
 
-// Pinned to kubernetes-1.13.1
 replace (
 	k8s.io/api => k8s.io/api v0.0.0-20181213150558-05914d821849
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20181213153335-0fe22c71c476

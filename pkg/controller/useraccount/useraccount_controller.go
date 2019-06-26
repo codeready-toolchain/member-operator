@@ -184,7 +184,7 @@ func (r *ReconcileUserAccount) ensureMapping(userAcc *toolchainv1alpha1.UserAcco
 	return true, nil
 }
 
-// updateStatus updates user account status to given status with errMsg. Pass status equal to blank to unchange current status.
+// updateStatus updates user account status to given status with errMsg.
 func (r *ReconcileUserAccount) updateStatus(userAcc *toolchainv1alpha1.UserAccount, status, errMsg string) error {
 	userAcc.Status = toolchainv1alpha1.UserAccountStatus{
 		Status: status,

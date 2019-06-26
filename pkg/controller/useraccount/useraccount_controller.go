@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/operator-framework/operator-sdk/pkg/predicate"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	userv1 "github.com/openshift/api/user/v1"
@@ -42,7 +44,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource UserAccount
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
 	if err != nil {
 		return err
 	}
@@ -93,23 +95,33 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 		return reconcile.Result{}, err
 	}
+	fmt.Println("VN2: u.s=", userAcc.Status)
 
 	var created bool
 	var user *userv1.User
-	if user, created, err = r.ensureUser(userAcc); err != nil || created {
+	if user, created, err = r.ensureUser(userAcc); err != nil {
+		r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
 		return reconcile.Result{}, err
+	} else if created {
+		return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
 	}
 
 	var identity *userv1.Identity
-	if identity, created, err = r.ensureIdentity(userAcc); err != nil || created {
+	if identity, created, err = r.ensureIdentity(userAcc); err != nil {
+		r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
 		return reconcile.Result{}, err
+	} else if created {
+		return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
 	}
 
-	if created, err = r.ensureMapping(userAcc, user, identity); err != nil || created {
+	if created, err = r.ensureMapping(userAcc, user, identity); err != nil {
+		r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error())
 		return reconcile.Result{}, err
+	} else if created {
+		return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
 	}
 
-	return reconcile.Result{}, nil
+	return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioned, "")
 }
 
 func (r *ReconcileUserAccount) ensureUser(userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
@@ -171,6 +183,19 @@ func (r *ReconcileUserAccount) ensureMapping(userAcc *toolchainv1alpha1.UserAcco
 	}
 	log.Info("user-identity mapping created successfully", "name", name)
 	return true, nil
+}
+
+// updateStatus updates user account status to given status with errMsg. Pass status equal to blank to unchange current status.
+func (r *ReconcileUserAccount) updateStatus(userAcc *toolchainv1alpha1.UserAccount, status, errMsg string) error {
+	userAcc.Status = toolchainv1alpha1.UserAccountStatus{
+		Status: status,
+		Error:  errMsg,
+	}
+	if err := r.client.Status().Update(context.TODO(), userAcc); err != nil {
+		log.Error(err, "status update failed")
+		return err
+	}
+	return nil
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {

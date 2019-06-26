@@ -15,5 +15,3 @@ spec:
         revision: 34efcd
       - type: stage
         revision: cdef56
-status:
-  status: provisioned

@@ -132,6 +132,45 @@ func TestEnsureMapping(t *testing.T) {
 	})
 }
 
+func TestUpdateStatus(t *testing.T) {
+	logf.SetLogger(logf.ZapLogger(true))
+	username := "johnsmith"
+	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
+	t.Run("status_ok", func(t *testing.T) {
+		userAcc := newUserAccount(username, userID)
+		client := fake.NewFakeClient(userAcc)
+		reconciler := &ReconcileUserAccount{
+			client: client,
+			scheme: s,
+		}
+
+		err := reconciler.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
+
+		assert.NoError(t, err)
+		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, userAcc.Status.Status)
+		assert.Equal(t, "", userAcc.Status.Error)
+	})
+
+	t.Run("status_error", func(t *testing.T) {
+		userAcc := newUserAccount(username, userID)
+		client := fake.NewFakeClient(userAcc)
+		reconciler := &ReconcileUserAccount{
+			client: client,
+			scheme: s,
+		}
+
+		err := reconciler.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "some error")
+
+		assert.NoError(t, err)
+		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, userAcc.Status.Status)
+		assert.Equal(t, "some error", userAcc.Status.Error)
+	})
+}
+
 func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{

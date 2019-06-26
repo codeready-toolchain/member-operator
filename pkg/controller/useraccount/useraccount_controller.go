@@ -95,7 +95,6 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 		return reconcile.Result{}, err
 	}
-	fmt.Println("VN2: u.s=", userAcc.Status)
 
 	var created bool
 	var user *userv1.User

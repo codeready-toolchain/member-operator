@@ -97,30 +97,31 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
+	var created bool
 	var user *userv1.User
-	if user, err = r.ensureUser(reqLogger, userAcc); err != nil {
+	if user, created, err = r.ensureUser(reqLogger, userAcc); err != nil || created {
 		return reconcile.Result{}, err
 	}
 
 	var identity *userv1.Identity
-	if identity, err = r.ensureIdentity(reqLogger, userAcc); err != nil {
+	if identity, created, err = r.ensureIdentity(reqLogger, userAcc); err != nil || created {
 		return reconcile.Result{}, err
 	}
 
-	if err = r.ensureMapping(reqLogger, userAcc, user, identity); err != nil {
+	if created, err = r.ensureMapping(reqLogger, userAcc, user, identity); err != nil || created {
 		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioned, "")
 }
 
-func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, error) {
+func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
 	user := &userv1.User{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new user", "name", userAcc.Name)
 			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error()); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			user = newUser(userAcc)
 			err = controllerutil.SetControllerReference(userAcc, user, r.scheme)
@@ -128,25 +129,25 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 				err = r.client.Create(context.TODO(), user)
 			}
 			if err != nil {
-				return nil, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user '%s'", userAcc.Name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user '%s'", userAcc.Name)
 			}
 			logger.Info("user created successfully", "name", userAcc.Name)
-			return user, nil
+			return user, true, nil
 		}
-		return nil, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get user '%s'", userAcc.Name)
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get user '%s'", userAcc.Name)
 	}
 	logger.Info("user already exists", "name", userAcc.Name)
-	return user, nil
+	return user, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.Identity, error) {
+func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.Identity, bool, error) {
 	name := getIdentityName(userAcc)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new identity", "name", name)
 			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error()); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			identity = newIdentity(userAcc)
 			err = controllerutil.SetControllerReference(userAcc, identity, r.scheme)
@@ -154,33 +155,33 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 				err = r.client.Create(context.TODO(), identity)
 			}
 			if err != nil {
-				return nil, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create identity '%s'", name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create identity '%s'", name)
 			}
 			logger.Info("identity created successfully", "name", name)
-			return identity, nil
+			return identity, true, nil
 		}
-		return nil, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get identity '%s'", name)
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get identity '%s'", name)
 	}
 	logger.Info("identity already exists", "name", name)
-	return identity, nil
+	return identity, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureMapping(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, identity *userv1.Identity) error {
+func (r *ReconcileUserAccount) ensureMapping(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, identity *userv1.Identity) (bool, error) {
 	mapping := newMapping(user, identity)
 	name := mapping.Name
 	if err := controllerutil.SetControllerReference(userAcc, mapping, r.scheme); err != nil {
-		return err
+		return false, err
 	}
 
 	if err := r.client.Create(context.TODO(), mapping); err != nil {
 		if errors.IsAlreadyExists(err) {
 			logger.Info("user-identity mapping already exists", "name", name)
-			return nil
+			return false, nil
 		}
-		return r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user-identity mapping '%s'", name)
+		return false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user-identity mapping '%s'", name)
 	}
 	logger.Info("user-identity mapping created successfully", "name", name)
-	return r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
+	return true, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
 }
 
 // updateStatus updates user account status to given status with errMsg.
@@ -200,7 +201,7 @@ func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, use
 	if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error()); err != nil {
 		logger.Error(err, "status update failed")
 	}
-	return errs.Wrapf(err, format, args)
+	return errs.Wrapf(err, format, args...)
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {

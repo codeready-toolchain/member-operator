@@ -120,15 +120,14 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new user", "name", userAcc.Name)
-			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error()); err != nil {
+			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
 				return nil, false, err
 			}
 			user = newUser(userAcc)
-			err = controllerutil.SetControllerReference(userAcc, user, r.scheme)
-			if err == nil {
-				err = r.client.Create(context.TODO(), user)
+			if err := controllerutil.SetControllerReference(userAcc, user, r.scheme); err != nil {
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to set controller reference for user '%s'", userAcc.Name)
 			}
-			if err != nil {
+			if err := r.client.Create(context.TODO(), user); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user '%s'", userAcc.Name)
 			}
 			logger.Info("user created successfully", "name", userAcc.Name)
@@ -146,15 +145,14 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new identity", "name", name)
-			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error()); err != nil {
+			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
 				return nil, false, err
 			}
 			identity = newIdentity(userAcc)
-			err = controllerutil.SetControllerReference(userAcc, identity, r.scheme)
-			if err == nil {
-				err = r.client.Create(context.TODO(), identity)
+			if err := controllerutil.SetControllerReference(userAcc, identity, r.scheme); err != nil {
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to set controller reference for identity '%s'", name)
 			}
-			if err != nil {
+			if err := r.client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create identity '%s'", name)
 			}
 			logger.Info("identity created successfully", "name", name)

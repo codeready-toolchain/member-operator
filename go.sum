@@ -44,6 +44,8 @@ github.com/codeready-toolchain/toolchain-common v0.0.0-20190626085744-a48a0f672d
 github.com/codeready-toolchain/toolchain-common v0.0.0-20190626085744-a48a0f672dc4/go.mod h1:lrW2V5UFR39oJLeIlMzeZ359KzNZ8a8KeMy4q6cHdow=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20190627065706-303c31d6f509 h1:ubwQoA2XNUvpe5Chm+uDxkl5+OAjBpf9n9qRlNQFSNo=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20190627065706-303c31d6f509/go.mod h1:ugjpT4MV5lyYg3OpTfEvXrx/7ns2US4NgQPCeMT/ibA=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20190628103825-823b9290aa31 h1:HjhECGCLedxUu/JUjN50EiHYm6g7V71Wpcodh1U/Aa8=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20190628103825-823b9290aa31/go.mod h1:ugjpT4MV5lyYg3OpTfEvXrx/7ns2US4NgQPCeMT/ibA=
 github.com/coreos/etcd v3.3.10+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
 github.com/coreos/go-etcd v2.0.0+incompatible/go.mod h1:Jez6KQU2B/sWsbdaef3ED8NzMklzPG4d5KIOhIy30Tk=
 github.com/coreos/go-semver v0.2.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=

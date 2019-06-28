@@ -5,7 +5,7 @@ require (
 	contrib.go.opencensus.io/exporter/ocagent v0.4.9 // indirect
 	github.com/Azure/go-autorest v11.5.2+incompatible // indirect
 	github.com/codeready-toolchain/api v0.0.0-20190627075133-9029b2a2b9f6
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190627065706-303c31d6f509
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190628103825-823b9290aa31
 	github.com/coreos/prometheus-operator v0.26.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/go-openapi/spec v0.19.2 // indirect

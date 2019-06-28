@@ -33,7 +33,7 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileUserAccountStatus{
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),
-		getHostCluster: cluster.GetFirstFedCluster,
+		getHostCluster: cluster.GetHostCluster,
 	}
 }
 

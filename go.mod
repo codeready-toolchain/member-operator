@@ -4,10 +4,11 @@ require (
 	cloud.google.com/go v0.40.0 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.4.9 // indirect
 	github.com/Azure/go-autorest v11.5.2+incompatible // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190627075133-9029b2a2b9f6
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190628103825-823b9290aa31
+	github.com/codeready-toolchain/api v0.0.0-20190627153646-25d21e70de5d
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190628135548-152ae535f870
 	github.com/coreos/prometheus-operator v0.26.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
+	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
 	github.com/gophercloud/gophercloud v0.0.0-20190318015731-ff9851476e98 // indirect

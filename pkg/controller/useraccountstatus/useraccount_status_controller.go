@@ -3,10 +3,9 @@ package useraccountstatus
 import (
 	"context"
 	"fmt"
+	"github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -47,20 +46,12 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource UserAccountStatus
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, GenerationNotChangedPredicate{})
+	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, predicate.OnlyUpdateWhenGenerationNotChanged{})
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-type GenerationNotChangedPredicate struct {
-	predicate.GenerationChangedPredicate
-}
-
-func (p GenerationNotChangedPredicate) Update(e event.UpdateEvent) bool {
-	return p.GenerationChangedPredicate.Update(e)
 }
 
 // blank assignment to verify that ReconcileUserAccountStatus implements reconcile.Reconciler
@@ -120,10 +111,10 @@ func (r *ReconcileUserAccountStatus) updateMasterUserRecord(userAcc *toolchainv1
 		return err
 	}
 	for i, account := range userRecord.Spec.UserAccounts {
-		if account.TargetCluster == fedCluster.LocalName {
+		if account.TargetCluster == fedCluster.OwnerClusterName {
 			userRecord.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
 			return fedCluster.Client.Update(context.TODO(), userRecord)
 		}
 	}
-	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", fedCluster.LocalName)
+	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", fedCluster.OwnerClusterName)
 }

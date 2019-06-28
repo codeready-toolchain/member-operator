@@ -172,7 +172,7 @@ func newGetHostCluster(ok bool, status v1.ConditionStatus) getHostCluster {
 				Client:            cl,
 				Type:              cluster.Host,
 				OperatorNamespace: hostOperatorNs,
-				LocalName:         memberClusterName,
+				OwnerClusterName:  memberClusterName,
 				ClusterStatus: &v1beta1.KubeFedClusterStatus{
 					Conditions: []v1beta1.ClusterCondition{{
 						Type:   common.ClusterReady,

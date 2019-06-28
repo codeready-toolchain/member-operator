@@ -199,7 +199,7 @@ func TestUpdateStatus(t *testing.T) {
 		assert.Equal(t, "some error", userAcc.Status.Error)
 	})
 
-	t.Run("status_error", func(t *testing.T) {
+	t.Run("status_error_wrapped", func(t *testing.T) {
 		userAcc := newUserAccount(username, userID)
 		client := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
@@ -214,6 +214,32 @@ func TestUpdateStatus(t *testing.T) {
 		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, userAcc.Status.Status)
 		assert.Equal(t, "oopsy woopsy", userAcc.Status.Error)
 		assert.Equal(t, "failed to create user bob: oopsy woopsy", err.Error())
+	})
+
+	t.Run("status_error_reset", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		userAcc.Status.Error = "this error should be reset to an empty string"
+
+		client := fake.NewFakeClient(userAcc)
+		r := &ReconcileUserAccount{
+			client: client,
+			scheme: s,
+		}
+
+		req := newReconcileRequest(username)
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		// Check updated status
+		updatedAcc := &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+		require.NoError(t, err)
+		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
+		assert.Empty(t, updatedAcc.Status.Error)
 	})
 }
 

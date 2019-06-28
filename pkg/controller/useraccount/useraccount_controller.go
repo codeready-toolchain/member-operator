@@ -182,8 +182,13 @@ func (r *ReconcileUserAccount) ensureMapping(logger logr.Logger, userAcc *toolch
 	return true, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
 }
 
-// updateStatus updates user account status to given status with errMsg.
+// updateStatus updates user account status to given status with errMsg but only if the current status doesn't match
+// If the current status already set to desired state then this method does nothing
 func (r *ReconcileUserAccount) updateStatus(userAcc *toolchainv1alpha1.UserAccount, status toolchainv1alpha1.StatusUserAccount, errMsg string) error {
+	if userAcc.Status.Status == status && userAcc.Status.Error == errMsg {
+		// Nothing changed
+		return nil
+	}
 	userAcc.Status = toolchainv1alpha1.UserAccountStatus{
 		Status: status,
 		Error:  errMsg,

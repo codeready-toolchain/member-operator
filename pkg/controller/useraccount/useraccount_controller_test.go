@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -24,31 +25,24 @@ func TestReconcileOK(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
 	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
-	s := scheme.Scheme
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
 
 	// given
 	userAcc := newUserAccount(username, userID)
-
-	client := fake.NewFakeClient(userAcc)
-	r := &ReconcileUserAccount{
-		client: client,
-		scheme: s,
-	}
-
-	req := newReconcileRequest(username)
-	identity := &userv1.Identity{}
-	user := &userv1.User{}
+	createdIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
+		Name:      getIdentityName(userAcc),
+		Namespace: "toolchain-member",
+		UID:       types.UID(username + "identity"),
+	}}
+	createdUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
+		Name:      username,
+		Namespace: "toolchain-member",
+		UID:       types.UID(username + "user"),
+	}}
 
 	t.Run("deleted_account_ignored", func(t *testing.T) {
 		// given
 		// No user account exists
-		client := fake.NewFakeClient()
-		r := &ReconcileUserAccount{
-			client: client,
-			scheme: s,
-		}
+		r, req := prepareReconcile(t, username)
 		//when
 		res, err := r.Reconcile(req)
 
@@ -57,18 +51,21 @@ func TestReconcileOK(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 
 		// Check the user is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &userv1.User{})
 		require.Error(t, err)
 		assert.True(t, errors.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, errors.IsNotFound(err))
 	})
 
 	// First cycle of reconcile. Freshly created UserAccount.
 	t.Run("create_user", func(t *testing.T) {
+		// given
+		r, req := prepareReconcile(t, username, userAcc)
+
 		//when
 		res, err := r.Reconcile(req)
 
@@ -84,6 +81,7 @@ func TestReconcileOK(t *testing.T) {
 		assert.Empty(t, updatedAcc.Status.Error)
 
 		// Check the created user
+		user := &userv1.User{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
 		assert.Equal(t, userAcc.Name, user.Name)
@@ -91,13 +89,16 @@ func TestReconcileOK(t *testing.T) {
 		assert.Equal(t, updatedAcc.UID, user.GetOwnerReferences()[0].UID)
 
 		// Check the identity is not created yet
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, errors.IsNotFound(err))
 	})
 
 	// Second cycle of reconcile. User already created.
 	t.Run("create_identity", func(t *testing.T) {
+		// given
+		r, req := prepareReconcile(t, username, userAcc, createdUser)
+
 		//when
 		res, err := r.Reconcile(req)
 
@@ -113,6 +114,7 @@ func TestReconcileOK(t *testing.T) {
 		assert.Empty(t, updatedAcc.Status.Error)
 
 		// Check the created identity
+		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
@@ -122,6 +124,9 @@ func TestReconcileOK(t *testing.T) {
 
 	// Third cycle of reconcile. User and Identity already created.
 	t.Run("create_user_identity_mapping", func(t *testing.T) {
+		// given
+		r, req := prepareReconcile(t, username, userAcc, createdUser, createdIdentity)
+
 		//when
 		res, err := r.Reconcile(req)
 
@@ -137,7 +142,7 @@ func TestReconcileOK(t *testing.T) {
 		assert.Empty(t, updatedAcc.Status.Error)
 
 		// Check the created user identity mapping
-		mapping := newMapping(user, identity)
+		mapping := newMapping(createdUser, createdIdentity)
 		err = r.client.Create(context.TODO(), mapping)
 		require.Error(t, err)
 		assert.True(t, errors.IsAlreadyExists(err))
@@ -145,6 +150,9 @@ func TestReconcileOK(t *testing.T) {
 
 	// Last cycle of reconcile. User, Identity and UserIdentityMapping created/updated.
 	t.Run("provisioned", func(t *testing.T) {
+		// given
+		r, req := prepareReconcile(t, username, userAcc, createdUser, createdIdentity, newMapping(createdUser, createdIdentity))
+
 		//when
 		res, err := r.Reconcile(req)
 
@@ -159,6 +167,19 @@ func TestReconcileOK(t *testing.T) {
 		assert.Equal(t, toolchainv1alpha1.StatusProvisioned, updatedAcc.Status.Status)
 		assert.Empty(t, updatedAcc.Status.Error)
 	})
+}
+
+func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request) {
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	client := fake.NewFakeClientWithScheme(s, initObjs...)
+
+	r := &ReconcileUserAccount{
+		client: client,
+		scheme: s,
+	}
+	return r, newReconcileRequest(username)
 }
 
 func TestUpdateStatus(t *testing.T) {

@@ -46,15 +46,15 @@ upload-codecov-report:
 ############################################################
 
 .PHONY: test-e2e
-## Runs the e2e tests locally
-test-e2e: e2e-setup 
-	$(info Running E2E test: $@)
-ifeq ($(OPENSHIFT_VERSION),3)
-	$(Q)oc login -u system:admin
-endif
+## Runs the e2e tests *locally*, assuming that minishift is installed, running and there's a session with an admin account
+test-e2e: e2e-setup docker-image-minishift
+	$(eval OPERATOR_IMAGE_NAME := $(shell minishift openshift registry)/${TEST_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT})
+	$(Q)docker tag ${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT} $(OPERATOR_IMAGE_NAME)
+	$(Q)eval `minishift docker-env` && docker login -u admin -p $(shell oc whoami -t) $(shell minishift openshift registry) && docker push $(OPERATOR_IMAGE_NAME)
+	$(Q)sed -e "s,REPLACE_IMAGE,$(OPERATOR_IMAGE_NAME)," ./deploy/operator.yaml | oc apply -f -
 	$(Q)operator-sdk test local ./test/e2e --namespace $(TEST_NAMESPACE) --up-local --go-test-flags "-v -timeout=15m"
 
-e2e-setup: ./vendor get-test-namespace e2e-cleanup docker-image
+e2e-setup: ./vendor get-test-namespace e2e-cleanup 
 	$(Q)oc new-project $(TEST_NAMESPACE) --display-name e2e-tests
 	$(Q)-oc apply -f ./deploy/service_account.yaml 
 	$(Q)-oc apply -f ./deploy/role.yaml 
@@ -62,10 +62,6 @@ e2e-setup: ./vendor get-test-namespace e2e-cleanup docker-image
 	$(foreach crd_file,$(wildcard deploy/crds/*.yaml), \
 		oc apply -f $(crd_file); \
 	)
-	$(eval OPERATOR_IMAGE_NAME := $(shell minishift openshift registry)/${TEST_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT})
-	$(Q)docker tag ${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT} $(OPERATOR_IMAGE_NAME)
-	$(Q)eval `minishift docker-env` && docker login -u admin -p $(shell oc whoami -t) $(shell minishift openshift registry) && docker push $(OPERATOR_IMAGE_NAME)
-	$(Q)sed -e "s,REPLACE_IMAGE,$(OPERATOR_IMAGE_NAME)," ./deploy/operator.yaml | oc apply -f -
 
 e2e-cleanup: get-test-namespace
 	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait

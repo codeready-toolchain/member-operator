@@ -7,6 +7,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/common"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,7 @@ func TestReconcileOK(t *testing.T) {
 	// given
 	userAcc := newUserAccount(username, userID)
 	createdIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      getIdentityName(userAcc),
+		Name:      common.ToIdentityName(userAcc.Spec.UserID),
 		Namespace: "toolchain-member",
 		UID:       types.UID(username + "identity"),
 	}}
@@ -56,7 +57,7 @@ func TestReconcileOK(t *testing.T) {
 		assert.True(t, errors.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, errors.IsNotFound(err))
 	})
@@ -89,7 +90,7 @@ func TestReconcileOK(t *testing.T) {
 		assert.Equal(t, updatedAcc.UID, user.GetOwnerReferences()[0].UID)
 
 		// Check the identity is not created yet
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, errors.IsNotFound(err))
 	})
@@ -115,7 +116,7 @@ func TestReconcileOK(t *testing.T) {
 
 		// Check the created identity
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 		assert.Len(t, identity.GetOwnerReferences(), 1)

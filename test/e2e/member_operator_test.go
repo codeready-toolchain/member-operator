@@ -2,12 +2,11 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"github.com/codeready-toolchain/member-operator/pkg/common"
 	userv1 "github.com/openshift/api/user/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
@@ -68,7 +67,7 @@ func TestUserAccount(t *testing.T) {
 
 	t.Run("delete_identity_ok", func(t *testing.T) {
 		identity := &userv1.Identity{}
-		err := client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+		err := client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
 
 		err = client.Delete(context.TODO(), identity)
@@ -106,15 +105,11 @@ func verifyResources(t *testing.T, f *framework.Framework, userAcc *toolchainv1a
 	if err := waitForUser(t, f.Client.Client, userAcc.Name); err != nil {
 		return err
 	}
-	if err := waitForIdentity(t, f.Client.Client, getIdentityName(userAcc)); err != nil {
+	if err := waitForIdentity(t, f.Client.Client, common.ToIdentityName(userAcc.Spec.UserID)); err != nil {
 		return err
 	}
-	if err := waitForMapping(t, f.Client.Client, userAcc.Name, getIdentityName(userAcc)); err != nil {
+	if err := waitForMapping(t, f.Client.Client, userAcc.Name, common.ToIdentityName(userAcc.Spec.UserID)); err != nil {
 		return err
 	}
 	return nil
-}
-
-func getIdentityName(userAcc *toolchainv1alpha1.UserAccount) string {
-	return fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID)
 }

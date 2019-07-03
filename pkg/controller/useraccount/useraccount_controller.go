@@ -2,10 +2,10 @@ package useraccount
 
 import (
 	"context"
-	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 
+	"github.com/codeready-toolchain/member-operator/pkg/common"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
@@ -140,7 +140,7 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 }
 
 func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.Identity, bool, error) {
-	name := getIdentityName(userAcc)
+	name := common.ToIdentityName(userAcc.Spec.UserID)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
@@ -217,7 +217,7 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
 }
 
 func newIdentity(userAcc *toolchainv1alpha1.UserAccount) *userv1.Identity {
-	name := getIdentityName(userAcc)
+	name := common.ToIdentityName(userAcc.Spec.UserID)
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -244,8 +244,4 @@ func newMapping(user *userv1.User, identity *userv1.Identity) *userv1.UserIdenti
 		},
 	}
 	return mapping
-}
-
-func getIdentityName(userAcc *toolchainv1alpha1.UserAccount) string {
-	return fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID)
 }

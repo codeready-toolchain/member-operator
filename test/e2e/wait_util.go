@@ -30,7 +30,7 @@ func waitForUser(t *testing.T, client client.Client, name string) error {
 			}
 			return false, err
 		}
-		if user != nil {
+		if user.Name != "" {
 			t.Logf("found user '%s'\n", name)
 			return true, nil
 		}
@@ -48,7 +48,7 @@ func waitForIdentity(t *testing.T, client client.Client, name string) error {
 			}
 			return false, err
 		}
-		if identity != nil {
+		if identity.Name != "" {
 			t.Logf("found identity '%s'\n", name)
 			return true, nil
 		}
@@ -66,7 +66,7 @@ func waitForMapping(t *testing.T, client client.Client, userName, identityName s
 			}
 			return false, err
 		}
-		if identity != nil {
+		if identity.Name != "" {
 			if identity.User.Name == userName {
 				t.Logf("found mapping between user '%s' and identity '%s'\n", userName, identityName)
 				return true, nil

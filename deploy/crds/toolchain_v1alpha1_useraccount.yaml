@@ -30,6 +30,10 @@ spec:
           type: object
         spec:
           properties:
+            disabled:
+              description: If set to true then the corresponding user should not be
+                able to login "false" is assumed by default
+              type: boolean
             nsLimit:
               description: The namespace limit name
               type: string
@@ -73,12 +77,32 @@ spec:
           type: object
         status:
           properties:
-            error:
-              description: The error message in case of failed status
-              type: string
-            status:
-              description: 'Observed status. For example: provisioning|provisioned'
-              type: string
+            conditions:
+              description: 'Conditions is an array of current User Account conditions
+                Supported condition types: Provisioning, UserNotReady, IdentityNotReady,
+                UserIdentityMappingNotReady, NSTemplateSetNotReady and Ready +patchMergeKey=type
+                +patchStrategy=merge'
+              items:
+                properties:
+                  lastTransitionTime:
+                    description: Last time the condition transit from one status to
+                      another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: Human readable message indicating details about last
+                      transition.
+                    type: string
+                  reason:
+                    description: (brief) reason for the condition's last transition.
+                    type: string
+                  status:
+                    description: Status of the condition, one of True, False, Unknown.
+                    type: string
+                required:
+                - status
+                type: object
+              type: array
           type: object
   version: v1alpha1
 status:

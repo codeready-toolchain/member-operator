@@ -25,13 +25,13 @@ func waitForUser(t *testing.T, client client.Client, name string) error {
 		user := &userv1.User{}
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: name}, user); err != nil {
 			if errors.IsNotFound(err) {
-				t.Logf("waiting for availability of user '%s'\n", name)
+				t.Logf("waiting for availability of user '%s'", name)
 				return false, nil
 			}
 			return false, err
 		}
-		if user.Name != "" {
-			t.Logf("found user '%s'\n", name)
+		if user.Name != "" && len(user.Identities) > 0 {
+			t.Logf("found user '%s'", name)
 			return true, nil
 		}
 		return false, nil
@@ -43,34 +43,14 @@ func waitForIdentity(t *testing.T, client client.Client, name string) error {
 		identity := &userv1.Identity{}
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 			if errors.IsNotFound(err) {
-				t.Logf("waiting for availability of identity '%s'\n", name)
+				t.Logf("waiting for availability of identity '%s'", name)
 				return false, nil
 			}
 			return false, err
 		}
-		if identity.Name != "" {
-			t.Logf("found identity '%s'\n", name)
+		if identity.Name != "" && identity.User.Name != "" {
+			t.Logf("found identity '%s'", name)
 			return true, nil
-		}
-		return false, nil
-	})
-}
-
-func waitForMapping(t *testing.T, client client.Client, userName, identityName string) error {
-	return wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		identity := &userv1.UserIdentityMapping{}
-		if err := client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity); err != nil {
-			if errors.IsNotFound(err) {
-				t.Logf("waiting for availability of identity '%s'\n", identityName)
-				return false, nil
-			}
-			return false, err
-		}
-		if identity.Name != "" {
-			if identity.User.Name == userName {
-				t.Logf("found mapping between user '%s' and identity '%s'\n", userName, identityName)
-				return true, nil
-			}
 		}
 		return false, nil
 	})

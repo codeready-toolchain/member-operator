@@ -8,7 +8,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/common"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	userv1 "github.com/openshift/api/user/v1"
 	uuid "github.com/satori/go.uuid"
@@ -34,7 +33,7 @@ func TestReconcileOK(t *testing.T) {
 	userAcc := newUserAccount(username, userID)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      getIdentityName(userAcc),
+		Name:      ToIdentityName(userAcc.Spec.UserID),
 		Namespace: "toolchain-member",
 		UID:       types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
@@ -46,7 +45,7 @@ func TestReconcileOK(t *testing.T) {
 		Namespace:       "toolchain-member",
 		UID:             userUID,
 		OwnerReferences: []metav1.OwnerReference{},
-	}, Identities: []string{getIdentityName(userAcc)}}
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
 
 	t.Run("deleted_account_ignored", func(t *testing.T) {
 		// given
@@ -65,7 +64,7 @@ func TestReconcileOK(t *testing.T) {
 		assert.True(t, errors.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, errors.IsNotFound(err))
 	})
@@ -100,7 +99,7 @@ func TestReconcileOK(t *testing.T) {
 			checkMapping(t, user, preexistingIdentity)
 
 			// Check the identity is not created yet
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
 			require.Error(t, err)
 			assert.True(t, errors.IsNotFound(err))
 		}
@@ -141,7 +140,7 @@ func TestReconcileOK(t *testing.T) {
 
 			// Check the created/updated identity
 			identity := &userv1.Identity{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 			require.NoError(t, err)
 			assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 			require.Len(t, identity.GetOwnerReferences(), 1)
@@ -158,7 +157,7 @@ func TestReconcileOK(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:            getIdentityName(userAcc),
+				Name:            ToIdentityName(userAcc.Spec.UserID),
 				Namespace:       "toolchain-member",
 				UID:             types.UID(uuid.NewV4().String()),
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},

@@ -6,12 +6,14 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/common"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
 	userv1 "github.com/openshift/api/user/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -67,10 +69,36 @@ func TestUserAccount(t *testing.T) {
 
 	t.Run("delete_identity_ok", func(t *testing.T) {
 		identity := &userv1.Identity{}
-		err := client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, identity)
+		err := client.Get(context.TODO(), types.NamespacedName{Name: useraccount.ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
 
 		err = client.Delete(context.TODO(), identity)
+		require.NoError(t, err)
+
+		err = verifyResources(t, f, userAcc)
+		assert.NoError(t, err)
+	})
+
+	t.Run("delete_user_mapping_ok", func(t *testing.T) {
+		user := &userv1.User{}
+		err := client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.NoError(t, err)
+
+		user.Identities = []string{}
+		err = client.Update(context.TODO(), user)
+		require.NoError(t, err)
+
+		err = verifyResources(t, f, userAcc)
+		assert.NoError(t, err)
+	})
+
+	t.Run("delete_identity_mapping_ok", func(t *testing.T) {
+		identity := &userv1.Identity{}
+		err := client.Get(context.TODO(), types.NamespacedName{Name: useraccount.ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.NoError(t, err)
+
+		identity.User = corev1.ObjectReference{Name: "", UID: ""}
+		err = client.Update(context.TODO(), identity)
 		require.NoError(t, err)
 
 		err = verifyResources(t, f, userAcc)
@@ -86,7 +114,7 @@ func newUserAcc(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) *t
 			Namespace: "toolchain-member-operator",
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID:  "1a03ecac-7c0b-44fc-b66d-12dd7fb21c40",
+			UserID:  types.UID(uuid.NewV4().String()),
 			NSLimit: "admin",
 			NSTemplateSet: toolchainv1alpha1.NSTemplateSetSpec{
 				TierName: "basic",
@@ -105,10 +133,7 @@ func verifyResources(t *testing.T, f *framework.Framework, userAcc *toolchainv1a
 	if err := waitForUser(t, f.Client.Client, userAcc.Name); err != nil {
 		return err
 	}
-	if err := waitForIdentity(t, f.Client.Client, common.ToIdentityName(userAcc.Spec.UserID)); err != nil {
-		return err
-	}
-	if err := waitForMapping(t, f.Client.Client, userAcc.Name, common.ToIdentityName(userAcc.Spec.UserID)); err != nil {
+	if err := waitForIdentity(t, f.Client.Client, useraccount.ToIdentityName(userAcc.Spec.UserID)); err != nil {
 		return err
 	}
 	return nil

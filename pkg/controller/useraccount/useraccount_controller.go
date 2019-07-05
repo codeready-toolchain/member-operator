@@ -2,6 +2,7 @@ package useraccount
 
 import (
 	"context"
+	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
@@ -132,12 +133,12 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 	logger.Info("user already exists", "name", userAcc.Name)
 
 	// ensure mapping
-	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != getIdentityName(userAcc) {
+	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID) {
 		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
 		if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
 			return nil, false, err
 		}
-		user.Identities = []string{getIdentityName(userAcc)}
+		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID)}
 		if err := r.client.Update(context.TODO(), user); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to update user '%s'", userAcc.Name)
 		}
@@ -148,7 +149,7 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 }
 
 func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	name := getIdentityName(userAcc)
+	name := ToIdentityName(userAcc.Spec.UserID)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
@@ -220,13 +221,13 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{getIdentityName(userAcc)},
+		Identities: []string{ToIdentityName(userAcc.Spec.UserID)},
 	}
 	return user
 }
 
 func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *userv1.Identity {
-	name := getIdentityName(userAcc)
+	name := ToIdentityName(userAcc.Spec.UserID)
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -239,4 +240,8 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 		},
 	}
 	return identity
+}
+
+func ToIdentityName(userID string) string {
+	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
 }

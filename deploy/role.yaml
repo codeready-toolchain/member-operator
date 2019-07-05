@@ -64,4 +64,8 @@ rules:
   - users
   - useridentitymappings
   verbs:
-  - "*"
+  - get
+  - create
+  - update
+  - list
+  - watch

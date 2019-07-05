@@ -39,11 +39,11 @@ upload-codecov-report:
 	# Upload coverage to codecov.io
 	bash <(curl -s https://codecov.io/bash) -f $(COV_DIR)/coverage.txt -t 51cc45ad-2e54-4e68-98cb-8ab15cf2b8df
 
-############################################################
+###########################################################
 #
 # End-to-end Tests
 #
-############################################################
+###########################################################
 
 .PHONY: test-e2e
 test-e2e:  e2e-setup

@@ -4,9 +4,8 @@ import (
 	"context"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-
-	"github.com/codeready-toolchain/member-operator/pkg/common"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
+
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
@@ -97,18 +96,13 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	var created bool
+	var createdOrUpdated bool
 	var user *userv1.User
-	if user, created, err = r.ensureUser(reqLogger, userAcc); err != nil || created {
+	if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
 		return reconcile.Result{}, err
 	}
 
-	var identity *userv1.Identity
-	if identity, created, err = r.ensureIdentity(reqLogger, userAcc); err != nil || created {
-		return reconcile.Result{}, err
-	}
-
-	if created, err = r.ensureMapping(reqLogger, userAcc, user, identity); err != nil || created {
+	if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
 		return reconcile.Result{}, err
 	}
 
@@ -136,11 +130,25 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get user '%s'", userAcc.Name)
 	}
 	logger.Info("user already exists", "name", userAcc.Name)
+
+	// ensure mapping
+	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != getIdentityName(userAcc) {
+		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
+		if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
+			return nil, false, err
+		}
+		user.Identities = []string{getIdentityName(userAcc)}
+		if err := r.client.Update(context.TODO(), user); err != nil {
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to update user '%s'", userAcc.Name)
+		}
+		logger.Info("user updated successfully", "name", userAcc.Name)
+		return user, true, nil
+	}
 	return user, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.Identity, bool, error) {
-	name := common.ToIdentityName(userAcc.Spec.UserID)
+func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
+	name := getIdentityName(userAcc)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
@@ -148,7 +156,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(userAcc)
+			identity = newIdentity(userAcc, user)
 			if err := controllerutil.SetControllerReference(userAcc, identity, r.scheme); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to set controller reference for identity '%s'", name)
 			}
@@ -161,25 +169,25 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get identity '%s'", name)
 	}
 	logger.Info("identity already exists", "name", name)
-	return identity, false, nil
-}
 
-func (r *ReconcileUserAccount) ensureMapping(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, identity *userv1.Identity) (bool, error) {
-	mapping := newMapping(user, identity)
-	name := mapping.Name
-	if err := controllerutil.SetControllerReference(userAcc, mapping, r.scheme); err != nil {
-		return false, err
-	}
-
-	if err := r.client.Create(context.TODO(), mapping); err != nil {
-		if errors.IsAlreadyExists(err) {
-			logger.Info("user-identity mapping already exists", "name", name)
-			return false, nil
+	// ensure mapping
+	if identity.User.Name != user.Name || identity.User.UID != user.UID {
+		logger.Info("identity is missing a reference to user; updating the reference", "identity", name, "user", user.Name)
+		if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
+			return nil, false, err
 		}
-		return false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user-identity mapping '%s'", name)
+		identity.User = corev1.ObjectReference{
+			Name: user.Name,
+			UID:  user.UID,
+		}
+		if err := r.client.Update(context.TODO(), identity); err != nil {
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to update identity '%s'", name)
+		}
+		logger.Info("identity updated successfully", "name", name)
+		return identity, true, nil
 	}
-	logger.Info("user-identity mapping created successfully", "name", name)
-	return true, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
+
+	return identity, false, nil
 }
 
 // updateStatus updates user account status to given status with errMsg but only if the current status doesn't match
@@ -212,36 +220,23 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
+		Identities: []string{getIdentityName(userAcc)},
 	}
 	return user
 }
 
-func newIdentity(userAcc *toolchainv1alpha1.UserAccount) *userv1.Identity {
-	name := common.ToIdentityName(userAcc.Spec.UserID)
+func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *userv1.Identity {
+	name := getIdentityName(userAcc)
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
 		ProviderName:     config.GetIdP(),
 		ProviderUserName: userAcc.Spec.UserID,
-	}
-	return identity
-}
-
-func newMapping(user *userv1.User, identity *userv1.Identity) *userv1.UserIdentityMapping {
-	name := identity.Name
-	mapping := &userv1.UserIdentityMapping{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
 		User: corev1.ObjectReference{
 			Name: user.Name,
 			UID:  user.UID,
 		},
-		Identity: corev1.ObjectReference{
-			Name: identity.Name,
-			UID:  identity.UID,
-		},
 	}
-	return mapping
+	return identity
 }

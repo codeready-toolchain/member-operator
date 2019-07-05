@@ -6,12 +6,15 @@ import (
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/common"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	userv1 "github.com/openshift/api/user/v1"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,16 +32,21 @@ func TestReconcileOK(t *testing.T) {
 
 	// given
 	userAcc := newUserAccount(username, userID)
-	createdIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      common.ToIdentityName(userAcc.Spec.UserID),
+	userUID := types.UID(username + "user")
+	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
+		Name:      getIdentityName(userAcc),
 		Namespace: "toolchain-member",
 		UID:       types.UID(username + "identity"),
+	}, User: corev1.ObjectReference{
+		Name: username,
+		UID:  userUID,
 	}}
-	createdUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-		Name:      username,
-		Namespace: "toolchain-member",
-		UID:       types.UID(username + "user"),
-	}}
+	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
+		Name:            username,
+		Namespace:       "toolchain-member",
+		UID:             userUID,
+		OwnerReferences: []metav1.OwnerReference{},
+	}, Identities: []string{getIdentityName(userAcc)}}
 
 	t.Run("deleted_account_ignored", func(t *testing.T) {
 		// given
@@ -63,96 +71,109 @@ func TestReconcileOK(t *testing.T) {
 	})
 
 	// First cycle of reconcile. Freshly created UserAccount.
-	t.Run("create_user", func(t *testing.T) {
-		// given
-		r, req := prepareReconcile(t, username, userAcc)
+	t.Run("create_or_update_user", func(t *testing.T) {
+		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
+			//when
+			res, err := r.Reconcile(req)
 
-		//when
-		res, err := r.Reconcile(req)
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
 
-		//then
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
+			// Check that the user account status has been updated
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+			assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
+			assert.Empty(t, updatedAcc.Status.Error)
 
-		// Check that the user account status has been updated
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-		require.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
-		assert.Empty(t, updatedAcc.Status.Error)
+			// Check the created/updated user
+			user := &userv1.User{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+			require.NoError(t, err)
+			assert.Equal(t, userAcc.Name, user.Name)
+			require.Len(t, user.GetOwnerReferences(), 1)
+			assert.Equal(t, updatedAcc.UID, user.GetOwnerReferences()[0].UID)
 
-		// Check the created user
-		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.NoError(t, err)
-		assert.Equal(t, userAcc.Name, user.Name)
-		assert.Len(t, user.GetOwnerReferences(), 1)
-		assert.Equal(t, updatedAcc.UID, user.GetOwnerReferences()[0].UID)
+			// Check the user identity mapping
+			user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
+			checkMapping(t, user, preexistingIdentity)
 
-		// Check the identity is not created yet
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
-		require.Error(t, err)
-		assert.True(t, errors.IsNotFound(err))
+			// Check the identity is not created yet
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
+			require.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		}
+
+		t.Run("create", func(t *testing.T) {
+			r, req := prepareReconcile(t, username, userAcc)
+			reconcile(r, req)
+		})
+
+		t.Run("update", func(t *testing.T) {
+			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
+				Name:            username,
+				Namespace:       "toolchain-member",
+				UID:             userUID,
+				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+			}}
+			r, req := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
+			reconcile(r, req)
+		})
 	})
 
 	// Second cycle of reconcile. User already created.
-	t.Run("create_identity", func(t *testing.T) {
-		// given
-		r, req := prepareReconcile(t, username, userAcc, createdUser)
+	t.Run("create_or_update_identity", func(t *testing.T) {
+		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
+			//when
+			res, err := r.Reconcile(req)
 
-		//when
-		res, err := r.Reconcile(req)
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
 
-		//then
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
+			// Check that the user account status is now "provisioning"
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+			assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
+			assert.Empty(t, updatedAcc.Status.Error)
 
-		// Check that the user account status is still "provisioning"
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-		require.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
-		assert.Empty(t, updatedAcc.Status.Error)
+			// Check the created/updated identity
+			identity := &userv1.Identity{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+			require.NoError(t, err)
+			assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
+			require.Len(t, identity.GetOwnerReferences(), 1)
+			assert.Equal(t, updatedAcc.UID, identity.GetOwnerReferences()[0].UID)
 
-		// Check the created identity
-		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: common.ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
-		assert.Len(t, identity.GetOwnerReferences(), 1)
-		assert.Equal(t, updatedAcc.UID, identity.GetOwnerReferences()[0].UID)
+			// Check the user identity mapping
+			checkMapping(t, preexistingUser, identity)
+		}
+
+		t.Run("create", func(t *testing.T) {
+			r, req := prepareReconcile(t, username, userAcc, preexistingUser)
+			reconcile(r, req)
+		})
+
+		t.Run("update", func(t *testing.T) {
+			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
+				Name:            getIdentityName(userAcc),
+				Namespace:       "toolchain-member",
+				UID:             types.UID(uuid.NewV4().String()),
+				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+			}}
+
+			r, req := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
+			reconcile(r, req)
+		})
+
 	})
 
-	// Third cycle of reconcile. User and Identity already created.
-	t.Run("create_user_identity_mapping", func(t *testing.T) {
-		// given
-		r, req := prepareReconcile(t, username, userAcc, createdUser, createdIdentity)
-
-		//when
-		res, err := r.Reconcile(req)
-
-		//then
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-
-		// Check that the user account status is still "provisioning"
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-		require.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
-		assert.Empty(t, updatedAcc.Status.Error)
-
-		// Check the created user identity mapping
-		mapping := newMapping(createdUser, createdIdentity)
-		err = r.client.Create(context.TODO(), mapping)
-		require.Error(t, err)
-		assert.True(t, errors.IsAlreadyExists(err))
-	})
-
-	// Last cycle of reconcile. User, Identity and UserIdentityMapping created/updated.
+	// Last cycle of reconcile. User, Identity created/updated.
 	t.Run("provisioned", func(t *testing.T) {
 		// given
-		r, req := prepareReconcile(t, username, userAcc, createdUser, createdIdentity, newMapping(createdUser, createdIdentity))
+		r, req := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
 		res, err := r.Reconcile(req)
@@ -270,6 +291,7 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
 			Namespace: "toolchain-member",
+			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID: userID,
@@ -285,4 +307,11 @@ func newReconcileRequest(name string) reconcile.Request {
 			Namespace: "toolchain-member",
 		},
 	}
+}
+
+func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
+	assert.Equal(t, user.Name, identity.User.Name)
+	assert.Equal(t, user.UID, identity.User.UID)
+	require.Len(t, user.Identities, 1)
+	assert.Equal(t, identity.Name, user.Identities[0])
 }

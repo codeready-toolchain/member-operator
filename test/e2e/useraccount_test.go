@@ -114,7 +114,7 @@ func newUserAcc(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) *t
 			Namespace: "toolchain-member-operator",
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID:  types.UID(uuid.NewV4().String()),
+			UserID:  uuid.NewV4().String(),
 			NSLimit: "admin",
 			NSTemplateSet: toolchainv1alpha1.NSTemplateSetSpec{
 				TierName: "basic",

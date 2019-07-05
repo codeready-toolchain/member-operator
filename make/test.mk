@@ -46,38 +46,37 @@ upload-codecov-report:
 ############################################################
 
 .PHONY: test-e2e
-## Runs the e2e tests *locally*, assuming that minishift is installed, running and there's a session with an admin account
-test-e2e: e2e-setup docker-image-minishift
-	$(eval OPERATOR_IMAGE_NAME := $(shell minishift openshift registry)/${TEST_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT})
-	$(Q)docker tag ${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT} $(OPERATOR_IMAGE_NAME)
-	$(Q)eval `minishift docker-env` && docker login -u admin -p $(shell oc whoami -t) $(shell minishift openshift registry) && docker push $(OPERATOR_IMAGE_NAME)
-	$(Q)sed -e "s,REPLACE_IMAGE,$(OPERATOR_IMAGE_NAME)," ./deploy/operator.yaml | oc apply -f -
-	$(Q)operator-sdk test local ./test/e2e --namespace $(TEST_NAMESPACE) --up-local --go-test-flags "-v -timeout=15m"
+test-e2e:  e2e-setup
+	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
+	operator-sdk test local ./test/e2e --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
 
-.PHONY: test-e2e-ci
-## Runs the e2e tests *locally*, assuming that minishift is installed, running and there's a session with an admin account
-test-e2e-ci: e2e-setup docker-image-minishift
-	$(eval OPERATOR_IMAGE_NAME := $(shell minishift openshift registry)/${TEST_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT})
-	$(Q)docker tag ${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT} $(OPERATOR_IMAGE_NAME)
-	$(Q)eval `minishift docker-env` && docker login -u admin -p $(shell oc whoami -t) $(shell minishift openshift registry) && docker push $(OPERATOR_IMAGE_NAME)
-	$(Q)sed -e "s,REPLACE_IMAGE,$(OPERATOR_IMAGE_NAME)," ./deploy/operator.yaml | oc apply -f -
-	$(Q)operator-sdk test local ./test/e2e --namespace $(TEST_NAMESPACE) --up-local --go-test-flags "-v -timeout=15m"
+.PHONY: e2e-setup
+e2e-setup: e2e-cleanup is-minishift
+	oc new-project $(TEST_NAMESPACE) --display-name e2e-tests
+	oc apply -f ./deploy/service_account.yaml
+	oc apply -f ./deploy/role.yaml
+	cat ./deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(TEST_NAMESPACE)/ | oc apply -f -
+	oc apply -f deploy/crds
 
-e2e-setup: ./vendor get-test-namespace e2e-cleanup 
-	$(Q)oc new-project $(TEST_NAMESPACE) --display-name e2e-tests
-	$(Q)-oc apply -f ./deploy/service_account.yaml 
-	$(Q)-oc apply -f ./deploy/role.yaml 
-	$(Q)sed -e "s,REPLACE_NAMESPACE,$(TEST_NAMESPACE)," ./deploy/role_binding.yaml | oc apply -f -
-	$(foreach crd_file,$(wildcard deploy/crds/*.yaml), \
-		oc apply -f $(crd_file); \
-	)
+.PHONY: is-minishift
+is-minishift:
+ifeq ($(OPENSHIFT_BUILD_NAMESPACE),)
+	$(info logging as system:admin")
+	$(shell echo "oc login -u system:admin")
+	$(eval IMAGE_NAME := docker.io/${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT})
+	$(shell docker-image)
+else
+	$(eval IMAGE_NAME := registry.svc.ci.openshift.org/${OPENSHIFT_BUILD_NAMESPACE}/stable:member-operator)
+endif
 
-e2e-cleanup: get-test-namespace
+.PHONY: e2e-cleanup
+e2e-cleanup:
+	$(eval TEST_NAMESPACE := toolchain-member-operator)
 	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait
 
+.PHONY: get-test-namespace
 get-test-namespace: $(OUT_DIR)/test-namespace
 	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
 
 $(OUT_DIR)/test-namespace:
 	@echo -n "test-namespace-$(shell uuidgen | tr '[:upper:]' '[:lower:]')" > $(OUT_DIR)/test-namespace
-

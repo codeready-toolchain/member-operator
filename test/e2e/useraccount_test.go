@@ -44,8 +44,11 @@ func TestUserAccount(t *testing.T) {
 
 	t.Log("member-operator is ready and running state")
 
+	extraUserAcc := createUserAccount(t, f, ctx, "amar")
+	t.Log("extra useraccount created at start")
+
 	// create useraccount
-	userAcc := newUserAcc(t, f, ctx)
+	userAcc := newUserAcc(t, f, ctx, "johnsmith")
 	err = f.Client.Create(context.TODO(), userAcc, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	require.NoError(t, err)
 	t.Logf("user account '%s' created", userAcc.Name)
@@ -104,10 +107,13 @@ func TestUserAccount(t *testing.T) {
 		err = verifyResources(t, f, userAcc)
 		assert.NoError(t, err)
 	})
+
+	err = verifyResources(t, f, extraUserAcc)
+	assert.NoError(t, err)
+	t.Log("extra useraccount verified at end")
 }
 
-func newUserAcc(t *testing.T, f *framework.Framework, ctx *framework.TestCtx) *toolchainv1alpha1.UserAccount {
-	name := "johnsmith"
+func newUserAcc(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, name string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -137,4 +143,15 @@ func verifyResources(t *testing.T, f *framework.Framework, userAcc *toolchainv1a
 		return err
 	}
 	return nil
+}
+
+func createUserAccount(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, name string) *toolchainv1alpha1.UserAccount {
+	userAcc := newUserAcc(t, f, ctx, name)
+	err := f.Client.Create(context.TODO(), userAcc, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+	require.NoError(t, err)
+
+	err = verifyResources(t, f, userAcc)
+	assert.NoError(t, err)
+
+	return userAcc
 }

@@ -19,7 +19,7 @@ spec:
         image: REPLACE_IMAGE
         command:
         - member-operator
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         env:
         - name: OPERATOR_NAMESPACE
           valueFrom:

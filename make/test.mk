@@ -48,10 +48,11 @@ upload-codecov-report:
 .PHONY: test-e2e
 test-e2e:  e2e-setup
 	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
-	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
+	echo "Moduling: $(GO111MODULE)"
+	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --debug --go-test-flags "-v -timeout=15m"
 
 .PHONY: e2e-setup
-e2e-setup: e2e-cleanup is-minishift
+e2e-setup: get-test-namespace is-minishift
 	oc new-project $(TEST_NAMESPACE) --display-name e2e-tests
 	oc apply -f ./deploy/service_account.yaml
 	oc apply -f ./deploy/role.yaml
@@ -64,14 +65,14 @@ ifeq ($(OPENSHIFT_BUILD_NAMESPACE),)
 	$(info logging as system:admin")
 	$(shell echo "oc login -u system:admin")
 	$(eval IMAGE_NAME := docker.io/${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}:${GIT_COMMIT_ID_SHORT})
-	$(shell docker-image)
+	$(shell echo "make docker-image")
 else
 	$(eval IMAGE_NAME := registry.svc.ci.openshift.org/${OPENSHIFT_BUILD_NAMESPACE}/stable:member-operator)
 endif
 
 .PHONY: e2e-cleanup
 e2e-cleanup:
-	$(eval TEST_NAMESPACE := toolchain-member-operator)
+	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
 	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait
 
 .PHONY: get-test-namespace

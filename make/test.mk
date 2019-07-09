@@ -48,7 +48,7 @@ upload-codecov-report:
 .PHONY: test-e2e
 test-e2e:  e2e-setup
 	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
-	operator-sdk test local ./test/e2e --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
+	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
 
 .PHONY: e2e-setup
 e2e-setup: e2e-cleanup is-minishift

@@ -46,6 +46,12 @@ rules:
   verbs:
   - "*"
 - apiGroups:
+  - core.kubefed.k8s.io
+  resources:
+  - kubefedclusters/status
+  verbs:
+  - update
+- apiGroups:
   - ""
   resources:
   - nodes

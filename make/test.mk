@@ -48,10 +48,10 @@ upload-codecov-report:
 .PHONY: test-e2e
 test-e2e:  e2e-setup
 	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
-	echo "Moduling: $(GO111MODULE)"
-	$(eval export GO111MODULE=on)
-	echo "Moduling: $(GO111MODULE)"
-	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --debug --go-test-flags "-v -timeout=15m"
+	# This is hack to fix https://github.com/operator-framework/operator-sdk/issues/1657
+	echo "info: Running go mod vendor"
+	go mod vendor
+	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
 
 .PHONY: e2e-setup
 e2e-setup: get-test-namespace is-minishift

@@ -21,15 +21,15 @@ spec:
     - name: Tier Name
       type: string
       JSONPath: .spec.nsTemplateSet.tierName
-    - name: Disabled
-      type: boolean
-      JSONPath: .spec.disabled
     - name: Ready
       type: string
       JSONPath: ".status.conditions[?(@.type==\"Ready\")].status"
     - name: Reason
       type: string
       JSONPath: ".status.conditions[?(@.type==\"Ready\")].reason"
+    - name: Disabled
+      type: boolean
+      JSONPath: .spec.disabled
   subresources:
     status: {}
   validation:

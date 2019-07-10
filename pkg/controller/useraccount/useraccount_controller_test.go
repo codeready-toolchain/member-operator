@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
@@ -83,7 +84,7 @@ func TestReconcileOK(t *testing.T) {
 			updatedAcc := &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 			require.NoError(t, err)
-			AssertConditionsMatch(t, updatedAcc.Status.Conditions, expectedConditions...)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions, expectedConditions...)
 
 			// Check the created/updated user
 			user := &userv1.User{}
@@ -158,7 +159,7 @@ func TestReconcileOK(t *testing.T) {
 			updatedAcc := &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 			require.NoError(t, err)
-			AssertConditionsMatch(t, updatedAcc.Status.Conditions, expectedConditions...)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions, expectedConditions...)
 
 			// Check the created/updated identity
 			identity := &userv1.Identity{}
@@ -231,7 +232,7 @@ func TestReconcileOK(t *testing.T) {
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
-		AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 			toolchainv1alpha1.Condition{
 				Type:   toolchainv1alpha1.UserAccountProvisioning,
 				Status: corev1.ConditionFalse,
@@ -307,7 +308,7 @@ func TestUpdateStatus(t *testing.T) {
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
 		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
-		AssertConditionsMatch(t, updatedAcc.Status.Conditions, conditions...)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions, conditions...)
 	})
 
 	t.Run("status not updated because not changed", func(t *testing.T) {
@@ -333,7 +334,7 @@ func TestUpdateStatus(t *testing.T) {
 		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
 		// Status is not updated
-		AssertConditionsMatch(t, updatedAcc.Status.Conditions)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions)
 	})
 
 	t.Run("status error wrapped", func(t *testing.T) {
@@ -403,31 +404,4 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, user.UID, identity.User.UID)
 	require.Len(t, user.Identities, 1)
 	assert.Equal(t, identity.Name, user.Identities[0])
-}
-
-// AssertConditionsMatch asserts that the specified list A of conditions is equal to specified
-// list B of conditions ignoring the order of the elements. We can't use assert.ElementsMatch
-// because the LastTransitionTime of the actual conditions can be modified but the conditions
-// still should be treated as matched
-//TODO move to toolchain-common
-func AssertConditionsMatch(t *testing.T, actual []toolchainv1alpha1.Condition, expected ...toolchainv1alpha1.Condition) {
-	require.Equal(t, len(expected), len(actual))
-	for _, c := range expected {
-		AssertContainsCondition(t, actual, c)
-	}
-}
-
-// AssertContainsCondition asserts that the specified list of conditions contains the specified condition.
-// LastTransitionTime is ignored.
-//TODO move to toolchain-common
-func AssertContainsCondition(t *testing.T, conditions []toolchainv1alpha1.Condition, contains toolchainv1alpha1.Condition) {
-	for _, c := range conditions {
-		if c.Type == contains.Type {
-			assert.Equal(t, contains.Status, c.Status)
-			assert.Equal(t, contains.Reason, c.Reason)
-			assert.Equal(t, contains.Message, c.Message)
-			return
-		}
-	}
-	assert.FailNow(t, fmt.Sprintf("the list of conditions %v doesn't contain the expected condition %v", conditions, contains))
 }

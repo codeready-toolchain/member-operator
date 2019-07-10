@@ -32,6 +32,8 @@ const (
 	unableToCreateUserReason     = "UnableToCreateUser"
 	unableToCreateIdentityReason = "UnableToCreateIdentity"
 	unableToCreateMappingReason  = "UnableToCreateMapping"
+	provisioningReason           = "Provisioning"
+	provisionedReason            = "Provisioned"
 )
 
 var log = logf.Log.WithName("controller_useraccount")
@@ -310,6 +312,7 @@ func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountReady,
 			Status: corev1.ConditionFalse,
+			Reason: provisioningReason,
 		})
 }
 
@@ -339,6 +342,7 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountReady,
 			Status: corev1.ConditionTrue,
+			Reason: provisionedReason,
 		})
 }
 

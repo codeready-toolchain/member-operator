@@ -118,6 +118,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
+					Reason: "Provisioning",
 				})
 		})
 
@@ -141,6 +142,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
+					Reason: "Provisioning",
 				})
 		})
 	})
@@ -187,6 +189,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
+					Reason: "Provisioning",
 				})
 		})
 
@@ -211,9 +214,9 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
+					Reason: "Provisioning",
 				})
 		})
-
 	})
 
 	// Last cycle of reconcile. User, Identity created/updated.
@@ -256,6 +259,7 @@ func TestReconcileOK(t *testing.T) {
 			toolchainv1alpha1.Condition{
 				Type:   toolchainv1alpha1.UserAccountReady,
 				Status: corev1.ConditionTrue,
+				Reason: "Provisioned",
 			})
 	})
 }

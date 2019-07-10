@@ -10,7 +10,7 @@ import (
 	userv1 "github.com/openshift/api/user/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
-	uuid "github.com/satori/go.uuid"
+	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +48,7 @@ func TestUserAccount(t *testing.T) {
 	t.Log("extra useraccount created at start")
 
 	// create useraccount
-	userAcc := newUserAcc(t, f, ctx, "johnsmith")
+	userAcc := newUserAcc(namespace, "johnsmith")
 	err = f.Client.Create(context.TODO(), userAcc, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	require.NoError(t, err)
 	t.Logf("user account '%s' created", userAcc.Name)
@@ -113,11 +113,11 @@ func TestUserAccount(t *testing.T) {
 	t.Log("extra useraccount verified at end")
 }
 
-func newUserAcc(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, name string) *toolchainv1alpha1.UserAccount {
+func newUserAcc(namespace, name string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: "toolchain-member-operator",
+			Namespace: namespace,
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID:  uuid.NewV4().String(),
@@ -146,8 +146,11 @@ func verifyResources(t *testing.T, f *framework.Framework, userAcc *toolchainv1a
 }
 
 func createUserAccount(t *testing.T, f *framework.Framework, ctx *framework.TestCtx, name string) *toolchainv1alpha1.UserAccount {
-	userAcc := newUserAcc(t, f, ctx, name)
-	err := f.Client.Create(context.TODO(), userAcc, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
+	namespace, err := ctx.GetNamespace()
+	require.NoError(t, err)
+
+	userAcc := newUserAcc(namespace, name)
+	err = f.Client.Create(context.TODO(), userAcc, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	require.NoError(t, err)
 
 	err = verifyResources(t, f, userAcc)

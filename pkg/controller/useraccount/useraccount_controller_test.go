@@ -303,6 +303,7 @@ func TestUpdateStatus(t *testing.T) {
 		err := reconciler.updateStatusConditions(userAcc, conditions...)
 
 		// then
+		require.NoError(t, err)
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
 		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
@@ -327,6 +328,7 @@ func TestUpdateStatus(t *testing.T) {
 		err := reconciler.updateStatusConditions(userAcc, conditions...)
 
 		// then
+		require.NoError(t, err)
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
 		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)

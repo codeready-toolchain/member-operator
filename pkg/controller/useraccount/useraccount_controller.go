@@ -11,7 +11,6 @@ import (
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
-	apiv1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -211,7 +210,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	return identity, false, nil
 }
 
-// wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then log the error.
+// wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
 func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, statusUpdater func(userAcc *toolchainv1alpha1.UserAccount, message string) error, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
@@ -222,36 +221,19 @@ func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, use
 	return errs.Wrapf(err, format, args...)
 }
 
-// updateStatusConditions updates user account status conditions with the new conditions
-func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
-	var atLeastOneUpdated bool
-	conditions := userAcc.Status.Conditions
-	var updated bool
-	for _, condition := range newConditions {
-		conditions, updated = AddOrUpdateStatusCondition(conditions, condition)
-		atLeastOneUpdated = atLeastOneUpdated || updated
-	}
-	if !atLeastOneUpdated {
-		// Nothing changed
-		return nil
-	}
-	userAcc.Status.Conditions = conditions
-	return r.client.Status().Update(context.TODO(), userAcc)
-}
-
 func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	reason := unableToCreateUserReason
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.UserAccountUserNotReady,
-			Status:  apiv1.ConditionTrue,
+			Status:  corev1.ConditionTrue,
 			Reason:  reason,
 			Message: message,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 			Reason: reason,
 		})
 }
@@ -262,13 +244,13 @@ func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchai
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.UserAccountIdentityNotReady,
-			Status:  apiv1.ConditionTrue,
+			Status:  corev1.ConditionTrue,
 			Reason:  reason,
 			Message: message,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 			Reason: reason,
 		})
 }
@@ -279,13 +261,13 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.UserAccountUserIdentityMappingNotReady,
-			Status:  apiv1.ConditionTrue,
+			Status:  corev1.ConditionTrue,
 			Reason:  reason,
 			Message: message,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 			Reason: reason,
 		})
 }
@@ -295,7 +277,7 @@ func (r *ReconcileUserAccount) setStatusUserCreationOK(userAcc *toolchainv1alpha
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountUserNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		})
 }
 
@@ -304,7 +286,7 @@ func (r *ReconcileUserAccount) setStatusIdentityCreationOK(userAcc *toolchainv1a
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountIdentityNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		})
 }
 
@@ -313,7 +295,7 @@ func (r *ReconcileUserAccount) setStatusMappingCreationOK(userAcc *toolchainv1al
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountUserIdentityMappingNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		})
 }
 
@@ -322,7 +304,11 @@ func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountProvisioning,
-			Status: apiv1.ConditionTrue,
+			Status: corev1.ConditionTrue,
+		},
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.UserAccountReady,
+			Status: corev1.ConditionFalse,
 		})
 }
 
@@ -331,28 +317,39 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 		userAcc,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountProvisioning,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountUserNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountIdentityNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountUserIdentityMappingNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountNSTemplateSetNotReady,
-			Status: apiv1.ConditionFalse,
+			Status: corev1.ConditionFalse,
 		},
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.UserAccountReady,
-			Status: apiv1.ConditionTrue,
+			Status: corev1.ConditionTrue,
 		})
+}
+
+// updateStatusConditions updates user account status conditions with the new conditions
+func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
+	var updated bool
+	userAcc.Status.Conditions, updated = AddOrUpdateStatusConditions(userAcc.Status.Conditions, newConditions...)
+	if !updated {
+		// Nothing changed
+		return nil
+	}
+	return r.client.Status().Update(context.TODO(), userAcc)
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
@@ -385,47 +382,50 @@ func getIdentityName(userAcc *toolchainv1alpha1.UserAccount) string {
 	return fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID)
 }
 
-// AddOrUpdateStatusCondition adds the new condition to the array of conditions. If there is already a condition
-// with the same type in the current condition array then the condition is updated
-// Also returns a bool flag which indicates if the conditions where updated
+// AddOrUpdateStatusConditions appends the new conditions to the condition slice. If there is already a condition
+// with the same type in the current condition array then the condition is updated in the result slice.
+// If the condition is not changed then the same unmodified slice is returned.
+// Also returns a bool flag which indicates if the conditions where updated/added
 // TODO: move to toolchain-common
-func AddOrUpdateStatusCondition(currentConditions []toolchainv1alpha1.Condition, newCondition toolchainv1alpha1.Condition) ([]toolchainv1alpha1.Condition, bool) {
-	var oldCondition *toolchainv1alpha1.Condition
-	var index int
-	var newConditions []toolchainv1alpha1.Condition
-	if currentConditions == nil {
-		newConditions = make([]toolchainv1alpha1.Condition, 0, 1)
+func AddOrUpdateStatusConditions(conditions []toolchainv1alpha1.Condition, newConditions ...toolchainv1alpha1.Condition) ([]toolchainv1alpha1.Condition, bool) {
+	var atLeastOneUpdated bool
+	var updated bool
+	for _, cond := range newConditions {
+		conditions, updated = addOrUpdateStatusCondition(conditions, cond)
+		atLeastOneUpdated = atLeastOneUpdated || updated
+	}
+
+	return conditions, atLeastOneUpdated
+}
+
+// TODO: move to toolchain-common
+func addOrUpdateStatusCondition(conditions []toolchainv1alpha1.Condition, newCondition toolchainv1alpha1.Condition) ([]toolchainv1alpha1.Condition, bool) {
+	newCondition.LastTransitionTime = metav1.Now()
+
+	if conditions == nil {
+		return []toolchainv1alpha1.Condition{newCondition}, true
 	} else {
-		newConditions = make([]toolchainv1alpha1.Condition, 0, len(currentConditions))
-		for i, condition := range currentConditions {
-			newConditions[i] = currentConditions[i]
-			if condition.Type == newCondition.Type {
-				oldCondition = &condition
-				index = i
+		for i, cond := range conditions {
+			if cond.Type == newCondition.Type {
+				// Condition already present. Update it if needed.
+				if cond.Status == newCondition.Status &&
+					cond.Reason == newCondition.Reason &&
+					cond.Message == newCondition.Message {
+					// Nothing changed. No need to update.
+					return conditions, false
+				}
+
+				// Update LastTransitionTime only if the status changed otherwise keep the old time
+				if newCondition.Status == cond.Status {
+					newCondition.LastTransitionTime = cond.LastTransitionTime
+				}
+				// Don't modify the currentConditions slice. Generate a new slice instead.
+				res := make([]toolchainv1alpha1.Condition, len(conditions))
+				copy(res, conditions)
+				res[i] = newCondition
+				return res, true
 			}
 		}
 	}
-
-	newCondition.LastTransitionTime = metav1.Now()
-	if oldCondition == nil {
-		// Condition is not present in the status yet. Append it.
-		newConditions = append(newConditions, newCondition)
-		return newConditions, true
-	}
-
-	// Condition already present. Update it if needed.
-	if oldCondition.Status == newCondition.Status &&
-		oldCondition.Reason == newCondition.Reason &&
-		oldCondition.Message == newCondition.Message {
-		// Nothing changed. No need to update.
-		return newConditions, false
-	}
-
-	// Update LastTransitionTime if the status changed
-	if newCondition.Status == oldCondition.Status {
-		newCondition.LastTransitionTime = oldCondition.LastTransitionTime
-	}
-
-	newConditions[index] = newCondition
-	return newConditions, true
+	return append(conditions, newCondition), true
 }

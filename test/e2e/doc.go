@@ -1,2 +1,3 @@
-package e2e_test
+package e2e
+
 // this package contains the end-to-end tests

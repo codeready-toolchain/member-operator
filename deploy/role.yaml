@@ -52,15 +52,6 @@ rules:
   verbs:
   - update
 - apiGroups:
-  - user.openshift.io
-  resources:
-  - users
-  - identities
-  verbs:
-  - list
-  - watch
-  - create
-- apiGroups:
   - ""
   resources:
   - nodes
@@ -69,13 +60,18 @@ rules:
 - apiGroups:
   - toolchain.dev.openshift.com
   resources:
-  - nstemplatesets
-  - useraccounts
+  - '*'
   verbs:
   - '*'
 - apiGroups:
-  - toolchain.dev.openshift.com
+  - user.openshift.io
   resources:
-  - useraccounts/status
+  - identities
+  - users
+  - useridentitymappings
   verbs:
+  - get
+  - create
   - update
+  - list
+  - watch

@@ -39,7 +39,13 @@ There are a few more targets that you can find useful:
 * to remove & create the local test namespace, and create ClusterRole/ClusterRoleBinding and ServiceAccount inside of the namespace: `$ make reset-namespace`
 
 === End-to-End tests
+==== Prerequisites if running locally on minishift
+If you are running this tests locally on minishift, make sure that you have exposed minishift's docker-env, so that deployment can use locally built image. You can expose it by running following command.
+`eval $(minishift docker-env)`
 
+NOTE: This is not required for openshift-ci environment
+
+==== Running End-to-End Tests
 The `make test-e2e` will take care of creating a namespace/project with a random name (or see below for enforcing the namespace). It will also create all required CRDs, role and role binding for the service account, build the Docker image for the operator and push it to the OpenShift container registry. Finally, it will deploy the operator and run the tests using
 the operator-sdk.
 

@@ -118,7 +118,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
-					Reason: "Provisioning",
+					Reason: provisioningReason,
 				})
 		})
 
@@ -142,7 +142,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
-					Reason: "Provisioning",
+					Reason: provisioningReason,
 				})
 		})
 	})
@@ -189,7 +189,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
-					Reason: "Provisioning",
+					Reason: provisioningReason,
 				})
 		})
 
@@ -214,7 +214,7 @@ func TestReconcileOK(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.UserAccountReady,
 					Status: corev1.ConditionFalse,
-					Reason: "Provisioning",
+					Reason: provisioningReason,
 				})
 		})
 	})
@@ -259,7 +259,7 @@ func TestReconcileOK(t *testing.T) {
 			toolchainv1alpha1.Condition{
 				Type:   toolchainv1alpha1.UserAccountReady,
 				Status: corev1.ConditionTrue,
-				Reason: "Provisioned",
+				Reason: provisionedReason,
 			})
 	})
 }

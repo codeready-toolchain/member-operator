@@ -15,6 +15,7 @@ spec:
     - name: User ID
       type: string
       JSONPath: .spec.userID
+      priority: 1
     - name: NS Limit
       type: string
       JSONPath: .spec.nsLimit
@@ -30,6 +31,7 @@ spec:
     - name: Disabled
       type: boolean
       JSONPath: .spec.disabled
+      priority: 1
   subresources:
     status: {}
   validation:

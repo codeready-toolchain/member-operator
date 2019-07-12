@@ -31,7 +31,7 @@ import (
 
 var log = logf.Log.WithName("controller_useraccount")
 
-type MyPredicate struct {
+type GenerationChangedPredicate struct {
 	predicate.GenerationChangedPredicate
 }
 
@@ -46,12 +46,12 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	myPredicate := &MyPredicate{
+	pred := &GenerationChangedPredicate{
 		predicate.GenerationChangedPredicate{
 			ctrlpredicate.Funcs{
 				DeleteFunc: func(e event.DeleteEvent) bool {
 					// Evaluate
-					fmt.Println("💡💡 DELETE EVENT 💡💡")
+					fmt.Println("💡💡 Delete event 💡💡")
 					return true
 				},
 			},
@@ -64,7 +64,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource UserAccount
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, myPredicate.GenerationChangedPredicate)
+	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, pred.GenerationChangedPredicate)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: config.GetOperatorNamespace(), Name: request.Name}, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			reqLogger.Info("👻👻 RESOURCE IS NOT FOUND 👻👻")
+			reqLogger.Info("👻👻 Resource is not found 👻👻")
 			reqLogger.Info(fmt.Sprintf("** Deletion time: %s", userAcc.ObjectMeta.DeletionTimestamp))
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
@@ -119,7 +119,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	if !userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
-		reqLogger.Info("🎉🎉 Deleting User Account - Time is not nil 🎉🎉")
+		reqLogger.Info("🎉🎉 Deleting UserAccount - time is not nil 🎉🎉")
 		return reconcile.Result{}, nil
 	}
 

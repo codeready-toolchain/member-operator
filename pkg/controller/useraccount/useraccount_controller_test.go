@@ -7,11 +7,10 @@ import (
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	userv1 "github.com/openshift/api/user/v1"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
@@ -88,7 +87,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
-					Type:   toolchainv1alpha1.UserAccountReady,
+					Type:   toolchainv1alpha1.ConditionReady,
 					Status: corev1.ConditionFalse,
 					Reason: "Provisioning",
 				})
@@ -150,7 +149,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.UserAccountReady,
+					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
 					Reason:  "UnableToCreateUser",
 					Message: "unable to create user",
@@ -183,7 +182,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.UserAccountReady,
+					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
 					Reason:  "UnableToCreateMapping",
 					Message: "unable to update user",
@@ -207,7 +206,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
-					Type:   toolchainv1alpha1.UserAccountReady,
+					Type:   toolchainv1alpha1.ConditionReady,
 					Status: corev1.ConditionFalse,
 					Reason: "Provisioning",
 				})
@@ -264,7 +263,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.UserAccountReady,
+					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
 					Reason:  "UnableToCreateIdentity",
 					Message: "unable to create identity",
@@ -297,7 +296,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.UserAccountReady,
+					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
 					Reason:  "UnableToCreateMapping",
 					Message: "unable to update identity",
@@ -323,7 +322,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.UserAccountReady,
+				Type:   toolchainv1alpha1.ConditionReady,
 				Status: corev1.ConditionTrue,
 				Reason: "Provisioned",
 			})
@@ -347,7 +346,7 @@ func TestUpdateStatus(t *testing.T) {
 			scheme: s,
 		}
 		condition := toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.UserAccountReady,
+			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 		}
 
@@ -371,7 +370,7 @@ func TestUpdateStatus(t *testing.T) {
 			scheme: s,
 		}
 		conditions := []toolchainv1alpha1.Condition{{
-			Type:   toolchainv1alpha1.UserAccountProvisioning,
+			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
 		}}
 		userAcc.Status.Conditions = conditions
@@ -457,42 +456,15 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, identity.Name, user.Identities[0])
 }
 
-func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *FakeClient) {
+func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	client := NewFakeClient(t, initObjs...)
+	client := test.NewFakeClient(t, initObjs...)
 
 	r := &ReconcileUserAccount{
 		client: client,
 		scheme: s,
 	}
 	return r, newReconcileRequest(username), client
-}
-
-// TODO move to toolchain-common
-func NewFakeClient(t *testing.T, initObjs ...runtime.Object) *FakeClient {
-	client := fake.NewFakeClientWithScheme(scheme.Scheme, initObjs...)
-	return &FakeClient{client, t, nil, nil}
-}
-
-type FakeClient struct {
-	client.Client
-	T          *testing.T
-	MockCreate func(obj runtime.Object) error
-	MockUpdate func(obj runtime.Object) error
-}
-
-func (c *FakeClient) Create(ctx context.Context, obj runtime.Object) error {
-	if c.MockCreate != nil {
-		return c.MockCreate(obj)
-	}
-	return c.Client.Create(ctx, obj)
-}
-
-func (c *FakeClient) Update(ctx context.Context, obj runtime.Object) error {
-	if c.MockUpdate != nil {
-		return c.MockUpdate(obj)
-	}
-	return c.Client.Update(ctx, obj)
 }

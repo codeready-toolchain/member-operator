@@ -6,6 +6,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	userv1 "github.com/openshift/api/user/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -69,33 +70,10 @@ func waitForUserAccStatusConditions(t *testing.T, client client.Client, namespac
 			}
 			return false, err
 		}
-		if ConditionsMatch(userAcc.Status.Conditions, conditions...) {
+		if test.ConditionsMatch(userAcc.Status.Conditions, conditions...) {
 			t.Log("conditions match")
 			return true, nil
 		}
 		return false, nil
 	})
-}
-
-// TODO Move to toolchain-common
-func ConditionsMatch(actual []toolchainv1alpha1.Condition, expected ...toolchainv1alpha1.Condition) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for _, c := range expected {
-		if !ContainsCondition(actual, c) {
-			return false
-		}
-	}
-	return true
-}
-
-// TODO Move to toolchain-common
-func ContainsCondition(conditions []toolchainv1alpha1.Condition, contains toolchainv1alpha1.Condition) bool {
-	for _, c := range conditions {
-		if c.Type == contains.Type {
-			return contains.Status == c.Status && contains.Reason == c.Reason && contains.Message == c.Message
-		}
-	}
-	return false
 }

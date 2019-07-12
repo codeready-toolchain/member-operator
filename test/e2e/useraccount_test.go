@@ -145,7 +145,7 @@ func verifyResources(t *testing.T, f *framework.Framework, namespace string, use
 	}
 	if err := waitForUserAccStatusConditions(t, f.Client.Client, namespace, userAcc.Name,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.UserAccountReady,
+			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: "Provisioned",
 		}); err != nil {

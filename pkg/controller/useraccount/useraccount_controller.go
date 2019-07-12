@@ -228,7 +228,7 @@ func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1a
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.UserAccountReady,
+			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  unableToCreateUserReason,
 			Message: message,
@@ -239,7 +239,7 @@ func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchai
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.UserAccountReady,
+			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  unableToCreateIdentityReason,
 			Message: message,
@@ -250,7 +250,7 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.UserAccountReady,
+			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  unableToCreateMappingReason,
 			Message: message,
@@ -261,7 +261,7 @@ func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.UserAccountReady,
+			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
 			Reason: provisioningReason,
 		})
@@ -271,7 +271,7 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.UserAccountReady,
+			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: provisionedReason,
 		})

@@ -7,6 +7,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
+
 	userv1 "github.com/openshift/api/user/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
@@ -39,7 +40,7 @@ func TestUserAccount(t *testing.T) {
 	client := f.Client.Client
 
 	// wait for operator to be ready
-	err = e2eutil.WaitForDeployment(t, f.KubeClient, namespace, "member-operator", 1, retryInterval, timeout)
+	err = e2eutil.WaitForDeployment(t, f.KubeClient, namespace, "member-operator", 1, operatorRetryInterval, operatorTimeout)
 	require.NoError(t, err, "failed while waiting for operator deployment")
 
 	t.Log("member-operator is ready and running state")
@@ -54,7 +55,7 @@ func TestUserAccount(t *testing.T) {
 	t.Logf("user account '%s' created", userAcc.Name)
 
 	t.Run("verify_useraccount_ok", func(t *testing.T) {
-		err := verifyResources(t, f, userAcc)
+		err := verifyResources(t, f, namespace, userAcc)
 		assert.NoError(t, err)
 	})
 
@@ -66,7 +67,7 @@ func TestUserAccount(t *testing.T) {
 		err = client.Delete(context.TODO(), user)
 		require.NoError(t, err)
 
-		err = verifyResources(t, f, userAcc)
+		err = verifyResources(t, f, namespace, userAcc)
 		assert.NoError(t, err)
 	})
 
@@ -78,7 +79,7 @@ func TestUserAccount(t *testing.T) {
 		err = client.Delete(context.TODO(), identity)
 		require.NoError(t, err)
 
-		err = verifyResources(t, f, userAcc)
+		err = verifyResources(t, f, namespace, userAcc)
 		assert.NoError(t, err)
 	})
 
@@ -91,7 +92,7 @@ func TestUserAccount(t *testing.T) {
 		err = client.Update(context.TODO(), user)
 		require.NoError(t, err)
 
-		err = verifyResources(t, f, userAcc)
+		err = verifyResources(t, f, namespace, userAcc)
 		assert.NoError(t, err)
 	})
 
@@ -104,11 +105,11 @@ func TestUserAccount(t *testing.T) {
 		err = client.Update(context.TODO(), identity)
 		require.NoError(t, err)
 
-		err = verifyResources(t, f, userAcc)
+		err = verifyResources(t, f, namespace, userAcc)
 		assert.NoError(t, err)
 	})
 
-	err = verifyResources(t, f, extraUserAcc)
+	err = verifyResources(t, f, namespace, extraUserAcc)
 	assert.NoError(t, err)
 	t.Log("extra useraccount verified at end")
 }
@@ -135,11 +136,19 @@ func newUserAcc(namespace, name string) *toolchainv1alpha1.UserAccount {
 	return userAcc
 }
 
-func verifyResources(t *testing.T, f *framework.Framework, userAcc *toolchainv1alpha1.UserAccount) error {
+func verifyResources(t *testing.T, f *framework.Framework, namespace string, userAcc *toolchainv1alpha1.UserAccount) error {
 	if err := waitForUser(t, f.Client.Client, userAcc.Name); err != nil {
 		return err
 	}
 	if err := waitForIdentity(t, f.Client.Client, useraccount.ToIdentityName(userAcc.Spec.UserID)); err != nil {
+		return err
+	}
+	if err := waitForUserAccStatusConditions(t, f.Client.Client, namespace, userAcc.Name,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+			Reason: "Provisioned",
+		}); err != nil {
 		return err
 	}
 	return nil
@@ -153,7 +162,7 @@ func createUserAccount(t *testing.T, f *framework.Framework, ctx *framework.Test
 	err = f.Client.Create(context.TODO(), userAcc, &framework.CleanupOptions{TestContext: ctx, Timeout: cleanupTimeout, RetryInterval: cleanupRetryInterval})
 	require.NoError(t, err)
 
-	err = verifyResources(t, f, userAcc)
+	err = verifyResources(t, f, namespace, userAcc)
 	assert.NoError(t, err)
 
 	return userAcc

@@ -42,9 +42,15 @@ rules:
 - apiGroups:
   - core.kubefed.k8s.io
   resources:
-  - KubeFedCluster
+  - kubefedclusters
   verbs:
   - "*"
+- apiGroups:
+  - core.kubefed.k8s.io
+  resources:
+  - kubefedclusters/status
+  verbs:
+  - update
 - apiGroups:
   - ""
   resources:
@@ -54,7 +60,18 @@ rules:
 - apiGroups:
   - toolchain.dev.openshift.com
   resources:
-  - nstemplatesets
-  - useraccounts
+  - '*'
   verbs:
   - '*'
+- apiGroups:
+  - user.openshift.io
+  resources:
+  - identities
+  - users
+  - useridentitymappings
+  verbs:
+  - get
+  - create
+  - update
+  - list
+  - watch

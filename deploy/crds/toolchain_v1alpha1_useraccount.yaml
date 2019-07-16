@@ -11,6 +11,27 @@ spec:
     kind: UserAccount
     plural: useraccounts
   scope: Namespaced
+  additionalPrinterColumns:
+    - name: User ID
+      type: string
+      JSONPath: .spec.userID
+      priority: 1
+    - name: NS Limit
+      type: string
+      JSONPath: .spec.nsLimit
+    - name: Tier Name
+      type: string
+      JSONPath: .spec.nsTemplateSet.tierName
+    - name: Ready
+      type: string
+      JSONPath: ".status.conditions[?(@.type==\"Ready\")].status"
+    - name: Reason
+      type: string
+      JSONPath: ".status.conditions[?(@.type==\"Ready\")].reason"
+    - name: Disabled
+      type: boolean
+      JSONPath: .spec.disabled
+      priority: 1
   subresources:
     status: {}
   validation:
@@ -30,6 +51,10 @@ spec:
           type: object
         spec:
           properties:
+            disabled:
+              description: If set to true then the corresponding user should not be
+                able to login "false" is assumed by default
+              type: boolean
             nsLimit:
               description: The namespace limit name
               type: string
@@ -73,12 +98,36 @@ spec:
           type: object
         status:
           properties:
-            error:
-              description: The error message in case of failed status
-              type: string
-            status:
-              description: 'Observed status. For example: provisioning|provisioned'
-              type: string
+            conditions:
+              description: 'Conditions is an array of current User Account conditions
+                Supported condition types: Provisioning, UserNotReady, IdentityNotReady,
+                UserIdentityMappingNotReady, NSTemplateSetNotReady and Ready +patchMergeKey=type
+                +patchStrategy=merge'
+              items:
+                properties:
+                  lastTransitionTime:
+                    description: Last time the condition transit from one status to
+                      another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: Human readable message indicating details about last
+                      transition.
+                    type: string
+                  reason:
+                    description: (brief) reason for the condition's last transition.
+                    type: string
+                  status:
+                    description: Status of the condition, one of True, False, Unknown.
+                    type: string
+                  type:
+                    description: Type of condition
+                    type: string
+                required:
+                - type
+                - status
+                type: object
+              type: array
           type: object
   version: v1alpha1
 status:

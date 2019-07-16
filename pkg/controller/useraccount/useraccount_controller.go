@@ -27,6 +27,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+const (
+	// Status condition reasons
+	unableToCreateUserReason     = "UnableToCreateUser"
+	unableToCreateIdentityReason = "UnableToCreateIdentity"
+	unableToCreateMappingReason  = "UnableToCreateMapping"
+	provisioningReason           = "Provisioning"
+	provisionedReason            = "Provisioned"
+)
+
 var log = logf.Log.WithName("controller_useraccount")
 
 type GenerationChangedPredicate struct {
@@ -170,7 +179,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{}, r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioned, "")
+	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
 
 func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
@@ -178,32 +187,38 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new user", "name", userAcc.Name)
-			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
+			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
 			user = newUser(userAcc)
 			if err := controllerutil.SetControllerReference(userAcc, user, r.scheme); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to set controller reference for user '%s'", userAcc.Name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to set controller reference for user '%s'", userAcc.Name)
 			}
 			if err := r.client.Create(context.TODO(), user); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create user '%s'", userAcc.Name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to create user '%s'", userAcc.Name)
+			}
+			if err := r.setStatusProvisioning(userAcc); err != nil {
+				return nil, false, err
 			}
 			logger.Info("user created successfully", "name", userAcc.Name)
 			return user, true, nil
 		}
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get user '%s'", userAcc.Name)
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to get user '%s'", userAcc.Name)
 	}
 	logger.Info("user already exists", "name", userAcc.Name)
 
 	// ensure mapping
-	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != getIdentityName(userAcc) {
+	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID) {
 		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
-		if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
+		if err := r.setStatusProvisioning(userAcc); err != nil {
 			return nil, false, err
 		}
-		user.Identities = []string{getIdentityName(userAcc)}
+		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID)}
 		if err := r.client.Update(context.TODO(), user); err != nil {
-			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to update user '%s'", userAcc.Name)
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update user '%s'", userAcc.Name)
+		}
+		if err := r.setStatusProvisioning(userAcc); err != nil {
+			return nil, false, err
 		}
 		logger.Info("user updated successfully", "name", userAcc.Name)
 		return user, true, nil
@@ -212,32 +227,35 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 }
 
 func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	name := getIdentityName(userAcc)
+	name := ToIdentityName(userAcc.Spec.UserID)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new identity", "name", name)
-			if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
+			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
 			identity = newIdentity(userAcc, user)
 			if err := controllerutil.SetControllerReference(userAcc, identity, r.scheme); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to set controller reference for identity '%s'", name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to set controller reference for identity '%s'", name)
 			}
 			if err := r.client.Create(context.TODO(), identity); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to create identity '%s'", name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", name)
+			}
+			if err := r.setStatusProvisioning(userAcc); err != nil {
+				return nil, false, err
 			}
 			logger.Info("identity created successfully", "name", name)
 			return identity, true, nil
 		}
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to get identity '%s'", name)
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to get identity '%s'", name)
 	}
 	logger.Info("identity already exists", "name", name)
 
 	// ensure mapping
 	if identity.User.Name != user.Name || identity.User.UID != user.UID {
 		logger.Info("identity is missing a reference to user; updating the reference", "identity", name, "user", user.Name)
-		if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, ""); err != nil {
+		if err := r.setStatusProvisioning(userAcc); err != nil {
 			return nil, false, err
 		}
 		identity.User = corev1.ObjectReference{
@@ -245,7 +263,10 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 			UID:  user.UID,
 		}
 		if err := r.client.Update(context.TODO(), identity); err != nil {
-			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, err, "failed to update identity '%s'", name)
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update identity '%s'", name)
+		}
+		if err := r.setStatusProvisioning(userAcc); err != nil {
+			return nil, false, err
 		}
 		logger.Info("identity updated successfully", "name", name)
 		return identity, true, nil
@@ -254,29 +275,79 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	return identity, false, nil
 }
 
-// updateStatus updates user account status to given status with errMsg but only if the current status doesn't match
-// If the current status already set to desired state then this method does nothing
-func (r *ReconcileUserAccount) updateStatus(userAcc *toolchainv1alpha1.UserAccount, status toolchainv1alpha1.StatusUserAccount, errMsg string) error {
-	if userAcc.Status.Status == status && userAcc.Status.Error == errMsg {
-		// Nothing changed
-		return nil
-	}
-	userAcc.Status = toolchainv1alpha1.UserAccountStatus{
-		Status: status,
-		Error:  errMsg,
-	}
-	return r.client.Status().Update(context.TODO(), userAcc)
-}
-
-// wrapErrorWithStatusUpdate wraps the error and set the user account status to "provisioning". If the update failed then log the error.
-func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, err error, format string, args ...interface{}) error {
+// wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
+func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, statusUpdater func(userAcc *toolchainv1alpha1.UserAccount, message string) error, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
-	if err := r.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, err.Error()); err != nil {
+	if err := statusUpdater(userAcc, err.Error()); err != nil {
 		logger.Error(err, "status update failed")
 	}
 	return errs.Wrapf(err, format, args...)
+}
+
+func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  unableToCreateUserReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  unableToCreateIdentityReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  unableToCreateMappingReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.UserAccount) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: provisioningReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAccount) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+			Reason: provisionedReason,
+		})
+}
+
+// updateStatusConditions updates user account status conditions with the new conditions
+func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
+	var updated bool
+	userAcc.Status.Conditions, updated = condition.AddOrUpdateStatusConditions(userAcc.Status.Conditions, newConditions...)
+	if !updated {
+		// Nothing changed
+		return nil
+	}
+	return r.client.Status().Update(context.TODO(), userAcc)
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
@@ -284,13 +355,13 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{getIdentityName(userAcc)},
+		Identities: []string{ToIdentityName(userAcc.Spec.UserID)},
 	}
 	return user
 }
 
 func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *userv1.Identity {
-	name := getIdentityName(userAcc)
+	name := ToIdentityName(userAcc.Spec.UserID)
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -305,8 +376,8 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 	return identity
 }
 
-func getIdentityName(userAcc *toolchainv1alpha1.UserAccount) string {
-	return fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID)
+func ToIdentityName(userID string) string {
+	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
 }
 
 func containsString(items []string, value string) bool {

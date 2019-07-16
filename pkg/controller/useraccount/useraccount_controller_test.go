@@ -2,19 +2,21 @@ package useraccount
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,16 +26,16 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-func TestReconcileOK(t *testing.T) {
+func TestReconcile(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
-	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
+	userID := uuid.NewV4().String()
 
 	// given
 	userAcc := newUserAccount(username, userID)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      getIdentityName(userAcc),
+		Name:      ToIdentityName(userAcc.Spec.UserID),
 		Namespace: "toolchain-member",
 		UID:       types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
@@ -45,12 +47,12 @@ func TestReconcileOK(t *testing.T) {
 		Namespace:       "toolchain-member",
 		UID:             userUID,
 		OwnerReferences: []metav1.OwnerReference{},
-	}, Identities: []string{getIdentityName(userAcc)}}
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
 
-	t.Run("deleted_account_ignored", func(t *testing.T) {
+	t.Run("deleted account ignored", func(t *testing.T) {
 		// given
 		// No user account exists
-		r, req := prepareReconcile(t, username)
+		r, req, _ := prepareReconcile(t, username)
 		//when
 		res, err := r.Reconcile(req)
 
@@ -61,16 +63,16 @@ func TestReconcileOK(t *testing.T) {
 		// Check the user is not created
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &userv1.User{})
 		require.Error(t, err)
-		assert.True(t, errors.IsNotFound(err))
+		assert.True(t, apierros.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
 		require.Error(t, err)
-		assert.True(t, errors.IsNotFound(err))
+		assert.True(t, apierros.IsNotFound(err))
 	})
 
 	// First cycle of reconcile. Freshly created UserAccount.
-	t.Run("create_or_update_user", func(t *testing.T) {
+	t.Run("create or update user OK", func(t *testing.T) {
 		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
 			//when
 			res, err := r.Reconcile(req)
@@ -83,8 +85,12 @@ func TestReconcileOK(t *testing.T) {
 			updatedAcc := &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 			require.NoError(t, err)
-			assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
-			assert.Empty(t, updatedAcc.Status.Error)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+				toolchainv1alpha1.Condition{
+					Type:   toolchainv1alpha1.ConditionReady,
+					Status: corev1.ConditionFalse,
+					Reason: "Provisioning",
+				})
 
 			// Check the created/updated user
 			user := &userv1.User{}
@@ -99,13 +105,13 @@ func TestReconcileOK(t *testing.T) {
 			checkMapping(t, user, preexistingIdentity)
 
 			// Check the identity is not created yet
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, &userv1.Identity{})
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
 			require.Error(t, err)
-			assert.True(t, errors.IsNotFound(err))
+			assert.True(t, apierros.IsNotFound(err))
 		}
 
 		t.Run("create", func(t *testing.T) {
-			r, req := prepareReconcile(t, username, userAcc)
+			r, req, _ := prepareReconcile(t, username, userAcc)
 			reconcile(r, req)
 		})
 
@@ -116,13 +122,76 @@ func TestReconcileOK(t *testing.T) {
 				UID:             userUID,
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
 			}}
-			r, req := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			reconcile(r, req)
 		})
 	})
 
+	t.Run("create or update user failed", func(t *testing.T) {
+		t.Run("create", func(t *testing.T) {
+			// given
+			r, req, client := prepareReconcile(t, username, userAcc)
+			client.MockCreate = func(obj runtime.Object) error {
+				return errors.New("unable to create user")
+			}
+
+			//when
+			res, err := r.Reconcile(req)
+
+			//then
+			require.Error(t, err)
+			require.EqualError(t, err, fmt.Sprintf("failed to create user '%s': unable to create user", username))
+			assert.Equal(t, reconcile.Result{}, res)
+
+			// Check that the user account status has been updated
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+				toolchainv1alpha1.Condition{
+					Type:    toolchainv1alpha1.ConditionReady,
+					Status:  corev1.ConditionFalse,
+					Reason:  "UnableToCreateUser",
+					Message: "unable to create user",
+				})
+		})
+		t.Run("update", func(t *testing.T) {
+			// given
+			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
+				Name:            username,
+				Namespace:       "toolchain-member",
+				UID:             userUID,
+				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+			}}
+			r, req, client := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
+			client.MockUpdate = func(obj runtime.Object) error {
+				return errors.New("unable to update user")
+			}
+
+			//when
+			res, err := r.Reconcile(req)
+
+			//then
+			require.Error(t, err)
+			require.EqualError(t, err, fmt.Sprintf("failed to update user '%s': unable to update user", username))
+			assert.Equal(t, reconcile.Result{}, res)
+
+			// Check that the user account status has been updated
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+				toolchainv1alpha1.Condition{
+					Type:    toolchainv1alpha1.ConditionReady,
+					Status:  corev1.ConditionFalse,
+					Reason:  "UnableToCreateMapping",
+					Message: "unable to update user",
+				})
+		})
+	})
+
 	// Second cycle of reconcile. User already created.
-	t.Run("create_or_update_identity", func(t *testing.T) {
+	t.Run("create or update identity OK", func(t *testing.T) {
 		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
 			//when
 			res, err := r.Reconcile(req)
@@ -135,12 +204,16 @@ func TestReconcileOK(t *testing.T) {
 			updatedAcc := &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 			require.NoError(t, err)
-			assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
-			assert.Empty(t, updatedAcc.Status.Error)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+				toolchainv1alpha1.Condition{
+					Type:   toolchainv1alpha1.ConditionReady,
+					Status: corev1.ConditionFalse,
+					Reason: "Provisioning",
+				})
 
 			// Check the created/updated identity
 			identity := &userv1.Identity{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity)
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 			require.NoError(t, err)
 			assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 			require.Len(t, identity.GetOwnerReferences(), 1)
@@ -151,28 +224,90 @@ func TestReconcileOK(t *testing.T) {
 		}
 
 		t.Run("create", func(t *testing.T) {
-			r, req := prepareReconcile(t, username, userAcc, preexistingUser)
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser)
 			reconcile(r, req)
 		})
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:            getIdentityName(userAcc),
+				Name:            ToIdentityName(userAcc.Spec.UserID),
 				Namespace:       "toolchain-member",
 				UID:             types.UID(uuid.NewV4().String()),
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
 			}}
 
-			r, req := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
 			reconcile(r, req)
 		})
+	})
 
+	t.Run("create or update identity failed", func(t *testing.T) {
+		t.Run("create", func(t *testing.T) {
+			// given
+			r, req, client := prepareReconcile(t, username, userAcc, preexistingUser)
+			client.MockCreate = func(obj runtime.Object) error {
+				return errors.New("unable to create identity")
+			}
+
+			//when
+			res, err := r.Reconcile(req)
+
+			//then
+			require.Error(t, err)
+			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID)))
+			assert.Equal(t, reconcile.Result{}, res)
+
+			// Check that the user account status has been updated
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+				toolchainv1alpha1.Condition{
+					Type:    toolchainv1alpha1.ConditionReady,
+					Status:  corev1.ConditionFalse,
+					Reason:  "UnableToCreateIdentity",
+					Message: "unable to create identity",
+				})
+		})
+		t.Run("update", func(t *testing.T) {
+			// given
+			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
+				Name:            ToIdentityName(userAcc.Spec.UserID),
+				Namespace:       "toolchain-member",
+				UID:             types.UID(uuid.NewV4().String()),
+				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+			}}
+			r, req, client := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
+			client.MockUpdate = func(obj runtime.Object) error {
+				return errors.New("unable to update identity")
+			}
+
+			//when
+			res, err := r.Reconcile(req)
+
+			//then
+			require.Error(t, err)
+			require.EqualError(t, err, fmt.Sprintf("failed to update identity '%s': unable to update identity", preexistingIdentityWithNoMapping.Name))
+			assert.Equal(t, reconcile.Result{}, res)
+
+			// Check that the user account status has been updated
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+				toolchainv1alpha1.Condition{
+					Type:    toolchainv1alpha1.ConditionReady,
+					Status:  corev1.ConditionFalse,
+					Reason:  "UnableToCreateMapping",
+					Message: "unable to update identity",
+				})
+		})
 	})
 
 	// Last cycle of reconcile. User, Identity created/updated.
 	t.Run("provisioned", func(t *testing.T) {
 		// given
-		r, req := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
 		res, err := r.Reconcile(req)
@@ -185,103 +320,109 @@ func TestReconcileOK(t *testing.T) {
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioned, updatedAcc.Status.Status)
-		assert.Empty(t, updatedAcc.Status.Error)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+			toolchainv1alpha1.Condition{
+				Type:   toolchainv1alpha1.ConditionReady,
+				Status: corev1.ConditionTrue,
+				Reason: "Provisioned",
+			})
 	})
-}
-
-func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request) {
-	s := scheme.Scheme
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
-	client := fake.NewFakeClientWithScheme(s, initObjs...)
-
-	r := &ReconcileUserAccount{
-		client: client,
-		scheme: s,
-	}
-	return r, newReconcileRequest(username)
 }
 
 func TestUpdateStatus(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
-	userID := "34113f6a-2e0d-11e9-be9a-525400fb443d"
+	userID := uuid.NewV4().String()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	t.Run("status_ok", func(t *testing.T) {
-		userAcc := newUserAccount(username, userID)
-		client := fake.NewFakeClient(userAcc)
-		reconciler := &ReconcileUserAccount{
-			client: client,
-			scheme: s,
-		}
-
-		err := reconciler.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "")
-
-		assert.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, userAcc.Status.Status)
-		assert.Equal(t, "", userAcc.Status.Error)
-	})
-
-	t.Run("status_error", func(t *testing.T) {
-		userAcc := newUserAccount(username, userID)
-		client := fake.NewFakeClient(userAcc)
-		reconciler := &ReconcileUserAccount{
-			client: client,
-			scheme: s,
-		}
-
-		err := reconciler.updateStatus(userAcc, toolchainv1alpha1.StatusProvisioning, "some error")
-
-		assert.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, userAcc.Status.Status)
-		assert.Equal(t, "some error", userAcc.Status.Error)
-	})
-
-	t.Run("status_error_wrapped", func(t *testing.T) {
-		userAcc := newUserAccount(username, userID)
-		client := fake.NewFakeClient(userAcc)
-		reconciler := &ReconcileUserAccount{
-			client: client,
-			scheme: s,
-		}
-
-		log := logf.Log.WithName("test")
-		err := reconciler.wrapErrorWithStatusUpdate(log, userAcc, errors.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
-
-		require.Error(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, userAcc.Status.Status)
-		assert.Equal(t, "oopsy woopsy", userAcc.Status.Error)
-		assert.Equal(t, "failed to create user bob: oopsy woopsy", err.Error())
-	})
-
-	t.Run("status_error_reset", func(t *testing.T) {
+	t.Run("status updated", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		userAcc.Status.Error = "this error should be reset to an empty string"
-
 		client := fake.NewFakeClient(userAcc)
-		r := &ReconcileUserAccount{
+		reconciler := &ReconcileUserAccount{
 			client: client,
 			scheme: s,
 		}
-
-		req := newReconcileRequest(username)
+		condition := toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+		}
 
 		// when
-		_, err := r.Reconcile(req)
+		err := reconciler.updateStatusConditions(userAcc, condition)
 
 		// then
 		require.NoError(t, err)
-		// Check updated status
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
-		assert.Equal(t, toolchainv1alpha1.StatusProvisioning, updatedAcc.Status.Status)
-		assert.Empty(t, updatedAcc.Status.Error)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions, condition)
+	})
+
+	t.Run("status not updated because not changed", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		client := fake.NewFakeClient(userAcc)
+		reconciler := &ReconcileUserAccount{
+			client: client,
+			scheme: s,
+		}
+		conditions := []toolchainv1alpha1.Condition{{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+		}}
+		userAcc.Status.Conditions = conditions
+
+		// when
+		err := reconciler.updateStatusConditions(userAcc, conditions...)
+
+		// then
+		require.NoError(t, err)
+		updatedAcc := &toolchainv1alpha1.UserAccount{}
+		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
+		require.NoError(t, err)
+		// Status is not updated
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions)
+	})
+
+	t.Run("status error wrapped", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		client := fake.NewFakeClient(userAcc)
+		reconciler := &ReconcileUserAccount{
+			client: client,
+			scheme: s,
+		}
+		log := logf.Log.WithName("test")
+
+		t.Run("status updated", func(t *testing.T) {
+			statusUpdater := func(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+				assert.Equal(t, "oopsy woopsy", message)
+				return nil
+			}
+
+			// when
+			err := reconciler.wrapErrorWithStatusUpdate(log, userAcc, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
+
+			// then
+			require.Error(t, err)
+			assert.Equal(t, "failed to create user bob: oopsy woopsy", err.Error())
+		})
+
+		t.Run("status update failed", func(t *testing.T) {
+			statusUpdater := func(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+				return errors.New("unable to update status")
+			}
+
+			// when
+			err := reconciler.wrapErrorWithStatusUpdate(log, userAcc, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
+
+			// then
+			require.Error(t, err)
+			assert.Equal(t, "failed to create user bob: oopsy woopsy", err.Error())
+		})
 	})
 }
 
@@ -313,4 +454,17 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, user.UID, identity.User.UID)
 	require.Len(t, user.Identities, 1)
 	assert.Equal(t, identity.Name, user.Identities[0])
+}
+
+func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	client := test.NewFakeClient(t, initObjs...)
+
+	r := &ReconcileUserAccount{
+		client: client,
+		scheme: s,
+	}
+	return r, newReconcileRequest(username), client
 }

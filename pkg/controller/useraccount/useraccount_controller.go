@@ -20,10 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	ctrlpredicate "sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -46,25 +44,13 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	pred := &GenerationChangedPredicate{
-		predicate.GenerationChangedPredicate{
-			ctrlpredicate.Funcs{
-				DeleteFunc: func(e event.DeleteEvent) bool {
-					// Evaluate
-					fmt.Println("💡💡 Delete event 💡💡")
-					return true
-				},
-			},
-		},
-	}
-
 	c, err := controller.New("useraccount-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to primary resource UserAccount
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, pred.GenerationChangedPredicate)
+	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
 	if err != nil {
 		return err
 	}
@@ -101,15 +87,13 @@ type ReconcileUserAccount struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling UserAccount")
+	reqLogger.Info("reconciling UserAccount")
 
 	// Fetch the UserAccount instance
 	userAcc := &toolchainv1alpha1.UserAccount{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: config.GetOperatorNamespace(), Name: request.Name}, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			reqLogger.Info("👻👻 Resource is not found 👻👻")
-			reqLogger.Info(fmt.Sprintf("** Deletion time: %s", userAcc.ObjectMeta.DeletionTimestamp))
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -118,8 +102,61 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
+	// Finalizer name
+	userAccFinalizerName := "finalizer.toolchain.dev.openshift.com"
+
+	// Add the finalizer if it is not present
+	if !containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
+		userAcc.ObjectMeta.Finalizers = append(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
+		if err := r.client.Update(context.TODO(), userAcc); err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
+	}
+
+	// Check if the UserAccount has been deleted
 	if !userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
-		reqLogger.Info("🎉🎉 Deleting UserAccount - time is not nil 🎉🎉")
+		reqLogger.Info("deleting UserAccount and subsequent resources", "name", userAcc.Name)
+
+		// Get the Identity associated with the UserAccount
+		identity := &userv1.Identity{}
+		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity); err != nil {
+			if errors.IsNotFound(err) {
+				// Request object not found, could have been deleted after reconcile request.
+				// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+				// Return and don't requeue
+				return reconcile.Result{}, nil
+			}
+			return reconcile.Result{}, err
+		}
+
+		// Get the User associated with the UserAccount
+		user := &userv1.User{}
+		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
+			if errors.IsNotFound(err) {
+				// Request object not found, could have been deleted after reconcile request.
+				// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+				// Return and don't requeue
+				return reconcile.Result{}, nil
+			}
+			return reconcile.Result{}, err
+		}
+
+		// Delete Identity associated with UserAccount
+		if err := r.client.Delete(context.TODO(), identity); err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
+
+		// Delete User associated with UserAccount
+		if err := r.client.Delete(context.TODO(), user); err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
+
+		// Remove finalizer from UserAccount
+		userAcc.ObjectMeta.Finalizers = removeString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
+		if err := r.client.Update(context.Background(), userAcc); err != nil {
+			return reconcile.Result{Requeue: true}, err
+		}
+
 		return reconcile.Result{}, nil
 	}
 
@@ -270,4 +307,23 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 
 func getIdentityName(userAcc *toolchainv1alpha1.UserAccount) string {
 	return fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID)
+}
+
+func containsString(items []string, value string) bool {
+	for _, item := range items {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(items []string, value string) (result []string) {
+	for _, item := range items {
+		if item == value {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
 }

@@ -6,6 +6,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
@@ -128,7 +129,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 		// Get the Identity associated with the UserAccount
 		identity := &userv1.Identity{}
-		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(userAcc)}, identity); err != nil {
+		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity); err != nil {
 			if errors.IsNotFound(err) {
 				// Request object not found, could have been deleted after reconcile request.
 				// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.

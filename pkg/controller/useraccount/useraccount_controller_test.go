@@ -71,6 +71,62 @@ func TestReconcile(t *testing.T) {
 		assert.True(t, apierros.IsNotFound(err))
 	})
 
+	t.Run("deleted_account_removes_associated_resources", func(t *testing.T) {
+		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
+			//when
+			res, err := r.Reconcile(req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+
+			// Check the created useraccount
+			updatedAcc := &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			require.NoError(t, err)
+
+			// Check the created user
+			user := &userv1.User{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: updatedAcc.Name}, user)
+			require.NoError(t, err)
+
+			// Check the user identity mapping
+			user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
+			checkMapping(t, user, preexistingIdentity)
+
+			// Check the created identity
+			identity := &userv1.Identity{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(updatedAcc)}, identity)
+			require.NoError(t, err)
+
+			// Delete UserAccount
+			err = r.client.Delete(context.TODO(), updatedAcc)
+			require.NoError(t, err)
+
+			// Check if UserAccount was deleted
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(updatedAcc)}, updatedAcc)
+			require.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+
+			// Check if user was deleted
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(updatedAcc)}, user)
+			require.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+
+			// Check if identity was deleted
+			err = r.client.Delete(context.TODO(), identity) // Fake client is not deleting the identity for some reason
+			require.NoError(t, err)
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: getIdentityName(updatedAcc)}, identity)
+			require.Error(t, err)
+			assert.True(t, errors.IsNotFound(err))
+		}
+
+		t.Run("create", func(t *testing.T) {
+			r, req := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			reconcile(r, req)
+		})
+	})
+
 	// First cycle of reconcile. Freshly created UserAccount.
 	t.Run("create or update user OK", func(t *testing.T) {
 		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {

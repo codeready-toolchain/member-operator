@@ -7,17 +7,16 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,6 +34,9 @@ const (
 	unableToCreateMappingReason  = "UnableToCreateMapping"
 	provisioningReason           = "Provisioning"
 	provisionedReason            = "Provisioned"
+
+	// Finalizers
+	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
 )
 
 var log = logf.Log.WithName("controller_useraccount")
@@ -93,7 +95,7 @@ type ReconcileUserAccount struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("reconciling UserAccount")
+	reqLogger.Info("Reconciling UserAccount")
 
 	// Fetch the UserAccount instance
 	userAcc := &toolchainv1alpha1.UserAccount{}
@@ -108,62 +110,18 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	// Finalizer name
-	userAccFinalizerName := "finalizer.toolchain.dev.openshift.com"
-
 	// Add the finalizer if it is not present
-	if !containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
-		userAcc.ObjectMeta.Finalizers = append(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
-		if err := r.client.Update(context.TODO(), userAcc); err != nil {
-			return reconcile.Result{Requeue: true}, err
-		}
+	if err := r.setFinalizers(userAcc); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Check if the UserAccount has been deleted
 	if !userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
-		reqLogger.Info("deleting UserAccount and subsequent resources", "name", userAcc.Name)
-
-		// Get the Identity associated with the UserAccount
-		identity := &userv1.Identity{}
-		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity); err != nil {
-			if errors.IsNotFound(err) {
-				// Request object not found, could have been deleted after reconcile request.
-				// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-				// Return and don't requeue
-				return reconcile.Result{}, nil
-			}
-			return reconcile.Result{}, err
-		}
-
-		// Get the User associated with the UserAccount
-		user := &userv1.User{}
-		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
-			if errors.IsNotFound(err) {
-				// Request object not found, could have been deleted after reconcile request.
-				// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-				// Return and don't requeue
-				return reconcile.Result{}, nil
-			}
-			return reconcile.Result{}, err
-		}
-
-		// Delete Identity associated with UserAccount
-		if err := r.client.Delete(context.TODO(), identity); err != nil {
+		rec, err := r.finalizer(reqLogger, userAcc)
+		if rec {
 			return reconcile.Result{Requeue: true}, err
 		}
-
-		// Delete User associated with UserAccount
-		if err := r.client.Delete(context.TODO(), user); err != nil {
-			return reconcile.Result{Requeue: true}, err
-		}
-
-		// Remove finalizer from UserAccount
-		userAcc.ObjectMeta.Finalizers = removeString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
-		if err := r.client.Update(context.Background(), userAcc); err != nil {
-			return reconcile.Result{Requeue: true}, err
-		}
-
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, err
 	}
 
 	var createdOrUpdated bool
@@ -270,6 +228,67 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	}
 
 	return identity, false, nil
+}
+
+// Sets the finalizers for UserAccount
+func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAccount) error {
+	// Add the finalizer if it is not present
+	if !containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
+		userAcc.ObjectMeta.Finalizers = append(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
+		if err := r.client.Update(context.TODO(), userAcc); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Handles finalizer logic for UserAccount
+func (r *ReconcileUserAccount) finalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	logger.Info("deleting UserAccount and subsequent resources", "name", userAcc.Name)
+
+	// Get the Identity associated with the UserAccount
+	identity := &userv1.Identity{}
+	identityName := ToIdentityName(userAcc.Spec.UserID)
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity); err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Get the User associated with the UserAccount
+	user := &userv1.User{}
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Delete Identity associated with UserAccount
+	if err := r.client.Delete(context.TODO(), identity); err != nil {
+		return true, err
+	}
+
+	// Delete User associated with UserAccount
+	if err := r.client.Delete(context.TODO(), user); err != nil {
+		return true, err
+	}
+
+	// Remove finalizer from UserAccount
+	userAcc.ObjectMeta.Finalizers = removeString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
+	if err := r.client.Update(context.Background(), userAcc); err != nil {
+		return true, err
+	}
+
+	return false, nil
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.

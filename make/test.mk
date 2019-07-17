@@ -46,12 +46,16 @@ upload-codecov-report:
 ###########################################################
 
 .PHONY: test-e2e
-test-e2e:  e2e-setup
-	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
+test-e2e:  deploy-host e2e-setup setup-kubefed
 	# This is hack to fix https://github.com/operator-framework/operator-sdk/issues/1657
 	echo "info: Running go mod vendor"
 	go mod vendor
 	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
+	# remove me once verified
+	oc get kubefedcluster -n $(TEST_NAMESPACE)
+	oc get kubefedcluster -n $(HOST_NS)
+	oc logs $(oc get pods -o name) -n $(HOST_NS)
+	oc logs $(oc get pods -o name) -n $(TEST_NAMESPACE)
 
 .PHONY: e2e-setup
 e2e-setup: get-test-namespace is-minishift
@@ -60,6 +64,13 @@ e2e-setup: get-test-namespace is-minishift
 	oc apply -f ./deploy/role.yaml
 	cat ./deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(TEST_NAMESPACE)/ | oc apply -f -
 	oc apply -f deploy/crds
+	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
+
+.PHONY: setup-kubefed
+setup-kubefed:
+    # TODO update this link which will be pointing to toolchain-common master once merged
+	curl -sSL https://gist.githubusercontent.com/dipak-pawar/af5065ef097bfac878b6b567d867f78f/raw/d053a4641ead6f7b4381d72e1bb660827e62f71c/create_fedcluster.sh | bash -s -- -t member -mn $(TEST_NAMESPACE) -hn $(HOST_NS)
+	curl -sSL https://gist.githubusercontent.com/dipak-pawar/af5065ef097bfac878b6b567d867f78f/raw/d053a4641ead6f7b4381d72e1bb660827e62f71c/create_fedcluster.sh | bash -s -- -t host -mn $(TEST_NAMESPACE) -hn $(HOST_NS)
 
 .PHONY: is-minishift
 is-minishift:
@@ -82,4 +93,23 @@ get-test-namespace: $(OUT_DIR)/test-namespace
 	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
 
 $(OUT_DIR)/test-namespace:
-	@echo -n "test-namespace-$(shell uuidgen | tr '[:upper:]' '[:lower:]')" > $(OUT_DIR)/test-namespace
+	@echo -n "member-operator-$(shell date +'%s')" > $(OUT_DIR)/test-namespace
+
+###########################################################
+#
+# Deploying Host Operator in Openshift CI Environment for End to End tests
+#
+###########################################################
+
+.PHONY: deploy-host
+deploy-host:
+	$(eval HOST_NS := $(shell echo -n "host-operator-$(shell date +'%s')"))
+	rm -rf /tmp/host-operator
+	# cloning shallow as don't want to maintain it for every single change in deploy directory of host-operator
+	git clone git@github.com:codeready-toolchain/host-operator.git --depth 1 /tmp/host-operator
+	oc new-project $(HOST_NS)
+	oc apply -f /tmp/host-operator/deploy/service_account.yaml
+	oc apply -f /tmp/host-operator/deploy/role.yaml
+	cat /tmp/host-operator/deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(HOST_NS)/ | oc apply -f -
+	oc apply -f /tmp/host-operator/deploy/crds
+	sed -e 's|REPLACE_IMAGE|registry.svc.ci.openshift.org/codeready-toolchain/host-operator-v0.1:host-operator|g' /tmp/host-operator/deploy/operator.yaml  | oc apply -f -

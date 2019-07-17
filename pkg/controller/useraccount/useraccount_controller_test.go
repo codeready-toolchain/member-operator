@@ -427,7 +427,7 @@ func TestUpdateStatus(t *testing.T) {
 }
 
 func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
-	finalizers := []string{"finalizer.toolchain.dev.openshift.com"}
+	finalizers := []string{userAccFinalizerName}
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       userName,

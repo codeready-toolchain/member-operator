@@ -327,6 +327,54 @@ func TestReconcile(t *testing.T) {
 				Reason: "Provisioned",
 			})
 	})
+
+	// Delete useraccount and ensure related resources are also removed
+	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
+		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
+			//when
+			res, err := r.Reconcile(req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+
+			// Check the created user
+			user := &userv1.User{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+			require.NoError(t, err)
+			assert.Equal(t, userAcc.Name, user.Name)
+
+			// Check the user identity mapping
+			user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
+			checkMapping(t, user, preexistingIdentity)
+
+			// Check the created/updated identity
+			identity := &userv1.Identity{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+			require.NoError(t, err)
+			assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
+
+			// Check the user identity mapping
+			checkMapping(t, preexistingUser, identity)
+
+			err = r.client.Delete(context.TODO(), userAcc)
+			require.NoError(t, err)
+
+			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, userAcc)
+			require.Error(t, err)
+
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+			require.Error(t, err)
+
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+			require.Error(t, err)
+		}
+
+		t.Run("create", func(t *testing.T) {
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser)
+			reconcile(r, req)
+		})
+	})
 }
 
 func TestUpdateStatus(t *testing.T) {

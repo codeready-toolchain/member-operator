@@ -272,11 +272,13 @@ func (r *ReconcileUserAccount) finalizer(logger logr.Logger, userAcc *toolchainv
 		return false, err
 	}
 
+	logger.Info("deleting the associated identity resource")
 	// Delete Identity associated with UserAccount
 	if err := r.client.Delete(context.TODO(), identity); err != nil {
 		return true, err
 	}
 
+	logger.Info("deleting the associated user resource")
 	// Delete User associated with UserAccount
 	if err := r.client.Delete(context.TODO(), user); err != nil {
 		return true, err

@@ -61,6 +61,9 @@ spec:
             nsTemplateSetName:
               description: Reference to NSTemplateSet for this user
               type: object
+            tierName:
+              description: The name of the tier represented by this template set
+              type: string
             userID:
               description: UserID is the user ID from RHD Identity Provider token
                 (“sub” claim) Is to be used to create Identity and UserIdentityMapping
@@ -69,6 +72,8 @@ spec:
           required:
           - userID
           - nsLimit
+          - tierName
+          - nsTemplateSetName
           type: object
         status:
           properties:

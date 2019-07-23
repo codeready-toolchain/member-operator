@@ -1,11 +1,17 @@
 package controller
 
 import (
+	"github.com/codeready-toolchain/member-operator/pkg/controller/nstemplateset"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // AddToManagerFuncs is a list of functions to add all Controllers to the Manager
 var AddToManagerFuncs []func(manager.Manager) error
+
+func init() {
+	// AddToManagerFuncs is a list of functions to create controllers and add them to a manager.
+	AddToManagerFuncs = append(AddToManagerFuncs, nstemplateset.Add)
+}
 
 // AddToManager adds all Controllers to the Manager
 func AddToManager(m manager.Manager) error {

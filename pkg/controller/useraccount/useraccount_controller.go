@@ -243,7 +243,7 @@ func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAcco
 	return nil
 }
 
-// Handles finalizer logic for UserAccount
+// Handles finalizer logic for UserAccount. Returns bool to indicate Requeue value
 func (r *ReconcileUserAccount) finalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	logger.Info("deleting UserAccount and subsequent resources", "name", userAcc.Name)
 

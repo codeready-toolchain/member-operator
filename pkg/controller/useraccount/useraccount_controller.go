@@ -117,7 +117,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	if err = r.ensureNamespaces(reqLogger, userAcc); err != nil {
+	if createdOrUpdated, err = r.ensureNamespaces(reqLogger, userAcc); err != nil || createdOrUpdated {
 		return reconcile.Result{}, err
 	}
 
@@ -217,33 +217,35 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	return identity, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureNamespaces(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *ReconcileUserAccount) ensureNamespaces(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	var createdOrUpdated bool
 	// TODO check name
 	name := fmt.Sprintf("%s-namespaces", userAcc.Name)
 	if userAcc.Spec.NSTemplateSetName.Name == "" {
 		if err := r.setStatusProvisioning(userAcc); err != nil {
-			return err
+			return createdOrUpdated, err
 		}
 		userAcc.Spec.NSTemplateSetName = corev1.LocalObjectReference{Name: name}
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
-			return err
+			return createdOrUpdated, err
 		}
+		createdOrUpdated = true
 	}
 
 	nsTeplSet := &toolchainv1alpha1.NSTemplateSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: userAcc.Namespace}, nsTeplSet); err != nil {
 		if errors.IsNotFound(err) {
 			if err := r.setStatusProvisioning(userAcc); err != nil {
-				return err
+				return createdOrUpdated, err
 			}
 			nsTeplSet = newNSTemplateSet(userAcc)
 			if err = r.client.Create(context.TODO(), nsTeplSet); err != nil {
-				return err
+				return createdOrUpdated, err
 			}
 		}
 	}
 
-	return nil
+	return createdOrUpdated, nil
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
@@ -355,8 +357,7 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 			Namespace: userAcc.Namespace,
 		},
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
-			// TODO where to get this from ??
-			TierName:   "basic",
+			TierName:   userAcc.Spec.TierName,
 			Namespaces: []toolchainv1alpha1.Namespace{},
 		},
 	}

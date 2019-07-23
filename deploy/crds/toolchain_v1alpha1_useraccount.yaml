@@ -73,7 +73,6 @@ spec:
           - userID
           - nsLimit
           - tierName
-          - nsTemplateSetName
           type: object
         status:
           properties:

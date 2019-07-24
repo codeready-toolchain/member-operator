@@ -226,7 +226,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	return identity, false, nil
 }
 
-// Sets the finalizers for UserAccount
+// setFinalizers sets the finalizers for UserAccount
 func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
 	if !containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
@@ -239,7 +239,7 @@ func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAcco
 	return nil
 }
 
-// Handles finalizer logic for UserAccount. Returns bool to indicate Requeue
+// finalizer handles logic for removing the UserAccount and related resources
 func (r *ReconcileUserAccount) finalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	logger.Info("deleting UserAccount and subsequent resources", "name", userAcc.Name)
 

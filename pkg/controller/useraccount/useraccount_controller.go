@@ -117,7 +117,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	// Check if the UserAccount has been deleted
 	if !userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
-		return reconcile.Result{}, r.finalizer(reqLogger, userAcc)
+		return reconcile.Result{}, r.finalize(reqLogger, userAcc)
 	}
 
 	var createdOrUpdated bool
@@ -239,8 +239,8 @@ func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAcco
 	return nil
 }
 
-// finalizer handles logic for removing the UserAccount and related resources
-func (r *ReconcileUserAccount) finalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+// finalize handles logic for removing the UserAccount and related resources
+func (r *ReconcileUserAccount) finalize(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	logger.Info("deleting UserAccount and subsequent resources", "name", userAcc.Name)
 
 	// Get the Identity associated with the UserAccount

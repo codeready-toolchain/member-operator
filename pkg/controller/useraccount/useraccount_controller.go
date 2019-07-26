@@ -32,6 +32,7 @@ const (
 	unableToCreateUserReason     = "UnableToCreateUser"
 	unableToCreateIdentityReason = "UnableToCreateIdentity"
 	unableToCreateMappingReason  = "UnableToCreateMapping"
+	unableToCreateNSTemplateSet  = "UnableToCreateNSTemplateSet"
 	provisioningReason           = "Provisioning"
 	provisionedReason            = "Provisioned"
 )
@@ -69,6 +70,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 	if err := c.Watch(&source.Kind{Type: &userv1.Identity{}}, enqueueRequestForOwner); err != nil {
+		return err
+	}
+	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, enqueueRequestForOwner); err != nil {
 		return err
 	}
 
@@ -117,7 +121,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	if createdOrUpdated, err = r.ensureNamespaces(reqLogger, userAcc); err != nil || createdOrUpdated {
+	if createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 		return reconcile.Result{}, err
 	}
 
@@ -217,35 +221,46 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	return identity, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureNamespaces(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	var createdOrUpdated bool
-	// TODO check name
-	name := fmt.Sprintf("%s-namespaces", userAcc.Name)
+// TODO introduce new status
+func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	name := ToNSTemplateSetName(userAcc.Name)
 	if userAcc.Spec.NSTemplateSetName.Name == "" {
 		if err := r.setStatusProvisioning(userAcc); err != nil {
-			return createdOrUpdated, err
+			return false, err
 		}
 		userAcc.Spec.NSTemplateSetName = corev1.LocalObjectReference{Name: name}
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
-			return createdOrUpdated, err
+			return false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
+				"failed to update UserAccount '%s' with NSTemplateSet", name)
 		}
-		createdOrUpdated = true
+		logger.Info("UserAccount updated with NSTemplateSet", "name", name)
+		return true, nil
 	}
 
 	nsTeplSet := &toolchainv1alpha1.NSTemplateSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: userAcc.Namespace}, nsTeplSet); err != nil {
 		if errors.IsNotFound(err) {
 			if err := r.setStatusProvisioning(userAcc); err != nil {
-				return createdOrUpdated, err
+				return false, err
 			}
 			nsTeplSet = newNSTemplateSet(userAcc)
-			if err = r.client.Create(context.TODO(), nsTeplSet); err != nil {
-				return createdOrUpdated, err
+			if err := controllerutil.SetControllerReference(userAcc, nsTeplSet, r.scheme); err != nil {
+				return false, err
 			}
+			if err = r.client.Create(context.TODO(), nsTeplSet); err != nil {
+				return false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
+					"failed to create NSTemplateSet '%s'", name)
+			}
+			logger.Info("NSTemplateSet created for UserAccount", "name", name)
+			return true, nil
 		}
 	}
 
-	return createdOrUpdated, nil
+	if nsTeplSet.Spec.TierName != userAcc.Spec.TierName {
+		// TODO tier is changed, do needful
+	}
+
+	return false, nil
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
@@ -288,6 +303,17 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  unableToCreateMappingReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  unableToCreateNSTemplateSet,
 			Message: message,
 		})
 }
@@ -350,7 +376,7 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 }
 
 func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1.NSTemplateSet {
-	name := fmt.Sprintf("%s-namespaces", userAcc.Name)
+	name := ToNSTemplateSetName(userAcc.Name)
 	nsTeplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -366,4 +392,8 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 
 func ToIdentityName(userID string) string {
 	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
+}
+
+func ToNSTemplateSetName(name string) string {
+	return name
 }

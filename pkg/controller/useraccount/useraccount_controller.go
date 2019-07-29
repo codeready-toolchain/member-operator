@@ -137,16 +137,17 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	// We want to reconcile if the object was created, was updated or there was an error
 	// We DO NOT want to reconcile if the object was NOT created, was NOT updated AND there was NO error
-	var createdOrUpdated bool
-	var user *userv1.User
-	if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
-		return reconcile.Result{}, err
-	}
+	if userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
+		var createdOrUpdated bool
+		var user *userv1.User
+		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
 
-	if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
-		return reconcile.Result{}, err
+		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
 	}
-
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
 

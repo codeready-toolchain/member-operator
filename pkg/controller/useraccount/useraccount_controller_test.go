@@ -367,10 +367,13 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		res, err = r.Reconcile(req)
 		require.NoError(t, err)
-		if res.Requeue {
-			res, err = r.Reconcile(req)
-			require.NoError(t, err)
-		}
+		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+
 		// check that the associated user and identity resources have been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)

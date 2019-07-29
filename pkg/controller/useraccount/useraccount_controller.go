@@ -110,11 +110,6 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	// Add the finalizer if it is not present
-	if err := r.setFinalizers(userAcc); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	// Check if the UserAccount has been deleted. If it has been deleted, delete
 	// secondary resources dentity and user.
 	if !userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -140,6 +135,11 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
+
+		// Add the finalizer if it is not present
+		if err := r.setFinalizers(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}

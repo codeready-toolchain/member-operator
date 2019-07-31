@@ -106,7 +106,7 @@ deploy-host:
 	$(eval HOST_NS := $(shell echo -n "host-operator-$(shell date +'%s')"))
 	rm -rf /tmp/host-operator
 	# cloning shallow as don't want to maintain it for every single change in deploy directory of host-operator
-	git clone git@github.com:codeready-toolchain/host-operator.git --depth 1 /tmp/host-operator
+	git clone https://github.com/codeready-toolchain/host-operator.git --depth 1 /tmp/host-operator
 	oc new-project $(HOST_NS)
 	oc apply -f /tmp/host-operator/deploy/service_account.yaml
 	oc apply -f /tmp/host-operator/deploy/role.yaml

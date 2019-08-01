@@ -1,0 +1,32 @@
+---
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  labels:
+    provider: fabric8
+    project: fabric8-tenant-user
+    version: 123abc
+  name: fabric8-tenant-user
+objects:
+- apiVersion: authorization.openshift.io/v1
+  kind: RoleBinding
+  metadata:
+    labels:
+      app: fabric8-tenant-user
+      provider: fabric8
+      version: 123abc
+    name: user-edit
+  roleRef:
+    name: edit
+  subjects:
+  - kind: User
+    name: system:admin
+  userNames:
+  - system:admin
+parameters:
+- name: USER_NAME
+  value: johnsmith
+- name: PROJECT_REQUESTING_USER
+  value: system:admin
+- name: COMMIT
+  value: 123abc

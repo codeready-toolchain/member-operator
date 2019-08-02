@@ -7,14 +7,15 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
-
 	userv1 "github.com/openshift/api/user/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	corev1 "k8s.io/api/core/v1"
+	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -47,6 +48,9 @@ func TestUserAccount(t *testing.T) {
 
 	extraUserAcc := createUserAccount(t, f, ctx, "amar")
 	t.Log("extra useraccount created at start")
+
+	lucyUserAcc := createUserAccount(t, f, ctx, "lucy")
+	t.Log("lucy useraccount created at start")
 
 	// create useraccount
 	userAcc := newUserAcc(namespace, "johnsmith")
@@ -107,6 +111,32 @@ func TestUserAccount(t *testing.T) {
 
 		err = verifyResources(t, f, namespace, userAcc)
 		assert.NoError(t, err)
+	})
+
+	t.Run("delete_useraccount_ok", func(t *testing.T) {
+		lucyAcc := &toolchainv1alpha1.UserAccount{}
+		err := client.Get(context.TODO(), types.NamespacedName{Name: lucyUserAcc.Name, Namespace: namespace}, lucyAcc)
+		err = client.Update(context.TODO(), lucyAcc)
+
+		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name, Namespace: namespace}, lucyAcc)
+		err = client.Update(context.TODO(), lucyAcc)
+
+		client.Delete(context.TODO(), lucyAcc)
+		assert.NoError(t, err)
+
+		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name, Namespace: namespace}, lucyAcc)
+		assert.Error(t, err)
+		t.Log(err)
+
+		user := &userv1.User{}
+		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		identity := &userv1.Identity{}
+		err = client.Get(context.TODO(), types.NamespacedName{Name: useraccount.ToIdentityName(lucyAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
 	})
 
 	err = verifyResources(t, f, namespace, extraUserAcc)

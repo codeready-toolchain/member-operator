@@ -110,8 +110,8 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	// Check if the UserAccount has been deleted. If it has been deleted, delete
-	// secondary resources dentity and user.
+	// If the UserAccount has not been deleted, create or update user and identity resources.
+	// If the UserAccount has been deleted, delete secondary resources identity and user.
 	if userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Add the finalizer if it is not present
 		if err := r.setFinalizers(userAcc); err != nil {
@@ -128,17 +128,19 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, err
 		}
 	} else {
-		var deleted bool
-		if err, deleted = r.deleteIdentity(reqLogger, userAcc); err != nil || deleted {
-			return reconcile.Result{}, err
-		}
+		if ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
+			var deleted bool
+			if err, deleted = r.deleteIdentity(reqLogger, userAcc); err != nil || deleted {
+				return reconcile.Result{}, err
+			}
 
-		if err, deleted = r.deleteUser(reqLogger, userAcc); err != nil || deleted {
-			return reconcile.Result{}, err
-		}
+			if err, deleted = r.deleteUser(reqLogger, userAcc); err != nil || deleted {
+				return reconcile.Result{}, err
+			}
 
-		if err = r.deleteFinalizer(reqLogger, userAcc); err != nil {
-			return reconcile.Result{}, err
+			if err = r.deleteFinalizer(reqLogger, userAcc); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
@@ -240,7 +242,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 // setFinalizers sets the finalizers for UserAccount
 func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
-	if !containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
+	if !ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
 		userAcc.ObjectMeta.Finalizers = append(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err
@@ -258,11 +260,9 @@ func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchain
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return err, false
+		} else {
+			return nil, false
 		}
-	}
-
-	if errors.IsNotFound(err) {
-		return nil, false
 	}
 
 	// Delete User associated with UserAccount
@@ -284,11 +284,9 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return err, false
+		} else {
+			return nil, false
 		}
-	}
-
-	if errors.IsNotFound(err) {
-		return nil, false
 	}
 
 	// Delete Identity associated with UserAccount
@@ -413,7 +411,7 @@ func ToIdentityName(userID string) string {
 	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
 }
 
-func containsString(items []string, value string) bool {
+func ContainsString(items []string, value string) bool {
 	for _, item := range items {
 		if item == value {
 			return true

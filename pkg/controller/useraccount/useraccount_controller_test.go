@@ -343,6 +343,13 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
+
 		// Check the created user
 		user := &userv1.User{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
@@ -365,25 +372,45 @@ func TestReconcile(t *testing.T) {
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
-		_, err = r.Reconcile(req)
-		require.NoError(t, err)
-		_, err = r.Reconcile(req)
-		require.NoError(t, err)
-		_, err = r.Reconcile(req)
-		require.NoError(t, err)
-		_, err = r.Reconcile(req)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		// check that the associated user and identity resources have been deleted
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// check that the associated identity has been deleted
+		// when reconciling the useraccount with a deletion timestamp
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// check that the user account finalizer has been removed
+		// when reconciling the useraccount with a deletion timestamp
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		require.False(t, ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
 	})
 }
 

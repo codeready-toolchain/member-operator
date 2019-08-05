@@ -50,8 +50,7 @@ test-e2e:  e2e-setup
 	# This is hack to fix https://github.com/operator-framework/operator-sdk/issues/1657
 	echo "info: Running go mod vendor"
 	go mod vendor
-	oc login -u system:admin
-	operator-sdk test local ./test/e2e --namespace $(TEST_NAMESPACE) --up-local --go-test-flags "-v -timeout=15m"
+	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
 
 .PHONY: e2e-setup
 e2e-setup: get-test-namespace is-minishift

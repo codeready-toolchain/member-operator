@@ -127,11 +127,11 @@ func TestUserAccount(t *testing.T) {
 		assert.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
-		err = waitForDeletedUser(t, client, lucyAcc.Name, namespace)
+		err = waitForDeletedUser(t, client, lucyAcc.Name)
 		assert.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
-		err = waitForDeletedIdentity(t, client, lucyAcc.Name, namespace)
+		err = waitForDeletedIdentity(t, client, lucyAcc.Name)
 		assert.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 	})

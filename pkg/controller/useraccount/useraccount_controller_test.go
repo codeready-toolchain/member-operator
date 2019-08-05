@@ -356,19 +356,13 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, userAcc.Name, user.Name)
 
-		// Check the user identity mapping
-		user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
-		checkMapping(t, user, preexistingIdentity)
-
-		// Check the created/updated identity
+		// Check the created identity
 		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 
-		// Check the user identity mapping
-		checkMapping(t, preexistingUser, identity)
-
+		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
@@ -407,10 +401,6 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 		require.False(t, ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
 	})
 }
 

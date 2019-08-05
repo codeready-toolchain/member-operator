@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
-	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -124,16 +123,13 @@ func TestUserAccount(t *testing.T) {
 		assert.NoError(t, err)
 
 		err = waitForDeletedUserAccount(t, client, lucyAcc.Name, namespace)
-		assert.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
+		assert.NoError(t, err)
 
 		err = waitForDeletedUser(t, client, lucyAcc.Name)
-		assert.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
+		assert.NoError(t, err)
 
 		err = waitForDeletedIdentity(t, client, lucyAcc.Name)
-		assert.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
+		assert.NoError(t, err)
 	})
 
 	err = verifyResources(t, f, namespace, extraUserAcc)

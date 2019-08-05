@@ -84,7 +84,7 @@ func waitForDeletedUserAccount(t *testing.T, client client.Client, name string, 
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, user); err != nil {
 			if errors.IsNotFound(err) {
 				t.Logf("deleted user account '%s'", name)
-				return true, err
+				return true, nil
 			}
 			return false, err
 		}
@@ -98,7 +98,7 @@ func waitForDeletedUser(t *testing.T, client client.Client, name string) error {
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: name}, user); err != nil {
 			if errors.IsNotFound(err) {
 				t.Logf("deleted user '%s'", name)
-				return true, err
+				return true, nil
 			}
 			return false, err
 		}
@@ -112,7 +112,7 @@ func waitForDeletedIdentity(t *testing.T, client client.Client, name string) err
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 			if errors.IsNotFound(err) {
 				t.Logf("deleted identity '%s'", name)
-				return true, err
+				return true, nil
 			}
 			return false, err
 		}

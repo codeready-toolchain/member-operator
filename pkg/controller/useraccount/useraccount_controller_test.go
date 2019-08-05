@@ -365,13 +365,13 @@ func TestReconcile(t *testing.T) {
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
-		res, err = r.Reconcile(req)
+		_, err = r.Reconcile(req)
 		require.NoError(t, err)
-		res, err = r.Reconcile(req)
+		_, err = r.Reconcile(req)
 		require.NoError(t, err)
-		res, err = r.Reconcile(req)
+		_, err = r.Reconcile(req)
 		require.NoError(t, err)
-		res, err = r.Reconcile(req)
+		_, err = r.Reconcile(req)
 		require.NoError(t, err)
 
 		// check that the associated user and identity resources have been deleted

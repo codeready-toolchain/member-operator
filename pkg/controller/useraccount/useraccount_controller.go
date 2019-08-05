@@ -113,6 +113,11 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	// Check if the UserAccount has been deleted. If it has been deleted, delete
 	// secondary resources dentity and user.
 	if userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Add the finalizer if it is not present
+		if err := r.setFinalizers(userAcc); err != nil {
+			return reconcile.Result{}, err
+		}
+
 		var createdOrUpdated bool
 		var user *userv1.User
 		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
@@ -120,11 +125,6 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
-			return reconcile.Result{}, err
-		}
-
-		// Add the finalizer if it is not present
-		if err := r.setFinalizers(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	} else {
@@ -254,18 +254,18 @@ func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAcco
 func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (error, bool) {
 	// Get the User associated with the UserAccount
 	user := &userv1.User{}
-	userErr := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-	if userErr != nil {
-		if !errors.IsNotFound(userErr) {
-			return userErr, false
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err, false
 		}
 	}
 
-	if errors.IsNotFound(userErr) {
+	if errors.IsNotFound(err) {
 		return nil, false
 	}
 
-	// Delete User associated with UserAccount if the User exists
+	// Delete User associated with UserAccount
 	if err := r.client.Delete(context.TODO(), user); err != nil {
 		return err, false
 	}
@@ -280,18 +280,18 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
 	identityName := ToIdentityName(userAcc.Spec.UserID)
-	identityErr := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
-	if identityErr != nil {
-		if !errors.IsNotFound(identityErr) {
-			return identityErr, false
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err, false
 		}
 	}
 
-	// Delete Identity associated with UserAccount if the identity exists
-	if errors.IsNotFound(identityErr) {
+	if errors.IsNotFound(err) {
 		return nil, false
 	}
 
+	// Delete Identity associated with UserAccount
 	if err := r.client.Delete(context.TODO(), identity); err != nil {
 		return err, false
 	}

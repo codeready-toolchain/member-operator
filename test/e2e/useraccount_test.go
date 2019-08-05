@@ -118,10 +118,7 @@ func TestUserAccount(t *testing.T) {
 	t.Run("delete_useraccount_ok", func(t *testing.T) {
 		lucyAcc := &toolchainv1alpha1.UserAccount{}
 		err := client.Get(context.TODO(), types.NamespacedName{Name: lucyUserAcc.Name, Namespace: namespace}, lucyAcc)
-		err = client.Update(context.TODO(), lucyAcc)
-
-		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name, Namespace: namespace}, lucyAcc)
-		err = client.Update(context.TODO(), lucyAcc)
+		assert.NoError(t, err)
 
 		err = client.Delete(context.TODO(), lucyAcc)
 		assert.NoError(t, err)

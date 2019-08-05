@@ -77,3 +77,45 @@ func waitForUserAccStatusConditions(t *testing.T, client client.Client, namespac
 		return false, nil
 	})
 }
+
+func waitForDeletedUserAccount(t *testing.T, client client.Client, name string, namespace string) error {
+	return wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+		user := &toolchainv1alpha1.UserAccount{}
+		if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, user); err != nil {
+			if errors.IsNotFound(err) {
+				t.Logf("deleted user account '%s'", name)
+				return true, err
+			}
+			return false, err
+		}
+		return false, nil
+	})
+}
+
+func waitForDeletedUser(t *testing.T, client client.Client, name string, namespace string) error {
+	return wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+		user := &toolchainv1alpha1.UserAccount{}
+		if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, user); err != nil {
+			if errors.IsNotFound(err) {
+				t.Logf("deleted user '%s'", name)
+				return true, err
+			}
+			return false, err
+		}
+		return false, nil
+	})
+}
+
+func waitForDeletedIdentity(t *testing.T, client client.Client, name string, namespace string) error {
+	return wait.Poll(retryInterval, timeout, func() (done bool, err error) {
+		user := &userv1.Identity{}
+		if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, user); err != nil {
+			if errors.IsNotFound(err) {
+				t.Logf("deleted identity '%s'", name)
+				return true, err
+			}
+			return false, err
+		}
+		return false, nil
+	})
+}

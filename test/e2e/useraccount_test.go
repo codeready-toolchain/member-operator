@@ -2,7 +2,9 @@ package e2e
 
 import (
 	"context"
+	//"fmt"
 	"testing"
+	//"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
@@ -121,21 +123,19 @@ func TestUserAccount(t *testing.T) {
 		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name, Namespace: namespace}, lucyAcc)
 		err = client.Update(context.TODO(), lucyAcc)
 
-		client.Delete(context.TODO(), lucyAcc)
+		err = client.Delete(context.TODO(), lucyAcc)
 		assert.NoError(t, err)
 
-		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name, Namespace: namespace}, lucyAcc)
+		err = waitForDeletedUserAccount(t, client, lucyAcc.Name, namespace)
 		assert.Error(t, err)
-		t.Log(err)
-
-		user := &userv1.User{}
-		err = client.Get(context.TODO(), types.NamespacedName{Name: lucyAcc.Name}, user)
-		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
-		identity := &userv1.Identity{}
-		err = client.Get(context.TODO(), types.NamespacedName{Name: useraccount.ToIdentityName(lucyAcc.Spec.UserID)}, identity)
-		require.Error(t, err)
+		err = waitForDeletedUser(t, client, lucyAcc.Name, namespace)
+		assert.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		err = waitForDeletedIdentity(t, client, lucyAcc.Name, namespace)
+		assert.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 	})
 

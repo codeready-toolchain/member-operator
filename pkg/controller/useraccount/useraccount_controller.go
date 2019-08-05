@@ -102,7 +102,6 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: config.GetOperatorNamespace(), Name: request.Name}, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			reqLogger.Info("USER ACCOUNT - NOT FOUND")
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -110,44 +109,35 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 		return reconcile.Result{}, err
 	}
-	// Add the finalizer if it is not present
-	if err := r.setFinalizers(userAcc); err != nil {
-		reqLogger.Info("USER ACCOUNT - SET FINALIZER")
-		return reconcile.Result{}, err
-	}
 
 	// Check if the UserAccount has been deleted. If it has been deleted, delete
 	// secondary resources dentity and user.
-	if !userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
-		reqLogger.Info("USER ACCOUNT - DELETION TIMESTAMP SET")
-		var deleted bool
-		reqLogger.Info("USER ACCOUNT - DELETE IDENTITY")
-		if err, deleted = r.deleteIdentity(reqLogger, userAcc); err != nil || deleted {
-			return reconcile.Result{}, err
-		}
-
-		reqLogger.Info("USER ACCOUNT - DELETE USER")
-		if err, deleted = r.deleteUser(reqLogger, userAcc); err != nil || deleted {
-			return reconcile.Result{}, err
-		}
-
-		reqLogger.Info("USER ACCOUNT - DELETE FINALIZER")
-		if err = r.deleteFinalizer(reqLogger, userAcc); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
 	if userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
-		reqLogger.Info("USER ACCOUNT - CREATEEEEEEEEEEEEEE USER ACCOUNT")
 		var createdOrUpdated bool
 		var user *userv1.User
-		reqLogger.Info("USER ACCOUNT - CREATEEEEEEEEEEEEEE USER")
 		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
 
-		reqLogger.Info("USER ACCOUNT - CREATEEEEEEEEEEEEEE IDENTITY")
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
+
+		// Add the finalizer if it is not present
+		if err := r.setFinalizers(userAcc); err != nil {
+			return reconcile.Result{}, err
+		}
+	} else {
+		var deleted bool
+		if err, deleted = r.deleteIdentity(reqLogger, userAcc); err != nil || deleted {
+			return reconcile.Result{}, err
+		}
+
+		if err, deleted = r.deleteUser(reqLogger, userAcc); err != nil || deleted {
+			return reconcile.Result{}, err
+		}
+
+		if err = r.deleteFinalizer(reqLogger, userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -267,7 +257,6 @@ func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchain
 	userErr := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 	if userErr != nil {
 		if !errors.IsNotFound(userErr) {
-			logger.Info("USER ACCOUNT DELETEUSER - USER NOT FOUND")
 			return userErr, false
 		}
 	}
@@ -280,7 +269,6 @@ func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchain
 	if err := r.client.Delete(context.TODO(), user); err != nil {
 		return err, false
 	}
-	logger.Info("USER ACCOUNT DELETEUSER - DELETE USER")
 	return nil, true
 }
 
@@ -295,7 +283,6 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	identityErr := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	if identityErr != nil {
 		if !errors.IsNotFound(identityErr) {
-			logger.Info("USER ACCOUNT DEETEIDENTITY - IDENTITY NOT FOUND")
 			return identityErr, false
 		}
 	}
@@ -309,7 +296,6 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 		return err, false
 	}
 
-	logger.Info("USER ACCOUNT DEETEIDENTITY - IDENTITY DELETED")
 	return nil, true
 }
 
@@ -319,7 +305,6 @@ func (r *ReconcileUserAccount) deleteFinalizer(logger logr.Logger, userAcc *tool
 	if err := r.client.Update(context.Background(), userAcc); err != nil {
 		return err
 	}
-	logger.Info("USER ACCOUNT DELETEFINALIZER - FINALIZER DELETED")
 	return nil
 }
 

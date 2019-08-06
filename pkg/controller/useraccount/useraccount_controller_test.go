@@ -158,6 +158,13 @@ func TestReconcile(t *testing.T) {
 				})
 		})
 		t.Run("update", func(t *testing.T) {
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			res, err := r.Reconcile(req)
+
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+			require.NoError(t, err)
+
 			// given
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
 				Name:            username,
@@ -171,7 +178,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			//when
-			res, err := r.Reconcile(req)
+			res, err = r.Reconcile(req)
 
 			//then
 			require.Error(t, err)
@@ -502,13 +509,11 @@ func TestUpdateStatus(t *testing.T) {
 }
 
 func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
-	finalizers := []string{userAccFinalizerName}
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       userName,
-			Namespace:  "toolchain-member",
-			UID:        types.UID(uuid.NewV4().String()),
-			Finalizers: finalizers,
+			Name:      userName,
+			Namespace: "toolchain-member",
+			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID: userID,

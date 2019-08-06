@@ -158,14 +158,8 @@ func TestReconcile(t *testing.T) {
 				})
 		})
 		t.Run("update", func(t *testing.T) {
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
-			res, err := r.Reconcile(req)
-
-			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-			require.NoError(t, err)
-
 			// given
+			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
 				Name:            username,
 				Namespace:       "toolchain-member",
@@ -178,7 +172,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			//when
-			res, err = r.Reconcile(req)
+			res, err := r.Reconcile(req)
 
 			//then
 			require.Error(t, err)
@@ -280,6 +274,7 @@ func TestReconcile(t *testing.T) {
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
+			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name:            ToIdentityName(userAcc.Spec.UserID),
 				Namespace:       "toolchain-member",
@@ -345,29 +340,16 @@ func TestReconcile(t *testing.T) {
 
 		//when
 		res, err := r.Reconcile(req)
-
-		//then
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
+		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
 		require.True(t, ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
-
-		// Check the created user
-		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.NoError(t, err)
-		assert.Equal(t, userAcc.Name, user.Name)
-
-		// Check the created identity
-		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -378,22 +360,9 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// check that the associated user has been deleted
+		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// check that the associated identity has been deleted
-		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
@@ -402,7 +371,18 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		// check that the user account finalizer has been removed
+		// Check that the associated user has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the user account finalizer has been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
@@ -514,6 +494,22 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 			Name:      userName,
 			Namespace: "toolchain-member",
 			UID:       types.UID(uuid.NewV4().String()),
+		},
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			UserID: userID,
+		},
+	}
+	return userAcc
+}
+
+func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
+	finalizers := []string{userAccFinalizerName}
+	userAcc := &toolchainv1alpha1.UserAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       userName,
+			Namespace:  "toolchain-member",
+			UID:        types.UID(uuid.NewV4().String()),
+			Finalizers: finalizers,
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID: userID,

@@ -80,8 +80,8 @@ func waitForUserAccStatusConditions(t *testing.T, client client.Client, namespac
 
 func waitForDeletedUserAccount(t *testing.T, client client.Client, name string, namespace string) error {
 	return wait.Poll(retryInterval, timeout, func() (done bool, err error) {
-		user := &toolchainv1alpha1.UserAccount{}
-		if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, user); err != nil {
+		userAcc := &toolchainv1alpha1.UserAccount{}
+		if err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, userAcc); err != nil {
 			if errors.IsNotFound(err) {
 				t.Logf("deleted user account '%s'", name)
 				return true, nil

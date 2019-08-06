@@ -349,7 +349,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
-		require.True(t, ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
+		require.True(t, containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -387,7 +387,7 @@ func TestReconcile(t *testing.T) {
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
-		require.False(t, ContainsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
+		require.False(t, containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
 	})
 }
 

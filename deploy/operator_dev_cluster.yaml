@@ -1,0 +1,93 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: member-operator-v0.1
+  namespace: toolchain-member-operator
+spec:
+  lookupPolicy:
+    local: false
+  tags:
+  - from:
+      kind: DockerImage
+      name: registry.svc.ci.openshift.org/codeready-toolchain/member-operator-v0.1:member-operator
+    importPolicy:
+      scheduled: true
+    name: member-operator
+---
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: member-operator
+  name: member-operator
+  namespace: toolchain-member-operator
+spec:
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    app: member-operator
+    deploymentconfig: member-operator
+  strategy:
+    activeDeadlineSeconds: 21600
+    resources: {}
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 25%
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      labels:
+        app: member-operator
+        deploymentconfig: member-operator
+    spec:
+      serviceAccountName: member-operator
+      containers:
+      - name: member-operator
+        image: ''
+        command:
+        - member-operator
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: OPERATOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: "member-operator"
+        resources:
+          requests:
+            cpu: 0.1m
+            memory: 10Mi
+          limits:
+            cpu: 400m
+            memory: 1.5Gi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+  test: false
+  triggers:
+  - type: ConfigChange
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - member-operator
+      from:
+        kind: ImageStreamTag
+        name: member-operator-v0.1:member-operator
+        namespace: toolchain-member-operator
+    type: ImageChange

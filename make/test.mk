@@ -44,6 +44,7 @@ upload-codecov-report:
 # End-to-end Tests
 #
 ###########################################################
+
 .PHONY: test-e2e
 test-e2e:  e2e-setup
 	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -

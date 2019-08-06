@@ -2,9 +2,7 @@ package e2e
 
 import (
 	"context"
-	//"fmt"
 	"testing"
-	//"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"

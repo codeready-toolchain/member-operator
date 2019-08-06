@@ -274,9 +274,6 @@ func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchain
 
 // deleteIdentity deletes the identity resource.
 func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (error, bool) {
-	// We want to reconcile if the object was delete OR if there was an error
-	// We do not want to reconcile of the object WAS NOT deleted AND thre is NO ERROR
-
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
 	identityName := ToIdentityName(userAcc.Spec.UserID)

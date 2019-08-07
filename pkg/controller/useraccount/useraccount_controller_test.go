@@ -397,7 +397,7 @@ func TestReconcile(t *testing.T) {
 
 		// Mock setting finalizer failure
 		client.MockUpdate = func(obj runtime.Object) error {
-			return errors.New(fmt.Sprintf("unable to set finalizer for user account %s", userAcc.Name))
+			return fmt.Errorf("unable to set finalizer for user account %s", userAcc.Name)
 		}
 
 		//when
@@ -453,9 +453,9 @@ func TestReconcile(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
-		// Mock finalizer reoval failure
+		// Mock finalizer removal failure
 		client.MockUpdate = func(obj runtime.Object) error {
-			return errors.New(fmt.Sprintf("unable to delete finalizer for user account %s", userAcc.Name))
+			return fmt.Errorf("unable to delete finalizer for user account %s", userAcc.Name)
 		}
 
 		res, err = r.Reconcile(req)

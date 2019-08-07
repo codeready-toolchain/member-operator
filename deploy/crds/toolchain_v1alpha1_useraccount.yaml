@@ -11,27 +11,6 @@ spec:
     kind: UserAccount
     plural: useraccounts
   scope: Namespaced
-  additionalPrinterColumns:
-    - name: User ID
-      type: string
-      JSONPath: .spec.userID
-      priority: 1
-    - name: NS Limit
-      type: string
-      JSONPath: .spec.nsLimit
-    - name: Tier Name
-      type: string
-      JSONPath: .spec.nsTemplateSet.tierName
-    - name: Ready
-      type: string
-      JSONPath: ".status.conditions[?(@.type==\"Ready\")].status"
-    - name: Reason
-      type: string
-      JSONPath: ".status.conditions[?(@.type==\"Ready\")].reason"
-    - name: Disabled
-      type: boolean
-      JSONPath: .spec.disabled
-      priority: 1
   subresources:
     status: {}
   validation:

@@ -404,8 +404,9 @@ func TestReconcile(t *testing.T) {
 		res, err := r.Reconcile(req)
 
 		//then
-		require.Error(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
+		require.Error(t, err)
+		require.EqualError(t, err, fmt.Sprintf("unable to set finalizer for user account %s", userAcc.Name))
 	})
 	// Delete useraccount and ensure related resources are also removed
 	t.Run("remove finalizer fails", func(t *testing.T) {
@@ -461,6 +462,7 @@ func TestReconcile(t *testing.T) {
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.Error(t, err)
+		require.EqualError(t, err, fmt.Sprintf("unable to delete finalizer for user account %s", userAcc.Name))
 
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp

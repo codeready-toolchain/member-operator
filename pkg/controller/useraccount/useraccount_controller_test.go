@@ -389,6 +389,86 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
 	})
+	// Delete useraccount and ensure related resources are also removed
+	t.Run("set finalizer fails", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, client := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		// Mock setting finalizer failure
+		client.MockUpdate = func(obj runtime.Object) error {
+			return errors.New(fmt.Sprintf("unable to set finalizer for user account %s", userAcc.Name))
+		}
+
+		//when
+		res, err := r.Reconcile(req)
+
+		//then
+		require.Error(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+	})
+	// Delete useraccount and ensure related resources are also removed
+	t.Run("remove finalizer fails", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, client := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		//then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated user has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Mock finalizer reoval failure
+		client.MockUpdate = func(obj runtime.Object) error {
+			return errors.New(fmt.Sprintf("unable to delete finalizer for user account %s", userAcc.Name))
+		}
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.Error(t, err)
+
+		// Check that the user account finalizer has not been removed
+		// when reconciling the useraccount with a deletion timestamp
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		require.True(t, containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName))
+	})
 }
 
 func TestUpdateStatus(t *testing.T) {

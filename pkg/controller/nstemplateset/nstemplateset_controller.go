@@ -30,19 +30,6 @@ func Add(mgr manager.Manager) error {
 }
 
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	// templateClient, err := templatev1client.NewForConfig(mgr.GetConfig())
-	// if err != nil {
-	// 	fmt.Println("VN: tmplClient, err=", err)
-	// }
-	// authClient, err := authv1client.NewForConfig(mgr.GetConfig())
-	// if err != nil {
-	// 	fmt.Println("VN: authClient, err=", err)
-	// }
-	// projectClient, err := projectv1client.NewForConfig(mgr.GetConfig())
-	// if err != nil {
-	// 	fmt.Println("VN: projectClient, err=", err)
-	// }
-
 	return &ReconcileNSTemplateSet{client: mgr.GetClient(), scheme: mgr.GetScheme()} // templateClient: templateClient, authClient: authClient, projectClient: projectClient,
 
 }
@@ -77,9 +64,6 @@ var _ reconcile.Reconciler = &ReconcileNSTemplateSet{}
 type ReconcileNSTemplateSet struct {
 	client client.Client
 	scheme *runtime.Scheme
-	// templateClient *templatev1client.TemplateV1Client
-	// authClient     *authv1client.AuthorizationV1Client
-	// projectClient  *projectv1client.ProjectV1Client
 }
 
 // TODO set NSTemplateSet.Status appropriately
@@ -121,7 +105,6 @@ func (r *ReconcileNSTemplateSet) createResources(objs []runtime.RawExtension, na
 		}
 		gvk := obj.Object.GetObjectKind().GroupVersionKind()
 		log.Info("processing object", "version", gvk.Version, "kind", gvk.Kind)
-		log.Info("object", "raw", obj.Object)
 		if err := r.client.Create(context.TODO(), obj.Object); err != nil {
 			log.Error(err, "unable to create resource", "type", gvk.Kind)
 			return errs.Wrapf(err, "unable to create resource of type %s", gvk.Kind)

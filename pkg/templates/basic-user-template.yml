@@ -12,8 +12,20 @@ objects:
   kind: ProjectRequest
   metadata:
     annotations:
-      openshift.io/description: ${PROJECT_NAME}
-      openshift.io/display-name: ${PROJECT_NAME}
+      openshift.io/description: ${PROJECT_NAME}-user
+      openshift.io/display-name: ${PROJECT_NAME}-user
+      openshift.io/requester: ${PROJECT_REQUESTING_USER}
+    labels:
+      provider: codeready-toolchain
+      project: codeready-toolchain-user
+      version: ${COMMIT}
+    name: ${PROJECT_NAME}
+- apiVersion: project.openshift.io/v1
+  kind: ProjectRequest
+  metadata:
+    annotations:
+      openshift.io/description: ${PROJECT_NAME}-che
+      openshift.io/display-name: ${PROJECT_NAME}-che
       openshift.io/requester: ${PROJECT_REQUESTING_USER}
     labels:
       provider: codeready-toolchain
@@ -40,6 +52,4 @@ parameters:
 - name: PROJECT_NAME
 - name: ADMIN_USER_NAME
 - name: PROJECT_REQUESTING_USER
-  value: system:admin
 - name: COMMIT
-  value: 123abc

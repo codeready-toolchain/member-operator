@@ -1,6 +1,7 @@
 apiVersion: toolchain.dev.openshift.com/v1alpha1
 kind: NSTemplateSet
 metadata:
+  name: johnsmith-templateset
   labels:
     username: johnsmith
 spec:
@@ -8,7 +9,10 @@ spec:
   namespaces:
     - type: ide
       revision: ab12ef
+      template: basic-user-template.yml
     - type: cicd
       revision: 34efcd
+      template: basic-user-template.yml
     - type: stage
       revision: cdef56
+      template: basic-user-template.yml

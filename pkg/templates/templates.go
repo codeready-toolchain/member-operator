@@ -3,7 +3,6 @@ package templates
 import (
 	"fmt"
 	"html/template"
-	"io"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
@@ -25,7 +24,7 @@ func initTemplates() {
 			Template{
 				Name:         "user",
 				Revision:     "abc1234",
-				TemplateFile: "templates/basic-user-template.yml",
+				TemplateFile: "basic-user-template.yml",
 			},
 		},
 	}
@@ -42,18 +41,13 @@ func loadTemplates() {
 	}
 }
 
-func ProcessTemplate(w io.Writer, tmplName string, param interface{}) error {
-	return tmpls.ExecuteTemplate(w, tmplName, param)
+func GetTemplateContent(tmplName string) ([]byte, error) {
+	return Asset("pkg/templates/" + tmplName)
 }
 
-func GetTemplateContent(tmplName string) []byte {
-	content, err := Asset(tmplName)
-	fmt.Println("VN: get tmpl, err=", err)
-	return content
-}
-
-func GetTemplate(typeName string) TemplateType {
-	return templates[typeName]
+func GetTemplate(typeName string) (TemplateType, bool) {
+	t, found := templates[typeName]
+	return t, found
 }
 
 var templates map[string]TemplateType

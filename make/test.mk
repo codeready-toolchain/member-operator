@@ -54,8 +54,6 @@ test-e2e:  deploy-host e2e-setup setup-kubefed
 	# remove me once verified
 	oc get kubefedcluster -n $(TEST_NAMESPACE)
 	oc get kubefedcluster -n $(HOST_NS)
-	oc logs $(oc get pods -o name) -n $(HOST_NS)
-	oc logs $(oc get pods -o name) -n $(TEST_NAMESPACE)
 
 .PHONY: e2e-setup
 e2e-setup: get-test-namespace is-minishift
@@ -68,9 +66,8 @@ e2e-setup: get-test-namespace is-minishift
 
 .PHONY: setup-kubefed
 setup-kubefed:
-    # TODO update this link which will be pointing to toolchain-common master once merged
-	curl -sSL https://gist.githubusercontent.com/dipak-pawar/af5065ef097bfac878b6b567d867f78f/raw/d053a4641ead6f7b4381d72e1bb660827e62f71c/create_fedcluster.sh | bash -s -- -t member -mn $(TEST_NAMESPACE) -hn $(HOST_NS)
-	curl -sSL https://gist.githubusercontent.com/dipak-pawar/af5065ef097bfac878b6b567d867f78f/raw/d053a4641ead6f7b4381d72e1bb660827e62f71c/create_fedcluster.sh | bash -s -- -t host -mn $(TEST_NAMESPACE) -hn $(HOST_NS)
+	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t member -mn $(TEST_NAMESPACE) -hn $(HOST_NS) -s
+	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t host -mn $(TEST_NAMESPACE) -hn $(HOST_NS) -s
 
 .PHONY: is-minishift
 is-minishift:

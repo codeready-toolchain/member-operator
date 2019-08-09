@@ -26,6 +26,7 @@ RUN yum install epel-release -y \
     bc \
     kubectl \
     yamllint \
+    jq \
     python36-virtualenv \
     jq \
     && yum clean all

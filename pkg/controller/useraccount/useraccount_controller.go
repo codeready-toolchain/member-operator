@@ -11,6 +11,7 @@ import (
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
+	"github.com/redhat-cop/operator-utils/pkg/util"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -113,9 +114,9 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
-	if userAcc.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !util.IsBeingDeleted(userAcc) {
 		// Add the finalizer if it is not present
-		if err := r.setFinalizers(userAcc, userAccFinalizerName); err != nil {
+		if err := r.addFinalizer(userAcc, userAccFinalizerName); err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -128,17 +129,8 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if containsString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName) {
-		var deleted bool
-		if err, deleted = r.deleteIdentity(reqLogger, userAcc); err != nil || deleted {
-			return reconcile.Result{}, err
-		}
-
-		if err, deleted = r.deleteUser(reqLogger, userAcc); err != nil || deleted {
-			return reconcile.Result{}, err
-		}
-
-		if err = r.deleteFinalizer(reqLogger, userAcc); err != nil {
+	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
+		if err = r.manageCleanUpLogic(reqLogger, userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -239,13 +231,34 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 }
 
 // setFinalizers sets the finalizers for UserAccount
-func (r *ReconcileUserAccount) setFinalizers(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
+func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
 	// Add the finalizer if it is not present
-	if !containsString(userAcc.ObjectMeta.Finalizers, finalizer) {
-		userAcc.ObjectMeta.Finalizers = append(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
+	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
+		util.AddFinalizer(userAcc, userAccFinalizerName)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// manageCleanUpLogic deletes the identity, user and finalizer when the UserAccount is being deleted
+func (r *ReconcileUserAccount) manageCleanUpLogic(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+	var deleted bool
+	var err error
+	if err, deleted = r.deleteIdentity(logger, userAcc); err != nil || deleted {
+		return err
+	}
+
+	if err, deleted = r.deleteUser(logger, userAcc); err != nil || deleted {
+		return err
+	}
+
+	// Remove finalizer from UserAccount
+	util.RemoveFinalizer(userAcc, userAccFinalizerName)
+	if err := r.client.Update(context.Background(), userAcc); err != nil {
+		return err
 	}
 
 	return nil
@@ -291,15 +304,6 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	}
 
 	return nil, true
-}
-
-func (r *ReconcileUserAccount) deleteFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
-	// Remove finalizer from UserAccount
-	userAcc.ObjectMeta.Finalizers = removeString(userAcc.ObjectMeta.Finalizers, userAccFinalizerName)
-	if err := r.client.Update(context.Background(), userAcc); err != nil {
-		return err
-	}
-	return nil
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.

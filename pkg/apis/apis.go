@@ -9,7 +9,7 @@ import (
 // AddToScheme adds all Resources to the Scheme
 func AddToScheme(s *runtime.Scheme) error {
 	// add openshift specific resource
-	AddToSchemes := append(apis.AddToSchemes, userv1.AddToScheme)
+	addToSchemes := append(apis.AddToSchemes, userv1.AddToScheme)
 
-	return AddToSchemes.AddToScheme(s)
+	return addToSchemes.AddToScheme(s)
 }

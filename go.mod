@@ -4,7 +4,7 @@ require (
 	cloud.google.com/go v0.40.0 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.4.9 // indirect
 	github.com/Azure/go-autorest v11.5.2+incompatible // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190712171113-7038210b9ba5
+	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20190712173044-bb50b23fbdd7
 	github.com/coreos/prometheus-operator v0.26.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
@@ -40,7 +40,7 @@ require (
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190603182131-db7b694dc208
 	sigs.k8s.io/controller-runtime v0.1.12
-	sigs.k8s.io/controller-tools v0.1.11
+	sigs.k8s.io/controller-tools v0.1.12
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
 

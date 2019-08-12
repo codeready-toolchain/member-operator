@@ -143,7 +143,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to create user '%s': unable to create user", username))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -177,7 +176,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to update user '%s': unable to update user", username))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -258,7 +256,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID)))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -292,7 +289,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to update identity '%s': unable to update identity", preexistingIdentityWithNoMapping.Name))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -407,7 +403,6 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		assert.Equal(t, reconcile.Result{}, res)
-		require.Error(t, err)
 		require.EqualError(t, err, fmt.Sprintf("unable to add finalizer for user account %s", userAcc.Name))
 	})
 	// Remove finalizer fails
@@ -463,7 +458,6 @@ func TestReconcile(t *testing.T) {
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.Error(t, err)
 		require.EqualError(t, err, fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
 
 		// Check that the user account finalizer has not been removed
@@ -504,7 +498,6 @@ func TestReconcile(t *testing.T) {
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.Error(t, err)
 		require.EqualError(t, err, fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
 
 		// Check that the associated identity has not been deleted
@@ -555,7 +548,6 @@ func TestReconcile(t *testing.T) {
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.Error(t, err)
 		require.EqualError(t, err, fmt.Sprintf("unable to delete user for user account %s", userAcc.Name))
 
 		// Check that the associated user has not been deleted

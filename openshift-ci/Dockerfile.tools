@@ -13,6 +13,11 @@ ENV LANG=en_US.utf8 \
 
 ARG GO_PACKAGE_PATH=github.com/codeready-toolchain/member-operator
 
+# this is workaround till we fix https://bugzilla.redhat.com/show_bug.cgi?id=1739804
+RUN yum -y install https://centos7.iuscommunity.org/ius-release.rpm \
+    python36u \
+    python36-devel
+
 RUN yum install epel-release -y \
     && yum install --enablerepo=centosplus install -y --quiet \
     findutils \
@@ -31,8 +36,11 @@ RUN yum install epel-release -y \
     jq \
     && yum clean all
 
-# download, verify and install openshift client tools (oc and kubectl)
 WORKDIR /tmp
+
+RUN mv /tmp/../usr/bin/python3.6 /usr/bin/python3
+
+# download, verify and install openshift client tools (oc and kubectl)
 RUN curl -L -s https://github.com/openshift/origin/releases/download/v3.11.0/openshift-origin-client-tools-v3.11.0-0cbc58b-linux-64bit.tar.gz -o openshift-origin-client-tools.tar.gz \
     && echo "4b0f07428ba854174c58d2e38287e5402964c9a9355f6c359d1242efd0990da3 openshift-origin-client-tools.tar.gz" > openshift-origin-client-tools.sha256 \
     && sha256sum -c openshift-origin-client-tools.sha256 \

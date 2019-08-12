@@ -34,7 +34,7 @@ require (
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190603182131-db7b694dc208
 	sigs.k8s.io/controller-runtime v0.1.12
-	sigs.k8s.io/controller-tools v0.1.11
+	sigs.k8s.io/controller-tools v0.1.12
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
 

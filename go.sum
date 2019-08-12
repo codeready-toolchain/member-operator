@@ -40,6 +40,8 @@ github.com/codeready-toolchain/api v0.0.0-20190709160753-31636807b6f1 h1:CJMZwz8
 github.com/codeready-toolchain/api v0.0.0-20190709160753-31636807b6f1/go.mod h1:THipEIgxvhBvngWP2bmD5TXoCuQ1v2cz0IwAwQaaoPE=
 github.com/codeready-toolchain/api v0.0.0-20190712171113-7038210b9ba5 h1:bTmnva6ifSFde4whh3taRt83Ev6197G5IE0C4ywTlAs=
 github.com/codeready-toolchain/api v0.0.0-20190712171113-7038210b9ba5/go.mod h1:THipEIgxvhBvngWP2bmD5TXoCuQ1v2cz0IwAwQaaoPE=
+github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28 h1:+ndo0pFuFuy10St4EDltsITtrj4iOLArBvLXwj2Z4Fo=
+github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28/go.mod h1:jHr8IvmLGTxmgD+jc1bBbucP4bSbT2JHnM+HdAw6N2g=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20190628135548-152ae535f870 h1:edpEZ10vHO8kAkATYnfH1QSMZJrXK6iDJl5YIWWJWtM=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20190628135548-152ae535f870/go.mod h1:ugjpT4MV5lyYg3OpTfEvXrx/7ns2US4NgQPCeMT/ibA=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20190710025502-b931feee5a1d h1:Vt9vwCkqJJftOZURQ44KtNnTRGRZyfyDbgl0BouTp+o=
@@ -124,6 +126,7 @@ github.com/gobuffalo/envy v1.6.15 h1:OsV5vOpHYUpP7ZLS6sem1y40/lNX1BZj+ynMiRi21lQ
 github.com/gobuffalo/envy v1.6.15/go.mod h1:n7DRkBerg/aorDM8kbduw5dN3oXGswK5liaSCx4T5NI=
 github.com/gobuffalo/envy v1.7.0 h1:GlXgaiBkmrYMHco6t4j7SacKO4XUjvh5pwXh0f4uxXU=
 github.com/gobuffalo/envy v1.7.0/go.mod h1:n7DRkBerg/aorDM8kbduw5dN3oXGswK5liaSCx4T5NI=
+github.com/gobuffalo/flect v0.1.5/go.mod h1:W3K3X9ksuZfir8f/LrfVtWmCDQFfayuylOJ7sz/Fj80=
 github.com/gobwas/glob v0.2.3/go.mod h1:d3Ez4x06l9bZtSvzIay5+Yzi0fmZzPgnTbPcKjJAkT8=
 github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
 github.com/gogo/protobuf v1.2.1 h1:/s5zKNz0uPFCZ5hddgPdo2TK2TVrUNMn0OOX8/aZMTE=

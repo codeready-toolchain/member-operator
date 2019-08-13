@@ -71,11 +71,7 @@ PULL_NUMBER := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].pulls[0].number')
 
 .PHONY: test-e2e
 test-e2e:  deploy-host e2e-setup setup-kubefed
-	# This is hack to fix https://github.com/operator-framework/operator-sdk/issues/1657
-	echo "info: Running go mod vendor"
-	go mod vendor
-	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
-	# remove me once verified
+	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --verbose --go-test-flags "-timeout=15m"
 	oc get kubefedcluster -n $(TEST_NAMESPACE)
 	oc get kubefedcluster -n $(HOST_NS)
 

@@ -4,15 +4,15 @@ require (
 	cloud.google.com/go v0.40.0 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.4.9 // indirect
 	github.com/Azure/go-autorest v11.5.2+incompatible // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190712171113-7038210b9ba5
+	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20190712173044-bb50b23fbdd7
 	github.com/coreos/prometheus-operator v0.26.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
-	github.com/gophercloud/gophercloud v0.0.0-20190318015731-ff9851476e98 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.9.2 // indirect
+	github.com/gophercloud/gophercloud v0.3.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.9.5 // indirect
 	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
 	github.com/openshift/api v3.9.0+incompatible
 	github.com/operator-framework/operator-sdk v0.8.2-0.20190522220659-031d71ef8154
@@ -40,7 +40,7 @@ require (
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190603182131-db7b694dc208
 	sigs.k8s.io/controller-runtime v0.1.12
-	sigs.k8s.io/controller-tools v0.1.11
+	sigs.k8s.io/controller-tools v0.1.12
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
 

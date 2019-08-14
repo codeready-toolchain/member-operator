@@ -2,8 +2,8 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	cloud.google.com/go v0.40.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190712171113-7038210b9ba5
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190712173044-bb50b23fbdd7
+	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190814120500-ab1e2af882aa
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
@@ -14,6 +14,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/common v0.6.0 // indirect
 	github.com/prometheus/procfs v0.0.3 // indirect
+	github.com/redhat-cop/operator-utils v0.0.0-20190530184149-66ee667a40b2
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0

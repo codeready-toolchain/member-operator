@@ -105,6 +105,10 @@ e2e-cleanup:
 	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
 	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait
 
+.PHONY: clean-e2e-namespaces
+clean-e2e-namespaces:
+	$(Q)-oc get projects --output=name | grep -E "(member|host)\-operator\-[0-9]+" | xargs oc delete
+
 .PHONY: get-test-namespace
 get-test-namespace: $(OUT_DIR)/test-namespace
 	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))

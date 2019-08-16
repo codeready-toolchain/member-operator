@@ -69,11 +69,17 @@ PULL_NUMBER := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].pulls[0].number')
 #
 ###########################################################
 
+.PHONY: test-e2e-keep-namespaces
+test-e2e-keep-namespaces: deploy-host e2e-setup setup-kubefed e2e-run
+
 .PHONY: test-e2e
-test-e2e:  deploy-host e2e-setup setup-kubefed
-	HOST_NS=${HOST_NS} operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --verbose --go-test-flags "-timeout=15m"
+test-e2e: test-e2e-keep-namespaces e2e-cleanup
+
+.PHONY: e2e-run
+e2e-run:
 	oc get kubefedcluster -n $(TEST_NAMESPACE)
 	oc get kubefedcluster -n $(HOST_NS)
+	HOST_NS=${HOST_NS} operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --verbose --go-test-flags "-timeout=15m"
 
 .PHONY: e2e-setup
 e2e-setup: get-test-namespace is-minishift
@@ -102,8 +108,11 @@ endif
 
 .PHONY: e2e-cleanup
 e2e-cleanup:
-	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
-	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait
+	oc delete project ${HOST_NS} ${TEST_NAMESPACE} --wait=false || true
+
+.PHONY: clean-e2e-namespaces
+clean-e2e-namespaces:
+	$(Q)-oc get projects --output=name | grep -E "(member|host)\-operator\-[0-9]+" | xargs oc delete
 
 .PHONY: get-test-namespace
 get-test-namespace: $(OUT_DIR)/test-namespace

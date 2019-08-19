@@ -5,22 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-
 	userv1 "github.com/openshift/api/user/v1"
+	"github.com/redhat-cop/operator-utils/pkg/util"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -130,8 +134,8 @@ func TestReconcile(t *testing.T) {
 	t.Run("create or update user failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
-			r, req, client := prepareReconcile(t, username, userAcc)
-			client.MockCreate = func(obj runtime.Object) error {
+			r, req, fakeClient := prepareReconcile(t, username, userAcc)
+			fakeClient.MockCreate = func(obj runtime.Object) error {
 				return errors.New("unable to create user")
 			}
 
@@ -139,7 +143,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to create user '%s': unable to create user", username))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -157,14 +160,15 @@ func TestReconcile(t *testing.T) {
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
+			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
 				Name:            username,
 				Namespace:       "toolchain-member",
 				UID:             userUID,
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
 			}}
-			r, req, client := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
-			client.MockUpdate = func(obj runtime.Object) error {
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
+			fakeClient.MockUpdate = func(obj runtime.Object) error {
 				return errors.New("unable to update user")
 			}
 
@@ -172,7 +176,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to update user '%s': unable to update user", username))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -244,8 +247,8 @@ func TestReconcile(t *testing.T) {
 	t.Run("create or update identity failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
-			r, req, client := prepareReconcile(t, username, userAcc, preexistingUser)
-			client.MockCreate = func(obj runtime.Object) error {
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser)
+			fakeClient.MockCreate = func(obj runtime.Object) error {
 				return errors.New("unable to create identity")
 			}
 
@@ -253,7 +256,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID)))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -271,14 +273,15 @@ func TestReconcile(t *testing.T) {
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
+			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name:            ToIdentityName(userAcc.Spec.UserID),
 				Namespace:       "toolchain-member",
 				UID:             types.UID(uuid.NewV4().String()),
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
 			}}
-			r, req, client := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
-			client.MockUpdate = func(obj runtime.Object) error {
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
+			fakeClient.MockUpdate = func(obj runtime.Object) error {
 				return errors.New("unable to update identity")
 			}
 
@@ -286,7 +289,6 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.Error(t, err)
 			require.EqualError(t, err, fmt.Sprintf("failed to update identity '%s': unable to update identity", preexistingIdentityWithNoMapping.Name))
 			assert.Equal(t, reconcile.Result{}, res)
 
@@ -327,6 +329,233 @@ func TestReconcile(t *testing.T) {
 				Reason: "Provisioned",
 			})
 	})
+
+	// Delete useraccount and ensure related resources are also removed
+	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		//then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated user has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the user account finalizer has been removed
+		// when reconciling the useraccount with a deletion timestamp
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		require.False(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+	})
+	// Add finalizer fails
+	t.Run("add finalizer fails", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		// Mock setting finalizer failure
+		fakeClient.MockUpdate = func(obj runtime.Object) error {
+			return fmt.Errorf("unable to add finalizer for user account %s", userAcc.Name)
+		}
+
+		//when
+		res, err := r.Reconcile(req)
+
+		//then
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, fmt.Sprintf("unable to add finalizer for user account %s", userAcc.Name))
+	})
+	// Remove finalizer fails
+	t.Run("remove finalizer fails", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		//then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated user has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Mock finalizer removal failure
+		fakeClient.MockUpdate = func(obj runtime.Object) error {
+			return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
+		}
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
+
+		// Check that the user account finalizer has not been removed
+		// when reconciling the useraccount with a deletion timestamp
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+	})
+	// delete identity fails
+	t.Run("delete identity fails", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		//then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		// Mock deleting identity failure
+		fakeClient.MockDelete = func(obj runtime.Object, opts ...client.DeleteOptionFunc) error {
+			return fmt.Errorf("unable to delete identity for user account %s", userAcc.Name)
+		}
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
+
+		// Check that the associated identity has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.NoError(t, err)
+	})
+	// delete user fails
+	t.Run("delete user fails", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		//then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Mock deleting user failure
+		fakeClient.MockDelete = func(obj runtime.Object, opts ...client.DeleteOptionFunc) error {
+			return fmt.Errorf("unable to delete user for user account %s", userAcc.Name)
+		}
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, fmt.Sprintf("unable to delete user for user account %s", userAcc.Name))
+
+		// Check that the associated user has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.NoError(t, err)
+	})
 }
 
 func TestUpdateStatus(t *testing.T) {
@@ -340,9 +569,9 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("status updated", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		client := fake.NewFakeClient(userAcc)
+		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
-			client: client,
+			client: fakeClient,
 			scheme: s,
 		}
 		condition := toolchainv1alpha1.Condition{
@@ -364,9 +593,9 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("status not updated because not changed", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		client := fake.NewFakeClient(userAcc)
+		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
-			client: client,
+			client: fakeClient,
 			scheme: s,
 		}
 		conditions := []toolchainv1alpha1.Condition{{
@@ -390,9 +619,9 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("status error wrapped", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		client := fake.NewFakeClient(userAcc)
+		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
-			client: client,
+			client: fakeClient,
 			scheme: s,
 		}
 		log := logf.Log.WithName("test")
@@ -440,6 +669,22 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 	return userAcc
 }
 
+func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
+	finalizers := []string{userAccFinalizerName}
+	userAcc := &toolchainv1alpha1.UserAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       userName,
+			Namespace:  "toolchain-member",
+			UID:        types.UID(uuid.NewV4().String()),
+			Finalizers: finalizers,
+		},
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			UserID: userID,
+		},
+	}
+	return userAcc
+}
+
 func newReconcileRequest(name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -460,11 +705,11 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	client := test.NewFakeClient(t, initObjs...)
+	fakeClient := test.NewFakeClient(t, initObjs...)
 
 	r := &ReconcileUserAccount{
-		client: client,
+		client: fakeClient,
 		scheme: s,
 	}
-	return r, newReconcileRequest(username), client
+	return r, newReconcileRequest(username), fakeClient
 }

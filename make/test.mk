@@ -69,13 +69,17 @@ PULL_NUMBER := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].pulls[0].number')
 #
 ###########################################################
 
+.PHONY: test-e2e-keep-namespaces
+test-e2e-keep-namespaces: deploy-host e2e-setup setup-kubefed e2e-run
+
 .PHONY: test-e2e
-test-e2e:  e2e-setup
-	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
-	# This is hack to fix https://github.com/operator-framework/operator-sdk/issues/1657
-	echo "info: Running go mod vendor"
-	go mod vendor
-	operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --go-test-flags "-v -timeout=15m"
+test-e2e: test-e2e-keep-namespaces e2e-cleanup
+
+.PHONY: e2e-run
+e2e-run:
+	oc get kubefedcluster -n $(TEST_NAMESPACE)
+	oc get kubefedcluster -n $(HOST_NS)
+	HOST_NS=${HOST_NS} operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --verbose --go-test-flags "-timeout=15m"
 
 .PHONY: e2e-setup
 e2e-setup: get-test-namespace is-minishift
@@ -84,6 +88,12 @@ e2e-setup: get-test-namespace is-minishift
 	oc apply -f ./deploy/role.yaml
 	cat ./deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(TEST_NAMESPACE)/ | oc apply -f -
 	oc apply -f deploy/crds
+	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
+
+.PHONY: setup-kubefed
+setup-kubefed:
+	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t member -mn $(TEST_NAMESPACE) -hn $(HOST_NS) -s
+	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t host -mn $(TEST_NAMESPACE) -hn $(HOST_NS) -s
 
 .PHONY: is-minishift
 is-minishift:
@@ -98,12 +108,34 @@ endif
 
 .PHONY: e2e-cleanup
 e2e-cleanup:
-	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
-	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait
+	oc delete project ${HOST_NS} ${TEST_NAMESPACE} --wait=false || true
+
+.PHONY: clean-e2e-namespaces
+clean-e2e-namespaces:
+	$(Q)-oc get projects --output=name | grep -E "(member|host)\-operator\-[0-9]+" | xargs oc delete
 
 .PHONY: get-test-namespace
 get-test-namespace: $(OUT_DIR)/test-namespace
 	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
 
 $(OUT_DIR)/test-namespace:
-	@echo -n "test-namespace-$(shell uuidgen | tr '[:upper:]' '[:lower:]')" > $(OUT_DIR)/test-namespace
+	@echo -n "member-operator-$(shell date +'%s')" > $(OUT_DIR)/test-namespace
+
+###########################################################
+#
+# Deploying Host Operator in Openshift CI Environment for End to End tests
+#
+###########################################################
+
+.PHONY: deploy-host
+deploy-host:
+	$(eval HOST_NS := $(shell echo -n "host-operator-$(shell date +'%s')"))
+	rm -rf /tmp/host-operator
+	# cloning shallow as don't want to maintain it for every single change in deploy directory of host-operator
+	git clone https://github.com/codeready-toolchain/host-operator.git --depth 1 /tmp/host-operator
+	oc new-project $(HOST_NS)
+	oc apply -f /tmp/host-operator/deploy/service_account.yaml
+	oc apply -f /tmp/host-operator/deploy/role.yaml
+	cat /tmp/host-operator/deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(HOST_NS)/ | oc apply -f -
+	oc apply -f /tmp/host-operator/deploy/crds
+	sed -e 's|REPLACE_IMAGE|registry.svc.ci.openshift.org/codeready-toolchain/host-operator-v0.1:host-operator|g' /tmp/host-operator/deploy/operator.yaml  | oc apply -f -

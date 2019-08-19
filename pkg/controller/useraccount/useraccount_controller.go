@@ -7,16 +7,18 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
-
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
+	"github.com/redhat-cop/operator-utils/pkg/util"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,6 +37,9 @@ const (
 	unableToCreateNSTemplateSet  = "UnableToCreateNSTemplateSet"
 	provisioningReason           = "Provisioning"
 	provisionedReason            = "Provisioned"
+
+	// Finalizers
+	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
 )
 
 var log = logf.Log.WithName("controller_useraccount")
@@ -111,19 +116,34 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	var createdOrUpdated bool
-	var user *userv1.User
-	if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
-		return reconcile.Result{}, err
+	// If the UserAccount has not been deleted, create or update user and identity resources.
+	// If the UserAccount has been deleted, delete secondary resources identity and user.
+	if !util.IsBeingDeleted(userAcc) {
+		// Add the finalizer if it is not present
+		if err := r.addFinalizer(userAcc, userAccFinalizerName); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		var createdOrUpdated bool
+		var user *userv1.User
+		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
+
+		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
+
+		if createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
+	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
+		if err = r.manageCleanUpLogic(reqLogger, userAcc); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
-	if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
-		return reconcile.Result{}, err
-	}
 
-	if createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
-		return reconcile.Result{}, err
-	}
 
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
@@ -256,11 +276,87 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 		}
 	}
 
-	if nsTeplSet.Spec.TierName != userAcc.Spec.TierName {
+	if nsTeplSet.Spec.TierName != userAcc.Spec.NSTemplateSet.TierName {
 		// TODO tier is changed, do needful
 	}
 
 	return false, nil
+}
+
+// setFinalizers sets the finalizers for UserAccount
+func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
+	// Add the finalizer if it is not present
+	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
+		util.AddFinalizer(userAcc, userAccFinalizerName)
+		if err := r.client.Update(context.TODO(), userAcc); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// manageCleanUpLogic deletes the identity, user and finalizer when the UserAccount is being deleted
+func (r *ReconcileUserAccount) manageCleanUpLogic(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+	var deleted bool
+	var err error
+	if err, deleted = r.deleteIdentity(logger, userAcc); err != nil || deleted {
+		return err
+	}
+
+	if err, deleted = r.deleteUser(logger, userAcc); err != nil || deleted {
+		return err
+	}
+
+	// Remove finalizer from UserAccount
+	util.RemoveFinalizer(userAcc, userAccFinalizerName)
+	if err := r.client.Update(context.Background(), userAcc); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// deleteUser deletes the user resource
+func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (error, bool) {
+	// Get the User associated with the UserAccount
+	user := &userv1.User{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err, false
+		} else {
+			return nil, false
+		}
+	}
+
+	// Delete User associated with UserAccount
+	if err := r.client.Delete(context.TODO(), user); err != nil {
+		return err, false
+	}
+	return nil, true
+}
+
+// deleteIdentity deletes the identity resource.
+func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (error, bool) {
+	// Get the Identity associated with the UserAccount
+	identity := &userv1.Identity{}
+	identityName := ToIdentityName(userAcc.Spec.UserID)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err, false
+		} else {
+			return nil, false
+		}
+	}
+
+	// Delete Identity associated with UserAccount
+	if err := r.client.Delete(context.TODO(), identity); err != nil {
+		return err, false
+	}
+
+	return nil, true
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.

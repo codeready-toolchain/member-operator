@@ -30,8 +30,7 @@ func Add(mgr manager.Manager) error {
 }
 
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileNSTemplateSet{client: mgr.GetClient(), scheme: mgr.GetScheme()} // templateClient: templateClient, authClient: authClient, projectClient: projectClient,
-
+	return &ReconcileNSTemplateSet{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {

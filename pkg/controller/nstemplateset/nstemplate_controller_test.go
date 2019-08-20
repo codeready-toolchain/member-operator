@@ -41,7 +41,8 @@ func TestReconcile(t *testing.T) {
 				TierName: "basic",
 			},
 		}
-		cl.Create(context.TODO(), tmplSet)
+		err := cl.Create(context.TODO(), tmplSet)
+		require.NoError(t, err)
 
 		// when
 		result, err := r.Reconcile(req)
@@ -68,7 +69,8 @@ func TestReconcile(t *testing.T) {
 				TierName: "basic",
 			},
 		}
-		cl.Create(context.TODO(), tmplSet)
+		err := cl.Create(context.TODO(), tmplSet)
+		require.NoError(t, err)
 
 		// when
 		result, err := r.Reconcile(req)
@@ -88,6 +90,9 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		result, err = r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, result)
+
 		verifyProjectRequest(t, r.client, namespace)
 		verifyRoleBinding(t, r.client, namespace)
 	})

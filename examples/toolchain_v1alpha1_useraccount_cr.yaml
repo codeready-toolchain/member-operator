@@ -6,4 +6,12 @@ metadata:
 spec:
   userID: 1a03ecac-7c0b-44fc-b66d-12dd7fb21c40
   nsLimit: admin
-  tierName: basic
+  nsTemplateSet:
+    tierName: basic
+    namespaces:
+      - type: ide
+        revision: ab12ef
+      - type: cicd
+        revision: 34efcd
+      - type: stage
+        revision: cdef56

@@ -37,12 +37,34 @@ spec:
             nsLimit:
               description: The namespace limit name
               type: string
-            nsTemplateSetName:
-              description: Reference to NSTemplateSet for this user
+            nsTemplateSet:
+              description: Namespace template set
+              properties:
+                namespaces:
+                  description: The namespace templates
+                  items:
+                    properties:
+                      revision:
+                        description: The revision of the corresponding template
+                        type: string
+                      template:
+                        description: Optional field. Used to specify a custom template
+                        type: string
+                      type:
+                        description: 'The type of the namespace. For example: ide|cicd|stage|default'
+                        type: string
+                    required:
+                    - type
+                    - revision
+                    type: object
+                  type: array
+                tierName:
+                  description: The name of the tier represented by this template set
+                  type: string
+              required:
+              - tierName
+              - namespaces
               type: object
-            tierName:
-              description: The name of the tier represented by this template set
-              type: string
             userID:
               description: UserID is the user ID from RHD Identity Provider token
                 (“sub” claim) Is to be used to create Identity and UserIdentityMapping
@@ -51,7 +73,7 @@ spec:
           required:
           - userID
           - nsLimit
-          - tierName
+          - nsTemplateSet
           type: object
         status:
           properties:

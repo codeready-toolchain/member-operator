@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"github.com/goadesign/goa/uuid"
+	"github.com/satori/go.uuid"
 )
 
 func TestReconcile(t *testing.T) {
@@ -28,9 +28,9 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("create projects", func(t *testing.T) {
 		// given
-		namespace := "foo"			// this is hard coded in controller, we should modify this once we add logic to find the required values from requests instance.
+		namespace :=  uuid.NewV4().String()
 		name := uuid.NewV4().String()
-		r, req, client := prepareReconcile(t, namespace, name)
+		r, req, cl := prepareReconcile(t, namespace, name)
 		// also, create the NSTemplateSet CR with the client
 		tmplSet := &toolchainv1alpha1.NSTemplateSet{
 			ObjectMeta: metav1.ObjectMeta{
@@ -41,7 +41,7 @@ func TestReconcile(t *testing.T) {
 				TierName: "basic",
 			},
 		}
-		client.Create(context.TODO(), tmplSet)
+		cl.Create(context.TODO(), tmplSet)
 
 		// when
 		result, err := r.Reconcile(req)
@@ -55,9 +55,9 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("delete_role_binding_and_reconcile", func(t *testing.T) {
 		// given
-		namespace := "foo"
+		namespace := uuid.NewV4().String()
 		name := uuid.NewV4().String()
-		r, req, client := prepareReconcile(t, namespace, name)
+		r, req, cl := prepareReconcile(t, namespace, name)
 		// also, create the NSTemplateSet CR with the client
 		tmplSet := &toolchainv1alpha1.NSTemplateSet{
 			ObjectMeta: metav1.ObjectMeta{
@@ -68,7 +68,7 @@ func TestReconcile(t *testing.T) {
 				TierName: "basic",
 			},
 		}
-		client.Create(context.TODO(), tmplSet)
+		cl.Create(context.TODO(), tmplSet)
 
 		// when
 		result, err := r.Reconcile(req)
@@ -84,7 +84,7 @@ func TestReconcile(t *testing.T) {
 		rb, err := getRoleBinding(r.client, namespace)
 		require.NoError(t, err)
 
-		err = client.Delete(context.TODO(), rb)
+		err = cl.Delete(context.TODO(), rb)
 		require.NoError(t, err)
 
 		result, err = r.Reconcile(req)
@@ -107,13 +107,13 @@ func prepareReconcile(t *testing.T, namespace, name string, initObjs ...runtime.
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	client := test.NewFakeClient(t, initObjs...)
+	cl := test.NewFakeClient(t, initObjs...)
 
 	r := &ReconcileNSTemplateSet{
-		client: client,
+		client: cl,
 		scheme: s,
 	}
-	return r, newReconcileRequest(namespace, name), client
+	return r, newReconcileRequest(namespace, name), cl
 }
 
 func verifyProjectRequest(t *testing.T, c client.Client, projectRequestName string) {
@@ -123,7 +123,7 @@ func verifyProjectRequest(t *testing.T, c client.Client, projectRequestName stri
 }
 
 func verifyRoleBinding(t *testing.T, c client.Client, ns string) {
-	// check that the rolebinding was created in the namespace
+	// check that the rolebinding is created in the namespace
 	// (the fake client just records the request but does not perform any consistency check)
 	rb, err := getRoleBinding(c, ns)
 

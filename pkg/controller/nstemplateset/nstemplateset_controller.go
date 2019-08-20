@@ -82,7 +82,7 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 	log.Info("processing NSTemplateSet...")
 	// TODO: use values from the request
 	values := map[string]string{
-		"PROJECT_NAME":    "foo",
+		"PROJECT_NAME":    request.Namespace,
 		"ADMIN_USER_NAME": "developer",
 	}
 	if err := r.processAndApply(nsTeplSet.Spec.TierName, request.Namespace, reqLogger, values); err != nil {

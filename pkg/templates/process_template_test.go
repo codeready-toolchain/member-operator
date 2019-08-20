@@ -34,14 +34,29 @@ func TestProcess(t *testing.T) {
 	// then
 	require.NoError(t, err)
 	require.Len(t, objs, 2)
+
 	// project request
-	require.IsType(t, &unstructured.Unstructured{}, objs[0].Object.GetObjectKind())
-	projectRequest := objs[0].Object.GetObjectKind().(*unstructured.Unstructured)
-	// check that all parameters have been set in the template object
-	assert.Equal(t, "foo", projectRequest.GetAnnotations()["openshift.io/description"])
-	assert.Equal(t, "foo", projectRequest.GetAnnotations()["openshift.io/display-name"])
-	assert.Equal(t, "operator-sa", projectRequest.GetAnnotations()["openshift.io/requester"])
-	assert.Equal(t, "1a2b3c", projectRequest.GetLabels()["version"])
-	assert.Equal(t, "foo", projectRequest.GetName())
-	// TODO: assert other objects
+	projectKind := objs[0].Object.GetObjectKind()
+	require.IsType(t, &unstructured.Unstructured{}, projectKind)
+	projectRequest := projectKind.(*unstructured.Unstructured)
+	prJson, err := projectRequest.MarshalJSON()
+	require.NoError(t, err, "failed to marshal json for projectrequest")
+	assert.Equal(t, expectedProjectRequest(), string(prJson))
+
+	// role binding
+	rbKind := objs[1].Object.GetObjectKind()
+	require.IsType(t, &unstructured.Unstructured{}, rbKind)
+	roleBinding := rbKind.(*unstructured.Unstructured)
+	rbJson, err := roleBinding.MarshalJSON()
+	require.NoError(t, err, "failed to marshal json for rolebinding")
+	assert.Equal(t, expectedRoleBinding(), string(rbJson))
+}
+
+func expectedRoleBinding() string  {
+	return `{"apiVersion":"authorization.openshift.io/v1","kind":"RoleBinding","metadata":{"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"user-admin","namespace":"foo"},"roleRef":{"name":"admin"},"subjects":[{"kind":"User","name":"developer"}]}
+`}
+
+func expectedProjectRequest() string  {
+	return `{"apiVersion":"project.openshift.io/v1","kind":"ProjectRequest","metadata":{"annotations":{"openshift.io/description":"foo-user","openshift.io/display-name":"foo","openshift.io/requester":"operator-sa"},"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"foo"}}
+`
 }

@@ -67,7 +67,7 @@ func processTemplateLocally(tpl *templatev1.Template, scheme *runtime.Scheme) (*
 		"expression": generator.NewExpressionValueGenerator(rand.New(rand.NewSource(time.Now().UnixNano()))),
 	})
 	if errs := processor.Process(tpl); len(errs) > 0 {
-		return nil, errs[0] // TODO: use errors.NewAggregate later
+		return nil, errs.ToAggregate()
 	}
 	var externalResultObj templatev1.Template
 	if err := scheme.Convert(tpl, &externalResultObj, nil); err != nil {

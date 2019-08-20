@@ -1,43 +1,20 @@
 package templates
 
-import (
-	"fmt"
-	"html/template"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-)
-
-var log = logf.Log.WithName("template")
-
-var tmpls = template.New("")
-
 func init() {
+	// Todo implement a cache, to store all the templates from host cluster and template tier and invalidate/sync it when needed.
 	initTemplates()
-	// loadTemplates()
 }
 
 func initTemplates() {
 	templates = make(map[string]TemplateType)
 	templates["basic"] = TemplateType{
-		Name: "basic",
 		Templates: []Template{
 			{
-				Name:         "user",
+				Type:         "basic",
 				Revision:     "abc1234",
 				TemplateFile: "basic-user-template.yml",
 			},
 		},
-	}
-}
-
-func loadTemplates() {
-	for _, path := range AssetNames() {
-		fmt.Printf("loading template %s\n", path)
-		content, err := Asset(path)
-		if err != nil {
-			log.Error(err, "Failed to parse template, path: %s, err: %v", path, err)
-		}
-		tmpls.New(path).Parse(string(content))
 	}
 }
 
@@ -53,12 +30,11 @@ func GetTemplate(typeName string) (TemplateType, bool) {
 var templates map[string]TemplateType
 
 type TemplateType struct {
-	Name      string
 	Templates []Template
 }
 
 type Template struct {
-	Name         string
+	Type         string
 	Revision     string
 	TemplateFile string
 }

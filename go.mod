@@ -31,7 +31,7 @@ require (
 	google.golang.org/grpc v1.22.0 // indirect
 	k8s.io/api v0.0.0-20190718062839-c8a0b81cb10e
 	k8s.io/apiextensions-apiserver v0.0.0-20190718063925-2249b0201a0a // indirect
-	k8s.io/apimachinery v0.0.0-20190717022731-0bb8574e0887
+	k8s.io/apimachinery v0.0.0-20190820100751-ac02f8882ef6
 	k8s.io/apiserver v0.0.0-20190111033246-d50e9ac5404f // indirect
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/code-generator v0.0.0-20190717022600-77f3a1fe56bb

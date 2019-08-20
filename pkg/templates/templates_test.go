@@ -15,7 +15,16 @@ func TestGetTemplate(t *testing.T) {
 		tmplType, found := templates.GetTemplate("basic")
 		// then
 		require.True(t, found)
-		assert.Equal(t, "basic", tmplType.Name)
+		require.Len(t, tmplType.Templates, 1)
+		assert.Equal(t, "basic", tmplType.Templates[0].Type)
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		// when
+		tmplType, found := templates.GetTemplate("not_found")
+		// then
+		assert.False(t, found)
+		assert.Empty(t, tmplType)
 	})
 }
 
@@ -27,5 +36,13 @@ func TestGetTemplateContent(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.NotEmpty(t, content)
+	})
+
+	t.Run("basic-user-template-not-found", func(t *testing.T) {
+		// when
+		_, err := templates.GetTemplateContent("basic-user-template1.yml")
+		// then
+		require.Error(t, err)
+		assert.EqualError(t, err, "Asset pkg/templates/basic-user-template1.yml not found")
 	})
 }

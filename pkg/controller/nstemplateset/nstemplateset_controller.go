@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
@@ -20,10 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"github.com/go-logr/logr"
 )
 
 var log = logf.Log.WithName("controller_nstemplateset")
-var defaultRequeueAfter = time.Duration(time.Second * 5)
 
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
@@ -65,7 +64,6 @@ type ReconcileNSTemplateSet struct {
 	scheme *runtime.Scheme
 }
 
-// TODO set NSTemplateSet.Status appropriately
 func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling NSTemplateSet")
@@ -87,16 +85,25 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 		"PROJECT_NAME":    "foo",
 		"ADMIN_USER_NAME": "developer",
 	}
-	objs, err := templates.Process(r.scheme, reqLogger, nsTeplSet.Spec.TierName, values)
-	if err != nil {
+	if err := r.processAndApply(nsTeplSet.Spec.TierName, request.Namespace, reqLogger, values); err != nil {
 		return reconcile.Result{}, err
 	}
-	err = r.createResources(objs, request.Namespace)
-	return reconcile.Result{}, err
+
+	// TODO set NSTemplateSet.Status appropriately
+	return reconcile.Result{}, nil
 }
 
-// oc apply
-func (r *ReconcileNSTemplateSet) createResources(objs []runtime.RawExtension, namespace string) error {
+func (r *ReconcileNSTemplateSet) processAndApply(tierName, ns string, reqLogger logr.Logger, values map[string]string) error {
+
+	objs, err := templates.Process(r.scheme, reqLogger, tierName, values)
+	if err != nil {
+		return err
+	}
+
+	return r.applyResources(objs, ns)
+}
+
+func (r *ReconcileNSTemplateSet) applyResources(objs []runtime.RawExtension, namespace string) error {
 	for _, obj := range objs {
 		if obj.Object == nil {
 			log.Info("template object is nil")
@@ -105,6 +112,11 @@ func (r *ReconcileNSTemplateSet) createResources(objs []runtime.RawExtension, na
 		gvk := obj.Object.GetObjectKind().GroupVersionKind()
 		log.Info("processing object", "version", gvk.Version, "kind", gvk.Kind)
 		if err := r.client.Create(context.TODO(), obj.Object); err != nil {
+			if errors.IsAlreadyExists(err) {
+				// if client failed to create all resources(few created, few remaining) in the first run, then to avoid
+				// continuous failing scenario due to resource already existing for later runs
+				continue
+			}
 			log.Error(err, "unable to create resource", "type", gvk.Kind)
 			return errs.Wrapf(err, "unable to create resource of type %s", gvk.Kind)
 		}

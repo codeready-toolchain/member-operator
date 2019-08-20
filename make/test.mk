@@ -63,31 +63,53 @@ BASE_COMMIT := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].base_sha')
 PR_COMMIT := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].pulls[0].sha')
 PULL_NUMBER := $(shell echo $$CLONEREFS_OPTIONS | jq '.refs[0].pulls[0].number')
 
+MEMBER_NS := member-operator-$(shell date +'%s')
+HOST_NS := host-operator-$(shell date +'%s')
+
 ###########################################################
 #
 # End-to-end Tests
 #
 ###########################################################
 
+.PHONY: test-e2e-keep-namespaces
+test-e2e-keep-namespaces: deploy-host e2e-setup setup-kubefed e2e-run
+
 .PHONY: test-e2e
-test-e2e:  deploy-host e2e-setup setup-kubefed
-	HOST_NS=${HOST_NS} operator-sdk test local ./test/e2e --no-setup --namespace $(TEST_NAMESPACE) --verbose --go-test-flags "-timeout=15m"
-	oc get kubefedcluster -n $(TEST_NAMESPACE)
+test-e2e: test-e2e-keep-namespaces e2e-cleanup
+
+.PHONY: e2e-run
+e2e-run:
+	oc get kubefedcluster -n $(MEMBER_NS)
 	oc get kubefedcluster -n $(HOST_NS)
+	HOST_NS=${HOST_NS} operator-sdk test local ./test/e2e --no-setup --namespace $(MEMBER_NS) --verbose --go-test-flags "-timeout=15m" || \
+	($(MAKE) print-logs HOST_NS=${HOST_NS} MEMBER_NS=${MEMBER_NS} && exit 1)
+
+.PHONY: print-logs
+print-logs:
+	@echo "=====================================================================================" &
+	@echo "================================ Host cluster logs =================================="
+	@echo "====================================================================================="
+	@oc logs deployment.apps/host-operator --namespace $(HOST_NS)
+	@echo "====================================================================================="
+	@echo "================================ Member cluster logs ================================"
+	@echo "====================================================================================="
+	@oc logs deployment.apps/member-operator --namespace $(MEMBER_NS)
+	@echo "====================================================================================="
 
 .PHONY: e2e-setup
-e2e-setup: get-test-namespace is-minishift
-	oc new-project $(TEST_NAMESPACE) --display-name e2e-tests
+e2e-setup: is-minishift
+	oc new-project $(MEMBER_NS) --display-name e2e-tests
 	oc apply -f ./deploy/service_account.yaml
 	oc apply -f ./deploy/role.yaml
-	cat ./deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(TEST_NAMESPACE)/ | oc apply -f -
+	cat ./deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(MEMBER_NS)/ | oc apply -f -
 	oc apply -f deploy/crds
 	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
 
 .PHONY: setup-kubefed
 setup-kubefed:
-	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t member -mn $(TEST_NAMESPACE) -hn $(HOST_NS) -s
-	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t host -mn $(TEST_NAMESPACE) -hn $(HOST_NS) -s
+	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t member -mn $(MEMBER_NS) -hn $(HOST_NS) -s
+	curl -sSL https://raw.githubusercontent.com/codeready-toolchain/toolchain-common/master/scripts/add-cluster.sh | bash -s -- -t host -mn $(MEMBER_NS) -hn $(HOST_NS) -s
 
 .PHONY: is-minishift
 is-minishift:
@@ -102,15 +124,12 @@ endif
 
 .PHONY: e2e-cleanup
 e2e-cleanup:
-	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
-	$(Q)-oc delete project $(TEST_NAMESPACE) --timeout=10s --wait
+	oc delete project ${HOST_NS} ${MEMBER_NS} --wait=false || true
 
-.PHONY: get-test-namespace
-get-test-namespace: $(OUT_DIR)/test-namespace
-	$(eval TEST_NAMESPACE := $(shell cat $(OUT_DIR)/test-namespace))
+.PHONY: clean-e2e-namespaces
+clean-e2e-namespaces:
+	$(Q)-oc get projects --output=name | grep -E "(member|host)\-operator\-[0-9]+" | xargs oc delete
 
-$(OUT_DIR)/test-namespace:
-	@echo -n "member-operator-$(shell date +'%s')" > $(OUT_DIR)/test-namespace
 
 ###########################################################
 #

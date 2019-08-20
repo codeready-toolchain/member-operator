@@ -21,7 +21,7 @@ func initTemplates() {
 	templates["basic"] = TemplateType{
 		Name: "basic",
 		Templates: []Template{
-			Template{
+			{
 				Name:         "user",
 				Revision:     "abc1234",
 				TemplateFile: "basic-user-template.yml",

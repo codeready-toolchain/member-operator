@@ -30,17 +30,17 @@ func Process(scheme *runtime.Scheme, reqLogger logr.Logger, tierName string, val
 	// TODO any use of middle return param
 	obj, _, err := decode(tmplContent, nil, nil)
 	if err != nil {
-		log.Error(err, "unable to decode template")
+		reqLogger.Error(err, "unable to decode template")
 		return nil, err
 	}
 	tmpl := obj.(*templatev1.Template)
 	if err := injectUserVars(tmpl, values, false); err != nil {
-		log.Error(err, "unable to inject vars in template", "error", err.Error())
+		reqLogger.Error(err, "unable to inject vars in template", "error", err.Error())
 		return nil, err
 	}
 	tmpl, err = processTemplateLocally(tmpl, scheme)
 	if err != nil {
-		log.Error(err, "unable to process template")
+		reqLogger.Error(err, "unable to process template")
 		return nil, err
 	}
 	return tmpl.Objects, nil

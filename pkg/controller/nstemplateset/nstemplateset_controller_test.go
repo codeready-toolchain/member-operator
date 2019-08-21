@@ -27,6 +27,52 @@ func TestReconcile(t *testing.T) {
 
 	logf.SetLogger(logf.ZapLogger(true))
 
+	t.Run("reconcile without NSTemplateSet", func(t *testing.T) {
+		// given
+		namespace := uuid.NewV4().String()
+		name := uuid.NewV4().String()
+		r, req, _ := prepareReconcile(t, namespace, name)
+
+		// when
+		result, err := r.Reconcile(req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, result)
+		// check that the project request was created
+
+		_, err = roleBinding(r.client, namespace)
+		require.EqualError(t, err, fmt.Sprintf("rolebindings.authorization.openshift.io \"%s-admin\" not found", namespace))
+
+		_, err = projectRequest(r.client, namespace)
+		require.EqualError(t, err, fmt.Sprintf("projectrequests.project.openshift.io \"%s\" not found", namespace))
+	})
+
+	t.Run("reconcile with invalid tiername", func(t *testing.T) {
+		// given
+		namespace := uuid.NewV4().String()
+		name := uuid.NewV4().String()
+		tierName := "invalid"
+		r, req, cl := prepareReconcile(t, namespace, name)
+		// also, create the NSTemplateSet CR with the client
+		tmplSet := &toolchainv1alpha1.NSTemplateSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			},
+			Spec: toolchainv1alpha1.NSTemplateSetSpec{
+				TierName: tierName,
+			},
+		}
+		err := cl.Create(context.TODO(), tmplSet)
+		require.NoError(t, err)
+
+		// when
+		result, err := r.Reconcile(req)
+		// then
+		require.EqualError(t, err, fmt.Sprintf("unable to get template \"%s\"", tierName))
+		assert.Equal(t, reconcile.Result{}, result)
+	})
+
 	t.Run("create projects", func(t *testing.T) {
 		// given
 		namespace := uuid.NewV4().String()
@@ -55,7 +101,7 @@ func TestReconcile(t *testing.T) {
 		verifyRoleBinding(t, r.client, namespace)
 	})
 
-	t.Run("delete_role_binding_and_reconcile", func(t *testing.T) {
+	t.Run("delete role binding and reconcile", func(t *testing.T) {
 		// given
 		namespace := uuid.NewV4().String()
 		name := uuid.NewV4().String()
@@ -84,7 +130,7 @@ func TestReconcile(t *testing.T) {
 		verifyRoleBinding(t, r.client, namespace)
 
 		// delete rolebinding to create scenario, of rolebinding failed to create in first run.
-		rb, err := getRoleBinding(r.client, namespace)
+		rb, err := roleBinding(r.client, namespace)
 		require.NoError(t, err)
 
 		err = cl.Delete(context.TODO(), rb)
@@ -124,20 +170,29 @@ func prepareReconcile(t *testing.T, namespace, name string, initObjs ...runtime.
 
 func verifyProjectRequest(t *testing.T, c client.Client, projectRequestName string) {
 	// check that the project request was created
-	err := c.Get(context.TODO(), types.NamespacedName{Name: projectRequestName, Namespace: ""}, &projectv1.ProjectRequest{}) // project request is cluster-scoped
+	pr, err := projectRequest(c, projectRequestName)
+
 	require.NoError(t, err)
+	assert.NotNil(t, pr)
 }
 
 func verifyRoleBinding(t *testing.T, c client.Client, ns string) {
 	// check that the rolebinding is created in the namespace
 	// (the fake client just records the request but does not perform any consistency check)
-	rb, err := getRoleBinding(c, ns)
+	rb, err := roleBinding(c, ns)
 
-	require.NotNil(t, rb)
 	require.NoError(t, err)
+	assert.NotNil(t, rb)
 }
 
-func getRoleBinding(c client.Client, ns string) (*authv1.RoleBinding, error) {
+func projectRequest(c client.Client, projectRequestName string) (*projectv1.ProjectRequest, error) {
+	var pr projectv1.ProjectRequest
+	err := c.Get(context.TODO(), types.NamespacedName{Name: projectRequestName, Namespace: ""}, &pr) // project request is cluster-scoped
+
+	return &pr, err
+}
+
+func roleBinding(c client.Client, ns string) (*authv1.RoleBinding, error) {
 	var rb authv1.RoleBinding
 	err := c.Get(context.TODO(), types.NamespacedName{
 		Namespace: ns,

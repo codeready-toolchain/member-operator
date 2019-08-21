@@ -12,7 +12,7 @@ func initTemplates() {
 			{
 				Type:         "basic",
 				Revision:     "abc1234",
-				TemplateFile: "basic-user-template.yml",
+				TemplateFile: "basic-tier-template.yml",
 			},
 		},
 	}

@@ -24,10 +24,9 @@ func TestProcess(t *testing.T) {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(template.Install(scheme)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
 	values := map[string]string{
-		"PROJECT_NAME":            "foo",
-		"PROJECT_REQUESTING_USER": "operator-sa",
-		"COMMIT":                  "1a2b3c",
-		"ADMIN_USER_NAME":         "developer",
+		"PROJECT_NAME": "foo",
+		"COMMIT":       "1a2b3c",
+		"USER_NAME":    "developer",
 	}
 	// when
 	objs, err := templates.Process(scheme, log, "basic", values)
@@ -52,11 +51,12 @@ func TestProcess(t *testing.T) {
 	assert.Equal(t, expectedRoleBinding(), string(rbJson))
 }
 
-func expectedRoleBinding() string  {
-	return `{"apiVersion":"authorization.openshift.io/v1","kind":"RoleBinding","metadata":{"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"user-admin","namespace":"foo"},"roleRef":{"name":"admin"},"subjects":[{"kind":"User","name":"developer"}]}
-`}
+func expectedRoleBinding() string {
+	return `{"apiVersion":"authorization.openshift.io/v1","kind":"RoleBinding","metadata":{"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"foo-admin","namespace":"foo"},"roleRef":{"name":"admin"},"subjects":[{"kind":"User","name":"developer"}]}
+`
+}
 
-func expectedProjectRequest() string  {
-	return `{"apiVersion":"project.openshift.io/v1","kind":"ProjectRequest","metadata":{"annotations":{"openshift.io/description":"foo-user","openshift.io/display-name":"foo","openshift.io/requester":"operator-sa"},"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"foo"}}
+func expectedProjectRequest() string {
+	return `{"apiVersion":"project.openshift.io/v1","kind":"ProjectRequest","metadata":{"annotations":{"openshift.io/description":"foo-user","openshift.io/display-name":"foo","openshift.io/requester":"developer"},"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"foo"}}
 `
 }

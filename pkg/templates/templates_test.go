@@ -32,7 +32,7 @@ func TestGetTemplateContent(t *testing.T) {
 
 	t.Run("basic-user-template", func(t *testing.T) {
 		// when
-		content, err := templates.GetTemplateContent("basic-user-template.yml")
+		content, err := templates.GetTemplateContent("basic-tier-template.yml")
 		// then
 		require.NoError(t, err)
 		assert.NotEmpty(t, content)

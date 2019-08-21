@@ -1,10 +1,10 @@
 package apis
 
 import (
+	"github.com/codeready-toolchain/api/pkg/apis"
 	authv1 "github.com/openshift/api/authorization/v1"
 	projectv1 "github.com/openshift/api/project/v1"
 	templatev1 "github.com/openshift/api/template/v1"
-	"github.com/codeready-toolchain/api/pkg/apis"
 	userv1 "github.com/openshift/api/user/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )

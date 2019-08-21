@@ -6,6 +6,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/member-operator/pkg/templates"
+	"github.com/go-logr/logr"
 	projectv1 "github.com/openshift/api/project/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
@@ -19,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"github.com/go-logr/logr"
 )
 
 var log = logf.Log.WithName("controller_nstemplateset")
@@ -80,10 +80,11 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	log.Info("processing NSTemplateSet...")
+
 	// TODO: use values from the request
 	values := map[string]string{
-		"PROJECT_NAME":    request.Namespace,
-		"ADMIN_USER_NAME": "developer",
+		"PROJECT_NAME": request.Namespace,
+		"USER_NAME":    "developer",
 	}
 	if err := r.processAndApply(nsTeplSet.Spec.TierName, request.Namespace, reqLogger, values); err != nil {
 		return reconcile.Result{}, err

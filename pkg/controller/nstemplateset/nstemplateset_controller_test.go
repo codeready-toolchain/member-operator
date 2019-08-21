@@ -7,19 +7,20 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
+	"fmt"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	projectv1 "github.com/openshift/api/project/v1"
 	authv1 "github.com/openshift/api/authorization/v1"
+	projectv1 "github.com/openshift/api/project/v1"
+	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"github.com/satori/go.uuid"
 )
 
 func TestReconcile(t *testing.T) {
@@ -28,7 +29,7 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("create projects", func(t *testing.T) {
 		// given
-		namespace :=  uuid.NewV4().String()
+		namespace := uuid.NewV4().String()
 		name := uuid.NewV4().String()
 		r, req, cl := prepareReconcile(t, namespace, name)
 		// also, create the NSTemplateSet CR with the client
@@ -140,7 +141,7 @@ func getRoleBinding(c client.Client, ns string) (*authv1.RoleBinding, error) {
 	var rb authv1.RoleBinding
 	err := c.Get(context.TODO(), types.NamespacedName{
 		Namespace: ns,
-		Name:      "user-admin",
+		Name:      fmt.Sprintf("%s-admin", ns),
 	}, &rb)
 
 	return &rb, err

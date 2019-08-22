@@ -118,7 +118,7 @@ func TestProcessAndApply(t *testing.T) {
 		verifyRoleBinding(t, cl, pn)
 	})
 
-	t.Run("delete role binding and reconcile", func(t *testing.T) {
+	t.Run("delete role binding and apply template", func(t *testing.T) {
 		// given
 		s := scheme.Scheme
 		err := apis.AddToScheme(s)

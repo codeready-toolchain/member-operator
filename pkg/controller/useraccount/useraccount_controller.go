@@ -31,11 +31,12 @@ import (
 
 const (
 	// Status condition reasons
-	unableToCreateUserReason     = "UnableToCreateUser"
-	unableToCreateIdentityReason = "UnableToCreateIdentity"
-	unableToCreateMappingReason  = "UnableToCreateMapping"
-	provisioningReason           = "Provisioning"
-	provisionedReason            = "Provisioned"
+	unableToCreateUserReason          = "UnableToCreateUser"
+	unableToCreateIdentityReason      = "UnableToCreateIdentity"
+	unableToCreateMappingReason       = "UnableToCreateMapping"
+	unableToCreateNSTemplateSetReason = "UnableToCreateNSTemplateSet"
+	provisioningReason                = "Provisioning"
+	provisionedReason                 = "Provisioned"
 
 	// Finalizers
 	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
@@ -74,6 +75,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 	if err := c.Watch(&source.Kind{Type: &userv1.Identity{}}, enqueueRequestForOwner); err != nil {
+		return err
+	}
+	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, enqueueRequestForOwner); err != nil {
 		return err
 	}
 
@@ -127,6 +131,10 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+			return reconcile.Result{}, err
+		}
+
+		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
@@ -230,6 +238,44 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	return identity, false, nil
 }
 
+func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
+	name := userAcc.Name
+
+	// create if not found
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: userAcc.Namespace}, nsTmplSet); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("creating a new NSTemplateSet", "name", name)
+			if err := r.setStatusProvisioning(userAcc); err != nil {
+				return nil, false, err
+			}
+			nsTmplSet = newNSTemplateSet(userAcc)
+			if err := controllerutil.SetControllerReference(userAcc, nsTmplSet, r.scheme); err != nil {
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
+					"failed to set controller reference for NSTemplateSet '%s'", name)
+			}
+			if err := r.client.Create(context.TODO(), nsTmplSet); err != nil {
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
+					"failed to create NSTemplateSet '%s'", name)
+			}
+			logger.Info("NSTemplateSet created successfully", "name", name)
+			return nsTmplSet, true, nil
+		}
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to get NSTemplateSet '%s'", name)
+	}
+
+	// update if not same
+	equal := compareNSTemplateSet(nsTmplSet.Spec, userAcc.Spec.NSTemplateSet)
+	if equal {
+		return nsTmplSet, false, nil
+	}
+	nsTmplSet.Spec = userAcc.Spec.NSTemplateSet
+	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to update NSTemplateSet '%s'", name)
+	}
+	return nsTmplSet, true, nil
+}
+
 // setFinalizers sets the finalizers for UserAccount
 func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
 	// Add the finalizer if it is not present
@@ -306,6 +352,35 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	return nil, true
 }
 
+func compareNSTemplateSet(first toolchainv1alpha1.NSTemplateSetSpec, second toolchainv1alpha1.NSTemplateSetSpec) bool {
+	if first.TierName != second.TierName {
+		return false
+	}
+	return compareNamespaces(first.Namespaces, second.Namespaces)
+}
+
+func compareNamespaces(namespaces1 []toolchainv1alpha1.Namespace, namespaces2 []toolchainv1alpha1.Namespace) bool {
+	if len(namespaces1) != len(namespaces2) {
+		return false
+	}
+	for _, ns1 := range namespaces1 {
+		found := findNamespace(ns1, namespaces2)
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func findNamespace(thisNs toolchainv1alpha1.Namespace, namespaces []toolchainv1alpha1.Namespace) bool {
+	for _, ns := range namespaces {
+		if ns.Type == thisNs.Type && ns.Revision == thisNs.Revision && ns.Template == thisNs.Template {
+			return true
+		}
+	}
+	return false
+}
+
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
 func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, statusUpdater func(userAcc *toolchainv1alpha1.UserAccount, message string) error, err error, format string, args ...interface{}) error {
 	if err == nil {
@@ -346,6 +421,17 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  unableToCreateMappingReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  unableToCreateNSTemplateSetReason,
 			Message: message,
 		})
 }
@@ -405,6 +491,17 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 		},
 	}
 	return identity
+}
+
+func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1.NSTemplateSet {
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userAcc.Name,
+			Namespace: userAcc.Namespace,
+		},
+		Spec: userAcc.Spec.NSTemplateSet,
+	}
+	return nsTmplSet
 }
 
 func ToIdentityName(userID string) string {

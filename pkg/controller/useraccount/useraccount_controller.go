@@ -3,7 +3,6 @@ package useraccount
 import (
 	"context"
 	"fmt"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -130,7 +129,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, err
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
-		if err = r.manageCleanUpLogic(reqLogger, userAcc); err != nil {
+		if err = r.manageCleanUp(reqLogger, userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -243,8 +242,8 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 	return nil
 }
 
-// manageCleanUpLogic deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) manageCleanUpLogic(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+// manageCleanUp deletes the identity, user and finalizer when the UserAccount is being deleted
+func (r *ReconcileUserAccount) manageCleanUp(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	var deleted bool
 	var err error
 	if err, deleted = r.deleteIdentity(logger, userAcc); err != nil || deleted {

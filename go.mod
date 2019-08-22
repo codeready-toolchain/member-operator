@@ -8,8 +8,6 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
-	github.com/golangci/golangci-lint v1.17.1 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.9.2 // indirect
 	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
 	github.com/openshift/api v3.9.0+incompatible
 	github.com/operator-framework/operator-sdk v0.10.0
@@ -20,13 +18,9 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0
-	go.opencensus.io v0.22.0 // indirect
 	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4 // indirect
 	golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0 // indirect
 	golang.org/x/tools v0.0.0-20190625160430-252024b82959 // indirect
-	google.golang.org/api v0.7.0 // indirect
-	google.golang.org/genproto v0.0.0-20190620144150-6af8c5fc6601 // indirect
-	google.golang.org/grpc v1.21.1 // indirect
 	k8s.io/api v0.0.0-20190626000116-b178a738ed00
 	k8s.io/apiextensions-apiserver v0.0.0-20190624090600-dfe76d39a269 // indirect
 	k8s.io/apimachinery v0.0.0-20190624085041-961b39a1baa0

@@ -1,19 +1,20 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	cloud.google.com/go v0.43.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190813211537-c2a9a838ce38
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190814120500-ab1e2af882aa
+	cloud.google.com/go v0.40.0 // indirect
+	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
+	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190822023853-ee967b4125e7
 	github.com/go-logr/logr v0.1.0
 	github.com/go-logr/zapr v0.1.1
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/go-openapi/swag v0.19.4 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
-	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.9.4 // indirect
-	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
-	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
-	github.com/openshift/library-go v0.0.0-20190802153730-cab1b771d4dc
+	github.com/golangci/golangci-lint v1.17.1 // indirect
+	github.com/grpc-ecosystem/grpc-gateway v1.9.2 // indirect
+	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
+	github.com/openshift/api v3.9.0+incompatible
+	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92
 	github.com/operator-framework/operator-sdk v0.10.0
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/common v0.6.0 // indirect

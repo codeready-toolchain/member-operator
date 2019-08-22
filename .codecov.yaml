@@ -24,7 +24,7 @@ coverage:
     - "build/*"
     - "example/*"
     - "openshift-ci/*"
-    - "pkg/templates/bindata.go"
+    - "test/templates/template_data.go"
 
 # See http://docs.codecov.io/docs/pull-request-comments-1
 comment:

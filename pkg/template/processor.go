@@ -46,8 +46,8 @@ func apply(cl client.Client, objs []runtime.RawExtension, rq logr.Logger) error 
 		rq.Info("processing object", "version", gvk.Version, "kind", gvk.Kind)
 		if err := cl.Create(context.TODO(), obj.Object); err != nil {
 			if errors.IsAlreadyExists(err) {
-				// if client failed to create all resources(few created, few remaining) in the first run, then to avoid
-				// continuous failing scenario due to resource already existing for later runs
+				// If client failed to create all resources(few created, few remaining) in the first run, then to avoid
+				// resource already existing errors for later runs.(it's like oc apply, don't fail to exists)
 				continue
 			}
 			rq.Error(err, "unable to create resource", "type", gvk.Kind)

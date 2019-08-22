@@ -9,10 +9,7 @@ spec:
   namespaces:
     - type: ide
       revision: ab12ef
-      template: basic-tier-template.yml
     - type: cicd
       revision: 34efcd
-      template: basic-tier-template.yml
     - type: stage
       revision: cdef56
-      template: basic-tier-template.yml

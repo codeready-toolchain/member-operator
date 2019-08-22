@@ -72,7 +72,7 @@ func TestProcess(t *testing.T) {
 		scheme := runtime.NewScheme()
 		utilruntime.Must(apitemplate.Install(scheme)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
 
-		random := "random"
+		random := uuid.NewV4().String()
 		values := map[string]string{
 			"PROJECT_NAME": "foo",
 			"COMMIT":       "1a2b3c",

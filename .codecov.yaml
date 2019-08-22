@@ -20,7 +20,6 @@ coverage:
 
   # See http://docs.codecov.io/docs/ignoring-paths
   ignore:
-    - "vendor/*"
     - "make/*"
     - "build/*"
     - "example/*"

@@ -2,11 +2,13 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	cloud.google.com/go v0.40.0 // indirect
+	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
 	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190814120500-ab1e2af882aa
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190822023853-ee967b4125e7
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
+	github.com/golangci/golangci-lint v1.17.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.9.2 // indirect
 	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
 	github.com/openshift/api v3.9.0+incompatible

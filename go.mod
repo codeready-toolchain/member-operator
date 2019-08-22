@@ -13,7 +13,7 @@ require (
 	github.com/golangci/golangci-lint v1.17.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.9.2 // indirect
 	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
-	github.com/openshift/api v3.9.0+incompatible
+	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
 	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92
 	github.com/operator-framework/operator-sdk v0.10.0
 	github.com/pkg/errors v0.8.1

@@ -9,7 +9,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 
 	"github.com/go-logr/zapr"
-	apitemplate "github.com/openshift/api/template"
+	apitemplate "github.com/openshift/api/template/v1"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"

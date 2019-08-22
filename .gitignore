@@ -80,4 +80,4 @@ tags
 /vendor
 
 out/
-pkg/templates/bindata.go
+test/templates/template_data.go

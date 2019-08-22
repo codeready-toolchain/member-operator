@@ -1,4 +1,4 @@
-package templates
+package template
 
 import (
 	"fmt"
@@ -9,38 +9,72 @@ import (
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/openshift/library-go/pkg/template/generator"
 	"github.com/openshift/library-go/pkg/template/templateprocessing"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/api/errors"
+	errs "github.com/pkg/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"context"
 )
 
-// Process processes the template with the given name
-func Process(scheme *runtime.Scheme, reqLogger logr.Logger, tierName string, values map[string]string) ([]runtime.RawExtension, error) {
-	tmplType, found := GetTemplate(tierName)
-	if !found {
-		return nil, errors.Errorf("unable to get template %q", tierName)
-	}
-	tmplFile := tmplType.Templates[0].TemplateFile
-	tmplContent, err := GetTemplateContent(tmplFile)
+type Processor struct {
+	cl     client.Client
+	scheme *runtime.Scheme
+	log    logr.Logger
+}
+
+func NewProcessor(cl client.Client, scheme *runtime.Scheme, log logr.Logger) *Processor {
+	return &Processor{cl: cl, scheme: scheme, log: log}
+}
+
+func (p Processor) ProcessAndApply(tmplContent []byte, values map[string]string) error {
+	objs, err := p.Process(tmplContent, values)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to get template content")
+		return err
 	}
+
+	return apply(p.cl, objs, p.log)
+}
+
+func apply(cl client.Client, objs []runtime.RawExtension, rq logr.Logger) error {
+	for _, obj := range objs {
+		if obj.Object == nil {
+			rq.Info("template object is nil")
+			continue
+		}
+		gvk := obj.Object.GetObjectKind().GroupVersionKind()
+		rq.Info("processing object", "version", gvk.Version, "kind", gvk.Kind)
+		if err := cl.Create(context.TODO(), obj.Object); err != nil {
+			if errors.IsAlreadyExists(err) {
+				// if client failed to create all resources(few created, few remaining) in the first run, then to avoid
+				// continuous failing scenario due to resource already existing for later runs
+				continue
+			}
+			rq.Error(err, "unable to create resource", "type", gvk.Kind)
+			return errs.Wrapf(err, "unable to create resource of type %s", gvk.Kind)
+		}
+	}
+	return nil
+}
+
+// Process processes the template with the given content
+func (p Processor) Process(tmplContent []byte, values map[string]string) ([]runtime.RawExtension, error) {
+	scheme := p.scheme
 	codecs := serializer.NewCodecFactory(scheme)
 	decode := codecs.UniversalDeserializer().Decode
-	// TODO any use of middle return param
 	obj, _, err := decode(tmplContent, nil, nil)
 	if err != nil {
-		reqLogger.Error(err, "unable to decode template")
+		p.log.Error(err, "unable to decode template")
 		return nil, err
 	}
 	tmpl := obj.(*templatev1.Template)
 	if err := injectUserVars(tmpl, values, false); err != nil {
-		reqLogger.Error(err, "unable to inject vars in template", "error", err.Error())
+		p.log.Error(err, "unable to inject vars in template", "error", err.Error())
 		return nil, err
 	}
 	tmpl, err = processTemplateLocally(tmpl, scheme)
 	if err != nil {
-		reqLogger.Error(err, "unable to process template")
+		p.log.Error(err, "unable to process template")
 		return nil, err
 	}
 	return tmpl.Objects, nil
@@ -66,8 +100,8 @@ func processTemplateLocally(tpl *templatev1.Template, scheme *runtime.Scheme) (*
 	processor := templateprocessing.NewProcessor(map[string]generator.Generator{
 		"expression": generator.NewExpressionValueGenerator(rand.New(rand.NewSource(time.Now().UnixNano()))),
 	})
-	if errs := processor.Process(tpl); len(errs) > 0 {
-		return nil, errs.ToAggregate()
+	if err := processor.Process(tpl); len(err) > 0 {
+		return nil, err.ToAggregate()
 	}
 	var externalResultObj templatev1.Template
 	if err := scheme.Convert(tpl, &externalResultObj, nil); err != nil {

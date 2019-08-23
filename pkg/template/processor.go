@@ -80,7 +80,7 @@ func (p Processor) Process(tmplContent []byte, values map[string]string) ([]runt
 	return tmpl.Objects, nil
 }
 
-// injectUserVars injects user specified variables into the Template
+// injectUserVars injects user specific variables into the Template
 func injectUserVars(t *templatev1.Template, values map[string]string, ignoreUnknownParameters bool) error {
 	for param, val := range values {
 		v := templateprocessing.GetParameterByName(t, param)

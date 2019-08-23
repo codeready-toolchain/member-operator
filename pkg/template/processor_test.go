@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"github.com/satori/go.uuid"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestProcess(t *testing.T) {
@@ -50,20 +51,10 @@ func TestProcess(t *testing.T) {
 		require.Len(t, objs, 2)
 
 		// project request
-		projectKind := objs[0].Object.GetObjectKind()
-		require.IsType(t, &unstructured.Unstructured{}, projectKind)
-		projectRequest := projectKind.(*unstructured.Unstructured)
-		prJson, err := projectRequest.MarshalJSON()
-		require.NoError(t, err, "failed to marshal json for projectrequest")
-		assert.Equal(t, expectedProjectRequest(), string(prJson))
+		verifyResource(t, objs[0].Object.GetObjectKind(), expectedProjectRequest())
 
 		// role binding
-		rbKind := objs[1].Object.GetObjectKind()
-		require.IsType(t, &unstructured.Unstructured{}, rbKind)
-		roleBinding := rbKind.(*unstructured.Unstructured)
-		rbJson, err := roleBinding.MarshalJSON()
-		require.NoError(t, err, "failed to marshal json for rolebinding")
-		assert.Equal(t, expectedRoleBinding(), string(rbJson))
+		verifyResource(t, objs[1].Object.GetObjectKind(), expectedRoleBinding())
 	})
 
 	t.Run("random extra param - fail", func(t *testing.T) {
@@ -99,13 +90,13 @@ func TestProcessAndApply(t *testing.T) {
 		utilruntime.Must(apitemplate.Install(s)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
 
 		templateContent := templateContent(t)
-		pn := uuid.NewV4().String()
-		u := uuid.NewV4().String()
-		c := uuid.NewV4().String()
+		projectName := uuid.NewV4().String()
+		username := uuid.NewV4().String()
+		commit := uuid.NewV4().String()
 		values := map[string]string{
-			"PROJECT_NAME": pn,
-			"COMMIT":       c,
-			"USER_NAME":    u,
+			"PROJECT_NAME": projectName,
+			"COMMIT":       commit,
+			"USER_NAME":    username,
 		}
 
 		cl := test.NewFakeClient(t)
@@ -114,8 +105,8 @@ func TestProcessAndApply(t *testing.T) {
 		err = p.ProcessAndApply(templateContent, values)
 		require.NoError(t, err)
 		// check that the project request was created
-		verifyProjectRequest(t, cl, pn)
-		verifyRoleBinding(t, cl, pn)
+		verifyProjectRequest(t, cl, projectName)
+		verifyRoleBinding(t, cl, projectName)
 	})
 
 	t.Run("delete role binding and apply template", func(t *testing.T) {
@@ -126,13 +117,13 @@ func TestProcessAndApply(t *testing.T) {
 		utilruntime.Must(apitemplate.Install(s)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
 
 		templateContent := templateContent(t)
-		pn := uuid.NewV4().String()
-		u := uuid.NewV4().String()
-		c := uuid.NewV4().String()
+		projectName := uuid.NewV4().String()
+		username := uuid.NewV4().String()
+		commit := uuid.NewV4().String()
 		values := map[string]string{
-			"PROJECT_NAME": pn,
-			"COMMIT":       c,
-			"USER_NAME":    u,
+			"PROJECT_NAME": projectName,
+			"COMMIT":       commit,
+			"USER_NAME":    username,
 		}
 
 		cl := test.NewFakeClient(t)
@@ -141,22 +132,24 @@ func TestProcessAndApply(t *testing.T) {
 		err = p.ProcessAndApply(templateContent, values)
 		require.NoError(t, err)
 
-		verifyProjectRequest(t, cl, pn)
-		verifyRoleBinding(t, cl, pn)
+		verifyProjectRequest(t, cl, projectName)
+		verifyRoleBinding(t, cl, projectName)
 
 		// delete rolebinding to create scenario, of rolebinding failed to create in first run.
-		rb, err := roleBinding(cl, pn)
+		rb, err := roleBinding(cl, projectName)
 		require.NoError(t, err)
 
 		err = cl.Delete(context.TODO(), rb)
 		require.NoError(t, err)
 
+		//when
 		// apply the same templates
 		err = p.ProcessAndApply(templateContent, values)
 		require.NoError(t, err)
 
-		verifyProjectRequest(t, cl, pn)
-		verifyRoleBinding(t, cl, pn)
+		//then
+		verifyProjectRequest(t, cl, projectName)
+		verifyRoleBinding(t, cl, projectName)
 	})
 }
 
@@ -186,6 +179,15 @@ func expectedProjectRequest() string {
 
 func GetTemplateContent(tmplName string) ([]byte, error) {
 	return testtemplates.Asset("test/templates/" + tmplName)
+}
+
+
+func verifyResource(t *testing.T, objKind schema.ObjectKind, expected string) {
+	require.IsType(t, &unstructured.Unstructured{}, objKind)
+	projectRequest := objKind.(*unstructured.Unstructured)
+	prJson, err := projectRequest.MarshalJSON()
+	require.NoError(t, err, "failed to marshal json for projectrequest")
+	assert.Equal(t, expected, string(prJson))
 }
 
 func verifyProjectRequest(t *testing.T, c client.Client, projectRequestName string) {

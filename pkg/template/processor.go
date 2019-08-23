@@ -5,16 +5,16 @@ import (
 	"math/rand"
 	"time"
 
+	"context"
 	"github.com/go-logr/logr"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/openshift/library-go/pkg/template/generator"
 	"github.com/openshift/library-go/pkg/template/templateprocessing"
+	errs "github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/api/errors"
-	errs "github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"context"
 )
 
 type Processor struct {

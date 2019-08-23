@@ -8,24 +8,24 @@ import (
 
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 
+	"context"
+	"fmt"
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
+	authv1 "github.com/openshift/api/authorization/v1"
+	projectv1 "github.com/openshift/api/project/v1"
 	apitemplate "github.com/openshift/api/template/v1"
+	"github.com/satori/go.uuid"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"fmt"
-	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/types"
-	"context"
-	authv1 "github.com/openshift/api/authorization/v1"
-	projectv1 "github.com/openshift/api/project/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"github.com/satori/go.uuid"
-	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var templateMetadata = `
@@ -202,7 +202,6 @@ func TestProcess(t *testing.T) {
 		assert.Nil(t, objs)
 	})
 
-
 }
 
 func TestProcessAndApply(t *testing.T) {
@@ -282,7 +281,7 @@ func addToScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-func templateContent(objs ... string) []byte {
+func templateContent(objs ...string) []byte {
 	tmpl := templateMetadata
 	for _, obj := range objs {
 		tmpl += obj
@@ -301,7 +300,7 @@ func templateVars() (string, string, string) {
 	return uuid.NewV4().String(), uuid.NewV4().String(), uuid.NewV4().String()
 }
 
-func verifyResource(t *testing.T, objKind schema.ObjectKind, vars ... string) {
+func verifyResource(t *testing.T, objKind schema.ObjectKind, vars ...string) {
 	require.IsType(t, &unstructured.Unstructured{}, objKind)
 	projectRequest := objKind.(*unstructured.Unstructured)
 	prJson, err := projectRequest.MarshalJSON()

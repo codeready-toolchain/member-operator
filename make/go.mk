@@ -20,7 +20,3 @@ $(OUT_DIR)/operator:
 .PHONY: vendor
 vendor:
 	$(Q)go mod vendor
-
-.PHONY: generate
-generate:
-	go-bindata -pkg templates -o test/templates/template_data.go -nocompress -ignore=.*go test/templates/...

@@ -80,4 +80,3 @@ tags
 /vendor
 
 out/
-test/templates/template_data.go

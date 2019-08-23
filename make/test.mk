@@ -6,7 +6,7 @@
 
 .PHONY: test
 ## runs the tests without coverage and excluding E2E tests
-test: generate
+test:
 	@echo "running the tests without coverage and excluding E2E tests..."
 	$(Q)go test ${V_FLAG} -race $(shell go list ./... | grep -v /test/e2e) -failfast
 	
@@ -21,7 +21,7 @@ COV_DIR = $(OUT_DIR)/coverage
 
 .PHONY: test-with-coverage
 ## runs the tests with coverage
-test-with-coverage: generate
+test-with-coverage:
 	@echo "running the tests with coverage..."
 	@-mkdir -p $(COV_DIR)
 	@-rm $(COV_DIR)/coverage.txt
@@ -79,7 +79,7 @@ test-e2e-keep-namespaces: deploy-host e2e-setup setup-kubefed e2e-run
 test-e2e: test-e2e-keep-namespaces e2e-cleanup
 
 .PHONY: e2e-run
-e2e-run: generate
+e2e-run:
 	oc get kubefedcluster -n $(MEMBER_NS)
 	oc get kubefedcluster -n $(HOST_NS)
 	HOST_NS=${HOST_NS} operator-sdk test local ./test/e2e --no-setup --namespace $(MEMBER_NS) --verbose --go-test-flags "-timeout=15m" || \

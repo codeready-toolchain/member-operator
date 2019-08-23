@@ -247,7 +247,7 @@ func TestProcessAndApply(t *testing.T) {
 
 		//then
 		require.NoError(t, err)
-		verifyRoleBinding(t, cl, "foo")
+		verifyRoleBinding(t, cl, project)
 	})
 
 	t.Run("project request role binding - ok", func(t *testing.T) {

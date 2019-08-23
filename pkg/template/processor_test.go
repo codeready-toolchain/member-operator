@@ -16,7 +16,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"fmt"
-	testtemplates "github.com/codeready-toolchain/member-operator/test/templates"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,136 +28,267 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+var templateMetadata = `
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  labels:
+    provider: codeready-toolchain
+    version: ${COMMIT}
+  name: basic-tier-template
+objects:`
+
+var projectRequestObj = `
+- apiVersion: project.openshift.io/v1
+  kind: ProjectRequest
+  metadata:
+    annotations:
+      openshift.io/description: ${PROJECT_NAME}-user
+      openshift.io/display-name: ${PROJECT_NAME}
+      openshift.io/requester: ${USER_NAME}
+    labels:
+      provider: codeready-toolchain
+      version: ${COMMIT}
+    name: ${PROJECT_NAME}`
+
+var roleBindingObj = `
+- apiVersion: authorization.openshift.io/v1
+  kind: RoleBinding
+  metadata:
+    name: ${PROJECT_NAME}-edit
+    namespace: ${PROJECT_NAME}
+  roleRef:
+    kind: ClusterRole
+    name: edit
+  subjects:
+  - kind: User
+    name: ${USER_NAME}`
+
+var templateParams = `
+parameters:
+- name: PROJECT_NAME
+  required: true
+- name: USER_NAME
+  value: toolchain-dev
+  required: true
+- name: COMMIT
+  value: 123abc
+  required: true
+`
+
 func TestProcess(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		// given
-		scheme := runtime.NewScheme()
-		utilruntime.Must(apitemplate.Install(scheme)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+
 		values := map[string]string{
-			"PROJECT_NAME": "foo",
-			"COMMIT":       "1a2b3c",
-			"USER_NAME":    "developer",
+			"PROJECT_NAME": project,
+			"COMMIT":       commit,
+			"USER_NAME":    user,
 		}
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, scheme, logger(t))
+		p := template.NewProcessor(cl, s, logger(t))
 
 		// when
-		objs, err := p.Process(templateContent(t), values)
+		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, objs, 2)
 
 		// project request
-		verifyResource(t, objs[0].Object.GetObjectKind(), expectedProjectRequest())
+		verifyResource(t, objs[0].Object.GetObjectKind(), project, commit, user)
 
 		// role binding
-		verifyResource(t, objs[1].Object.GetObjectKind(), expectedRoleBinding())
+		verifyResource(t, objs[1].Object.GetObjectKind(), project, user)
+	})
+
+	t.Run("overwrite default value of commit", func(t *testing.T) {
+		// given
+		s := addToScheme(t)
+		project, commit, _ := templateVars()
+
+		userDefault := "toolchain-dev"
+		values := map[string]string{
+			"PROJECT_NAME": project,
+			"COMMIT":       commit,
+		}
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s, logger(t))
+
+		// when
+		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, objs, 2)
+
+		// project request
+		verifyResource(t, objs[0].Object.GetObjectKind(), project, commit, userDefault)
+
+		// role binding
+		verifyResource(t, objs[1].Object.GetObjectKind(), project, userDefault)
 	})
 
 	t.Run("random extra param - fail", func(t *testing.T) {
-
 		// given
-		scheme := runtime.NewScheme()
-		utilruntime.Must(apitemplate.Install(scheme)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
-
-		random := uuid.NewV4().String()
+		s := addToScheme(t)
+		project, commit, user := templateVars()
 		values := map[string]string{
-			"PROJECT_NAME": "foo",
-			"COMMIT":       "1a2b3c",
-			"USER_NAME":    "developer",
-			random:         random,
+			"PROJECT_NAME": project,
+			"COMMIT":       commit,
+			"USER_NAME":    user,
 		}
+
+		// adding random param
+		random := uuid.NewV4().String()
+		values[random] = random
+
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, scheme, logger(t))
+		p := template.NewProcessor(cl, s, logger(t))
 
 		// when
-		objs, err := p.Process(templateContent(t), values)
+		objs, err := p.Process(templateContent(projectRequestObj), values)
 
 		// then
 		require.EqualError(t, err, fmt.Sprintf("unknown parameter name \"%s\"", random))
 		require.Len(t, objs, 0)
 	})
+
+	t.Run("template with default", func(t *testing.T) {
+		// given
+		s := addToScheme(t)
+		// default values
+		commit, user := "123abc", "toolchain-dev"
+
+		project := uuid.NewV4().String()
+		values := make(map[string]string)
+		values["PROJECT_NAME"] = project
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s, logger(t))
+
+		// when
+		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, objs, 2)
+
+		// project request
+		verifyResource(t, objs[0].Object.GetObjectKind(), project, commit, user)
+
+		// role binding
+		verifyResource(t, objs[1].Object.GetObjectKind(), project, user)
+	})
+
+	t.Run("template with missing required params", func(t *testing.T) {
+		// given
+		s := addToScheme(t)
+
+		values := make(map[string]string)
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s, logger(t))
+
+		// when
+		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+
+		// then
+		require.Error(t, err, "fail to process as not providing required param PROJECT_NAME")
+		assert.Nil(t, objs)
+	})
+
+
 }
 
 func TestProcessAndApply(t *testing.T) {
-	t.Run("ok", func(t *testing.T) {
-		s := scheme.Scheme
-		err := apis.AddToScheme(s)
-		require.NoError(t, err)
-		utilruntime.Must(apitemplate.Install(s)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
+	t.Run("project Request - ok", func(t *testing.T) {
+		//given
+		s := addToScheme(t)
+		project, commit, user := templateVars()
 
-		templateContent := templateContent(t)
-		projectName := uuid.NewV4().String()
-		username := uuid.NewV4().String()
-		commit := uuid.NewV4().String()
 		values := map[string]string{
-			"PROJECT_NAME": projectName,
+			"PROJECT_NAME": project,
 			"COMMIT":       commit,
-			"USER_NAME":    username,
+			"USER_NAME":    user,
 		}
 
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s, logger(t))
-
-		err = p.ProcessAndApply(templateContent, values)
-		require.NoError(t, err)
-		// check that the project request was created
-		verifyProjectRequest(t, cl, projectName)
-		verifyRoleBinding(t, cl, projectName)
-	})
-
-	t.Run("delete role binding and apply template", func(t *testing.T) {
-		// given
-		s := scheme.Scheme
-		err := apis.AddToScheme(s)
-		require.NoError(t, err)
-		utilruntime.Must(apitemplate.Install(s)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
-
-		templateContent := templateContent(t)
-		projectName := uuid.NewV4().String()
-		username := uuid.NewV4().String()
-		commit := uuid.NewV4().String()
-		values := map[string]string{
-			"PROJECT_NAME": projectName,
-			"COMMIT":       commit,
-			"USER_NAME":    username,
-		}
-
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
-
-		err = p.ProcessAndApply(templateContent, values)
-		require.NoError(t, err)
-
-		verifyProjectRequest(t, cl, projectName)
-		verifyRoleBinding(t, cl, projectName)
-
-		// delete rolebinding to create scenario, of rolebinding failed to create in first run.
-		rb, err := roleBinding(cl, projectName)
-		require.NoError(t, err)
-
-		err = cl.Delete(context.TODO(), rb)
-		require.NoError(t, err)
 
 		//when
-		// apply the same templates
-		err = p.ProcessAndApply(templateContent, values)
-		require.NoError(t, err)
+		err := p.ProcessAndApply(templateContent(projectRequestObj), values)
 
 		//then
-		verifyProjectRequest(t, cl, projectName)
-		verifyRoleBinding(t, cl, projectName)
+		require.NoError(t, err)
+		verifyProjectRequest(t, cl, project)
+	})
+
+	t.Run("role binding - ok", func(t *testing.T) {
+		//given
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+
+		values := map[string]string{
+			"PROJECT_NAME": project,
+			"COMMIT":       commit,
+			"USER_NAME":    user,
+		}
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s, logger(t))
+
+		//when
+		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+
+		//then
+		require.NoError(t, err)
+		verifyRoleBinding(t, cl, "foo")
+	})
+
+	t.Run("project request role binding - ok", func(t *testing.T) {
+		//given
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+
+		values := map[string]string{
+			"PROJECT_NAME": project,
+			"COMMIT":       commit,
+			"USER_NAME":    user,
+		}
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s, logger(t))
+
+		//when
+		err := p.ProcessAndApply(templateContent(projectRequestObj, roleBindingObj), values)
+
+		//then
+		require.NoError(t, err)
+		verifyProjectRequest(t, cl, project)
+		verifyRoleBinding(t, cl, project)
 	})
 }
 
-
-func templateContent(t *testing.T) []byte {
-	templateContent, err := GetTemplateContent("basic-tier-template.yml")
+func addToScheme(t *testing.T) *runtime.Scheme {
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
 	require.NoError(t, err)
+	utilruntime.Must(apitemplate.Install(s)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
+	return s
+}
 
-	return templateContent
+func templateContent(objs ... string) []byte {
+	tmpl := templateMetadata
+	for _, obj := range objs {
+		tmpl += obj
+	}
+
+	return []byte(tmpl + templateParams)
 }
 
 func logger(t *testing.T) logr.Logger {
@@ -167,27 +297,18 @@ func logger(t *testing.T) logr.Logger {
 	return zapr.NewLogger(zapLog)
 }
 
-func expectedRoleBinding() string {
-	return `{"apiVersion":"authorization.openshift.io/v1","kind":"RoleBinding","metadata":{"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"foo-admin","namespace":"foo"},"roleRef":{"name":"admin"},"subjects":[{"kind":"User","name":"developer"}]}
-`
+func templateVars() (string, string, string) {
+	return uuid.NewV4().String(), uuid.NewV4().String(), uuid.NewV4().String()
 }
 
-func expectedProjectRequest() string {
-	return `{"apiVersion":"project.openshift.io/v1","kind":"ProjectRequest","metadata":{"annotations":{"openshift.io/description":"foo-user","openshift.io/display-name":"foo","openshift.io/requester":"developer"},"labels":{"provider":"codeready-toolchain","version":"1a2b3c"},"name":"foo"}}
-`
-}
-
-func GetTemplateContent(tmplName string) ([]byte, error) {
-	return testtemplates.Asset("test/templates/" + tmplName)
-}
-
-
-func verifyResource(t *testing.T, objKind schema.ObjectKind, expected string) {
+func verifyResource(t *testing.T, objKind schema.ObjectKind, vars ... string) {
 	require.IsType(t, &unstructured.Unstructured{}, objKind)
 	projectRequest := objKind.(*unstructured.Unstructured)
 	prJson, err := projectRequest.MarshalJSON()
 	require.NoError(t, err, "failed to marshal json for projectrequest")
-	assert.Equal(t, expected, string(prJson))
+	for _, v := range vars {
+		assert.Contains(t, string(prJson), v, fmt.Sprintf("missing %s", v))
+	}
 }
 
 func verifyProjectRequest(t *testing.T, c client.Client, projectRequestName string) {
@@ -218,7 +339,7 @@ func roleBinding(c client.Client, ns string) (*authv1.RoleBinding, error) {
 	var rb authv1.RoleBinding
 	err := c.Get(context.TODO(), types.NamespacedName{
 		Namespace: ns,
-		Name:      fmt.Sprintf("%s-admin", ns),
+		Name:      fmt.Sprintf("%s-edit", ns),
 	}, &rb)
 
 	return &rb, err

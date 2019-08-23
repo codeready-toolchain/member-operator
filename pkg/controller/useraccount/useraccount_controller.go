@@ -352,7 +352,7 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	return nil, true
 }
 
-func compareNSTemplateSet(first toolchainv1alpha1.NSTemplateSetSpec, second toolchainv1alpha1.NSTemplateSetSpec) bool {
+func compareNSTemplateSet(first, second toolchainv1alpha1.NSTemplateSetSpec) bool {
 	if first.TierName != second.TierName {
 		return false
 	}

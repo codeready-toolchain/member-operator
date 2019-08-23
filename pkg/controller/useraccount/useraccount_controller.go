@@ -352,14 +352,14 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 	return nil, true
 }
 
-func compareNSTemplateSet(first toolchainv1alpha1.NSTemplateSetSpec, second toolchainv1alpha1.NSTemplateSetSpec) bool {
+func compareNSTemplateSet(first, second toolchainv1alpha1.NSTemplateSetSpec) bool {
 	if first.TierName != second.TierName {
 		return false
 	}
 	return compareNamespaces(first.Namespaces, second.Namespaces)
 }
 
-func compareNamespaces(namespaces1 []toolchainv1alpha1.Namespace, namespaces2 []toolchainv1alpha1.Namespace) bool {
+func compareNamespaces(namespaces1, namespaces2 []toolchainv1alpha1.Namespace) bool {
 	if len(namespaces1) != len(namespaces2) {
 		return false
 	}

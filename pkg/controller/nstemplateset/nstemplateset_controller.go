@@ -3,6 +3,7 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-logr/logr"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -93,7 +94,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 }
 
 func findNsForProvision(projects []projectv1.Project, namespaces []toolchainv1alpha1.Namespace, userName string) []toolchainv1alpha1.Namespace {
-	missing := make([]toolchainv1alpha1.Namespace, 0, 0)
+	missing := make([]toolchainv1alpha1.Namespace, 0)
 	for _, ns := range namespaces {
 		nsName := fmt.Sprintf("%s-%s", userName, ns.Type)
 		found := findProject(projects, nsName, ns.Revision)

@@ -1,4 +1,4 @@
-kind: ClusterRole
+kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: member-operator
@@ -25,13 +25,6 @@ rules:
   verbs:
   - "*"
 - apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - "get"
-  - "create"
-- apiGroups:
   - apps
   resources:
   - deployments/finalizers
@@ -42,37 +35,6 @@ rules:
 - apiGroups:
   - core.kubefed.k8s.io
   resources:
-  - kubefedclusters
-  verbs:
-  - "*"
-- apiGroups:
-  - core.kubefed.k8s.io
-  resources:
   - kubefedclusters/status
   verbs:
   - update
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - list
-- apiGroups:
-  - toolchain.dev.openshift.com
-  resources:
-  - '*'
-  verbs:
-  - '*'
-- apiGroups:
-  - user.openshift.io
-  resources:
-  - identities
-  - users
-  - useridentitymappings
-  verbs:
-  - get
-  - create
-  - update
-  - list
-  - watch
-  - delete

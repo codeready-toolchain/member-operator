@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/go-logr/logr"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	projectv1 "github.com/openshift/api/project/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -43,6 +47,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to secondary resource
+	enqueueRequestForOwner := &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &toolchainv1alpha1.NSTemplateSet{},
+	}
+	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, enqueueRequestForOwner); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -68,48 +81,70 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 		}
 		return reconcile.Result{}, err
 	}
-	err = r.ensureNamespaces(reqLogger, nsTmplSet)
-	return reconcile.Result{}, err
+	return r.ensureNamespaces(reqLogger, nsTmplSet)
 }
 
-func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	name := nsTmplSet.GetName()
+func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
+	userName := nsTmplSet.GetName()
 	labels := map[string]string{
-		"owner": name,
+		"owner": userName,
 	}
 	opts := client.MatchingLabels(labels)
-	projects := &projectv1.ProjectList{}
-	if err := r.client.List(context.TODO(), opts, projects); err != nil {
+	namespaces := &corev1.NamespaceList{}
+	if err := r.client.List(context.TODO(), opts, namespaces); err != nil {
 		// TODO status handling
-		return err
+		return reconcile.Result{}, err
 	}
 
-	nsForProvision := findNsForProvision(projects.Items, nsTmplSet.Spec.Namespaces, name)
-	for _, ns := range nsForProvision {
+	missingNs := findNsForProvision(namespaces.Items, nsTmplSet.Spec.Namespaces, userName)
+	if missingNs != (toolchainv1alpha1.Namespace{}) {
 		// TODO call template processing for ns
-		log.Info("provisionng namespace", "namespace", ns)
+		log.Info("provisioning namespace", "namespace", missingNs)
+
+		// set labels
+		nsName := toNamespaceName(userName, missingNs.Type)
+		namespace := &corev1.Namespace{}
+		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace); err != nil {
+			return reconcile.Result{}, err
+		}
+		if err := controllerutil.SetControllerReference(nsTmplSet, namespace, r.scheme); err != nil {
+			return reconcile.Result{}, err
+		}
+		if namespace.Labels == nil {
+			namespace.Labels = make(map[string]string)
+		}
+		namespace.Labels["owner"] = userName
+		namespace.Labels["revision"] = missingNs.Revision
+		if err := r.client.Update(context.TODO(), namespace); err != nil {
+			return reconcile.Result{}, err
+		}
+		log.Info("namespace provisioned", "namespace", missingNs)
+		return reconcile.Result{Requeue: true}, nil
 	}
 
-	return nil
+	return reconcile.Result{}, nil
 }
 
-func findNsForProvision(projects []projectv1.Project, namespaces []toolchainv1alpha1.Namespace, userName string) []toolchainv1alpha1.Namespace {
-	missing := make([]toolchainv1alpha1.Namespace, 0)
-	for _, ns := range namespaces {
-		nsName := fmt.Sprintf("%s-%s", userName, ns.Type)
-		found := findProject(projects, nsName, ns.Revision)
+func findNsForProvision(namespaces []corev1.Namespace, tcNamespaces []toolchainv1alpha1.Namespace, userName string) toolchainv1alpha1.Namespace {
+	for _, tcNamespace := range tcNamespaces {
+		nsName := toNamespaceName(userName, tcNamespace.Type)
+		found := findNamespace(namespaces, nsName, tcNamespace.Revision)
 		if !found {
-			missing = append(missing, ns)
+			return tcNamespace
 		}
 	}
-	return missing
+	return toolchainv1alpha1.Namespace{}
 }
 
-func findProject(projects []projectv1.Project, projectName, revision string) bool {
-	for _, project := range projects {
-		if project.GetName() == projectName && project.GetLabels()["revision"] == revision {
+func findNamespace(namespaces []corev1.Namespace, namespaceName, revision string) bool {
+	for _, ns := range namespaces {
+		if ns.GetName() == namespaceName && ns.GetLabels()["revision"] == revision {
 			return true
 		}
 	}
 	return false
+}
+
+func toNamespaceName(userName, nsType string) string {
+	return fmt.Sprintf("%s-%s", userName, nsType)
 }

@@ -1,7 +1,9 @@
 package template_test
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,18 +14,13 @@ import (
 	"fmt"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
 	authv1 "github.com/openshift/api/authorization/v1"
 	projectv1 "github.com/openshift/api/project/v1"
-	apitemplate "github.com/openshift/api/template/v1"
 	"github.com/satori/go.uuid"
-	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -76,20 +73,20 @@ parameters:
   required: true
 `
 
+var newUser = `
+  - kind: User
+    name: newUser
+`
+
 func TestProcess(t *testing.T) {
-	t.Run("ok", func(t *testing.T) {
+	t.Run("should process template successfully", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
-
-		values := map[string]string{
-			"PROJECT_NAME": project,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
+		values := paramsKeyValues(project, commit, user)
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
@@ -105,7 +102,7 @@ func TestProcess(t *testing.T) {
 		verifyResource(t, objs[1].Object.GetObjectKind(), project, user)
 	})
 
-	t.Run("overwrite default value of commit", func(t *testing.T) {
+	t.Run("should overwrite default value of commit parameter", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		project, commit, _ := templateVars()
@@ -117,7 +114,7 @@ func TestProcess(t *testing.T) {
 		}
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
@@ -133,32 +130,30 @@ func TestProcess(t *testing.T) {
 		verifyResource(t, objs[1].Object.GetObjectKind(), project, userDefault)
 	})
 
-	t.Run("random extra param - fail", func(t *testing.T) {
+	t.Run("should not fail for random extra param", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
-		values := map[string]string{
-			"PROJECT_NAME": project,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
+		values := paramsKeyValues(project, commit, user)
 
 		// adding random param
-		random := uuid.NewV4().String()
+		random := getNameFromTime("random")
 		values[random] = random
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process(templateContent(projectRequestObj), values)
 
 		// then
-		require.EqualError(t, err, fmt.Sprintf("unknown parameter name \"%s\"", random))
-		require.Len(t, objs, 0)
+		require.NoError(t, err)
+		require.Len(t, objs, 1)
+		// project request
+		verifyResource(t, objs[0].Object.GetObjectKind(), project, commit, user)
 	})
 
-	t.Run("template with default", func(t *testing.T) {
+	t.Run("should process template with default parameters", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		// default values
@@ -169,7 +164,7 @@ func TestProcess(t *testing.T) {
 		values["PROJECT_NAME"] = project
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
@@ -185,14 +180,13 @@ func TestProcess(t *testing.T) {
 		verifyResource(t, objs[1].Object.GetObjectKind(), project, user)
 	})
 
-	t.Run("template with missing required params", func(t *testing.T) {
+	t.Run("should process template with missing required params", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-
 		values := make(map[string]string)
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
@@ -202,22 +196,32 @@ func TestProcess(t *testing.T) {
 		assert.Nil(t, objs)
 	})
 
+	t.Run("should fail to process template for invalid template content", func(t *testing.T) {
+		// given
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+		values := paramsKeyValues(project, commit, user)
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
+
+		// when
+		_, err := p.Process([]byte(projectRequestObj), values)
+
+		// then
+		assert.Error(t, err)
+	})
 }
 
 func TestProcessAndApply(t *testing.T) {
-	t.Run("project Request - ok", func(t *testing.T) {
+	t.Run("should create project Request", func(t *testing.T) {
 		//given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
-
-		values := map[string]string{
-			"PROJECT_NAME": project,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
+		values := paramsKeyValues(project, commit, user)
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		//when
 		err := p.ProcessAndApply(templateContent(projectRequestObj), values)
@@ -227,19 +231,14 @@ func TestProcessAndApply(t *testing.T) {
 		verifyProjectRequest(t, cl, project)
 	})
 
-	t.Run("role binding - ok", func(t *testing.T) {
+	t.Run("should create role binding", func(t *testing.T) {
 		//given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
-
-		values := map[string]string{
-			"PROJECT_NAME": project,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
+		values := paramsKeyValues(project, commit, user)
 
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		//when
 		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
@@ -249,19 +248,13 @@ func TestProcessAndApply(t *testing.T) {
 		verifyRoleBinding(t, cl, project)
 	})
 
-	t.Run("project request role binding - ok", func(t *testing.T) {
+	t.Run("should create project request role binding", func(t *testing.T) {
 		//given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
-
-		values := map[string]string{
-			"PROJECT_NAME": project,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
-
+		values := paramsKeyValues(project, commit, user)
 		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s, logger(t))
+		p := template.NewProcessor(cl, s)
 
 		//when
 		err := p.ProcessAndApply(templateContent(projectRequestObj, roleBindingObj), values)
@@ -271,13 +264,80 @@ func TestProcessAndApply(t *testing.T) {
 		verifyProjectRequest(t, cl, project)
 		verifyRoleBinding(t, cl, project)
 	})
+
+	t.Run("should update existing role binding", func(t *testing.T) {
+		//given
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+		values := paramsKeyValues(project, commit, user)
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
+
+		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+
+		require.NoError(t, err)
+		verifyRoleBinding(t, cl, project)
+
+		//when
+		err = p.ProcessAndApply(templateContent(roleBindingObj+newUser), values)
+
+		//then
+		require.NoError(t, err)
+		binding, err := roleBinding(cl, project)
+		require.NoError(t, err)
+
+		require.Len(t, binding.Subjects, 2)
+		verifyRoleBinding(t, cl, project)
+	})
+
+	t.Run("should fail to create template object", func(t *testing.T) {
+		//given
+		cl := test.NewFakeClient(t)
+		cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			return errors.New("failed to create resource")
+		}
+
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+
+		values := paramsKeyValues(project, commit, user)
+
+		p := template.NewProcessor(cl, s)
+
+		//when
+		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+		//then
+		require.Error(t, err)
+	})
+
+	t.Run("should fail to update template object", func(t *testing.T) {
+		//given
+		cl := test.NewFakeClient(t)
+		cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+			return errors.New("failed to update resource")
+		}
+
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+
+		values := paramsKeyValues(project, commit, user)
+
+		p := template.NewProcessor(cl, s)
+		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+		require.NoError(t, err)
+
+		//when
+		err = p.ProcessAndApply(templateContent(roleBindingObj), values)
+		//then
+		assert.Error(t, err)
+	})
 }
 
 func addToScheme(t *testing.T) *runtime.Scheme {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	utilruntime.Must(apitemplate.Install(s)) // see https://github.com/openshift/oc/blob/master/cmd/oc/oc.go#L77
 	return s
 }
 
@@ -290,14 +350,20 @@ func templateContent(objs ...string) []byte {
 	return []byte(tmpl + templateParams)
 }
 
-func logger(t *testing.T) logr.Logger {
-	zapLog, err := zap.NewDevelopment()
-	require.NoError(t, err)
-	return zapr.NewLogger(zapLog)
+func paramsKeyValues(project, commit, user string) map[string]string {
+	return map[string]string{
+		"PROJECT_NAME": project,
+		"COMMIT":       commit,
+		"USER_NAME":    user,
+	}
 }
 
 func templateVars() (string, string, string) {
-	return uuid.NewV4().String(), uuid.NewV4().String(), uuid.NewV4().String()
+	return getNameFromTime("project"), getNameFromTime("sha"), getNameFromTime("user")
+}
+
+func getNameFromTime(prefix string) string {
+	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
 
 func verifyResource(t *testing.T, objKind schema.ObjectKind, vars ...string) {

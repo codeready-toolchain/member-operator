@@ -47,7 +47,7 @@ func apply(cl client.Client, objs []runtime.RawExtension) error {
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		if err := createOrUpdateObj(cl, obj); err != nil {
-			return errs.Wrapf(err, "unable to create resource of kind: %s, version: %s", gvk.Kind,  gvk.Version)
+			return errs.Wrapf(err, "unable to create resource of kind: %s, version: %s", gvk.Kind, gvk.Version)
 		}
 	}
 	return nil

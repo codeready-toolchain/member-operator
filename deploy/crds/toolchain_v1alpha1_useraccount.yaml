@@ -17,10 +17,10 @@ spec:
   - JSONPath: .spec.nsTemplateSet.tierName
     name: Tier Name
     type: string
-  - JSONPath: .status.conditions[?(@.type==\"Ready\")].status
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
     name: Ready
     type: string
-  - JSONPath: .status.conditions[?(@.type==\"Ready\")].reason
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
     name: Reason
     type: string
   - JSONPath: .spec.disabled

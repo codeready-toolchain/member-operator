@@ -6,6 +6,16 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: nstemplatesets.toolchain.dev.openshift.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.tierName
+    name: Tier Name
+    type: string
+  - JSONPath: .status.conditions[?(@.type==\"Ready\")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type==\"Ready\")].reason
+    name: Reason
+    type: string
   group: toolchain.dev.openshift.com
   names:
     kind: NSTemplateSet
@@ -57,31 +67,34 @@ spec:
           type: object
         status:
           properties:
-            namespaces:
-              description: The detailed namespace statuses
+            conditions:
+              description: 'Conditions is an array of current NSTemplateSet conditions
+                Supported condition types: ConditionReady +patchMergeKey=type +patchStrategy=merge'
               items:
                 properties:
-                  error:
-                    description: The error message in case of failed status
+                  lastTransitionTime:
+                    description: Last time the condition transit from one status to
+                      another.
+                    format: date-time
                     type: string
-                  name:
-                    description: The name of the namespace
+                  message:
+                    description: Human readable message indicating details about last
+                      transition.
+                    type: string
+                  reason:
+                    description: (brief) reason for the condition's last transition.
                     type: string
                   status:
-                    description: 'Observed status. For example: provisioning|provisioned|failed'
+                    description: Status of the condition, one of True, False, Unknown.
                     type: string
                   type:
-                    description: 'The type of the namespace. For example: ide|cicd|stage|default'
+                    description: Type of condition
                     type: string
                 required:
-                - name
                 - type
+                - status
                 type: object
               type: array
-            status:
-              description: 'String representation of the overall observed status.
-                For example: provisioning|provisioned|updating'
-              type: string
           type: object
   version: v1alpha1
 status:

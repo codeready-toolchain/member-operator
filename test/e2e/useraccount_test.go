@@ -147,9 +147,9 @@ func newUserAcc(namespace, name string) *toolchainv1alpha1.UserAccount {
 			NSTemplateSet: toolchainv1alpha1.NSTemplateSetSpec{
 				TierName: "basic",
 				Namespaces: []toolchainv1alpha1.Namespace{
-					toolchainv1alpha1.Namespace{Type: "ide", Revision: "ab12ef"},
-					toolchainv1alpha1.Namespace{Type: "cicd", Revision: "34efcd"},
-					toolchainv1alpha1.Namespace{Type: "stage", Revision: "cdef56"},
+					{Type: "ide", Revision: "ab12ef"},
+					{Type: "cicd", Revision: "34efcd"},
+					{Type: "stage", Revision: "cdef56"},
 				},
 			},
 		},

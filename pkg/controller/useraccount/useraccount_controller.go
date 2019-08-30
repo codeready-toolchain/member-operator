@@ -3,12 +3,12 @@ package useraccount
 import (
 	"context"
 	"fmt"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -102,10 +102,19 @@ type ReconcileUserAccount struct {
 func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling UserAccount")
+	var err error
+
+	namespace := request.Namespace
+	if namespace == "" {
+		namespace, err = k8sutil.GetWatchNamespace()
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
 
 	// Fetch the UserAccount instance
 	userAcc := &toolchainv1alpha1.UserAccount{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: config.GetOperatorNamespace(), Name: request.Name}, userAcc)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -138,7 +147,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, err
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
-		if err = r.manageCleanUpLogic(reqLogger, userAcc); err != nil {
+		if err = r.manageCleanUp(reqLogger, userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -289,8 +298,8 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 	return nil
 }
 
-// manageCleanUpLogic deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) manageCleanUpLogic(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+// manageCleanUp deletes the identity, user and finalizer when the UserAccount is being deleted
+func (r *ReconcileUserAccount) manageCleanUp(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	var deleted bool
 	var err error
 	if err, deleted = r.deleteIdentity(logger, userAcc); err != nil || deleted {

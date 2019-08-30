@@ -102,7 +102,9 @@ e2e-setup: is-minishift
 	oc new-project $(MEMBER_NS) --display-name e2e-tests
 	oc apply -f ./deploy/service_account.yaml
 	oc apply -f ./deploy/role.yaml
-	cat ./deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(MEMBER_NS)/ | oc apply -f -
+	oc apply -f ./deploy/role_binding.yaml
+	oc apply -f ./deploy/cluster_role.yaml
+	cat ./deploy/cluster_role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(MEMBER_NS)/ | oc apply -f -
 	oc apply -f deploy/crds
 	sed -e 's|REPLACE_IMAGE|${IMAGE_NAME}|g' ./deploy/operator.yaml  | oc apply -f -
 
@@ -146,6 +148,8 @@ deploy-host:
 	oc new-project $(HOST_NS)
 	oc apply -f /tmp/host-operator/deploy/service_account.yaml
 	oc apply -f /tmp/host-operator/deploy/role.yaml
-	cat /tmp/host-operator/deploy/role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(HOST_NS)/ | oc apply -f -
+	oc apply -f /tmp/host-operator/deploy/role_binding.yaml
+	oc apply -f /tmp/host-operator/deploy/cluster_role.yaml
+	cat /tmp/host-operator/deploy/cluster_role_binding.yaml | sed s/\REPLACE_NAMESPACE/$(HOST_NS)/ | oc apply -f -
 	oc apply -f /tmp/host-operator/deploy/crds
 	sed -e 's|REPLACE_IMAGE|registry.svc.ci.openshift.org/codeready-toolchain/host-operator-v0.1:host-operator|g' /tmp/host-operator/deploy/operator.yaml  | oc apply -f -

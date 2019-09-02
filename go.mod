@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	cloud.google.com/go v0.40.0 // indirect
-	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
+	github.com/Azure/go-autorest v13.0.0+incompatible
 	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20190827045201-35e4f49da4c9
 	github.com/go-logr/logr v0.1.0

@@ -1,20 +1,22 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
 	"time"
 
-	"context"
-
+	projectv1 "github.com/openshift/api/project/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/openshift/library-go/pkg/template/generator"
 	"github.com/openshift/library-go/pkg/template/templateprocessing"
 	errs "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -34,10 +36,10 @@ func (p Processor) ProcessAndApply(tmplContent []byte, values map[string]string)
 		return errs.Wrap(err, "failed while processing template")
 	}
 
-	return apply(p.cl, objs)
+	return p.apply(objs)
 }
 
-func apply(cl client.Client, objs []runtime.RawExtension) error {
+func (p Processor) apply(objs []runtime.RawExtension) error {
 	// sorting before applying to maintain correct order
 	sort.Sort(ByKind(objs))
 
@@ -47,11 +49,52 @@ func apply(cl client.Client, objs []runtime.RawExtension) error {
 			continue
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
-		if err := createOrUpdateObj(cl, obj); err != nil {
+		if err := createOrUpdateObj(p.cl, obj); err != nil {
 			return errs.Wrapf(err, "unable to create resource of kind: %s, version: %s", gvk.Kind, gvk.Version)
+		}
+		if gvk.Group == "project.openshift.io" && gvk.Version == "v1" && gvk.Kind == "ProjectRequest" {
+			if _, ok := obj.(runtime.Unstructured); ok {
+				var prq projectv1.ProjectRequest
+				err := p.scheme.Convert(obj, &prq, nil)
+				if err != nil {
+					return err
+				}
+				// wait until the Project exists and is ready
+				_, err = p.waitUntilProjectExists(prq.GetName(), 2*time.Second)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
+}
+
+func (p Processor) waitUntilProjectExists(namespace string, t time.Duration) (projectv1.Project, error) {
+	var prj projectv1.Project
+	ticker := time.NewTicker(t / 5)
+	timeout := time.After(t)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			err := p.cl.Get(context.TODO(), types.NamespacedName{
+				Namespace: namespace,
+				Name:      "",
+			}, &prj)
+			// something wrong happened while checking the project
+			if err != nil && !apierrors.IsNotFound(err) {
+				return projectv1.Project{}, errs.Wrapf(err, "failed to check if project '%s' exists", namespace)
+			}
+			// project exists and is active
+			if err == nil && prj.Status.Phase == corev1.NamespaceActive {
+				return prj, nil
+			}
+			// project does not exist, so l'ets wait
+		case <-timeout:
+			return projectv1.Project{}, errs.Errorf("timeout while checking if project '%s' exists", namespace)
+		}
+	}
 }
 
 func createOrUpdateObj(cl client.Client, obj runtime.Object) error {

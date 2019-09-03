@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	cloud.google.com/go v0.40.0 // indirect
-	github.com/Azure/go-autorest v13.0.0+incompatible
+	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
 	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20190827045201-35e4f49da4c9
 	github.com/go-logr/logr v0.1.0
@@ -16,14 +16,16 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/common v0.6.0 // indirect
 	github.com/prometheus/procfs v0.0.3 // indirect
-	github.com/redhat-cop/operator-utils v0.0.0-20190530184149-66ee667a40b2
+	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0
-	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4 // indirect
-	golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0 // indirect
-	golang.org/x/tools v0.0.0-20190625160430-252024b82959 // indirect
+	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
+	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
+	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
+	golang.org/x/tools v0.0.0-20190830223141-573d9926052a // indirect
+	golang.org/x/tools/gopls v0.0.0-20190830223141-573d9926052a // indirect
 	k8s.io/api v0.0.0-20190626000116-b178a738ed00
 	k8s.io/apiextensions-apiserver v0.0.0-20190624090600-dfe76d39a269 // indirect
 	k8s.io/apimachinery v0.0.0-20190624085041-961b39a1baa0
@@ -57,3 +59,5 @@ replace (
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 	k8s.io/kubernetes => k8s.io/kubernetes v1.13.4
 )
+
+replace github.com/codeready-toolchain/toolchain-common => ../toolchain-common

@@ -1,22 +1,23 @@
 package template_test
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/codeready-toolchain/member-operator/pkg/template"
-
-	"context"
-	"fmt"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	authv1 "github.com/openshift/api/authorization/v1"
 	projectv1 "github.com/openshift/api/project/v1"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -214,25 +215,67 @@ func TestProcess(t *testing.T) {
 }
 
 func TestProcessAndApply(t *testing.T) {
-	t.Run("should create project Request", func(t *testing.T) {
-		//given
-		s := addToScheme(t)
-		project, commit, user := templateVars()
-		values := paramsKeyValues(project, commit, user)
+	t.Run("should create project request alone", func(t *testing.T) {
 
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
+		t.Run("success", func(t *testing.T) {
+			// given
+			s := addToScheme(t)
+			project, commit, user := templateVars()
+			values := paramsKeyValues(project, commit, user)
 
-		//when
-		err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+			cl := test.NewFakeClient(t)
+			// make sure that the Project exists and is "active" after a short period of time
+			cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceActive, time.Second)
+			p := template.NewProcessor(cl, s)
 
-		//then
-		require.NoError(t, err)
-		verifyProjectRequest(t, cl, project)
+			// when
+			err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+
+			// then
+			require.NoError(t, err)
+			verifyProjectRequest(t, cl, project)
+		})
+
+		t.Run("timeout", func(t *testing.T) {
+
+			t.Run("project does not exist", func(t *testing.T) {
+				// given
+				s := addToScheme(t)
+				project, commit, user := templateVars()
+				values := paramsKeyValues(project, commit, user)
+
+				cl := test.NewFakeClient(t)
+				p := template.NewProcessor(cl, s)
+
+				// when
+				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+
+				// then
+				require.Error(t, err)
+			})
+
+			t.Run("project not available", func(t *testing.T) {
+				// given
+				s := addToScheme(t)
+				project, commit, user := templateVars()
+				values := paramsKeyValues(project, commit, user)
+
+				cl := test.NewFakeClient(t)
+				// make sure that the Project exists and is "active" after a short period of time
+				cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, time.Second)
+				p := template.NewProcessor(cl, s)
+
+				// when
+				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+
+				// then
+				require.Error(t, err)
+			})
+		})
 	})
 
-	t.Run("should create role binding", func(t *testing.T) {
-		//given
+	t.Run("should create role binding alone", func(t *testing.T) {
+		// given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
 		values := paramsKeyValues(project, commit, user)
@@ -240,33 +283,74 @@ func TestProcessAndApply(t *testing.T) {
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 
-		//when
+		// when
 		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
 
-		//then
+		// then
 		require.NoError(t, err)
 		verifyRoleBinding(t, cl, project)
 	})
 
-	t.Run("should create project request role binding", func(t *testing.T) {
-		//given
-		s := addToScheme(t)
-		project, commit, user := templateVars()
-		values := paramsKeyValues(project, commit, user)
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
+	t.Run("should create project request and role binding", func(t *testing.T) {
 
-		//when
-		err := p.ProcessAndApply(templateContent(projectRequestObj, roleBindingObj), values)
+		t.Run("success", func(t *testing.T) {
+			// given
+			s := addToScheme(t)
+			project, commit, user := templateVars()
+			values := paramsKeyValues(project, commit, user)
+			cl := test.NewFakeClient(t)
+			cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceActive, time.Second)
+			p := template.NewProcessor(cl, s)
 
-		//then
-		require.NoError(t, err)
-		verifyProjectRequest(t, cl, project)
-		verifyRoleBinding(t, cl, project)
+			// when
+			err := p.ProcessAndApply(templateContent(projectRequestObj, roleBindingObj), values)
+
+			// then
+			require.NoError(t, err)
+			verifyProjectRequest(t, cl, project)
+			verifyRoleBinding(t, cl, project)
+		})
+
+		t.Run("timeout", func(t *testing.T) {
+
+			t.Run("project does not exist", func(t *testing.T) {
+				// given
+				s := addToScheme(t)
+				project, commit, user := templateVars()
+				values := paramsKeyValues(project, commit, user)
+
+				cl := test.NewFakeClient(t)
+				p := template.NewProcessor(cl, s)
+
+				// when
+				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+
+				// then
+				require.Error(t, err)
+			})
+
+			t.Run("project not available", func(t *testing.T) {
+				// given
+				s := addToScheme(t)
+				project, commit, user := templateVars()
+				values := paramsKeyValues(project, commit, user)
+
+				cl := test.NewFakeClient(t)
+				// make sure that the Project exists and is "active" after a short period of time
+				cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, time.Second)
+				p := template.NewProcessor(cl, s)
+
+				// when
+				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+
+				// then
+				require.Error(t, err)
+			})
+		})
 	})
 
 	t.Run("should update existing role binding", func(t *testing.T) {
-		//given
+		// given
 		s := addToScheme(t)
 		project, commit, user := templateVars()
 		values := paramsKeyValues(project, commit, user)
@@ -279,10 +363,10 @@ func TestProcessAndApply(t *testing.T) {
 		require.NoError(t, err)
 		verifyRoleBinding(t, cl, project)
 
-		//when
+		// when
 		err = p.ProcessAndApply(templateContent(roleBindingObj+newUser), values)
 
-		//then
+		// then
 		require.NoError(t, err)
 		binding, err := roleBinding(cl, project)
 		require.NoError(t, err)
@@ -292,7 +376,7 @@ func TestProcessAndApply(t *testing.T) {
 	})
 
 	t.Run("should fail to create template object", func(t *testing.T) {
-		//given
+		// given
 		cl := test.NewFakeClient(t)
 		cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("failed to create resource")
@@ -305,14 +389,14 @@ func TestProcessAndApply(t *testing.T) {
 
 		p := template.NewProcessor(cl, s)
 
-		//when
+		// when
 		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
-		//then
+		// then
 		require.Error(t, err)
 	})
 
 	t.Run("should fail to update template object", func(t *testing.T) {
-		//given
+		// given
 		cl := test.NewFakeClient(t)
 		cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("failed to update resource")
@@ -327,9 +411,9 @@ func TestProcessAndApply(t *testing.T) {
 		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
 
-		//when
+		// when
 		err = p.ProcessAndApply(templateContent(roleBindingObj), values)
-		//then
+		// then
 		assert.Error(t, err)
 	})
 }
@@ -408,4 +492,40 @@ func roleBinding(c client.Client, ns string) (*authv1.RoleBinding, error) {
 	}, &rb)
 
 	return &rb, err
+}
+
+// getProjectWithDelay returns a mock function that will return a Project object with the given namespace and status
+// after a given delay. When called for the first time, it will trigger a timer which prevent from returning the
+// requested project until the timer is done (ie, until then, it will return a `NotFoundError`).
+// For all other requested objects, the call with be delegated to the fake client.
+//
+// Note: this mock func does not support concurrent access to multiple projects with custom delays
+func getProjectWithDelay(c *test.FakeClient, namespace string, status corev1.NamespacePhase, delay time.Duration) func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	var timer *time.Timer
+	return func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		// deletagate to the fake client's underlying `Client`
+		if !(key.Namespace == namespace && key.Name == "") {
+			return c.Client.Get(ctx, key, obj)
+		}
+		if timer == nil {
+			timer = time.NewTimer(delay)
+		}
+		select {
+		case <-timer.C:
+			// timer is done, project can be returned
+			if prj, ok := obj.(*projectv1.Project); ok {
+				prj.SetNamespace(namespace)
+				prj.Status = projectv1.ProjectStatus{
+					Phase: status,
+				}
+				return nil
+			}
+		default:
+			// timer is not done, project cannot be returned
+		}
+		return apierrors.NewNotFound(schema.GroupResource{
+			Group:    "project.openshift.io",
+			Resource: "Project",
+		}, namespace)
+	}
 }

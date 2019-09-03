@@ -53,17 +53,15 @@ func (p Processor) apply(objs []runtime.RawExtension) error {
 			return errs.Wrapf(err, "unable to create resource of kind: %s, version: %s", gvk.Kind, gvk.Version)
 		}
 		if gvk.Group == "project.openshift.io" && gvk.Version == "v1" && gvk.Kind == "ProjectRequest" {
-			if _, ok := obj.(runtime.Unstructured); ok {
-				var prq projectv1.ProjectRequest
-				err := p.scheme.Convert(obj, &prq, nil)
-				if err != nil {
-					return err
-				}
-				// wait until the Project exists and is ready
-				_, err = p.waitUntilProjectExists(prq.GetName(), 2*time.Second)
-				if err != nil {
-					return err
-				}
+			var prq projectv1.ProjectRequest
+			err := p.scheme.Convert(obj, &prq, nil)
+			if err != nil {
+				return errs.Wrapf(err, "unable to convert object of kind: %s, version: %s to a ProjectRequests", gvk.Kind, gvk.Version)
+			}
+			// wait until the Project exists and is ready
+			_, err = p.waitUntilProjectExists(prq.GetName(), 2*time.Second)
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -73,8 +71,8 @@ func (p Processor) apply(objs []runtime.RawExtension) error {
 func (p Processor) waitUntilProjectExists(namespace string, t time.Duration) (projectv1.Project, error) {
 	var prj projectv1.Project
 	ticker := time.NewTicker(t / 5)
-	timeout := time.After(t)
 	defer ticker.Stop()
+	timeout := time.After(t)
 	for {
 		select {
 		case <-ticker.C:
@@ -87,10 +85,10 @@ func (p Processor) waitUntilProjectExists(namespace string, t time.Duration) (pr
 				return projectv1.Project{}, errs.Wrapf(err, "failed to check if project '%s' exists", namespace)
 			}
 			// project exists and is active
-			if err == nil && prj.Status.Phase == corev1.NamespaceActive {
+			if prj.Status.Phase == corev1.NamespaceActive {
 				return prj, nil
 			}
-			// project does not exist, so l'ets wait
+			// project does not exist, so let's wait
 		case <-timeout:
 			return projectv1.Project{}, errs.Errorf("timeout while checking if project '%s' exists", namespace)
 		}

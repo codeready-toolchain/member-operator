@@ -2,7 +2,6 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	cloud.google.com/go v0.40.0 // indirect
-	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
 	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20190827045201-35e4f49da4c9
 	github.com/go-logr/logr v0.1.0
@@ -25,7 +24,6 @@ require (
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
 	golang.org/x/tools v0.0.0-20190830223141-573d9926052a // indirect
-	golang.org/x/tools/gopls v0.0.0-20190830223141-573d9926052a // indirect
 	k8s.io/api v0.0.0-20190626000116-b178a738ed00
 	k8s.io/apiextensions-apiserver v0.0.0-20190624090600-dfe76d39a269 // indirect
 	k8s.io/apimachinery v0.0.0-20190624085041-961b39a1baa0
@@ -60,3 +58,7 @@ replace (
 	k8s.io/kubernetes => k8s.io/kubernetes v1.13.4
 )
 
+replace (
+	git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
+	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
+)

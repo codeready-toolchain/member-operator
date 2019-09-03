@@ -60,4 +60,3 @@ replace (
 	k8s.io/kubernetes => k8s.io/kubernetes v1.13.4
 )
 
-replace github.com/codeready-toolchain/toolchain-common => ../toolchain-common

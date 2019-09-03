@@ -59,7 +59,7 @@ func (p Processor) apply(objs []runtime.RawExtension) error {
 				return errs.Wrapf(err, "unable to convert object of kind: %s, version: %s to a ProjectRequests", gvk.Kind, gvk.Version)
 			}
 			// wait until the Project exists and is ready
-			_, err = p.waitUntilProjectExists(prq.GetName(), 2*time.Second)
+			_, err = p.waitUntilProjectExists(prq.GetName(), 10*time.Second)
 			if err != nil {
 				return err
 			}

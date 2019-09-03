@@ -41,7 +41,11 @@ func Add(mgr manager.Manager) error {
 }
 
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileNSTemplateSet{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+	return &ReconcileNSTemplateSet{
+		client:        mgr.GetClient(),
+		scheme:        mgr.GetScheme(),
+		applyTemplate: applyTemplate,
+	}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -72,8 +76,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 var _ reconcile.Reconciler = &ReconcileNSTemplateSet{}
 
 type ReconcileNSTemplateSet struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client        client.Client
+	scheme        *runtime.Scheme
+	applyTemplate func(client.Client, toolchainv1alpha1.Namespace, map[string]string) error
 }
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
@@ -111,11 +116,17 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 
 	missingNs := findNsForProvision(namespaces.Items, nsTmplSet.Spec.Namespaces, userName)
 	if missingNs != (toolchainv1alpha1.Namespace{}) {
-		// TODO call template processing for ns
 		nsName := toNamespaceName(userName, missingNs.Type)
 		log.Info("provisioning namespace", "namespace", missingNs)
 		if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
 			return reconcile.Result{}, err
+		}
+
+		params := make(map[string]string)
+		params["USER_NAME"] = userName
+		err := r.applyTemplate(r.client, missingNs, params)
+		if err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s'", nsName)
 		}
 
 		// set labels
@@ -167,6 +178,12 @@ func findNamespace(namespaces []corev1.Namespace, namespaceName, revision string
 
 func toNamespaceName(userName, nsType string) string {
 	return fmt.Sprintf("%s-%s", userName, nsType)
+}
+
+func applyTemplate(client client.Client, tcNamespace toolchainv1alpha1.Namespace, params map[string]string) error {
+	// TODO get template content from template tier
+	// TODO apply template with template content to create namesapce
+	return nil
 }
 
 // error handling methods

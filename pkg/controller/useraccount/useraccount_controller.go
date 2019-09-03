@@ -3,6 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -275,14 +276,26 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 
 	// update if not same
 	equal := compareNSTemplateSet(nsTmplSet.Spec, userAcc.Spec.NSTemplateSet)
-	if equal {
-		return nsTmplSet, false, nil
+	if !equal {
+		nsTmplSet.Spec = userAcc.Spec.NSTemplateSet
+		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to update NSTemplateSet '%s'", name)
+		}
+		return nsTmplSet, true, nil
 	}
-	nsTmplSet.Spec = userAcc.Spec.NSTemplateSet
-	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to update NSTemplateSet '%s'", name)
+
+	// update status if ready=false
+	readyCond := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	if readyCond != (toolchainv1alpha1.Condition{}) {
+		if readyCond.Status == corev1.ConditionFalse {
+			if err := r.setStatusFromNSTemplateSet(userAcc, readyCond.Reason, readyCond.Message); err != nil {
+				return nsTmplSet, false, err
+			}
+			return nsTmplSet, true, nil
+		}
 	}
-	return nsTmplSet, true, nil
+
+	return nsTmplSet, false, nil
 }
 
 // setFinalizers sets the finalizers for UserAccount
@@ -412,6 +425,17 @@ func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *too
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  unableToCreateNSTemplateSetReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusFromNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount, reason, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  reason,
 			Message: message,
 		})
 }

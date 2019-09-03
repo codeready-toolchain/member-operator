@@ -3,7 +3,6 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
@@ -149,7 +148,6 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 		if err := r.setStatusProvisioning(nsTmplSet); err != nil {
 			return reconcile.Result{}, err
 		}
-		time.Sleep(time.Second * 5)
 		return reconcile.Result{Requeue: true}, nil
 	}
 

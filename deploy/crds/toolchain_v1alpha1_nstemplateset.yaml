@@ -10,10 +10,10 @@ spec:
   - JSONPath: .spec.tierName
     name: Tier Name
     type: string
-  - JSONPath: .status.conditions[?(@.type==\"Ready\")].status
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
     name: Ready
     type: string
-  - JSONPath: .status.conditions[?(@.type==\"Ready\")].reason
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
     name: Reason
     type: string
   group: toolchain.dev.openshift.com

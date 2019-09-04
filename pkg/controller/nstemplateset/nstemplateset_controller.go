@@ -3,7 +3,6 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
@@ -114,8 +113,8 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", userName)
 	}
 
-	missingNs := findNsForProvision(namespaces.Items, nsTmplSet.Spec.Namespaces, userName)
-	if missingNs != (toolchainv1alpha1.Namespace{}) {
+	missingNs, found := nextNsForProvision(namespaces.Items, nsTmplSet.Spec.Namespaces, userName)
+	if found {
 		nsName := toNamespaceName(userName, missingNs.Type)
 		log.Info("provisioning namespace", "namespace", missingNs)
 		if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
@@ -135,7 +134,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace '%s'", nsName)
 		}
 		if err := controllerutil.SetControllerReference(nsTmplSet, namespace, r.scheme); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller '%s'", nsName)
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller reference for namespace '%s'", nsName)
 		}
 		if namespace.Labels == nil {
 			namespace.Labels = make(map[string]string)
@@ -149,22 +148,21 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 		if err := r.setStatusProvisioning(nsTmplSet); err != nil {
 			return reconcile.Result{}, err
 		}
-		time.Sleep(time.Second * 5)
 		return reconcile.Result{Requeue: true}, nil
 	}
 
 	return reconcile.Result{}, nil
 }
 
-func findNsForProvision(namespaces []corev1.Namespace, tcNamespaces []toolchainv1alpha1.Namespace, userName string) toolchainv1alpha1.Namespace {
+func nextNsForProvision(namespaces []corev1.Namespace, tcNamespaces []toolchainv1alpha1.Namespace, userName string) (toolchainv1alpha1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
 		nsName := toNamespaceName(userName, tcNamespace.Type)
 		found := findNamespace(namespaces, nsName, tcNamespace.Revision)
 		if !found {
-			return tcNamespace
+			return tcNamespace, true
 		}
 	}
-	return toolchainv1alpha1.Namespace{}
+	return toolchainv1alpha1.Namespace{}, false
 }
 
 func findNamespace(namespaces []corev1.Namespace, namespaceName, revision string) bool {

@@ -61,13 +61,14 @@ func (p Processor) Process(tmplContent []byte, values map[string]string) ([]runt
 	if err := p.scheme.Convert(tmpl, &result, nil); err != nil {
 		return nil, errs.Wrap(err, "failed to convert template to external template object")
 	}
-	return result.Objects, nil
+	// sorting before applying to maintain correct order
+	objs := result.Objects
+	sort.Sort(ByKind(objs))
+	return objs, nil
 }
 
 // Apply applies the objects, ie, creates or updates them on the cluster
 func (p Processor) Apply(objs []runtime.RawExtension, projectActiveTimeout time.Duration) error {
-	// sorting before applying to maintain correct order
-	sort.Sort(ByKind(objs))
 
 	for _, rawObj := range objs {
 		obj := rawObj.Object

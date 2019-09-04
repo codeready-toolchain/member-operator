@@ -212,6 +212,29 @@ func TestProcess(t *testing.T) {
 		// then
 		assert.Error(t, err)
 	})
+
+	t.Run("should order objects in template output", func(t *testing.T) {
+		// given
+		s := addToScheme(t)
+		project, commit, user := templateVars()
+		values := paramsKeyValues(project, commit, user)
+
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
+
+		// when
+		objs, err := p.Process(templateContent(roleBindingObj, projectRequestObj), values) // projectRequestObj is not the first object in the input
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, objs, 2)
+		obj := objs[0].Object
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		// verify that the ProjectRequest is the first object in the `Process` result
+		assert.Equal(t, "project.openshift.io", gvk.Group)
+		assert.Equal(t, "v1", gvk.Version)
+		assert.Equal(t, "ProjectRequest", gvk.Kind)
+	})
 }
 
 func TestProcessAndApply(t *testing.T) {

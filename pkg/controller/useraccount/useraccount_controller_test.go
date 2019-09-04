@@ -52,6 +52,13 @@ func TestReconcile(t *testing.T) {
 		UID:             userUID,
 		OwnerReferences: []metav1.OwnerReference{},
 	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
+	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userAcc.Name,
+			Namespace: "toolchain-member",
+		},
+		Spec: newNSTmplSetSpec(),
+	}
 
 	t.Run("deleted account ignored", func(t *testing.T) {
 		// given
@@ -71,6 +78,11 @@ func TestReconcile(t *testing.T) {
 
 		// Check the identity is not created
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Check the NSTmplSet is not created
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &toolchainv1alpha1.NSTemplateSet{})
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 	})
@@ -110,6 +122,11 @@ func TestReconcile(t *testing.T) {
 
 			// Check the identity is not created yet
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
+			require.Error(t, err)
+			assert.True(t, apierros.IsNotFound(err))
+
+			// Check the NSTmplSet is not created yet
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &toolchainv1alpha1.NSTemplateSet{})
 			require.Error(t, err)
 			assert.True(t, apierros.IsNotFound(err))
 		}
@@ -306,10 +323,84 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
+	t.Run("create or update nstmplset OK", func(t *testing.T) {
+		t.Run("create", func(t *testing.T) {
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+			// test
+			_, err := r.Reconcile(req)
+
+			require.NoError(t, err)
+			checkStatus(t, r.client, username, corev1.ConditionFalse, "Provisioning", "")
+			checkNSTmplSet(t, r.client, username)
+		})
+
+		t.Run("update", func(t *testing.T) {
+			preexistingNsTmplSetNoNS := &toolchainv1alpha1.NSTemplateSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      userAcc.Name,
+					Namespace: "toolchain-member",
+				},
+				Spec: toolchainv1alpha1.NSTemplateSetSpec{
+					TierName: "basic",
+				},
+			}
+
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetNoNS)
+
+			// test
+			_, err := r.Reconcile(req)
+
+			require.NoError(t, err)
+			checkStatus(t, r.client, username, corev1.ConditionFalse, "Provisioning", "")
+			checkNSTmplSet(t, r.client, username)
+		})
+	})
+
+	t.Run("create or update nstmplset failed", func(t *testing.T) {
+		t.Run("create", func(t *testing.T) {
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+				return errors.New("unable to create NSTemplateSet")
+			}
+
+			// test
+			_, err := r.Reconcile(req)
+
+			require.Error(t, err)
+			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToCreateNSTemplateSet", "unable to create NSTemplateSet")
+		})
+
+		t.Run("update", func(t *testing.T) {
+			preexistingNsTmplSetNoNS := &toolchainv1alpha1.NSTemplateSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      userAcc.Name,
+					Namespace: "toolchain-member",
+				},
+				Spec: toolchainv1alpha1.NSTemplateSetSpec{
+					TierName: "basic",
+				},
+			}
+
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetNoNS)
+			err := r.addFinalizer(userAcc, userAccFinalizerName)
+			require.NoError(t, err)
+			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+				return errors.New("unable to update NSTemplateSet")
+			}
+
+			// test
+			_, err = r.Reconcile(req)
+
+			require.Error(t, err)
+			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToCreateNSTemplateSet", "unable to update NSTemplateSet")
+		})
+	})
+
 	// Last cycle of reconcile. User, Identity created/updated.
 	t.Run("provisioned", func(t *testing.T) {
 		// given
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		res, err := r.Reconcile(req)
@@ -663,7 +754,8 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID: userID,
+			UserID:        userID,
+			NSTemplateSet: newNSTmplSetSpec(),
 		},
 	}
 	return userAcc
@@ -685,6 +777,16 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 	return userAcc
 }
 
+func newNSTmplSetSpec() toolchainv1alpha1.NSTemplateSetSpec {
+	return toolchainv1alpha1.NSTemplateSetSpec{
+		TierName: "basic",
+		Namespaces: []toolchainv1alpha1.Namespace{
+			toolchainv1alpha1.Namespace{Type: "dev", Revision: "rev1", Template: ""},
+			toolchainv1alpha1.Namespace{Type: "code", Revision: "rev1", Template: ""},
+		},
+	}
+}
+
 func newReconcileRequest(name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -699,6 +801,34 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, user.UID, identity.User.UID)
 	require.Len(t, user.Identities, 1)
 	assert.Equal(t, identity.Name, user.Identities[0])
+}
+
+func checkStatus(t *testing.T, client client.Client, username string, wantStatus corev1.ConditionStatus, wantReason, wantMsg string) {
+	t.Helper()
+
+	updatedAcc := &toolchainv1alpha1.UserAccount{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, updatedAcc)
+	require.NoError(t, err)
+	test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  wantStatus,
+			Reason:  wantReason,
+			Message: wantMsg,
+		})
+}
+
+func checkNSTmplSet(t *testing.T, client client.Client, username string) {
+	t.Helper()
+
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, nsTmplSet)
+	require.NoError(t, err)
+
+	assert.Equal(t, "basic", nsTmplSet.Spec.TierName)
+	assert.Equal(t, 2, len(nsTmplSet.Spec.Namespaces))
+	assert.Equal(t, nsTmplSet.Spec.Namespaces[0].Type, "dev")
+	assert.Equal(t, nsTmplSet.Spec.Namespaces[1].Type, "code")
 }
 
 func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {

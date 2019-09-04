@@ -20,26 +20,52 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Processor the tool that will process and apply a template with variables
 type Processor struct {
 	cl           client.Client
 	scheme       *runtime.Scheme
 	codecFactory serializer.CodecFactory
 }
 
-func NewProcessor(cl client.Client, scheme *runtime.Scheme) *Processor {
-	return &Processor{cl: cl, scheme: scheme, codecFactory: serializer.NewCodecFactory(scheme)}
+// NewProcessor returns a new Processor
+func NewProcessor(cl client.Client, scheme *runtime.Scheme) Processor {
+	return Processor{cl: cl, scheme: scheme, codecFactory: serializer.NewCodecFactory(scheme)}
 }
 
-func (p Processor) ProcessAndApply(tmplContent []byte, values map[string]string) error {
-	objs, err := p.Process(tmplContent, values)
+// Process processes the template (ie, replaces the variables with their actual values)
+func (p Processor) Process(tmplContent []byte, values map[string]string) ([]runtime.RawExtension, error) {
+	obj, _, err := p.codecFactory.UniversalDeserializer().Decode(tmplContent, nil, nil)
 	if err != nil {
-		return errs.Wrap(err, "failed while processing template")
+		return nil, errs.Wrapf(err, "unable to decode template")
 	}
-
-	return p.apply(objs)
+	tmpl, ok := obj.(*templatev1.Template)
+	if !ok {
+		return nil, fmt.Errorf("unable to convert object type %T to Template, must be a v1.Template", obj)
+	}
+	// inject variables in the twmplate
+	for param, val := range values {
+		v := templateprocessing.GetParameterByName(tmpl, param)
+		if v != nil {
+			v.Value = val
+			v.Generate = ""
+		}
+	}
+	// convert the template into a set of objects
+	tmplProcessor := templateprocessing.NewProcessor(map[string]generator.Generator{
+		"expression": generator.NewExpressionValueGenerator(rand.New(rand.NewSource(time.Now().UnixNano()))),
+	})
+	if err := tmplProcessor.Process(tmpl); len(err) > 0 {
+		return nil, errs.Wrap(err.ToAggregate(), "unable to process template")
+	}
+	var result templatev1.Template
+	if err := p.scheme.Convert(tmpl, &result, nil); err != nil {
+		return nil, errs.Wrap(err, "failed to convert template to external template object")
+	}
+	return result.Objects, nil
 }
 
-func (p Processor) apply(objs []runtime.RawExtension) error {
+// Apply applies the objects, ie, creates or updates them on the cluster
+func (p Processor) Apply(objs []runtime.RawExtension, projectActiveTimeout time.Duration) error {
 	// sorting before applying to maintain correct order
 	sort.Sort(ByKind(objs))
 
@@ -59,7 +85,7 @@ func (p Processor) apply(objs []runtime.RawExtension) error {
 				return errs.Wrapf(err, "unable to convert object of kind: %s, version: %s to a ProjectRequests", gvk.Kind, gvk.Version)
 			}
 			// wait until the Project exists and is ready
-			_, err = p.waitUntilProjectExists(prq.GetName(), 10*time.Second)
+			_, err = p.waitUntilProjectActive(prq.GetName(), projectActiveTimeout)
 			if err != nil {
 				return err
 			}
@@ -68,7 +94,7 @@ func (p Processor) apply(objs []runtime.RawExtension) error {
 	return nil
 }
 
-func (p Processor) waitUntilProjectExists(namespace string, t time.Duration) (projectv1.Project, error) {
+func (p Processor) waitUntilProjectActive(namespace string, t time.Duration) (projectv1.Project, error) {
 	var prj projectv1.Project
 	ticker := time.NewTicker(t / 5)
 	defer ticker.Stop()
@@ -107,50 +133,4 @@ func createOrUpdateObj(cl client.Client, obj runtime.Object) error {
 		return nil
 	}
 	return nil
-}
-
-// Process processes the template with the given content
-func (p Processor) Process(tmplContent []byte, values map[string]string) ([]runtime.RawExtension, error) {
-	decode := p.codecFactory.UniversalDeserializer().Decode
-	obj, _, err := decode(tmplContent, nil, nil)
-	if err != nil {
-		return nil, errs.Wrapf(err, "unable to decode template")
-	}
-	tmpl, ok := obj.(*templatev1.Template)
-	if !ok {
-		return nil, fmt.Errorf("unable to convert object type %T to Template, must be a v1.Template", obj)
-	}
-	injectUserVars(tmpl, values)
-	tmpl, err = processTemplateLocally(tmpl, p.scheme)
-	if err != nil {
-		return nil, errs.Wrap(err, "unable to process template")
-	}
-	return tmpl.Objects, nil
-}
-
-// injectUserVars injects user specific variables into the Template
-func injectUserVars(t *templatev1.Template, values map[string]string) {
-	for param, val := range values {
-		v := templateprocessing.GetParameterByName(t, param)
-		if v != nil {
-			v.Value = val
-			v.Generate = ""
-		}
-	}
-}
-
-// processTemplateLocally applies the same logic that a remote call would make but makes no
-// connection to the server.
-func processTemplateLocally(tmpl *templatev1.Template, scheme *runtime.Scheme) (*templatev1.Template, error) {
-	processor := templateprocessing.NewProcessor(map[string]generator.Generator{
-		"expression": generator.NewExpressionValueGenerator(rand.New(rand.NewSource(time.Now().UnixNano()))),
-	})
-	if err := processor.Process(tmpl); len(err) > 0 {
-		return nil, err.ToAggregate()
-	}
-	var externalResultObj templatev1.Template
-	if err := scheme.Convert(tmpl, &externalResultObj, nil); err != nil {
-		return nil, errs.Wrap(err, "failed to convert template to external template object")
-	}
-	return &externalResultObj, nil
 }

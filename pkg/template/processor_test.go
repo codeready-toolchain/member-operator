@@ -215,6 +215,7 @@ func TestProcess(t *testing.T) {
 }
 
 func TestProcessAndApply(t *testing.T) {
+
 	t.Run("should create project request alone", func(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
@@ -229,7 +230,9 @@ func TestProcessAndApply(t *testing.T) {
 			p := template.NewProcessor(cl, s)
 
 			// when
-			err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+			objs, err := p.Process(templateContent(projectRequestObj), values)
+			require.NoError(t, err)
+			err = p.Apply(objs, 2*time.Second)
 
 			// then
 			require.NoError(t, err)
@@ -245,10 +248,14 @@ func TestProcessAndApply(t *testing.T) {
 				values := paramsKeyValues(project, commit, user)
 
 				cl := test.NewFakeClient(t)
+				// make sure that the Project exists and is "active" after a short period of time
+				cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, 10*time.Second)
 				p := template.NewProcessor(cl, s)
 
 				// when
-				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+				objs, err := p.Process(templateContent(projectRequestObj), values)
+				require.NoError(t, err)
+				err = p.Apply(objs, 2*time.Second)
 
 				// then
 				require.Error(t, err)
@@ -266,7 +273,9 @@ func TestProcessAndApply(t *testing.T) {
 				p := template.NewProcessor(cl, s)
 
 				// when
-				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+				objs, err := p.Process(templateContent(projectRequestObj), values)
+				require.NoError(t, err)
+				err = p.Apply(objs, 2*time.Second)
 
 				// then
 				require.Error(t, err)
@@ -284,7 +293,9 @@ func TestProcessAndApply(t *testing.T) {
 		p := template.NewProcessor(cl, s)
 
 		// when
-		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+		objs, err := p.Process(templateContent(roleBindingObj), values)
+		require.NoError(t, err)
+		err = p.Apply(objs, 2*time.Second)
 
 		// then
 		require.NoError(t, err)
@@ -303,7 +314,9 @@ func TestProcessAndApply(t *testing.T) {
 			p := template.NewProcessor(cl, s)
 
 			// when
-			err := p.ProcessAndApply(templateContent(projectRequestObj, roleBindingObj), values)
+			objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+			require.NoError(t, err)
+			err = p.Apply(objs, 2*time.Second)
 
 			// then
 			require.NoError(t, err)
@@ -320,10 +333,13 @@ func TestProcessAndApply(t *testing.T) {
 				values := paramsKeyValues(project, commit, user)
 
 				cl := test.NewFakeClient(t)
+				cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, 10*time.Second)
 				p := template.NewProcessor(cl, s)
 
 				// when
-				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+				objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+				require.NoError(t, err)
+				err = p.Apply(objs, 2*time.Second)
 
 				// then
 				require.Error(t, err)
@@ -341,7 +357,9 @@ func TestProcessAndApply(t *testing.T) {
 				p := template.NewProcessor(cl, s)
 
 				// when
-				err := p.ProcessAndApply(templateContent(projectRequestObj), values)
+				objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+				require.NoError(t, err)
+				err = p.Apply(objs, 2*time.Second)
 
 				// then
 				require.Error(t, err)
@@ -358,13 +376,17 @@ func TestProcessAndApply(t *testing.T) {
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 
-		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+		objs, err := p.Process(templateContent(roleBindingObj), values)
+		require.NoError(t, err)
+		err = p.Apply(objs, 2*time.Second)
 
 		require.NoError(t, err)
 		verifyRoleBinding(t, cl, project)
 
 		// when
-		err = p.ProcessAndApply(templateContent(roleBindingObj+newUser), values)
+		objs, err = p.Process(templateContent(roleBindingObj, newUser), values)
+		require.NoError(t, err)
+		err = p.Apply(objs, 2*time.Second)
 
 		// then
 		require.NoError(t, err)
@@ -390,7 +412,10 @@ func TestProcessAndApply(t *testing.T) {
 		p := template.NewProcessor(cl, s)
 
 		// when
-		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+		objs, err := p.Process(templateContent(roleBindingObj), values)
+		require.NoError(t, err)
+		err = p.Apply(objs, 2*time.Second)
+
 		// then
 		require.Error(t, err)
 	})
@@ -408,11 +433,16 @@ func TestProcessAndApply(t *testing.T) {
 		values := paramsKeyValues(project, commit, user)
 
 		p := template.NewProcessor(cl, s)
-		err := p.ProcessAndApply(templateContent(roleBindingObj), values)
+		objs, err := p.Process(templateContent(roleBindingObj), values)
+		require.NoError(t, err)
+		err = p.Apply(objs, 2*time.Second)
 		require.NoError(t, err)
 
 		// when
-		err = p.ProcessAndApply(templateContent(roleBindingObj), values)
+		objs, err = p.Process(templateContent(roleBindingObj), values)
+		require.NoError(t, err)
+		err = p.Apply(objs, 2*time.Second)
+
 		// then
 		assert.Error(t, err)
 	})

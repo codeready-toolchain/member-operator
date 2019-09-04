@@ -324,45 +324,72 @@ func TestProcessAndApply(t *testing.T) {
 			verifyRoleBinding(t, cl, project)
 		})
 
-		t.Run("timeout", func(t *testing.T) {
+		t.Run("failure", func(t *testing.T) {
 
-			t.Run("project does not exist", func(t *testing.T) {
-				// given
-				s := addToScheme(t)
-				project, commit, user := templateVars()
-				values := paramsKeyValues(project, commit, user)
+			t.Run("client error", func(t *testing.T) {
 
-				cl := test.NewFakeClient(t)
-				cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, 10*time.Second)
-				p := template.NewProcessor(cl, s)
+				t.Run("project does not exist", func(t *testing.T) {
+					// given
+					s := addToScheme(t)
+					project, commit, user := templateVars()
+					values := paramsKeyValues(project, commit, user)
 
-				// when
-				objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
-				require.NoError(t, err)
-				err = p.Apply(objs, 2*time.Second)
+					cl := test.NewFakeClient(t)
+					cl.MockGet = func(ctx context.Context, key types.NamespacedName, obj runtime.Object) error {
+						return errors.New("mock error")
+					}
+					p := template.NewProcessor(cl, s)
 
-				// then
-				require.Error(t, err)
+					// when
+					objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+					require.NoError(t, err)
+					err = p.Apply(objs, 2*time.Second)
+
+					// then
+					require.Error(t, err)
+				})
 			})
 
-			t.Run("project not available", func(t *testing.T) {
-				// given
-				s := addToScheme(t)
-				project, commit, user := templateVars()
-				values := paramsKeyValues(project, commit, user)
+			t.Run("timeout", func(t *testing.T) {
 
-				cl := test.NewFakeClient(t)
-				// make sure that the Project exists and is "active" after a short period of time
-				cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, time.Second)
-				p := template.NewProcessor(cl, s)
+				t.Run("project does not exist", func(t *testing.T) {
+					// given
+					s := addToScheme(t)
+					project, commit, user := templateVars()
+					values := paramsKeyValues(project, commit, user)
 
-				// when
-				objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
-				require.NoError(t, err)
-				err = p.Apply(objs, 2*time.Second)
+					cl := test.NewFakeClient(t)
+					cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, 10*time.Second)
+					p := template.NewProcessor(cl, s)
 
-				// then
-				require.Error(t, err)
+					// when
+					objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+					require.NoError(t, err)
+					err = p.Apply(objs, 2*time.Second)
+
+					// then
+					require.Error(t, err)
+				})
+
+				t.Run("project not available", func(t *testing.T) {
+					// given
+					s := addToScheme(t)
+					project, commit, user := templateVars()
+					values := paramsKeyValues(project, commit, user)
+
+					cl := test.NewFakeClient(t)
+					// make sure that the Project exists and is "active" after a short period of time
+					cl.MockGet = getProjectWithDelay(cl, project, corev1.NamespaceTerminating, time.Second)
+					p := template.NewProcessor(cl, s)
+
+					// when
+					objs, err := p.Process(templateContent(projectRequestObj, roleBindingObj), values)
+					require.NoError(t, err)
+					err = p.Apply(objs, 2*time.Second)
+
+					// then
+					require.Error(t, err)
+				})
 			})
 		})
 	})

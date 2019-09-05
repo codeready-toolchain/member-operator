@@ -1,6 +1,8 @@
 package useraccount
 
 import (
+	"reflect"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 )
 
@@ -26,7 +28,7 @@ func compareNamespaces(namespaces1, namespaces2 []toolchainv1alpha1.Namespace) b
 
 func findNamespace(thisNs toolchainv1alpha1.Namespace, namespaces []toolchainv1alpha1.Namespace) bool {
 	for _, ns := range namespaces {
-		if ns.Type == thisNs.Type && ns.Revision == thisNs.Revision && ns.Template == thisNs.Template {
+		if reflect.DeepEqual(thisNs, ns) {
 			return true
 		}
 	}

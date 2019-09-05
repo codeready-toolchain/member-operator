@@ -3,8 +3,8 @@ module github.com/codeready-toolchain/member-operator
 require (
 	cloud.google.com/go v0.40.0 // indirect
 	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190827045201-35e4f49da4c9
+	github.com/codeready-toolchain/api v0.0.0-20190904115539-d78705bda7de
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190904115454-79e74322be0a
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
@@ -14,7 +14,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/common v0.6.0 // indirect
 	github.com/prometheus/procfs v0.0.3 // indirect
-	github.com/redhat-cop/operator-utils v0.0.0-20190530184149-66ee667a40b2
+	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0

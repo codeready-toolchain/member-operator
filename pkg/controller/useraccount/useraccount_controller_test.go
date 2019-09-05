@@ -781,8 +781,8 @@ func newNSTmplSetSpec() toolchainv1alpha1.NSTemplateSetSpec {
 	return toolchainv1alpha1.NSTemplateSetSpec{
 		TierName: "basic",
 		Namespaces: []toolchainv1alpha1.Namespace{
-			toolchainv1alpha1.Namespace{Type: "dev", Revision: "rev1", Template: ""},
-			toolchainv1alpha1.Namespace{Type: "code", Revision: "rev1", Template: ""},
+			{Type: "dev", Revision: "rev1", Template: ""},
+			{Type: "code", Revision: "rev1", Template: ""},
 		},
 	}
 }

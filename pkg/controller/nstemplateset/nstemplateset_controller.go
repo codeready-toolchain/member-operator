@@ -96,7 +96,7 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, err
 	}
 	result, err := r.ensureNamespaces(reqLogger, nsTmplSet)
-	if err != nil || result.Requeue == true {
+	if err != nil || result.Requeue {
 		return result, err
 	}
 	return result, r.setStatusReady(nsTmplSet)
@@ -114,44 +114,45 @@ func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet 
 	}
 
 	missingNs, found := nextNsForProvision(namespaces.Items, nsTmplSet.Spec.Namespaces, userName)
-	if found {
-		nsName := toNamespaceName(userName, missingNs.Type)
-		log.Info("provisioning namespace", "namespace", missingNs)
-		if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
-			return reconcile.Result{}, err
-		}
-
-		params := make(map[string]string)
-		params["USER_NAME"] = userName
-		err := r.applyTemplate(r.client, missingNs, params)
-		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s'", nsName)
-		}
-
-		// set labels
-		namespace := &corev1.Namespace{}
-		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace '%s'", nsName)
-		}
-		if err := controllerutil.SetControllerReference(nsTmplSet, namespace, r.scheme); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller reference for namespace '%s'", nsName)
-		}
-		if namespace.Labels == nil {
-			namespace.Labels = make(map[string]string)
-		}
-		namespace.Labels["owner"] = userName
-		namespace.Labels["revision"] = missingNs.Revision
-		if err := r.client.Update(context.TODO(), namespace); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
-		}
-		log.Info("namespace provisioned", "namespace", missingNs)
-		if err := r.setStatusProvisioning(nsTmplSet); err != nil {
-			return reconcile.Result{}, err
-		}
-		return reconcile.Result{Requeue: true}, nil
+	if !found {
+		return reconcile.Result{}, nil
 	}
 
-	return reconcile.Result{}, nil
+	// provision missing namespace
+	nsName := toNamespaceName(userName, missingNs.Type)
+	log.Info("provisioning namespace", "namespace", missingNs)
+	if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	params := make(map[string]string)
+	params["USER_NAME"] = userName
+	err := r.applyTemplate(r.client, missingNs, params)
+	if err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s'", nsName)
+	}
+
+	// set labels
+	namespace := &corev1.Namespace{}
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace '%s'", nsName)
+	}
+	if err := controllerutil.SetControllerReference(nsTmplSet, namespace, r.scheme); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller reference for namespace '%s'", nsName)
+	}
+	if namespace.Labels == nil {
+		namespace.Labels = make(map[string]string)
+	}
+	namespace.Labels["owner"] = userName
+	namespace.Labels["revision"] = missingNs.Revision
+	if err := r.client.Update(context.TODO(), namespace); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
+	}
+	log.Info("namespace provisioned", "namespace", missingNs)
+	if err := r.setStatusProvisioning(nsTmplSet); err != nil {
+		return reconcile.Result{}, err
+	}
+	return reconcile.Result{Requeue: true}, nil
 }
 
 func nextNsForProvision(namespaces []corev1.Namespace, tcNamespaces []toolchainv1alpha1.Namespace, userName string) (toolchainv1alpha1.Namespace, bool) {

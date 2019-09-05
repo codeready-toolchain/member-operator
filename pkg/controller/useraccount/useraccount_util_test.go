@@ -1,9 +1,10 @@
 package useraccount
 
 import (
+	"testing"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestCompareNSTemplateSet(t *testing.T) {
@@ -25,8 +26,8 @@ func TestCompareNSTemplateSet(t *testing.T) {
 			second: toolchainv1alpha1.NSTemplateSetSpec{
 				TierName: "basic",
 				Namespaces: []toolchainv1alpha1.Namespace{
-					{Type: "cicd", Revision: "rev1", Template: ""},
 					{Type: "ide", Revision: "rev1", Template: ""},
+					{Type: "cicd", Revision: "rev1", Template: ""},
 				},
 			},
 			want: true,

@@ -4,19 +4,15 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"sort"
 	"time"
 
-	projectv1 "github.com/openshift/api/project/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/openshift/library-go/pkg/template/generator"
 	"github.com/openshift/library-go/pkg/template/templateprocessing"
 	errs "github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -63,13 +59,38 @@ func (p Processor) Process(tmplContent []byte, values map[string]string) ([]runt
 	}
 	// sorting before applying to maintain correct order
 	objs := result.Objects
-	sort.Sort(ByKind(objs))
 	return objs, nil
+}
+
+// FilterFunc a function to retain an object or not
+type FilterFunc func(runtime.RawExtension) bool
+
+var RetainNamespaces, RetainAllButNamespaces FilterFunc
+
+func init() {
+	RetainNamespaces = func(obj runtime.RawExtension) bool {
+		gvk := obj.Object.GetObjectKind().GroupVersionKind()
+		return gvk.Kind == "Namespace"
+	}
+	RetainAllButNamespaces = func(obj runtime.RawExtension) bool {
+		gvk := obj.Object.GetObjectKind().GroupVersionKind()
+		return gvk.Kind != "Namespace"
+	}
+}
+
+// Filter filters the given objs to return only those matching the given filter
+func Filter(objs []runtime.RawExtension, filter FilterFunc) []runtime.RawExtension {
+	result := make([]runtime.RawExtension, 0, len(objs))
+	for _, obj := range objs {
+		if filter(obj) {
+			result = append(result, obj)
+		}
+	}
+	return result
 }
 
 // Apply applies the objects, ie, creates or updates them on the cluster
 func (p Processor) Apply(objs []runtime.RawExtension, projectActiveTimeout time.Duration) error {
-
 	for _, rawObj := range objs {
 		obj := rawObj.Object
 		if obj == nil {
@@ -79,47 +100,8 @@ func (p Processor) Apply(objs []runtime.RawExtension, projectActiveTimeout time.
 		if err := createOrUpdateObj(p.cl, obj); err != nil {
 			return errs.Wrapf(err, "unable to create resource of kind: %s, version: %s", gvk.Kind, gvk.Version)
 		}
-		if gvk.Group == "project.openshift.io" && gvk.Version == "v1" && gvk.Kind == "ProjectRequest" {
-			var prq projectv1.ProjectRequest
-			err := p.scheme.Convert(obj, &prq, nil)
-			if err != nil {
-				return errs.Wrapf(err, "unable to convert object of kind: %s, version: %s to a ProjectRequests", gvk.Kind, gvk.Version)
-			}
-			// wait until the Project exists and is ready
-			_, err = p.waitUntilProjectActive(prq.GetName(), projectActiveTimeout)
-			if err != nil {
-				return err
-			}
-		}
 	}
 	return nil
-}
-
-func (p Processor) waitUntilProjectActive(namespace string, t time.Duration) (projectv1.Project, error) {
-	var prj projectv1.Project
-	ticker := time.NewTicker(t / 5)
-	defer ticker.Stop()
-	timeout := time.After(t)
-	for {
-		select {
-		case <-ticker.C:
-			err := p.cl.Get(context.TODO(), types.NamespacedName{
-				Namespace: namespace,
-				Name:      "",
-			}, &prj)
-			// something wrong happened while checking the project
-			if err != nil && !apierrors.IsNotFound(err) {
-				return projectv1.Project{}, errs.Wrapf(err, "failed to check if project '%s' exists", namespace)
-			}
-			// project exists and is active
-			if prj.Status.Phase == corev1.NamespaceActive {
-				return prj, nil
-			}
-			// project does not exist, so let's wait
-		case <-timeout:
-			return projectv1.Project{}, errs.Errorf("timeout while checking if project '%s' exists", namespace)
-		}
-	}
 }
 
 func createOrUpdateObj(cl client.Client, obj runtime.Object) error {

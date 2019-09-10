@@ -31,8 +31,8 @@ type getHostCluster func(cl client.Client) func() (*cluster.FedCluster, bool)
 func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 	// given
 	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("johny", "222222")
-	mur := newMasterUserRecord("johny", "111111")
+	userAcc := newUserAccount("foo", "222222")
+	mur := newMasterUserRecord("foo", "111111")
 
 	t.Run("successful - should change the syncIndex", func(t *testing.T) {
 
@@ -85,8 +85,8 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	// given
 	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("johny", "222222")
-	mur := newMasterUserRecord("johny", "111111")
+	userAcc := newUserAccount("bar", "222222")
+	mur := newMasterUserRecord("bar", "111111")
 	mur.Spec.UserAccounts = append(mur.Spec.UserAccounts, toolchainv1alpha1.UserAccountEmbedded{
 		TargetCluster: "second-member-cluster",
 		SyncIndex:     "aaaaaa",
@@ -208,7 +208,7 @@ func newUserAccount(userName, resourceVersion string) *toolchainv1alpha1.UserAcc
 	return userAcc
 }
 
-func newMasterUserRecord(userName, syncIndex string) *toolchainv1alpha1.MasterUserRecord { //nolint:unparam
+func newMasterUserRecord(userName, syncIndex string) *toolchainv1alpha1.MasterUserRecord {
 	userAcc := &toolchainv1alpha1.MasterUserRecord{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,

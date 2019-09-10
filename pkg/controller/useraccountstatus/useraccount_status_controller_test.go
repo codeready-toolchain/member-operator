@@ -2,12 +2,14 @@ package useraccountstatus
 
 import (
 	"context"
+	"testing"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -17,7 +19,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/kubefed/pkg/apis/core/common"
 	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
-	"testing"
 )
 
 const (
@@ -30,8 +31,8 @@ type getHostCluster func(cl client.Client) func() (*cluster.FedCluster, bool)
 func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 	// given
 	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("johny", "222222")
-	mur := newMasterUserRecord("johny", "111111")
+	userAcc := newUserAccount("foo", "222222")
+	mur := newMasterUserRecord("foo", "111111")
 
 	t.Run("successful - should change the syncIndex", func(t *testing.T) {
 
@@ -84,8 +85,8 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	// given
 	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("johny", "222222")
-	mur := newMasterUserRecord("johny", "111111")
+	userAcc := newUserAccount("bar", "222222")
+	mur := newMasterUserRecord("bar", "111111")
 	mur.Spec.UserAccounts = append(mur.Spec.UserAccounts, toolchainv1alpha1.UserAccountEmbedded{
 		TargetCluster: "second-member-cluster",
 		SyncIndex:     "aaaaaa",

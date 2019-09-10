@@ -35,8 +35,10 @@ require (
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
 
-// fix for unavailable git.apache.org https://status.apache.org/incidents/63030p4241xj
-replace git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
+replace (
+	git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
+	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
+)
 
 replace (
 	github.com/coreos/prometheus-operator => github.com/coreos/prometheus-operator v0.29.0
@@ -57,10 +59,3 @@ replace (
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 	k8s.io/kubernetes => k8s.io/kubernetes v1.13.4
 )
-
-replace (
-	git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
-	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
-)
-
-go 1.13

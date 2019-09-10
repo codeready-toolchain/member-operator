@@ -78,6 +78,7 @@ var newUser = `
 `
 
 func TestProcess(t *testing.T) {
+
 	t.Run("should process template successfully", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
@@ -210,160 +211,56 @@ func TestProcess(t *testing.T) {
 		// then
 		assert.Error(t, err)
 	})
-}
 
-func TestFilter(t *testing.T) {
+	t.Run("filter results", func(t *testing.T) {
 
-	ns1 := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"kind": "Namespace",
-			"metadata": map[string]interface{}{
-				"name": "ns1",
-			},
-		},
-	}
-	ns2 := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"kind": "Namespace",
-			"metadata": map[string]interface{}{
-				"name": "ns2",
-			},
-		},
-	}
-	rb1 := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"kind": "RoleBinding",
-			"metadata": map[string]interface{}{
-				"name": "rb1",
-			},
-		},
-	}
-	rb2 := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"kind": "RoleBinding",
-			"metadata": map[string]interface{}{
-				"name": "rb2",
-			},
-		},
-	}
-
-	t.Run("filter namespaces", func(t *testing.T) {
-
-		t.Run("return one", func(t *testing.T) {
+		t.Run("return namespace", func(t *testing.T) {
 			// given
-			objs := []runtime.RawExtension{
-				{
-					Object: ns1,
-				},
-				{
-					Object: rb1,
-				},
-			}
-			// when
-			result := template.Filter(objs, template.RetainNamespaces)
-			// then
-			require.Len(t, result, 1)
-			assert.Equal(t, ns1, result[0].Object)
+			s := addToScheme(t)
+			// default values
+			user := "123abc"
 
-		})
-		t.Run("return multiple", func(t *testing.T) {
-			// given
-			objs := []runtime.RawExtension{
-				{
-					Object: ns1,
-				},
-				{
-					Object: rb1,
-				},
-				{
-					Object: ns2,
-				},
-				{
-					Object: rb2,
-				},
-			}
-			// when
-			result := template.Filter(objs, template.RetainNamespaces)
-			// then
-			require.Len(t, result, 2)
-			assert.Equal(t, ns1, result[0].Object)
-			assert.Equal(t, ns2, result[1].Object)
-		})
-		t.Run("return none", func(t *testing.T) {
-			// given
-			objs := []runtime.RawExtension{
-				{
-					Object: rb1,
-				},
-				{
-					Object: rb2,
-				},
-			}
-			// when
-			result := template.Filter(objs, template.RetainNamespaces)
-			// then
-			require.Empty(t, result)
-		})
-	})
+			namespace := uuid.NewV4().String()
+			values := make(map[string]string)
+			values["PROJECT_NAME"] = namespace
 
-	t.Run("filter other resources", func(t *testing.T) {
+			cl := test.NewFakeClient(t)
+			p := template.NewProcessor(cl, s)
 
-		t.Run("return one", func(t *testing.T) {
-			// given
-			objs := []runtime.RawExtension{
-				{
-					Object: ns1,
-				},
-				{
-					Object: rb1,
-				},
-			}
 			// when
-			result := template.Filter(objs, template.RetainAllButNamespaces)
-			// then
-			require.Len(t, result, 1)
-			assert.Equal(t, rb1, result[0].Object)
+			objs, err := p.Process(templateContent(namespaceObj, roleBindingObj), values, template.RetainNamespaces)
 
-		})
-		t.Run("return multiple", func(t *testing.T) {
-			// given
-			objs := []runtime.RawExtension{
-				{
-					Object: ns1,
-				},
-				{
-					Object: rb1,
-				},
-				{
-					Object: ns2,
-				},
-				{
-					Object: rb2,
-				},
-			}
-			// when
-			result := template.Filter(objs, template.RetainAllButNamespaces)
 			// then
-			require.Len(t, result, 2)
-			assert.Equal(t, rb1, result[0].Object)
-			assert.Equal(t, rb2, result[1].Object)
+			require.NoError(t, err)
+			require.Len(t, objs, 1)
+			// role binding
+			verifyResource(t, objs[1].Object.GetObjectKind(), namespace, user)
 		})
 
-		t.Run("return none", func(t *testing.T) {
+		t.Run("return other resources", func(t *testing.T) {
 			// given
-			objs := []runtime.RawExtension{
-				{
-					Object: ns1,
-				},
-				{
-					Object: ns2,
-				},
-			}
+			s := addToScheme(t)
+			// default values
+			commit, user := "123abc", "toolchain-dev"
+
+			namespace := uuid.NewV4().String()
+			values := make(map[string]string)
+			values["PROJECT_NAME"] = namespace
+
+			cl := test.NewFakeClient(t)
+			p := template.NewProcessor(cl, s)
+
 			// when
-			result := template.Filter(objs, template.RetainAllButNamespaces)
+			objs, err := p.Process(templateContent(namespaceObj, roleBindingObj), values, template.RetainAllButNamespaces)
+
 			// then
-			require.Empty(t, result)
+			require.NoError(t, err)
+			require.Len(t, objs, 1)
+
+			// namespace
+			verifyResource(t, objs[0].Object.GetObjectKind(), namespace, commit, user)
 		})
+
 	})
 }
 
@@ -381,7 +278,7 @@ func TestProcessAndApply(t *testing.T) {
 		// when
 		objs, err := p.Process(templateContent(namespaceObj), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 
 		// then
 		require.NoError(t, err)
@@ -400,7 +297,7 @@ func TestProcessAndApply(t *testing.T) {
 		// when
 		objs, err := p.Process(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 
 		// then
 		require.NoError(t, err)
@@ -420,7 +317,7 @@ func TestProcessAndApply(t *testing.T) {
 			// when
 			objs, err := p.Process(templateContent(namespaceObj, roleBindingObj), values)
 			require.NoError(t, err)
-			err = p.Apply(objs, 2*time.Second)
+			err = p.Apply(objs)
 
 			// then
 			require.NoError(t, err)
@@ -450,7 +347,7 @@ func TestProcessAndApply(t *testing.T) {
 					// when
 					objs, err := p.Process(templateContent(namespaceObj, roleBindingObj), values)
 					require.NoError(t, err)
-					err = p.Apply(objs, 2*time.Second)
+					err = p.Apply(objs)
 
 					// then
 					require.Error(t, err)
@@ -471,7 +368,7 @@ func TestProcessAndApply(t *testing.T) {
 
 		objs, err := p.Process(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 
 		require.NoError(t, err)
 		verifyRoleBinding(t, cl, namespace)
@@ -479,7 +376,7 @@ func TestProcessAndApply(t *testing.T) {
 		// when
 		objs, err = p.Process(templateContent(roleBindingObj, newUser), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 
 		// then
 		require.NoError(t, err)
@@ -504,7 +401,7 @@ func TestProcessAndApply(t *testing.T) {
 		// when
 		objs, err := p.Process(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 
 		// then
 		require.Error(t, err)
@@ -525,13 +422,13 @@ func TestProcessAndApply(t *testing.T) {
 		p := template.NewProcessor(cl, s)
 		objs, err := p.Process(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 		require.NoError(t, err)
 
 		// when
 		objs, err = p.Process(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
-		err = p.Apply(objs, 2*time.Second)
+		err = p.Apply(objs)
 
 		// then
 		assert.Error(t, err)

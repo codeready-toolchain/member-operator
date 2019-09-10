@@ -3,6 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -125,7 +126,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
 	if !util.IsBeingDeleted(userAcc) {
 		// Add the finalizer if it is not present
-		if err := r.addFinalizer(userAcc, userAccFinalizerName); err != nil {
+		if err := r.addFinalizer(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -139,7 +140,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, err
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
-		if err = r.manageCleanUp(reqLogger, userAcc); err != nil {
+		if err = r.manageCleanUp(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -240,7 +241,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 }
 
 // setFinalizers sets the finalizers for UserAccount
-func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
+func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
 		util.AddFinalizer(userAcc, userAccFinalizerName)
@@ -253,17 +254,13 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 }
 
 // manageCleanUp deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) manageCleanUp(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
-	var deleted bool
-	var err error
-	if err, deleted = r.deleteIdentity(logger, userAcc); err != nil || deleted {
+func (r *ReconcileUserAccount) manageCleanUp(userAcc *toolchainv1alpha1.UserAccount) error {
+	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
 		return err
 	}
-
-	if err, deleted = r.deleteUser(logger, userAcc); err != nil || deleted {
+	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
 		return err
 	}
-
 	// Remove finalizer from UserAccount
 	util.RemoveFinalizer(userAcc, userAccFinalizerName)
 	if err := r.client.Update(context.Background(), userAcc); err != nil {
@@ -273,46 +270,48 @@ func (r *ReconcileUserAccount) manageCleanUp(logger logr.Logger, userAcc *toolch
 	return nil
 }
 
-// deleteUser deletes the user resource
-func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (error, bool) {
+// deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,
+// with the underlying error if the user existed and something wrong happened. If the user did not
+// exist, this func returns `false, nil`
+func (r *ReconcileUserAccount) deleteUser(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the User associated with the UserAccount
 	user := &userv1.User{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return err, false
-		} else {
-			return nil, false
+			return false, err
 		}
+		return false, nil
 	}
 
 	// Delete User associated with UserAccount
 	if err := r.client.Delete(context.TODO(), user); err != nil {
-		return err, false
+		return false, err
 	}
-	return nil, true
+	return true, nil
 }
 
-// deleteIdentity deletes the identity resource.
-func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (error, bool) {
+// deleteIdentity deletes the identity resource. Returns `true` if the identity was deleted, `false` otherwise,
+// with the underlying error if the identity existed and something wrong happened. If the identity did not
+// exist, this func returns `false, nil`
+func (r *ReconcileUserAccount) deleteIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
 	identityName := ToIdentityName(userAcc.Spec.UserID)
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return err, false
-		} else {
-			return nil, false
+			return false, err
 		}
+		return false, nil
 	}
 
 	// Delete Identity associated with UserAccount
 	if err := r.client.Delete(context.TODO(), identity); err != nil {
-		return err, false
+		return false, err
 	}
 
-	return nil, true
+	return true, nil
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
@@ -416,6 +415,7 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 	return identity
 }
 
+// ToIdentityName converts the given `userID` into an identity
 func ToIdentityName(userID string) string {
 	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
 }

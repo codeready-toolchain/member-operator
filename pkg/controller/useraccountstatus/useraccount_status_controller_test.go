@@ -2,12 +2,14 @@ package useraccountstatus
 
 import (
 	"context"
+	"testing"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -17,7 +19,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/kubefed/pkg/apis/core/common"
 	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
-	"testing"
 )
 
 const (
@@ -207,7 +208,7 @@ func newUserAccount(userName, resourceVersion string) *toolchainv1alpha1.UserAcc
 	return userAcc
 }
 
-func newMasterUserRecord(userName, syncIndex string) *toolchainv1alpha1.MasterUserRecord {
+func newMasterUserRecord(userName, syncIndex string) *toolchainv1alpha1.MasterUserRecord { //nolint:unparam
 	userAcc := &toolchainv1alpha1.MasterUserRecord{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,

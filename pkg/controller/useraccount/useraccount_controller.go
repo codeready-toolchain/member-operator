@@ -275,7 +275,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 	}
 
 	// update if not same
-	equal := compareNSTemplateSet(nsTmplSet.Spec, userAcc.Spec.NSTemplateSet)
+	equal := nsTmplSet.Spec.CompareTo(userAcc.Spec.NSTemplateSet)
 	if !equal {
 		logger.Info("updating NSTemplateSet", "name", name)
 		if err := r.setStatusProvisioning(userAcc); err != nil {

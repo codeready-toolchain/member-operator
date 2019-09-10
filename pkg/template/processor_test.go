@@ -12,7 +12,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	authv1 "github.com/openshift/api/authorization/v1"
-	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -79,10 +78,13 @@ var newUser = `
 
 func TestProcess(t *testing.T) {
 
+	namespace := getNameWithTimestamp("namespace")
+	commit := getNameWithTimestamp("sha")
+	user := getNameWithTimestamp("user")
+
 	t.Run("should process template successfully", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
 		values := paramsKeyValues(namespace, commit, user)
 
 		cl := test.NewFakeClient(t)
@@ -105,17 +107,13 @@ func TestProcess(t *testing.T) {
 	t.Run("should overwrite default value of commit parameter", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, _ := templateVars()
-
 		userDefault := "toolchain-dev"
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 		}
-
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-
 		// when
 		objs, err := p.Process(templateContent(namespaceObj, roleBindingObj), values)
 
@@ -125,7 +123,6 @@ func TestProcess(t *testing.T) {
 
 		// namespace
 		verifyResource(t, objs[0].Object.GetObjectKind(), namespace, commit, userDefault)
-
 		// role binding
 		verifyResource(t, objs[1].Object.GetObjectKind(), namespace, userDefault)
 	})
@@ -133,7 +130,6 @@ func TestProcess(t *testing.T) {
 	t.Run("should not fail for random extra param", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
 		values := paramsKeyValues(namespace, commit, user)
 
 		// adding random param
@@ -157,12 +153,10 @@ func TestProcess(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		// default values
-		commit, user := "123abc", "toolchain-dev"
-
-		namespace := uuid.NewV4().String()
+		commit := "123abc"
+		user := "toolchain-dev"
 		values := make(map[string]string)
 		values["PROJECT_NAME"] = namespace
-
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 
@@ -172,10 +166,8 @@ func TestProcess(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.Len(t, objs, 2)
-
 		// namespace
 		verifyResource(t, objs[0].Object.GetObjectKind(), namespace, commit, user)
-
 		// role binding
 		verifyResource(t, objs[1].Object.GetObjectKind(), namespace, user)
 	})
@@ -184,7 +176,6 @@ func TestProcess(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		values := make(map[string]string)
-
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 
@@ -199,9 +190,7 @@ func TestProcess(t *testing.T) {
 	t.Run("should fail to process template for invalid template content", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
 		values := paramsKeyValues(namespace, commit, user)
-
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 
@@ -218,12 +207,8 @@ func TestProcess(t *testing.T) {
 			// given
 			s := addToScheme(t)
 			// default values
-			user := "123abc"
-
-			namespace := uuid.NewV4().String()
 			values := make(map[string]string)
 			values["PROJECT_NAME"] = namespace
-
 			cl := test.NewFakeClient(t)
 			p := template.NewProcessor(cl, s)
 
@@ -234,16 +219,14 @@ func TestProcess(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, objs, 1)
 			// role binding
-			verifyResource(t, objs[1].Object.GetObjectKind(), namespace, user)
+			verifyResource(t, objs[0].Object.GetObjectKind(), namespace)
 		})
 
 		t.Run("return other resources", func(t *testing.T) {
 			// given
 			s := addToScheme(t)
 			// default values
-			commit, user := "123abc", "toolchain-dev"
-
-			namespace := uuid.NewV4().String()
+			user := "toolchain-dev"
 			values := make(map[string]string)
 			values["PROJECT_NAME"] = namespace
 
@@ -258,7 +241,7 @@ func TestProcess(t *testing.T) {
 			require.Len(t, objs, 1)
 
 			// namespace
-			verifyResource(t, objs[0].Object.GetObjectKind(), namespace, commit, user)
+			verifyResource(t, objs[0].Object.GetObjectKind(), namespace, user)
 		})
 
 	})
@@ -266,11 +249,13 @@ func TestProcess(t *testing.T) {
 
 func TestProcessAndApply(t *testing.T) {
 
-	t.Run("should create namespace alone", func(t *testing.T) {
+	namespace := getNameWithTimestamp("namespace")
+	commit := getNameWithTimestamp("sha")
+	user := getNameWithTimestamp("user")
 
+	t.Run("should create namespace alone", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
 		values := paramsKeyValues(namespace, commit, user)
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
@@ -288,7 +273,6 @@ func TestProcessAndApply(t *testing.T) {
 	t.Run("should create role binding alone", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
 		values := paramsKeyValues(namespace, commit, user)
 
 		cl := test.NewFakeClient(t)
@@ -309,7 +293,6 @@ func TestProcessAndApply(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
 			// given
 			s := addToScheme(t)
-			namespace, commit, user := templateVars()
 			values := paramsKeyValues(namespace, commit, user)
 			cl := test.NewFakeClient(t)
 			p := template.NewProcessor(cl, s)
@@ -332,7 +315,6 @@ func TestProcessAndApply(t *testing.T) {
 				t.Run("namespace does not exist", func(t *testing.T) {
 					// given
 					s := addToScheme(t)
-					namespace, commit, user := templateVars()
 					values := paramsKeyValues(namespace, commit, user)
 
 					cl := test.NewFakeClient(t)
@@ -360,7 +342,6 @@ func TestProcessAndApply(t *testing.T) {
 	t.Run("should update existing role binding", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
 		values := paramsKeyValues(namespace, commit, user)
 
 		cl := test.NewFakeClient(t)
@@ -390,12 +371,8 @@ func TestProcessAndApply(t *testing.T) {
 		cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("failed to create resource")
 		}
-
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
-
 		values := paramsKeyValues(namespace, commit, user)
-
 		p := template.NewProcessor(cl, s)
 
 		// when
@@ -413,12 +390,8 @@ func TestProcessAndApply(t *testing.T) {
 		cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("failed to update resource")
 		}
-
 		s := addToScheme(t)
-		namespace, commit, user := templateVars()
-
 		values := paramsKeyValues(namespace, commit, user)
-
 		p := template.NewProcessor(cl, s)
 		objs, err := p.Process(templateContent(roleBindingObj), values)
 		require.NoError(t, err)
@@ -457,10 +430,6 @@ func paramsKeyValues(namespace, commit, user string) map[string]string {
 		"COMMIT":       commit,
 		"USER_NAME":    user,
 	}
-}
-
-func templateVars() (string, string, string) {
-	return getNameWithTimestamp("namespace"), getNameWithTimestamp("sha"), getNameWithTimestamp("user")
 }
 
 func getNameWithTimestamp(prefix string) string {

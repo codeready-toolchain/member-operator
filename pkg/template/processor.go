@@ -77,7 +77,6 @@ func (p Processor) Apply(objs []runtime.RawExtension) error {
 }
 
 func createOrUpdateObj(cl client.Client, obj runtime.Object) error {
-	fmt.Printf("creating or updating %v\n", obj)
 	if err := cl.Create(context.TODO(), obj); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
 			return errs.Wrapf(err, "failed to create object %v", obj)

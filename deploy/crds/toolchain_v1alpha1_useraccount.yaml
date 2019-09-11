@@ -6,32 +6,32 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: useraccounts.toolchain.dev.openshift.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.userID
+    name: User ID
+    priority: 1
+    type: string
+  - JSONPath: .spec.nsLimit
+    name: NS Limit
+    type: string
+  - JSONPath: .spec.nsTemplateSet.tierName
+    name: Tier Name
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
+  - JSONPath: .spec.disabled
+    name: Disabled
+    priority: 1
+    type: boolean
   group: toolchain.dev.openshift.com
   names:
     kind: UserAccount
     plural: useraccounts
   scope: Namespaced
-  additionalPrinterColumns:
-    - name: User ID
-      type: string
-      JSONPath: .spec.userID
-      priority: 1
-    - name: NS Limit
-      type: string
-      JSONPath: .spec.nsLimit
-    - name: Tier Name
-      type: string
-      JSONPath: .spec.nsTemplateSet.tierName
-    - name: Ready
-      type: string
-      JSONPath: ".status.conditions[?(@.type==\"Ready\")].status"
-    - name: Reason
-      type: string
-      JSONPath: ".status.conditions[?(@.type==\"Ready\")].reason"
-    - name: Disabled
-      type: boolean
-      JSONPath: .spec.disabled
-      priority: 1
   subresources:
     status: {}
   validation:

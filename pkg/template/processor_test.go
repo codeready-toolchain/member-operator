@@ -240,10 +240,10 @@ func TestProcessAndApply(t *testing.T) {
 		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-
-		// when
 		objs, err := p.Process([]byte(namespaceTmpl), values)
 		require.NoError(t, err)
+
+		// when
 		err = p.Apply(objs)
 
 		// then
@@ -260,10 +260,10 @@ func TestProcessAndApply(t *testing.T) {
 		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-
-		// when
 		objs, err := p.Process([]byte(rolebindingTmpl), values)
 		require.NoError(t, err)
+
+		// when
 		err = p.Apply(objs)
 
 		// then
@@ -282,10 +282,10 @@ func TestProcessAndApply(t *testing.T) {
 			}
 			cl := test.NewFakeClient(t)
 			p := template.NewProcessor(cl, s)
-
-			// when
 			objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
 			require.NoError(t, err)
+
+			// when
 			err = p.Apply(objs)
 
 			// then
@@ -313,11 +313,10 @@ func TestProcessAndApply(t *testing.T) {
 						}
 						return nil
 					}
-					// p := template.NewProcessor(cl, s)
-
-					// when
 					objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
 					require.NoError(t, err)
+
+					// when
 					err = p.Apply(objs)
 
 					// then

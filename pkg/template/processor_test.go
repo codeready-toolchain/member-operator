@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -353,53 +354,106 @@ func TestProcessAndApply(t *testing.T) {
 		require.Len(t, binding.Subjects, 2)
 	})
 
-	t.Run("should fail to create template object", func(t *testing.T) {
-		// given
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
-		cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
-			return errors.New("failed to create resource")
-		}
-		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
-		// p := template.NewProcessor(cl, s)
+	t.Run("failures", func(t *testing.T) {
 
-		// when
-		objs, err := p.Process([]byte(rolebindingTmpl), values)
-		require.NoError(t, err)
-		err = p.Apply(objs)
+		t.Run("should fail to create template object", func(t *testing.T) {
+			// given
+			cl := test.NewFakeClient(t)
+			p := template.NewProcessor(cl, s)
+			cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+				return errors.New("failed to create resource")
+			}
+			values := map[string]string{
+				"PROJECT_NAME": namespace,
+				"COMMIT":       commit,
+				"USER_NAME":    user,
+			}
+			// p := template.NewProcessor(cl, s)
 
-		// then
-		require.Error(t, err)
+			// when
+			objs, err := p.Process([]byte(rolebindingTmpl), values)
+			require.NoError(t, err)
+			err = p.Apply(objs)
+
+			// then
+			require.Error(t, err)
+		})
+
+		t.Run("should fail to update template object", func(t *testing.T) {
+			// given
+			cl := test.NewFakeClient(t)
+			p := template.NewProcessor(cl, s)
+			cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+				return errors.New("failed to update resource")
+			}
+			values := map[string]string{
+				"PROJECT_NAME": namespace,
+				"COMMIT":       commit,
+				"USER_NAME":    user,
+			}
+			objs, err := p.Process([]byte(rolebindingTmpl), values)
+			require.NoError(t, err)
+			err = p.Apply(objs)
+			require.NoError(t, err)
+
+			// when
+			objs, err = p.Process([]byte(rolebindingTmpl), values)
+			require.NoError(t, err)
+			err = p.Apply(objs)
+
+			// then
+			assert.Error(t, err)
+		})
 	})
 
-	t.Run("should fail to update template object", func(t *testing.T) {
+	t.Run("should create with extra labels and ownerref", func(t *testing.T) {
+
 		// given
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
-		cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
-			return errors.New("failed to update resource")
-		}
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-		objs, err := p.Process([]byte(rolebindingTmpl), values)
-		require.NoError(t, err)
-		err = p.Apply(objs)
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
+		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
 		require.NoError(t, err)
 
-		// when
-		objs, err = p.Process([]byte(rolebindingTmpl), values)
-		require.NoError(t, err)
+		// when adding labels and an owner reference
+		obj := objs[0]
+		nsObj, ok := obj.Object.(*unstructured.Unstructured)
+		require.True(t, ok)
+		nsObj.SetOwnerReferences([]metav1.OwnerReference{
+			{
+				APIVersion: "crt/v1",
+				Kind:       "NSTemplateSet",
+				Name:       "foo",
+			},
+		})
+		nsObj.SetLabels(map[string]string{
+			"provider": "codeready-toolchain",
+			"version":  commit,
+			"extra":    "foo",
+		})
 		err = p.Apply(objs)
 
 		// then
-		assert.Error(t, err)
+		require.NoError(t, err)
+		ns := assertNamespaceExists(t, cl, namespace)
+		// verify labels
+		assert.Equal(t, map[string]string{
+			"provider": "codeready-toolchain",
+			"version":  commit,
+			"extra":    "foo",
+		}, ns.Labels)
+		// verify owner refs
+		assert.Equal(t, []metav1.OwnerReference{
+			{
+				APIVersion: "crt/v1",
+				Kind:       "NSTemplateSet",
+				Name:       "foo",
+			},
+		}, ns.OwnerReferences)
 	})
 }
 
@@ -453,13 +507,12 @@ func newObject(template, projectName, username, commit string) (*unstructured.Un
 	return result, err
 }
 
-func assertNamespaceExists(t *testing.T, c client.Client, nsName string) {
+func assertNamespaceExists(t *testing.T, c client.Client, nsName string) corev1.Namespace {
 	// check that the namespace was created
 	var ns corev1.Namespace
 	err := c.Get(context.TODO(), types.NamespacedName{Name: nsName, Namespace: ""}, &ns) // assert namespace is cluster-scoped
-
 	require.NoError(t, err)
-	assert.NotNil(t, ns)
+	return ns
 }
 
 func assertRoleBindingExists(t *testing.T, c client.Client, ns string) authv1.RoleBinding {
@@ -472,7 +525,6 @@ func assertRoleBindingExists(t *testing.T, c client.Client, ns string) authv1.Ro
 	}, &rb)
 
 	require.NoError(t, err)
-	require.NotNil(t, rb)
 	return rb
 }
 

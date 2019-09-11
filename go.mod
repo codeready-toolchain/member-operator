@@ -39,6 +39,11 @@ require (
 )
 
 replace (
+	git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
+	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
+)
+
+replace (
 	github.com/coreos/prometheus-operator => github.com/coreos/prometheus-operator v0.29.0
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.1.10
 	sigs.k8s.io/controller-tools => sigs.k8s.io/controller-tools v0.1.11-0.20190411181648-9d55346c2bde
@@ -57,10 +62,3 @@ replace (
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 	k8s.io/kubernetes => k8s.io/kubernetes v1.13.4
 )
-
-replace (
-	git.apache.org/thrift.git => github.com/apache/thrift v0.12.0
-	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
-)
-
-go 1.13

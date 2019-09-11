@@ -158,7 +158,7 @@ func TestProcess(t *testing.T) {
 		}, objs[1])
 	})
 
-	t.Run("should process template with missing required params", func(t *testing.T) {
+	t.Run("process template should fail because of missing required parameter", func(t *testing.T) {
 		// given
 		s := addToScheme(t)
 		values := make(map[string]string)

@@ -342,7 +342,7 @@ func TestProcessAndApply(t *testing.T) {
 		require.NoError(t, err)
 		assertRoleBindingExists(t, cl, namespace)
 
-		// when
+		// when rolebinding changes
 		objs, err = p.Process([]byte(namespaceAndRolebindingWithExtraUserTmpl), values)
 		require.NoError(t, err)
 		err = p.Apply(objs)
@@ -651,29 +651,6 @@ parameters:
 		{
 			"kind": "User",
 			"name": "{{ .Username }}"
-		}
-	]
-}`
-
-	rolebindingWithExtraUserObj = `{
-	"apiVersion": "authorization.openshift.io/v1",
-	"kind": "RoleBinding",
-	"metadata": {
-		"name": "{{ .ProjectName }}-edit",
-    	"namespace": "{{ .ProjectName }}"
-	}
-	"roleRef": {
-		"kind": "ClusterRole",
-		"name": "edit"
-	},
-	"subjects": [
-		{
-			"kind": "User",
-			"name": "{{ .Username }}"
-		},
-		{
-			"kind": "extraUser",
-			"name": "extra"
 		}
 	]
 }`

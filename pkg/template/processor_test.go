@@ -32,16 +32,17 @@ func TestProcess(t *testing.T) {
 	commit := getNameWithTimestamp("sha")
 	defaultCommit := "123abc"
 
+	s := addToScheme(t)
+	cl := test.NewFakeClient(t)
+	p := template.NewProcessor(cl, s)
+
 	t.Run("should process template successfully", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
 		// when
 		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
 
@@ -67,14 +68,10 @@ func TestProcess(t *testing.T) {
 
 	t.Run("should overwrite default value of commit parameter", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 		}
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
-		// when
 		// when
 		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
 
@@ -100,7 +97,6 @@ func TestProcess(t *testing.T) {
 
 	t.Run("should not fail for random extra param", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		random := getNameWithTimestamp("random")
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
@@ -108,8 +104,6 @@ func TestProcess(t *testing.T) {
 			"USER_NAME":    user,
 			"random":       random, // extra, unused param
 		}
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
 		// when
 		objs, err := p.Process([]byte(namespaceTmpl), values)
 
@@ -127,14 +121,9 @@ func TestProcess(t *testing.T) {
 
 	t.Run("should process template with default parameters", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
-		// default values
-		commit := "123abc"
-		user := "toolchain-dev"
-		values := make(map[string]string)
-		values["PROJECT_NAME"] = namespace
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
+		values := map[string]string{
+			"PROJECT_NAME": namespace,
+		}
 
 		// when
 		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
@@ -146,24 +135,21 @@ func TestProcess(t *testing.T) {
 		assertObject(t, expectedObj{
 			template:    namespaceObj,
 			projectName: namespace,
-			username:    user,
-			commit:      commit,
+			username:    defaultUser,
+			commit:      defaultCommit,
 		}, objs[0])
 		// assert rolebinding
 		assertObject(t, expectedObj{
 			template:    rolebindingObj,
 			projectName: namespace,
-			username:    user,
-			commit:      commit,
+			username:    defaultUser,
+			commit:      defaultCommit,
 		}, objs[1])
 	})
 
-	t.Run("process template should fail because of missing required parameter", func(t *testing.T) {
+	t.Run("should fail because of missing required parameter", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := make(map[string]string)
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
@@ -175,14 +161,11 @@ func TestProcess(t *testing.T) {
 
 	t.Run("should fail to process template for invalid template content", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-		cl := test.NewFakeClient(t)
-		p := template.NewProcessor(cl, s)
 
 		// when
 		_, err := p.Process([]byte(invalidTmpl), values)
@@ -195,13 +178,9 @@ func TestProcess(t *testing.T) {
 
 		t.Run("return namespace", func(t *testing.T) {
 			// given
-			s := addToScheme(t)
-			// default values
 			values := map[string]string{
 				"PROJECT_NAME": namespace,
 			}
-			cl := test.NewFakeClient(t)
-			p := template.NewProcessor(cl, s)
 
 			// when
 			objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values, template.RetainNamespaces)
@@ -220,15 +199,11 @@ func TestProcess(t *testing.T) {
 
 		t.Run("return other resources", func(t *testing.T) {
 			// given
-			s := addToScheme(t)
-			// default values
 			values := map[string]string{
 				"PROJECT_NAME": namespace,
 				"COMMIT":       commit,
 				"USER_NAME":    user,
 			}
-			cl := test.NewFakeClient(t)
-			p := template.NewProcessor(cl, s)
 
 			// when
 			objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values, template.RetainAllButNamespaces)
@@ -254,9 +229,10 @@ func TestProcessAndApply(t *testing.T) {
 	commit := getNameWithTimestamp("sha")
 	user := getNameWithTimestamp("user")
 
+	s := addToScheme(t)
+
 	t.Run("should create namespace alone", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
@@ -277,13 +253,11 @@ func TestProcessAndApply(t *testing.T) {
 
 	t.Run("should create role binding alone", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 
@@ -301,7 +275,6 @@ func TestProcessAndApply(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			// given
-			s := addToScheme(t)
 			values := map[string]string{
 				"PROJECT_NAME": namespace,
 				"COMMIT":       commit,
@@ -327,20 +300,20 @@ func TestProcessAndApply(t *testing.T) {
 
 				t.Run("namespace does not exist", func(t *testing.T) {
 					// given
-					s := addToScheme(t)
 					values := map[string]string{
 						"PROJECT_NAME": namespace,
 						"COMMIT":       commit,
 						"USER_NAME":    user,
 					}
 					cl := test.NewFakeClient(t)
+					p := template.NewProcessor(cl, s)
 					cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 						if obj.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" {
 							return errors.New("mock error")
 						}
 						return nil
 					}
-					p := template.NewProcessor(cl, s)
+					// p := template.NewProcessor(cl, s)
 
 					// when
 					objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
@@ -357,13 +330,11 @@ func TestProcessAndApply(t *testing.T) {
 
 	t.Run("should update existing role binding", func(t *testing.T) {
 		// given
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
 		objs, err := p.Process([]byte(rolebindingTmpl), values)
@@ -386,16 +357,16 @@ func TestProcessAndApply(t *testing.T) {
 	t.Run("should fail to create template object", func(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
 		cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("failed to create resource")
 		}
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-		p := template.NewProcessor(cl, s)
+		// p := template.NewProcessor(cl, s)
 
 		// when
 		objs, err := p.Process([]byte(rolebindingTmpl), values)
@@ -409,16 +380,15 @@ func TestProcessAndApply(t *testing.T) {
 	t.Run("should fail to update template object", func(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
 		cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("failed to update resource")
 		}
-		s := addToScheme(t)
 		values := map[string]string{
 			"PROJECT_NAME": namespace,
 			"COMMIT":       commit,
 			"USER_NAME":    user,
 		}
-		p := template.NewProcessor(cl, s)
 		objs, err := p.Process([]byte(rolebindingTmpl), values)
 		require.NoError(t, err)
 		err = p.Apply(objs)

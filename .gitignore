@@ -80,3 +80,4 @@ tags
 /vendor
 
 out/
+templates/bindata.go

@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -29,7 +30,53 @@ const (
 	namespaceName = "toolchain-member"
 )
 
-func TestReconcile(t *testing.T) {
+func TestNSTmplSetCreateReconcile(t *testing.T) {
+	logf.SetLogger(logf.ZapLogger(true))
+	username := "johnsmith"
+
+	// given
+	nsTmplSet := newNSTmplSet(username)
+
+	r, req, _ := prepareReconcile(t, username, nsTmplSet)
+
+	res, err := r.Reconcile(req)
+	require.NoError(t, err)
+	fmt.Println(res)
+
+	nsName := fmt.Sprintf("%s-dev", username)
+	ns := &corev1.Namespace{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: nsName}, ns)
+	require.NoError(t, err)
+	ns.Status.Phase = corev1.NamespaceActive
+	err = r.client.Update(context.TODO(), ns)
+	require.NoError(t, err)
+
+	res, err = r.Reconcile(req)
+	require.NoError(t, err)
+	fmt.Println(res)
+
+	res, err = r.Reconcile(req)
+	require.NoError(t, err)
+	fmt.Println(res)
+
+	nsName = fmt.Sprintf("%s-code", username)
+	ns = &corev1.Namespace{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: nsName}, ns)
+	require.NoError(t, err)
+	ns.Status.Phase = corev1.NamespaceActive
+	err = r.client.Update(context.TODO(), ns)
+	require.NoError(t, err)
+
+	res, err = r.Reconcile(req)
+	require.NoError(t, err)
+	fmt.Println(res)
+
+	res, err = r.Reconcile(req)
+	require.NoError(t, err)
+	fmt.Println(res)
+}
+
+func testReconcile(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
 
@@ -160,9 +207,8 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	fakeClient := test.NewFakeClient(t, initObjs...)
 
 	r := &ReconcileNSTemplateSet{
-		client:        fakeClient,
-		scheme:        s,
-		applyTemplate: applyTemplateTestMock,
+		client: fakeClient,
+		scheme: s,
 	}
 	return r, newReconcileRequest(username), fakeClient
 }

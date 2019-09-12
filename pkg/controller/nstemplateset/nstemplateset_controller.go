@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/codeready-toolchain/member-operator/pkg/template"
+	"github.com/codeready-toolchain/member-operator/templates"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,9 +45,8 @@ func Add(mgr manager.Manager) error {
 
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileNSTemplateSet{
-		client:        mgr.GetClient(),
-		scheme:        mgr.GetScheme(),
-		applyTemplate: applyTemplate,
+		client: mgr.GetClient(),
+		scheme: mgr.GetScheme(),
 	}
 }
 
@@ -75,9 +78,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 var _ reconcile.Reconciler = &ReconcileNSTemplateSet{}
 
 type ReconcileNSTemplateSet struct {
-	client        client.Client
-	scheme        *runtime.Scheme
-	applyTemplate func(client.Client, toolchainv1alpha1.Namespace, map[string]string) error
+	client client.Client
+	scheme *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
@@ -86,103 +88,192 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling NSTemplateSet")
 
+	var err error
+	namespace := request.Namespace
+	if namespace == "" {
+		namespace, err = k8sutil.GetWatchNamespace()
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
+
 	// Fetch the NSTemplateSet instance
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, nsTmplSet)
+	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, err
 	}
-	result, err := r.ensureNamespaces(reqLogger, nsTmplSet)
-	if err != nil || result.Requeue {
-		return result, err
-	}
-	return result, r.setStatusReady(nsTmplSet)
-}
 
-func (r *ReconcileNSTemplateSet) ensureNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
-	userName := nsTmplSet.GetName()
-	labels := map[string]string{
-		"owner": userName,
-	}
-	opts := client.MatchingLabels(labels)
-	namespaces := &corev1.NamespaceList{}
-	if err := r.client.List(context.TODO(), opts, namespaces); err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", userName)
-	}
-
-	missingNs, found := nextNsForProvision(namespaces.Items, nsTmplSet.Spec.Namespaces, userName)
-	if !found {
-		return reconcile.Result{}, nil
-	}
-
-	// provision missing namespace
-	nsName := toNamespaceName(userName, missingNs.Type)
-	log.Info("provisioning namespace", "namespace", missingNs)
-	if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
+	done, err := r.ensureUserNamespaces(reqLogger, nsTmplSet)
+	if !done {
 		return reconcile.Result{}, err
 	}
+	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
+}
 
-	params := make(map[string]string)
-	params["USER_NAME"] = userName
-	err := r.applyTemplate(r.client, missingNs, params)
-	if err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s'", nsName)
+func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+	username := nsTmplSet.GetName()
+
+	// fetch all namespace with owner=username label
+	labels := map[string]string{"owner": username}
+	opts := client.MatchingLabels(labels)
+	userNamespaceList := &corev1.NamespaceList{}
+	if err := r.client.List(context.TODO(), opts, userNamespaceList); err != nil {
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+			"failed to list namespace with label owner '%s'", username)
+	}
+	userNamespaces := userNamespaceList.Items
+
+	// find next namespace for provisioning namespace resource
+	tcNamespace, userNamespace, found := nextMissingNamespace(nsTmplSet.Spec.Namespaces, userNamespaces, username)
+	if !found {
+		return true, nil
 	}
 
-	// set labels
+	// create namespace resource
+	return false, r.ensureNamespace(logger, nsTmplSet, tcNamespace, userNamespace)
+}
+
+func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, userNamespace *corev1.Namespace) error {
+	username := nsTmplSet.GetName()
+	nsName := toNamespaceName(username, tcNamespace.Type)
+
+	log.Info("provisioning namespace", "namespace", tcNamespace)
+	if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
+		return err
+	}
+
+	params := map[string]string{"USER_NAME": username}
+
+	if userNamespace == nil {
+		return r.ensureNamespaceResources(logger, nsTmplSet, tcNamespace, params)
+	}
+	return r.ensureOtherResources(logger, nsTmplSet, tcNamespace, params)
+}
+
+func (r *ReconcileNSTemplateSet) ensureNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string) error {
+	username := nsTmplSet.GetName()
+	nsName := toNamespaceName(username, tcNamespace.Type)
+
+	tmplContent, err := templates.GetTemplateContent(fmt.Sprintf("%s-%s", nsTmplSet.Spec.TierName, tcNamespace.Type))
+	if err != nil {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to provision namespace '%s'", nsName)
+	}
+
+	tmplProcessor := template.NewProcessor(r.client, r.scheme)
+	objs, err := tmplProcessor.Process(tmplContent, params)
+	if err != nil {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to provision namespace '%s'", nsName)
+	}
+
+	objs = template.Filter(objs, template.RetainNamespaces)
+	for _, rawObj := range objs {
+		obj := rawObj.Object
+		if nsObj, ok := obj.(*unstructured.Unstructured); ok {
+			// set labels
+			labels := nsObj.GetLabels()
+			if labels == nil {
+				labels = make(map[string]string)
+			}
+			labels["owner"] = username
+			nsObj.SetLabels(labels)
+
+			// set owner ref
+			if err := controllerutil.SetControllerReference(nsTmplSet, nsObj, r.scheme); err != nil {
+				return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+					"failed to set controller reference for namespace '%s'", nsName)
+			}
+		}
+	}
+
+	err = tmplProcessor.Apply(objs)
+	if err != nil {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to provision namespace '%s'", nsName)
+	}
+
+	log.Info("namespace provisioned", "namespace", tcNamespace)
+	if err := r.setStatusProvisioning(nsTmplSet); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcileNSTemplateSet) ensureOtherResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string) error {
+	username := nsTmplSet.GetName()
+	nsName := toNamespaceName(username, tcNamespace.Type)
+
+	tmplContent, err := templates.GetTemplateContent(fmt.Sprintf("%s-%s", nsTmplSet.Spec.TierName, tcNamespace.Type))
+	if err != nil {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to provision namespace '%s'", nsName)
+	}
+
+	tmplProcessor := template.NewProcessor(r.client, r.scheme)
+	objs, err := tmplProcessor.Process(tmplContent, params)
+	if err != nil {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to provision namespace '%s'", nsName)
+	}
+	objs = template.Filter(objs, template.RetainAllButNamespaces)
+	err = tmplProcessor.Apply(objs)
+	if err != nil {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to provision namespace '%s'", nsName)
+	}
+
 	namespace := &corev1.Namespace{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace); err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace '%s'", nsName)
-	}
-	if err := controllerutil.SetControllerReference(nsTmplSet, namespace, r.scheme); err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller reference for namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace '%s'", nsName)
 	}
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
 	}
-	namespace.Labels["owner"] = userName
-	namespace.Labels["revision"] = missingNs.Revision
+	namespace.Labels["revision"] = tcNamespace.Revision
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
-	log.Info("namespace provisioned", "namespace", missingNs)
+
+	log.Info("namespace provisioned", "namespace", tcNamespace)
 	if err := r.setStatusProvisioning(nsTmplSet); err != nil {
-		return reconcile.Result{}, err
+		return err
 	}
-	return reconcile.Result{Requeue: true}, nil
+
+	// TODO add validation for other objects
+	return nil
 }
 
-func nextNsForProvision(namespaces []corev1.Namespace, tcNamespaces []toolchainv1alpha1.Namespace, userName string) (toolchainv1alpha1.Namespace, bool) {
+func nextMissingNamespace(tcNamespaces []toolchainv1alpha1.Namespace, namespaces []corev1.Namespace, username string) (*toolchainv1alpha1.Namespace, *corev1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
-		nsName := toNamespaceName(userName, tcNamespace.Type)
-		found := findNamespace(namespaces, nsName, tcNamespace.Revision)
-		if !found {
-			return tcNamespace, true
+		nsName := toNamespaceName(username, tcNamespace.Type)
+		namespace, found := findNamespace(namespaces, nsName)
+		if found {
+			if namespace.Status.Phase == corev1.NamespaceActive && namespace.GetLabels()["revision"] != tcNamespace.Revision {
+				return &tcNamespace, &namespace, true
+			}
+		} else {
+			return &tcNamespace, nil, true
 		}
 	}
-	return toolchainv1alpha1.Namespace{}, false
+	return nil, nil, false
 }
 
-func findNamespace(namespaces []corev1.Namespace, namespaceName, revision string) bool {
+func findNamespace(namespaces []corev1.Namespace, namespaceName string) (corev1.Namespace, bool) {
 	for _, ns := range namespaces {
-		if ns.GetName() == namespaceName && ns.GetLabels()["revision"] == revision {
-			return true
+		if ns.GetName() == namespaceName {
+			return ns, true
 		}
 	}
-	return false
+	return corev1.Namespace{}, false
 }
 
 func toNamespaceName(userName, nsType string) string {
 	return fmt.Sprintf("%s-%s", userName, nsType)
-}
-
-func applyTemplate(client client.Client, tcNamespace toolchainv1alpha1.Namespace, params map[string]string) error {
-	// TODO get template content from template tier
-	// TODO apply template with template content to create namesapce
-	return nil
 }
 
 // error handling methods

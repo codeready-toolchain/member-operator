@@ -273,6 +273,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 		}
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to get NSTemplateSet '%s'", name)
 	}
+	logger.Info("NSTemplateSet already exists", "name", name)
 
 	// update if not same
 	equal := nsTmplSet.Spec.CompareTo(userAcc.Spec.NSTemplateSet)

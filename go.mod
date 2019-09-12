@@ -10,6 +10,7 @@ require (
 	github.com/gobuffalo/envy v1.7.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
 	github.com/openshift/api v3.9.0+incompatible
+	github.com/openshift/library-go v0.0.0-20190904120025-7d4acc018c61
 	github.com/operator-framework/operator-sdk v0.10.0
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/common v0.6.0 // indirect

@@ -273,59 +273,25 @@ func TestProcessAndApply(t *testing.T) {
 	})
 
 	t.Run("should create namespace and role binding", func(t *testing.T) {
+		// given
+		values := map[string]string{
+			"PROJECT_NAME": namespace,
+			"COMMIT":       commit,
+			"USER_NAME":    user,
+		}
+		cl := test.NewFakeClient(t)
+		p := template.NewProcessor(cl, s)
+		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		require.NoError(t, err)
 
-		t.Run("success", func(t *testing.T) {
-			// given
-			values := map[string]string{
-				"PROJECT_NAME": namespace,
-				"COMMIT":       commit,
-				"USER_NAME":    user,
-			}
-			cl := test.NewFakeClient(t)
-			p := template.NewProcessor(cl, s)
-			objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
-			require.NoError(t, err)
+		// when
+		err = p.Apply(objs)
 
-			// when
-			err = p.Apply(objs)
+		// then
+		require.NoError(t, err)
+		assertNamespaceExists(t, cl, namespace)
+		assertRoleBindingExists(t, cl, namespace)
 
-			// then
-			require.NoError(t, err)
-			assertNamespaceExists(t, cl, namespace)
-			assertRoleBindingExists(t, cl, namespace)
-		})
-
-		t.Run("failure", func(t *testing.T) {
-
-			t.Run("client error", func(t *testing.T) {
-
-				t.Run("namespace does not exist", func(t *testing.T) {
-					// given
-					values := map[string]string{
-						"PROJECT_NAME": namespace,
-						"COMMIT":       commit,
-						"USER_NAME":    user,
-					}
-					cl := test.NewFakeClient(t)
-					p := template.NewProcessor(cl, s)
-					cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
-						if obj.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" {
-							return errors.New("mock error")
-						}
-						return nil
-					}
-					objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
-					require.NoError(t, err)
-
-					// when
-					err = p.Apply(objs)
-
-					// then
-					require.Error(t, err)
-				})
-			})
-
-		})
 	})
 
 	t.Run("should update existing role binding", func(t *testing.T) {
@@ -368,7 +334,6 @@ func TestProcessAndApply(t *testing.T) {
 				"COMMIT":       commit,
 				"USER_NAME":    user,
 			}
-			// p := template.NewProcessor(cl, s)
 
 			// when
 			objs, err := p.Process([]byte(rolebindingTmpl), values)

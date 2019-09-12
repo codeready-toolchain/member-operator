@@ -318,6 +318,10 @@ func TestProcessAndApply(t *testing.T) {
 		require.NoError(t, err)
 		binding := assertRoleBindingExists(t, cl, namespace)
 		require.Len(t, binding.Subjects, 2)
+		assert.Equal(t, "User", binding.Subjects[0].Kind)
+		assert.Equal(t, user, binding.Subjects[0].Name)
+		assert.Equal(t, "User", binding.Subjects[1].Kind)
+		assert.Equal(t, "extraUser", binding.Subjects[1].Name)
 	})
 
 	t.Run("failures", func(t *testing.T) {

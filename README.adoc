@@ -50,7 +50,7 @@ The logic that executes tests in openshift-ci automatically tries to pair PR ope
 For example, if a developer with GH account `cooljohn` opens a PR (for member-operator repo) from a branch `fix-reconcile`, then the logic checks if there is a branch `fix-reconcile` also in the `cooljohn/toolchain-e2e` fork.
 If there is, then the logic:
 
-1. clones latest changes from https://github.com/codeready-toolchain/toolchain-e2e[codeready-toolchain/toolchain-e2e]
+1. clones the latest changes from https://github.com/codeready-toolchain/toolchain-e2e[codeready-toolchain/toolchain-e2e]
 2. fetches the `fix-reconcile` branch from `cooljohn/toolchain-e2e` fork
 3. merges `master` branch with the changes from `fix-reconcile` branch
 4. clones latest changes from https://github.com/codeready-toolchain/host-operator[host-operator] repo and builds & deploys the `host-operator` image out of it

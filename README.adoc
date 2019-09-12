@@ -42,20 +42,20 @@ There are a few more targets that you can find useful:
 
 ==== Background & pairing
 
-E2E tests are not located in this repository - all e2e tests are in https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo, however, it's still possible to run them locally from this repo - see <<Running End-to-End Tests>>.
+E2E tests are not located in this repository - all e2e tests are in the https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo, however, it's still possible to run them locally from this repo - see <<Running End-to-End Tests>>.
 
 When there is a change introduced in this repository that should be either covered by e2e tests or requires changes in the already existing tests, then all needed changes should go into the https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo.
-The logic that executes tests in openshift-ci automatically tries to pair PR opened for this (member-operator) repository with a branch that potentially exists in the developer's fork of the https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo. This pairing is based on a branch name.
+The logic that executes tests in openshift-ci automatically tries to pair any PR opened for this (member-operator) repository with a branch that potentially exists in the developer's fork of the https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo. This pairing is based on the current branch name.
 
-For example, if a developer with GH account `cooljohn` opens a PR (for member-operator repo) from a branch `fix-reconcile`, then the logic checks if there is a branch `fix-reconcile` also in the `cooljohn/toolchain-e2e` fork.
-If there is, then the logic:
+For example, if a developer with a GH account `cooljohn` opens a PR (for member-operator repo) from a branch `fix-reconcile`, then the logic checks if there is a branch named `fix-reconcile` also in the `cooljohn/toolchain-e2e` fork.
+If there is a match, then the logic:
 
 1. clones the latest changes from https://github.com/codeready-toolchain/toolchain-e2e[codeready-toolchain/toolchain-e2e]
 2. fetches the `fix-reconcile` branch from `cooljohn/toolchain-e2e` fork
-3. merges `master` branch with the changes from `fix-reconcile` branch
-4. clones latest changes from https://github.com/codeready-toolchain/host-operator[host-operator] repo and builds & deploys the `host-operator` image out of it
+3. merges the `master` branch with the changes from `fix-reconcile` branch
+4. clones the latest changes from https://github.com/codeready-toolchain/host-operator[host-operator] repo, then builds and deploys the `host-operator` image out of it
 5. builds & deploys the `member-operator` image from the code that is in the PR
-6. runs e2e tests against both operators from the merged branch of the `toolchain-e2e` repo
+6. runs the e2e tests against both operators from the merged branch of the `toolchain-e2e` repo
 
 If the branch with the same name does not exist, then it only clones the latest changes from https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] and runs e2e tests from the `master`.
 
@@ -69,11 +69,11 @@ NOTE: This is not required for openshift-ci environment
 
 ==== Running End-to-End Tests
 
-Although the e2e tests are in the separated repository, it's still possible to run them from this repo (member-operator) and also against the current code that is at HEAD.
+Although the e2e tests are in the separated repository, it's still possible to run them from this repo (member-operator) and also against the current code that is the local repository (directory).
 There are two Makefile targets that will execute the e2e tests:
 
-* `make test-e2e` - this target clones latest changes from https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] and runs e2e tests for both operators from the master. As deployment for `member-operator` it uses the current code that is at HEAD.
-* `make test-e2e-local` - this target doesn't clone anything, but it runs run e2e tests for both operators from the directory `../toolchain-e2e`. As deployment for `member-operator` it uses the current code that is at HEAD.
+* `make test-e2e` - this target clones latest changes from https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] and runs e2e tests for both operators from the master. As deployment for `member-operator` it uses the current code that is in the local repository.
+* `make test-e2e-local` - this target doesn't clone anything, but it runs run e2e tests for both operators from the directory `../toolchain-e2e`. As deployment for `member-operator` it uses the current code that is in the local repository.
 
 The tests executed within https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo will take care of creating all needed namespaces with random names (or see below for enforcing some specific namespace names).
 It will also create all required CRDs, role and role bindings for the service accounts, build the Docker images for both operators and push them to the OpenShift container registry. Finally, it will deploy the operators and run the tests using the operator-sdk.
@@ -88,7 +88,7 @@ If you are still confused by the e2e location, execution and branch pairing, see
 ** *Need to test your code using the latest version of e2e tests from https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo:*
 *** execute `make test-e2e`
 ** *Need to test your code using e2e tests located in `../toolchain-e2e` repo:*
-*** `make test-e2e-local`
+*** execute `make test-e2e-local`
 
 * *Creating a PR:*
 ** *Your PR doesn't need any changes in https://github.com/codeready-toolchain/toolchain-e2e[toolchain-e2e] repo:*

@@ -286,6 +286,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to update NSTemplateSet '%s'", name)
 		}
+		logger.Info("NSTemplateSet updated successfully", "name", name)
 		return nsTmplSet, true, nil
 	}
 

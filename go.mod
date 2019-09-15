@@ -5,8 +5,6 @@ require (
 	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
 	github.com/codeready-toolchain/api v0.0.0-20190910110833-66e1ab342d1e
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20190904115454-79e74322be0a
-	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190827045201-35e4f49da4c9
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/go-openapi/swag v0.19.4 // indirect

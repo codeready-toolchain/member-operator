@@ -139,7 +139,7 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 
 func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, userNamespace *corev1.Namespace) error {
 	username := nsTmplSet.GetName()
-	nsName := toNamespaceName(username, tcNamespace.Type)
+	nsName := ToNamespaceName(username, tcNamespace.Type)
 
 	log.Info("provisioning namespace", "namespace", tcNamespace)
 	if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
@@ -156,7 +156,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 
 func (r *ReconcileNSTemplateSet) ensureNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string) error {
 	username := nsTmplSet.GetName()
-	nsName := toNamespaceName(username, tcNamespace.Type)
+	nsName := ToNamespaceName(username, tcNamespace.Type)
 
 	tmplContent, err := templates.GetTemplateContent(fmt.Sprintf("%s-%s", nsTmplSet.Spec.TierName, tcNamespace.Type))
 	if err != nil {
@@ -206,7 +206,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResources(logger logr.Logger, ns
 
 func (r *ReconcileNSTemplateSet) ensureOtherResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string) error {
 	username := nsTmplSet.GetName()
-	nsName := toNamespaceName(username, tcNamespace.Type)
+	nsName := ToNamespaceName(username, tcNamespace.Type)
 
 	tmplContent, err := templates.GetTemplateContent(fmt.Sprintf("%s-%s", nsTmplSet.Spec.TierName, tcNamespace.Type))
 	if err != nil {
@@ -250,7 +250,7 @@ func (r *ReconcileNSTemplateSet) ensureOtherResources(logger logr.Logger, nsTmpl
 
 func nextMissingNamespace(tcNamespaces []toolchainv1alpha1.Namespace, namespaces []corev1.Namespace, username string) (*toolchainv1alpha1.Namespace, *corev1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
-		nsName := toNamespaceName(username, tcNamespace.Type)
+		nsName := ToNamespaceName(username, tcNamespace.Type)
 		namespace, found := findNamespace(namespaces, nsName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive && namespace.GetLabels()["revision"] != tcNamespace.Revision {
@@ -272,7 +272,8 @@ func findNamespace(namespaces []corev1.Namespace, namespaceName string) (corev1.
 	return corev1.Namespace{}, false
 }
 
-func toNamespaceName(userName, nsType string) string {
+// ToNamespaceName returns NamespaceName formed using given userName and nsType
+func ToNamespaceName(userName, nsType string) string {
 	return fmt.Sprintf("%s-%s", userName, nsType)
 }
 

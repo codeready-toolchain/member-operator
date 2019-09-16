@@ -383,7 +383,7 @@ func TestReconcile(t *testing.T) {
 			}
 
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetNoNS)
-			err := r.addFinalizer(userAcc, userAccFinalizerName)
+			err := r.addFinalizer(userAcc)
 			require.NoError(t, err)
 			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
 				return errors.New("unable to update NSTemplateSet")

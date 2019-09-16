@@ -331,7 +331,7 @@ func TestReconcile(t *testing.T) {
 			_, err := r.Reconcile(req)
 
 			require.NoError(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "Provisioning", "")
+			checkStatus(t, r.client, username, "Provisioning", "")
 			checkNSTmplSet(t, r.client, username)
 		})
 
@@ -352,7 +352,7 @@ func TestReconcile(t *testing.T) {
 			_, err := r.Reconcile(req)
 
 			require.NoError(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "Provisioning", "")
+			checkStatus(t, r.client, username, "Provisioning", "")
 			checkNSTmplSet(t, r.client, username)
 		})
 	})
@@ -368,7 +368,7 @@ func TestReconcile(t *testing.T) {
 			_, err := r.Reconcile(req)
 
 			require.Error(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToCreateNSTemplateSet", "unable to create NSTemplateSet")
+			checkStatus(t, r.client, username, "UnableToCreateNSTemplateSet", "unable to create NSTemplateSet")
 		})
 
 		t.Run("update", func(t *testing.T) {
@@ -393,7 +393,7 @@ func TestReconcile(t *testing.T) {
 			_, err = r.Reconcile(req)
 
 			require.Error(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToCreateNSTemplateSet", "unable to update NSTemplateSet")
+			checkStatus(t, r.client, username, "UnableToCreateNSTemplateSet", "unable to update NSTemplateSet")
 		})
 	})
 
@@ -803,7 +803,7 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, identity.Name, user.Identities[0])
 }
 
-func checkStatus(t *testing.T, client client.Client, username string, wantStatus corev1.ConditionStatus, wantReason, wantMsg string) {
+func checkStatus(t *testing.T, client client.Client, username string, wantReason, wantMsg string) {
 	t.Helper()
 
 	updatedAcc := &toolchainv1alpha1.UserAccount{}
@@ -812,7 +812,7 @@ func checkStatus(t *testing.T, client client.Client, username string, wantStatus
 	test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  wantStatus,
+			Status:  corev1.ConditionFalse,
 			Reason:  wantReason,
 			Message: wantMsg,
 		})

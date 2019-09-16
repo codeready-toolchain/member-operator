@@ -355,6 +355,34 @@ func TestReconcile(t *testing.T) {
 			checkStatus(t, r.client, username, "Provisioning", "")
 			checkNSTmplSet(t, r.client, username)
 		})
+
+		t.Run("update_status", func(t *testing.T) {
+			preexistingNsTmplSetWithNS := &toolchainv1alpha1.NSTemplateSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      userAcc.Name,
+					Namespace: "toolchain-member",
+				},
+				Spec: newNSTmplSetSpec(),
+				Status: toolchainv1alpha1.NSTemplateSetStatus{
+					Conditions: []toolchainv1alpha1.Condition{
+						{
+							Type:   toolchainv1alpha1.ConditionReady,
+							Status: corev1.ConditionFalse,
+							Reason: "ProvisioningNamespace",
+						},
+					},
+				},
+			}
+
+			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+
+			// test
+			_, err := r.Reconcile(req)
+
+			require.NoError(t, err)
+			checkStatus(t, r.client, username, "ProvisioningNamespace", "")
+			checkNSTmplSet(t, r.client, username)
+		})
 	})
 
 	t.Run("create or update nstmplset failed", func(t *testing.T) {

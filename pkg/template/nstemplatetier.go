@@ -22,9 +22,9 @@ type RevisionedTemplate struct {
 
 // GetNSTemplates gets the templates configured in the NSTemplateTier resource
 // which is fetched from the host cluster.
-func GetNSTemplates(tierName string) (NSTemplates, error) {
+func GetNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string) (NSTemplates, error) {
 	// retrieve the address of the host cluster in the
-	host, ok := cluster.GetHostCluster()
+	host, ok := hostClusterFunc()
 	if !ok {
 		return nil, fmt.Errorf("unable to connect to the Host cluster: unknown cluster")
 	}

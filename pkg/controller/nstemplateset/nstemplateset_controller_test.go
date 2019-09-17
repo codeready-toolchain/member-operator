@@ -70,39 +70,28 @@ func TestNextMissingNamespace(t *testing.T) {
 		{Type: "stage", Revision: "rev1"},
 	}
 
-	t.Run("mistach_revision", func(t *testing.T) {
-		// test
-		tcNS, userNS, found := nextMissingNamespace(tcNamespaces, userNamespaces, username)
+	// test mismatch_revision
+	tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
+	assert.True(t, found)
+	assert.Equal(t, "code", tcNS.Type)
+	assert.Equal(t, "johnsmith-code", userNS.GetName())
 
-		assert.True(t, found)
-		assert.Equal(t, "code", tcNS.Type)
-		assert.Equal(t, "johnsmith-code", userNS.GetName())
+	// test found_next_namespace
+	userNamespaces[1].Labels = map[string]string{"revision": "rev1"}
+	tcNS, userNS, found = nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
+	assert.True(t, found)
+	assert.Equal(t, "stage", tcNS.Type)
+	assert.Nil(t, userNS)
+
+	// test not_found_next_namespace
+	userNamespaces = append(userNamespaces, corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "johnsmith-stage", Labels: map[string]string{"revision": "rev1"},
+		},
+		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	})
-
-	t.Run("found_next_namespace", func(t *testing.T) {
-		userNamespaces[1].Labels = map[string]string{"revision": "rev1"}
-
-		// test
-		tcNS, userNS, found := nextMissingNamespace(tcNamespaces, userNamespaces, username)
-
-		assert.True(t, found)
-		assert.Equal(t, "stage", tcNS.Type)
-		assert.Nil(t, userNS)
-	})
-
-	t.Run("not_found_next_namespace", func(t *testing.T) {
-		userNamespaces = append(userNamespaces, corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-stage", Labels: map[string]string{"revision": "rev1"},
-			},
-			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
-		})
-
-		// test
-		_, _, found := nextMissingNamespace(tcNamespaces, userNamespaces, username)
-
-		assert.False(t, found)
-	})
+	_, _, found = nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
+	assert.False(t, found)
 }
 
 func TestCreateReconcile(t *testing.T) {

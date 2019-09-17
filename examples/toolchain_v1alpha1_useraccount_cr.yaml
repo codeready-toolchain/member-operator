@@ -13,3 +13,5 @@ spec:
         revision: rev1
       - type: code
         revision: rev1
+      - type: stage
+        revision: rev1

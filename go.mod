@@ -23,7 +23,8 @@ require (
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
-	golang.org/x/tools v0.0.0-20190830223141-573d9926052a // indirect
+	golang.org/x/tools v0.0.0-20190911225940-c7d52e45e2f2 // indirect
+	gopkg.in/h2non/gock.v1 v1.0.14
 	k8s.io/api v0.0.0-20190626000116-b178a738ed00
 	k8s.io/apiextensions-apiserver v0.0.0-20190624090600-dfe76d39a269 // indirect
 	k8s.io/apimachinery v0.0.0-20190624085041-961b39a1baa0

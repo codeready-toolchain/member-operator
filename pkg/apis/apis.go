@@ -1,6 +1,8 @@
 package apis
 
 import (
+	"fmt"
+
 	"github.com/codeready-toolchain/api/pkg/apis"
 	authv1 "github.com/openshift/api/authorization/v1"
 	projectv1 "github.com/openshift/api/project/v1"
@@ -11,6 +13,7 @@ import (
 
 // AddToScheme adds all Resources to the Scheme
 func AddToScheme(s *runtime.Scheme) error {
+	fmt.Println("adding OpenShift specific resources...")
 	// add openshift specific resource
 	addToSchemes := append(apis.AddToSchemes, userv1.Install)
 	addToSchemes = append(addToSchemes, templatev1.Install)

@@ -41,23 +41,52 @@ func TestGetNSTemplateTier(t *testing.T) {
 			Namespaces: []toolchainv1alpha1.Namespace{
 				{
 					Revision: "abcdef",
-					Template: "{foo}",
+					Template: "{foo1}",
 					Type:     "ide",
 				},
 				{
-					Revision: "1d2f3q",
-					Template: "{bar}",
+					Revision: "123456",
+					Template: "{bar1}",
 					Type:     "cicd",
 				},
 				{
-					Revision: "a34r57",
-					Template: "{baz}",
+					Revision: "1a2b3c",
+					Template: "{baz1}",
 					Type:     "stage",
 				},
 			},
 		},
 	}
-	cl := fake.NewFakeClient(basicTier)
+	advancedTier := &toolchainv1alpha1.NSTemplateTier{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "toolchain.dev.openshift.com/v1alpha1",
+			Kind:       "NSTemplateTier",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "advanced",
+			Namespace: "toolchain-host-operator",
+		},
+		Spec: toolchainv1alpha1.NSTemplateTierSpec{
+			Namespaces: []toolchainv1alpha1.Namespace{
+				{
+					Revision: "ghijkl",
+					Template: "{foo1}",
+					Type:     "ide",
+				},
+				{
+					Revision: "789012",
+					Template: "{bar1}",
+					Type:     "cicd",
+				},
+				{
+					Revision: "4d5e6f",
+					Template: "{baz1}",
+					Type:     "stage",
+				},
+			},
+		},
+	}
+	cl := fake.NewFakeClient(basicTier, advancedTier)
 
 	t.Run("success", func(t *testing.T) {
 		// given
@@ -73,15 +102,15 @@ func TestGetNSTemplateTier(t *testing.T) {
 		require.Len(t, tmpls, 3)
 		assert.Equal(t, template.RevisionedTemplate{
 			Revision: "abcdef",
-			Template: "{foo}",
+			Template: "{foo1}",
 		}, tmpls["ide"])
 		assert.Equal(t, template.RevisionedTemplate{
-			Revision: "1d2f3q",
-			Template: "{bar}",
+			Revision: "123456",
+			Template: "{bar1}",
 		}, tmpls["cicd"])
 		assert.Equal(t, template.RevisionedTemplate{
-			Revision: "a34r57",
-			Template: "{baz}",
+			Revision: "1a2b3c",
+			Template: "{baz1}",
 		}, tmpls["stage"])
 	})
 

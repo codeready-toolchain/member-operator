@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
 // NSTemplates the templates along with their revision number for a given tier
@@ -26,8 +27,12 @@ func GetNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string)
 	// retrieve the FedCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {
-		return nil, fmt.Errorf("unable to connect to the Host cluster: unknown cluster")
+		return nil, fmt.Errorf("unable to connect to the host cluster: unknown cluster")
 	}
+	if !util.IsClusterReady(host.ClusterStatus) {
+		return nil, fmt.Errorf("the host cluster is not ready")
+	}
+
 	tier := &toolchainv1alpha1.NSTemplateTier{}
 	err := host.Client.Get(context.TODO(), types.NamespacedName{
 		Namespace: host.OperatorNamespace,

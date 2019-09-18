@@ -1,5 +1,7 @@
 package nstemplateset
 
+import "fmt"
+
 var _templatesBasicDevYaml = []byte(`apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
@@ -113,6 +115,5 @@ func getTemplateContent(tierName, typeName string) ([]byte, error) {
 	} else if tierName == "basic" && typeName == "stage" {
 		return _templatesBasicStageYaml, nil
 	}
-
-	return nil, nil
+	return nil, fmt.Errorf("no template found for tier:%s, type:%s", tierName, typeName)
 }

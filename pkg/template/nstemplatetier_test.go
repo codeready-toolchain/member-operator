@@ -29,10 +29,6 @@ func TestGetNSTemplateTier(t *testing.T) {
 	require.NoError(t, err)
 	logf.SetLogger(zap.Logger())
 	basicTier := &toolchainv1alpha1.NSTemplateTier{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "toolchain.dev.openshift.com/v1alpha1",
-			Kind:       "NSTemplateTier",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "basic",
 			Namespace: "toolchain-host-operator",
@@ -58,10 +54,6 @@ func TestGetNSTemplateTier(t *testing.T) {
 		},
 	}
 	advancedTier := &toolchainv1alpha1.NSTemplateTier{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "toolchain.dev.openshift.com/v1alpha1",
-			Kind:       "NSTemplateTier",
-		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "advanced",
 			Namespace: "toolchain-host-operator",
@@ -86,7 +78,13 @@ func TestGetNSTemplateTier(t *testing.T) {
 			},
 		},
 	}
-	cl := fake.NewFakeClient(basicTier, advancedTier)
+	otherTier := &toolchainv1alpha1.NSTemplateTier{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "other",
+			Namespace: "other_namespace",
+		},
+	}
+	cl := fake.NewFakeClient(basicTier, advancedTier, otherTier)
 
 	t.Run("success", func(t *testing.T) {
 		// given
@@ -153,6 +151,19 @@ func TestGetNSTemplateTier(t *testing.T) {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to retrieve the NSTemplateTier 'unknown' from 'Host' cluster")
 		})
+
+		t.Run("tier in another namespace", func(t *testing.T) {
+			// given
+			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
+				Type:   fedcommon.ClusterReady,
+				Status: apiv1.ConditionTrue,
+			})
+			// when
+			_, err := template.GetNSTemplates(hostCluster, "other")
+			// then
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unable to retrieve the NSTemplateTier 'other' from 'Host' cluster")
+		})
 	})
 
 }
@@ -160,7 +171,8 @@ func TestGetNSTemplateTier(t *testing.T) {
 func newHostCluster(cl client.Client, condition fedv1b1.ClusterCondition) cluster.GetHostClusterFunc {
 	return func() (*cluster.FedCluster, bool) {
 		return &cluster.FedCluster{
-			Client: cl,
+			OperatorNamespace: "toolchain-host-operator",
+			Client:            cl,
 			ClusterStatus: &fedv1b1.KubeFedClusterStatus{
 				Conditions: []fedv1b1.ClusterCondition{condition},
 			},

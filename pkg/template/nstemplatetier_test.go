@@ -71,6 +71,18 @@ func TestGetNSTemplateTier(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.Len(t, tmpls, 3)
+		assert.Equal(t, template.RevisionedTemplate{
+			Revision: "abcdef",
+			Template: "{foo}",
+		}, tmpls["ide"])
+		assert.Equal(t, template.RevisionedTemplate{
+			Revision: "1d2f3q",
+			Template: "{bar}",
+		}, tmpls["cicd"])
+		assert.Equal(t, template.RevisionedTemplate{
+			Revision: "a34r57",
+			Template: "{baz}",
+		}, tmpls["stage"])
 	})
 
 	t.Run("failures", func(t *testing.T) {

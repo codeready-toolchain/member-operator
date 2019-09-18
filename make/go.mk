@@ -8,7 +8,7 @@ export GO111MODULE
 
 .PHONY: build
 ## Build the operator
-build: generate $(OUT_DIR)/operator
+build: $(OUT_DIR)/operator
 
 $(OUT_DIR)/operator:
 	$(Q)CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
@@ -20,7 +20,3 @@ $(OUT_DIR)/operator:
 .PHONY: vendor
 vendor:
 	$(Q)go mod vendor
-
-.PHONY: generate
-generate:
-	go-bindata -pkg templates -o templates/bindata.go -nocompress -ignore=.*go templates/...

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/codeready-toolchain/member-operator/pkg/template"
-	"github.com/codeready-toolchain/member-operator/templates"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -111,7 +110,9 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 
 	done, err := r.ensureUserNamespaces(reqLogger, nsTmplSet)
 	if !done || err != nil {
-		reqLogger.Error(err, "failed to provision user namespaces")
+		if err != nil {
+			reqLogger.Error(err, "failed to provision user namespaces")
+		}
 		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
@@ -161,7 +162,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 	username := nsTmplSet.GetName()
 	nsName := ToNamespaceName(username, tcNamespace.Type)
 
-	tmplContent, err := templates.GetTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
+	tmplContent, err := getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
 			"failed to to retrieve template for namespace '%s'", nsName)
@@ -211,7 +212,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string, namespace *corev1.Namespace) error {
 	nsName := namespace.GetName()
 
-	tmplContent, err := templates.GetTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
+	tmplContent, err := getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
 			"failed to to retrieve template for namespace '%s'", nsName)

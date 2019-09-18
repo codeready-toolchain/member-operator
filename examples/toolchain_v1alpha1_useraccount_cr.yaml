@@ -10,8 +10,8 @@ spec:
     tierName: basic
     namespaces:
       - type: dev
-        revision: rev1
+        revision: 34efcd
       - type: code
-        revision: rev1
+        revision: ab12ef
       - type: stage
-        revision: rev1
+        revision: cdef56

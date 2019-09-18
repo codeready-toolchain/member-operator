@@ -171,7 +171,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 	objs, err := tmplProcessor.Process(tmplContent, params, template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to provision namespace '%s'", nsName)
+			"failed to process template for namespace '%s'", nsName)
 	}
 
 	for _, rawObj := range objs {
@@ -221,7 +221,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 	objs, err := tmplProcessor.Process(tmplContent, params, template.RetainAllButNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to provision namespace '%s'", nsName)
+			"failed to process template for namespace '%s'", nsName)
 	}
 	err = tmplProcessor.Apply(objs)
 	if err != nil {

@@ -14,8 +14,14 @@ rules:
   - ""
   resources:
   - nodes
+  - namespaces
   verbs:
+  - get
+  - create
+  - update
   - list
+  - watch
+  - delete
 - apiGroups:
   - user.openshift.io
   resources:
@@ -38,6 +44,18 @@ rules:
   - "*"
 - apiGroups:
   - toolchain.dev.openshift.com
+  resources:
+  - '*'
+  verbs:
+  - '*'
+- apiGroups:
+  - authorization.openshift.io
+  resources:
+  - rolebindings
+  verbs:
+  - '*'
+- apiGroups:
+  - rbac.authorization.k8s.io
   resources:
   - '*'
   verbs:

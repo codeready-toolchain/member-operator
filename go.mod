@@ -2,9 +2,10 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	cloud.google.com/go v0.40.0 // indirect
-	github.com/Azure/go-autorest v13.0.0+incompatible // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190910110833-66e1ab342d1e
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190904115454-79e74322be0a
+	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
+	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190917153404-e09c4e7d2a7e
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/go-openapi/swag v0.19.4 // indirect
@@ -21,10 +22,11 @@ require (
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0
+	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
-	golang.org/x/tools v0.0.0-20190830223141-573d9926052a // indirect
+	golang.org/x/tools v0.0.0-20190911225940-c7d52e45e2f2 // indirect
 	k8s.io/api v0.0.0-20190626000116-b178a738ed00
 	k8s.io/apiextensions-apiserver v0.0.0-20190624090600-dfe76d39a269 // indirect
 	k8s.io/apimachinery v0.0.0-20190624085041-961b39a1baa0

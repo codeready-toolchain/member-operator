@@ -4,13 +4,18 @@ require (
 	cloud.google.com/go v0.40.0 // indirect
 	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190812113906-bd1f09d19c28
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190917153404-e09c4e7d2a7e
+	github.com/NYTimes/gziphandler v1.1.1 // indirect
+	github.com/codeready-toolchain/api v0.0.0-20190917150354-87b0c74ff7b5
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190920111906-1948fd993dcc
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/go-openapi/swag v0.19.4 // indirect
 	github.com/gobuffalo/envy v1.7.0 // indirect
+	github.com/kisielk/errcheck v1.2.0 // indirect
 	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
+	github.com/munnerz/goautoneg v0.0.0-20190414153302-2ae31c8b6b30 // indirect
+	github.com/onsi/ginkgo v1.8.0 // indirect
+	github.com/onsi/gomega v1.5.0 // indirect
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
 	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92
 	github.com/operator-framework/operator-sdk v0.10.0
@@ -36,7 +41,7 @@ require (
 	k8s.io/gengo v0.0.0-20190327210449-e17681d19d3a
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190718094010-3cf2ea392886
-	sigs.k8s.io/controller-runtime v0.1.12
+	sigs.k8s.io/controller-runtime v0.2.0
 	sigs.k8s.io/controller-tools v0.1.12
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )

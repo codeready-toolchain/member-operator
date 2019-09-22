@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -94,7 +95,7 @@ func TestNextMissingNamespace(t *testing.T) {
 	assert.False(t, found)
 }
 
-func TestCreateReconcile(t *testing.T) {
+func TestReconcileProvisionOK(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 
 	username := "johnsmith"
@@ -112,10 +113,8 @@ func TestCreateReconcile(t *testing.T) {
 		// for dev
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-
 		nsName := fmt.Sprintf("%s-dev", username)
 		activate(t, fakeClient, nsName)
-
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
 
@@ -132,7 +131,7 @@ func TestCreateReconcile(t *testing.T) {
 		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
 	})
 
-	t.Run("with_existing_namespace", func(t *testing.T) {
+	t.Run("ok_with_namespace_with_children", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		nsName := fmt.Sprintf("%s-dev", username)
@@ -149,6 +148,68 @@ func TestCreateReconcile(t *testing.T) {
 		// done
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+	})
+
+	t.Run("ok_with_namespace_without_children", func(t *testing.T) {
+		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
+
+		nsName := fmt.Sprintf("%s-dev", username)
+		createNamespace(t, fakeClient, username, nsName, "")
+
+		// for dev
+		reconcile(r, req)
+		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+
+		// for code
+		reconcile(r, req)
+		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		nsName = fmt.Sprintf("%s-code", username)
+		activate(t, fakeClient, nsName)
+		reconcile(r, req)
+		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+
+		// done
+		reconcile(r, req)
+		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+	})
+
+}
+
+func TestReconcileProvisionFail(t *testing.T) {
+	logf.SetLogger(logf.ZapLogger(true))
+
+	username := "johnsmith"
+	nsTmplSet := newNSTmplSet(username)
+
+	reconcile := func(r *ReconcileNSTemplateSet, req reconcile.Request, errMsg string) {
+		res, err := r.Reconcile(req)
+		require.Error(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		assert.Contains(t, err.Error(), errMsg)
+	}
+
+	t.Run("fail_create_namespace", func(t *testing.T) {
+		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
+		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			return errors.New("unable to create namespace")
+		}
+
+		// test
+		reconcile(r, req, "unable to create namespace")
+	})
+
+	t.Run("fail_create_children", func(t *testing.T) {
+		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
+
+		nsName := fmt.Sprintf("%s-dev", username)
+		createNamespace(t, fakeClient, username, nsName, "")
+
+		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			return errors.New("unable to create some object")
+		}
+
+		// test
+		reconcile(r, req, "unable to create some object")
 	})
 
 }

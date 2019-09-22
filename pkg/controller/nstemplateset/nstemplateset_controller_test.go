@@ -151,31 +151,6 @@ func TestCreateReconcile(t *testing.T) {
 		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
 	})
 
-	t.Run("with_existing_old_namespace", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
-
-		nsName := fmt.Sprintf("%s-dev", username)
-		createNamespace(t, fakeClient, username, nsName, "rev1")
-		nsTmplSet.Spec.Namespaces[0].Revision = "rev2" // change revision to latest
-		err := fakeClient.Update(context.TODO(), nsTmplSet)
-		require.NoError(t, err)
-
-		// for dev
-		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-
-		// for code
-		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		nsName = fmt.Sprintf("%s-code", username)
-		activate(t, fakeClient, nsName)
-		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-
-		// done
-		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
-	})
 }
 
 func activate(t *testing.T, client client.Client, nsName string) {

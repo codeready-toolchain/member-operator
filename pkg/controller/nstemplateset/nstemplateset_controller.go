@@ -252,7 +252,7 @@ func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.Namespace, namesp
 		nsName := ToNamespaceName(username, tcNamespace.Type)
 		namespace, found := findNamespace(namespaces, nsName)
 		if found {
-			if namespace.Status.Phase == corev1.NamespaceActive && namespace.GetLabels()["revision"] != tcNamespace.Revision {
+			if namespace.Status.Phase == corev1.NamespaceActive && namespace.GetLabels()["revision"] == "" {
 				return &tcNamespace, &namespace, true
 			}
 		} else {

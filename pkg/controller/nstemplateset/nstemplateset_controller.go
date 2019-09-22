@@ -44,8 +44,9 @@ func Add(mgr manager.Manager) error {
 
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileNSTemplateSet{
-		client: mgr.GetClient(),
-		scheme: mgr.GetScheme(),
+		client:             mgr.GetClient(),
+		scheme:             mgr.GetScheme(),
+		getTemplateContent: getTemplateContent,
 	}
 }
 
@@ -77,8 +78,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 var _ reconcile.Reconciler = &ReconcileNSTemplateSet{}
 
 type ReconcileNSTemplateSet struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client             client.Client
+	scheme             *runtime.Scheme
+	getTemplateContent func(tierName, typeName string) ([]byte, error)
 }
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
@@ -162,7 +164,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 	username := nsTmplSet.GetName()
 	nsName := ToNamespaceName(username, tcNamespace.Type)
 
-	tmplContent, err := getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
+	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
 			"failed to to retrieve template for namespace '%s'", nsName)
@@ -212,7 +214,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string, namespace *corev1.Namespace) error {
 	nsName := namespace.GetName()
 
-	tmplContent, err := getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
+	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
 			"failed to to retrieve template for namespace '%s'", nsName)

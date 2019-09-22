@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
 	"testing"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -20,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	authv1 "github.com/openshift/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -111,20 +114,24 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// for dev
+		nsName := fmt.Sprintf("%s-dev", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		nsName := fmt.Sprintf("%s-dev", username)
+		checkNamespace(t, fakeClient, nsName)
 		activate(t, fakeClient, nsName)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkChildren(t, fakeClient, nsName)
 
 		// for code
+		nsName = fmt.Sprintf("%s-code", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		nsName = fmt.Sprintf("%s-code", username)
+		checkNamespace(t, fakeClient, nsName)
 		activate(t, fakeClient, nsName)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkChildren(t, fakeClient, nsName)
 
 		// done
 		reconcile(r, req)
@@ -138,12 +145,14 @@ func TestReconcileProvisionOK(t *testing.T) {
 		createNamespace(t, fakeClient, username, nsName, "rev1")
 
 		// for code
+		nsName = fmt.Sprintf("%s-code", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		nsName = fmt.Sprintf("%s-code", username)
+		checkNamespace(t, fakeClient, nsName)
 		activate(t, fakeClient, nsName)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkChildren(t, fakeClient, nsName)
 
 		// done
 		reconcile(r, req)
@@ -159,14 +168,17 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// for dev
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkChildren(t, fakeClient, nsName)
 
 		// for code
+		nsName = fmt.Sprintf("%s-code", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		nsName = fmt.Sprintf("%s-code", username)
+		checkNamespace(t, fakeClient, nsName)
 		activate(t, fakeClient, nsName)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkChildren(t, fakeClient, nsName)
 
 		// done
 		reconcile(r, req)
@@ -247,6 +259,22 @@ func checkStatus(t *testing.T, client *test.FakeClient, username string, wantSta
 	assert.Equal(t, wantReason, readyCond.Reason)
 }
 
+func checkNamespace(t *testing.T, client *test.FakeClient, nsName string) {
+	t.Helper()
+
+	namespace := &corev1.Namespace{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
+	require.NoError(t, err)
+}
+
+func checkChildren(t *testing.T, client *test.FakeClient, nsName string) {
+	t.Helper()
+
+	roleBinding := &authv1.RoleBinding{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: "user-edit", Namespace: nsName}, roleBinding)
+	require.NoError(t, err)
+}
+
 func newNSTmplSet(userName string) *toolchainv1alpha1.NSTemplateSet {
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -271,8 +299,9 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	fakeClient := test.NewFakeClient(t, initObjs...)
 
 	r := &ReconcileNSTemplateSet{
-		client: fakeClient,
-		scheme: s,
+		client:             fakeClient,
+		scheme:             s,
+		getTemplateContent: testTemplateContent,
 	}
 	return r, newReconcileRequest(username), fakeClient
 }
@@ -284,4 +313,12 @@ func newReconcileRequest(name string) reconcile.Request {
 			Namespace: namespaceName,
 		},
 	}
+}
+
+func testTemplateContent(tierName, typeName string) ([]byte, error) {
+	tmplFile, err := filepath.Abs(filepath.Join("test-files", fmt.Sprintf("%s-%s.yaml", tierName, typeName)))
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadFile(tmplFile)
 }

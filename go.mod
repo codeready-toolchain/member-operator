@@ -27,7 +27,6 @@ require (
 	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0
-	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect

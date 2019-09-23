@@ -323,30 +323,9 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
-	t.Run("create or update nstmplset OK", func(t *testing.T) {
+	t.Run("create nstmplset OK", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
-
-			// test
-			_, err := r.Reconcile(req)
-
-			require.NoError(t, err)
-			checkStatus(t, r.client, username, "Provisioning", "")
-			checkNSTmplSet(t, r.client, username)
-		})
-
-		t.Run("update", func(t *testing.T) {
-			preexistingNsTmplSetNoNS := &toolchainv1alpha1.NSTemplateSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      userAcc.Name,
-					Namespace: "toolchain-member",
-				},
-				Spec: toolchainv1alpha1.NSTemplateSetSpec{
-					TierName: "basic",
-				},
-			}
-
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetNoNS)
 
 			// test
 			_, err := r.Reconcile(req)
@@ -385,7 +364,7 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
-	t.Run("create or update nstmplset failed", func(t *testing.T) {
+	t.Run("create nstmplset failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
@@ -399,30 +378,6 @@ func TestReconcile(t *testing.T) {
 			checkStatus(t, r.client, username, "UnableToCreateNSTemplateSet", "unable to create NSTemplateSet")
 		})
 
-		t.Run("update", func(t *testing.T) {
-			preexistingNsTmplSetNoNS := &toolchainv1alpha1.NSTemplateSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      userAcc.Name,
-					Namespace: "toolchain-member",
-				},
-				Spec: toolchainv1alpha1.NSTemplateSetSpec{
-					TierName: "basic",
-				},
-			}
-
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetNoNS)
-			err := r.addFinalizer(userAcc)
-			require.NoError(t, err)
-			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
-				return errors.New("unable to update NSTemplateSet")
-			}
-
-			// test
-			_, err = r.Reconcile(req)
-
-			require.Error(t, err)
-			checkStatus(t, r.client, username, "UnableToCreateNSTemplateSet", "unable to update NSTemplateSet")
-		})
 	})
 
 	// Last cycle of reconcile. User, Identity created/updated.

@@ -278,16 +278,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 	// update if not same
 	equal := nsTmplSet.Spec.CompareTo(userAcc.Spec.NSTemplateSet)
 	if !equal {
-		logger.Info("updating NSTemplateSet", "name", name)
-		if err := r.setStatusProvisioning(userAcc); err != nil {
-			return nil, false, err
-		}
-		nsTmplSet.Spec = userAcc.Spec.NSTemplateSet
-		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
-			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to update NSTemplateSet '%s'", name)
-		}
-		logger.Info("NSTemplateSet updated successfully", "name", name)
-		return nsTmplSet, true, nil
+		return nil, false, fmt.Errorf("update of NSTemplateSet is not supported")
 	}
 
 	// update status if ready=false

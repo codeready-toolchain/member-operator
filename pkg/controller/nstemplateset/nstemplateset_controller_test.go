@@ -54,17 +54,16 @@ func TestFindNamespace(t *testing.T) {
 }
 
 func TestNextMissingNamespace(t *testing.T) {
-	username := "johnsmith"
 	userNamespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-dev", Labels: map[string]string{"revision": "rev1", "type": "dev"},
+				Name: "johnsmith-dev", Labels: map[string]string{"owner": "johnsmith", "revision": "rev1", "type": "dev"},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-code", Labels: map[string]string{"type": "code"},
+				Name: "johnsmith-code", Labels: map[string]string{"owner": "johnsmith", "type": "code"},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
@@ -76,14 +75,14 @@ func TestNextMissingNamespace(t *testing.T) {
 	}
 
 	// revision not set
-	tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
+	tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
 	assert.True(t, found)
 	assert.Equal(t, "code", tcNS.Type)
 	assert.Equal(t, "johnsmith-code", userNS.GetName())
 
 	// missing namespace
 	userNamespaces[1].Labels["revision"] = "rev1"
-	tcNS, userNS, found = nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
+	tcNS, userNS, found = nextNamespaceToProvision(tcNamespaces, userNamespaces)
 	assert.True(t, found)
 	assert.Equal(t, "stage", tcNS.Type)
 	assert.Nil(t, userNS)
@@ -95,7 +94,7 @@ func TestNextMissingNamespace(t *testing.T) {
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	})
-	_, _, found = nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
+	_, _, found = nextNamespaceToProvision(tcNamespaces, userNamespaces)
 	assert.False(t, found)
 }
 

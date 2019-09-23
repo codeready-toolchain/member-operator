@@ -34,20 +34,21 @@ const (
 
 func TestFindNamespace(t *testing.T) {
 	namespaces := []corev1.Namespace{
-		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-dev"}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-code"}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-dev", Labels: map[string]string{"type": "dev"}}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-code", Labels: map[string]string{"type": "code"}}},
 	}
 
 	t.Run("found", func(t *testing.T) {
-		nsName := "johnsmith-dev"
-		namespace, found := findNamespace(namespaces, nsName)
+		typeName := "dev"
+		namespace, found := findNamespace(namespaces, typeName)
 		assert.True(t, found)
-		assert.Equal(t, nsName, namespace.GetName())
+		assert.NotNil(t, namespace)
+		assert.Equal(t, typeName, namespace.GetLabels()["type"])
 	})
 
 	t.Run("not_found", func(t *testing.T) {
-		nsName := "johnsmith-stage"
-		_, found := findNamespace(namespaces, nsName)
+		typeName := "stage"
+		_, found := findNamespace(namespaces, typeName)
 		assert.False(t, found)
 	})
 }
@@ -57,13 +58,13 @@ func TestNextMissingNamespace(t *testing.T) {
 	userNamespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-dev", Labels: map[string]string{"revision": "rev1"},
+				Name: "johnsmith-dev", Labels: map[string]string{"revision": "rev1", "type": "dev"},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-code",
+				Name: "johnsmith-code", Labels: map[string]string{"type": "code"},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
@@ -74,23 +75,23 @@ func TestNextMissingNamespace(t *testing.T) {
 		{Type: "stage", Revision: "rev1"},
 	}
 
-	// test mismatch_revision
+	// revision not set
 	tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
 	assert.True(t, found)
 	assert.Equal(t, "code", tcNS.Type)
 	assert.Equal(t, "johnsmith-code", userNS.GetName())
 
-	// test found_next_namespace
-	userNamespaces[1].Labels = map[string]string{"revision": "rev1"}
+	// missing namespace
+	userNamespaces[1].Labels["revision"] = "rev1"
 	tcNS, userNS, found = nextNamespaceToProvision(tcNamespaces, userNamespaces, username)
 	assert.True(t, found)
 	assert.Equal(t, "stage", tcNS.Type)
 	assert.Nil(t, userNS)
 
-	// test not_found_next_namespace
+	// namespace not found
 	userNamespaces = append(userNamespaces, corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "johnsmith-stage", Labels: map[string]string{"revision": "rev1"},
+			Name: "johnsmith-stage", Labels: map[string]string{"revision": "rev1", "type": "stage"},
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	})
@@ -114,24 +115,22 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// for dev
-		nsName := fmt.Sprintf("%s-dev", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkNamespace(t, fakeClient, nsName)
-		activate(t, fakeClient, nsName)
+		namespace := checkNamespace(t, r.client, username, "dev")
+		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, nsName)
+		checkChildren(t, fakeClient, namespace.GetName())
 
 		// for code
-		nsName = fmt.Sprintf("%s-code", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkNamespace(t, fakeClient, nsName)
-		activate(t, fakeClient, nsName)
+		namespace = checkNamespace(t, fakeClient, username, "code")
+		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, nsName)
+		checkChildren(t, fakeClient, namespace.GetName())
 
 		// done
 		reconcile(r, req)
@@ -141,18 +140,17 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("ok_with_namespace_with_children", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
-		nsName := fmt.Sprintf("%s-dev", username)
-		createNamespace(t, fakeClient, username, nsName, "rev1")
+		// create dev
+		createNamespace(t, fakeClient, username, "rev1", "dev")
 
 		// for code
-		nsName = fmt.Sprintf("%s-code", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkNamespace(t, fakeClient, nsName)
-		activate(t, fakeClient, nsName)
+		namespace := checkNamespace(t, r.client, username, "code")
+		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, nsName)
+		checkChildren(t, fakeClient, namespace.GetName())
 
 		// done
 		reconcile(r, req)
@@ -162,23 +160,22 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("ok_with_namespace_without_children", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
-		nsName := fmt.Sprintf("%s-dev", username)
-		createNamespace(t, fakeClient, username, nsName, "")
+		// create dev
+		namespace := createNamespace(t, fakeClient, username, "", "dev")
 
 		// for dev
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, nsName)
+		checkChildren(t, fakeClient, namespace.GetName())
 
 		// for code
-		nsName = fmt.Sprintf("%s-code", username)
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkNamespace(t, fakeClient, nsName)
-		activate(t, fakeClient, nsName)
+		namespace = checkNamespace(t, r.client, username, "code")
+		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, nsName)
+		checkChildren(t, fakeClient, namespace.GetName())
 
 		// done
 		reconcile(r, req)
@@ -213,8 +210,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	t.Run("fail_create_children", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
-		nsName := fmt.Sprintf("%s-dev", username)
-		createNamespace(t, fakeClient, username, nsName, "")
+		createNamespace(t, fakeClient, username, "", "dev")
 
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 			return errors.New("unable to create some object")
@@ -235,16 +231,18 @@ func activate(t *testing.T, client client.Client, nsName string) {
 	require.NoError(t, err)
 }
 
-func createNamespace(t *testing.T, client client.Client, username, nsName, revision string) {
+func createNamespace(t *testing.T, client client.Client, username, revision, typeName string) *corev1.Namespace {
+	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   nsName,
-			Labels: map[string]string{"owner": username, "revision": revision},
+			Labels: map[string]string{"owner": username, "revision": revision, "type": typeName},
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	}
 	err := client.Create(context.TODO(), ns)
 	require.NoError(t, err)
+	return ns
 }
 
 func checkStatus(t *testing.T, client *test.FakeClient, username string, wantStatus corev1.ConditionStatus, wantReason string) {
@@ -259,12 +257,28 @@ func checkStatus(t *testing.T, client *test.FakeClient, username string, wantSta
 	assert.Equal(t, wantReason, readyCond.Reason)
 }
 
-func checkNamespace(t *testing.T, client *test.FakeClient, nsName string) {
+func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *corev1.Namespace {
 	t.Helper()
 
+	// TODO fix error coming from below code, error => item[0]: can't assign or convert unstructured.Unstructured into v1.Namespace
+	// error coming from
+	// code - if err := meta.SetList(list, matchingObjs); err != nil {
+	// file - k8s.io/client-go/testing/fixture.go, line - 239
+
+	// labels := map[string]string{"owner": username, "type": typeName}
+	// opts := client.MatchingLabels(labels)
+	// namespaceList := &corev1.NamespaceList{}
+	// err := cl.List(context.TODO(), opts, namespaceList)
+	// require.NoError(t, err)
+	// require.NotNil(t, namespaceList)
+	// require.Equal(t, 1, len(namespaceList.Items))
+	// return &namespaceList.Items[0]
+
 	namespace := &corev1.Namespace{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
+	nsName := fmt.Sprintf("%s-%s", username, typeName)
+	err := cl.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
 	require.NoError(t, err)
+	return namespace
 }
 
 func checkChildren(t *testing.T, client *test.FakeClient, nsName string) {

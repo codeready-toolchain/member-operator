@@ -10,7 +10,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -145,10 +145,9 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 
 func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, userNamespace *corev1.Namespace) error {
 	username := nsTmplSet.GetName()
-	nsName := ToNamespaceName(username, tcNamespace.Type)
 
 	log.Info("provisioning namespace", "namespace", tcNamespace)
-	if err := r.setStatusNamespaceProvisioning(nsTmplSet, nsName); err != nil {
+	if err := r.setStatusNamespaceProvisioning(nsTmplSet, tcNamespace.Type); err != nil {
 		return err
 	}
 
@@ -162,46 +161,47 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 
 func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string) error {
 	username := nsTmplSet.GetName()
-	nsName := ToNamespaceName(username, tcNamespace.Type)
 
 	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to to retrieve template for namespace '%s'", nsName)
+			"failed to to retrieve template for namespace type '%s'", tcNamespace.Type)
 	}
 
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)
 	objs, err := tmplProcessor.Process(tmplContent, params, template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to process template for namespace '%s'", nsName)
+			"failed to process template for namespace type '%s'", tcNamespace.Type)
 	}
 
 	for _, rawObj := range objs {
-		obj := rawObj.Object
-		if nsObj, ok := obj.(*unstructured.Unstructured); ok {
-			// set labels
-			labels := nsObj.GetLabels()
-			if labels == nil {
-				labels = make(map[string]string)
-			}
-			labels["owner"] = username
-			nsObj.SetLabels(labels)
+		acc, err := meta.Accessor(rawObj.Object)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+				"invalid element in template for namespace type '%s'", tcNamespace.Type)
+		}
 
-			// set owner ref
-			if err := controllerutil.SetControllerReference(nsTmplSet, nsObj, r.scheme); err != nil {
-				return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-					"failed to set controller reference for namespace '%s'", nsName)
-			}
-		} else {
-			return fmt.Errorf("invalid element in template for namespace '%s'", nsName)
+		// set labels
+		labels := acc.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels["owner"] = username
+		labels["type"] = tcNamespace.Type
+		acc.SetLabels(labels)
+
+		// set owner ref
+		if err := controllerutil.SetControllerReference(nsTmplSet, acc, r.scheme); err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+				"failed to set controller reference for namespace type '%s'", tcNamespace.Type)
 		}
 	}
 
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to create namespace '%s'", nsName)
+			"failed to create namespace with type '%s'", tcNamespace.Type)
 	}
 
 	log.Info("namespace provisioned", "namespace", tcNamespace)
@@ -251,8 +251,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 
 func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.Namespace, namespaces []corev1.Namespace, username string) (*toolchainv1alpha1.Namespace, *corev1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
-		nsName := ToNamespaceName(username, tcNamespace.Type)
-		namespace, found := findNamespace(namespaces, nsName)
+		namespace, found := findNamespace(namespaces, tcNamespace.Type)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive && namespace.GetLabels()["revision"] == "" {
 				return &tcNamespace, &namespace, true
@@ -264,18 +263,13 @@ func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.Namespace, namesp
 	return nil, nil, false
 }
 
-func findNamespace(namespaces []corev1.Namespace, namespaceName string) (corev1.Namespace, bool) {
+func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Namespace, bool) {
 	for _, ns := range namespaces {
-		if ns.GetName() == namespaceName {
+		if ns.GetLabels()["type"] == typeName {
 			return ns, true
 		}
 	}
 	return corev1.Namespace{}, false
-}
-
-// ToNamespaceName returns NamespaceName formed using given userName and nsType
-func ToNamespaceName(userName, nsType string) string {
-	return fmt.Sprintf("%s-%s", userName, nsType)
 }
 
 // error handling methods
@@ -331,14 +325,14 @@ func (r *ReconcileNSTemplateSet) setStatusReady(nsTmplSet *toolchainv1alpha1.NST
 		})
 }
 
-func (r *ReconcileNSTemplateSet) setStatusNamespaceProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet, namespaceName string) error {
+func (r *ReconcileNSTemplateSet) setStatusNamespaceProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet, typeName string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  provisioningNamespaceReason,
-			Message: fmt.Sprintf("provisioning %s namespace", namespaceName),
+			Message: fmt.Sprintf("provisioning %s namespace type", typeName),
 		})
 }
 

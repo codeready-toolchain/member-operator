@@ -33,7 +33,6 @@ const (
 	// Status condition reasons
 	unableToProvisionReason          = "UnableToProvision"
 	unableToProvisionNamespaceReason = "UnableToProvisionNamespace"
-	provisioningNamespaceReason      = "ProvisioningNamespace"
 	provisioningReason               = "Provisioning"
 	provisionedReason                = "Provisioned"
 )
@@ -147,7 +146,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 	username := nsTmplSet.GetName()
 
 	log.Info("provisioning namespace", "namespace", tcNamespace)
-	if err := r.setStatusNamespaceProvisioning(nsTmplSet, tcNamespace.Type); err != nil {
+	if err := r.setStatusProvisioning(nsTmplSet, fmt.Sprintf("provisioning namespace type '%s'", tcNamespace.Type)); err != nil {
 		return err
 	}
 
@@ -205,9 +204,6 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 	}
 
 	log.Info("namespace provisioned", "namespace", tcNamespace)
-	if err := r.setStatusProvisioning(nsTmplSet); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -237,13 +233,11 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 	}
 	namespace.Labels["revision"] = tcNamespace.Revision
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to update namespace '%s'", nsName)
 	}
 
 	log.Info("namespace provisioned", "namespace", tcNamespace)
-	if err := r.setStatusProvisioning(nsTmplSet); err != nil {
-		return err
-	}
 
 	// TODO add validation for other objects
 	return nil
@@ -305,13 +299,14 @@ func (r *ReconcileNSTemplateSet) setStatusProvisionFailed(nsTmplSet *toolchainv1
 		})
 }
 
-func (r *ReconcileNSTemplateSet) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *ReconcileNSTemplateSet) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.ConditionReady,
-			Status: corev1.ConditionFalse,
-			Reason: provisioningReason,
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  provisioningReason,
+			Message: message,
 		})
 }
 
@@ -322,17 +317,6 @@ func (r *ReconcileNSTemplateSet) setStatusReady(nsTmplSet *toolchainv1alpha1.NST
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: provisionedReason,
-		})
-}
-
-func (r *ReconcileNSTemplateSet) setStatusNamespaceProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet, typeName string) error {
-	return r.updateStatusConditions(
-		nsTmplSet,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  provisioningNamespaceReason,
-			Message: fmt.Sprintf("provisioning %s namespace type", typeName),
 		})
 }
 

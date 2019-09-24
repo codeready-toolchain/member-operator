@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -146,7 +145,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 	username := nsTmplSet.GetName()
 
 	log.Info("provisioning namespace", "namespace", tcNamespace)
-	if err := r.setStatusProvisioning(nsTmplSet, fmt.Sprintf("provisioning namespace type '%s'", tcNamespace.Type)); err != nil {
+	if err := r.setStatusProvisioning(nsTmplSet); err != nil {
 		return err
 	}
 
@@ -299,14 +298,13 @@ func (r *ReconcileNSTemplateSet) setStatusProvisionFailed(nsTmplSet *toolchainv1
 		})
 }
 
-func (r *ReconcileNSTemplateSet) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *ReconcileNSTemplateSet) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  provisioningReason,
-			Message: message,
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: provisioningReason,
 		})
 }
 

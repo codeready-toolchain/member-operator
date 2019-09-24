@@ -283,16 +283,14 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 
 	// update status if ready=false
 	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
-	if !found || readyCond.Status == corev1.ConditionUnknown {
+	if !found || readyCond.Status == corev1.ConditionUnknown || (readyCond.Status == corev1.ConditionFalse && readyCond.Message == "") {
 		return nsTmplSet, true, nil
 	}
-	if found {
-		if readyCond.Status == corev1.ConditionFalse {
-			if err := r.setStatusFromNSTemplateSet(userAcc, readyCond.Reason, readyCond.Message); err != nil {
-				return nsTmplSet, false, err
-			}
-			return nsTmplSet, true, nil
+	if readyCond.Status == corev1.ConditionFalse {
+		if err := r.setStatusFromNSTemplateSet(userAcc, readyCond.Reason, readyCond.Message); err != nil {
+			return nsTmplSet, false, err
 		}
+		return nsTmplSet, true, nil
 	}
 
 	return nsTmplSet, false, nil

@@ -58,6 +58,11 @@ func TestReconcile(t *testing.T) {
 			Namespace: "toolchain-member",
 		},
 		Spec: newNSTmplSetSpec(),
+		Status: toolchainv1alpha1.NSTemplateSetStatus{
+			Conditions: []toolchainv1alpha1.Condition{
+				{Type: toolchainv1alpha1.ConditionReady, Status: corev1.ConditionTrue},
+			},
+		},
 	}
 
 	t.Run("deleted account ignored", func(t *testing.T) {

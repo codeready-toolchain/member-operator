@@ -14,6 +14,11 @@ rules:
   - ""
   resources:
   - nodes
+  verbs:
+  - list
+- apiGroups:
+  - ""
+  resources:
   - namespaces
   verbs:
   - get
@@ -53,10 +58,16 @@ rules:
   resources:
   - rolebindings
   verbs:
-  - '*'
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
-  - '*'
+  - rolebindings
+  - clusterroles
   verbs:
   - '*'

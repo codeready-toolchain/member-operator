@@ -80,7 +80,11 @@ test-e2e-local:
 .PHONY: test-e2e
 test-e2e: get-e2e-repo
 	# run the e2e test via toolchain-e2e repo
+ifeq ($(OPENSHIFT_BUILD_NAMESPACE),)
 	$(MAKE) -C ${E2E_REPO_PATH} test-e2e MEMBER_REPO_PATH=${PWD}
+else
+	$(MAKE) -C ${E2E_REPO_PATH} test-e2e MEMBER_REPO_PATH=${PWD} MEMBER_IMAGE_NAME=registry.svc.ci.openshift.org/${OPENSHIFT_BUILD_NAMESPACE}/stable:member-operator
+endif
 
 .PHONY: get-e2e-repo
 get-e2e-repo:

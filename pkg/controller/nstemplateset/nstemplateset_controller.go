@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/codeready-toolchain/member-operator/pkg/template"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -44,7 +45,7 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileNSTemplateSet{
 		client:             mgr.GetClient(),
 		scheme:             mgr.GetScheme(),
-		getTemplateContent: getTemplateContent,
+		getTemplateContent: getTemplateContentFromHost,
 	}
 }
 
@@ -242,6 +243,9 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 	return nil
 }
 
+// nextNamespaceToProvision returns first namespace (from given namespaces) with
+// namespace status is active and revision not set
+// or namesapce present in tcNamespaces but not found in given namespaces
 func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.Namespace, namespaces []corev1.Namespace) (*toolchainv1alpha1.Namespace, *corev1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
 		namespace, found := findNamespace(namespaces, tcNamespace.Type)
@@ -263,6 +267,14 @@ func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Names
 		}
 	}
 	return corev1.Namespace{}, false
+}
+
+func getTemplateContentFromHost(tierName, typeName string) ([]byte, error) {
+	templates, err := template.GetNSTemplates(cluster.GetHostCluster, tierName)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(templates[typeName].Template), nil
 }
 
 // error handling methods

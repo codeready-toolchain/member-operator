@@ -259,11 +259,10 @@ func checkStatus(t *testing.T, client *test.FakeClient, username string, wantSta
 func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *corev1.Namespace {
 	t.Helper()
 
-	// TODO fix error coming from below code, error => item[0]: can't assign or convert unstructured.Unstructured into v1.Namespace
-	// error coming from
-	// code - if err := meta.SetList(list, matchingObjs); err != nil {
-	// file - k8s.io/client-go/testing/fixture.go, line - 239
+	// TODO uncomment below code when issue fixed.
+	// Issue: https://github.com/kubernetes-sigs/controller-runtime/issues/524
 
+	// uncomment below code block when issue fixed
 	// labels := map[string]string{"owner": username, "type": typeName}
 	// opts := client.MatchingLabels(labels)
 	// namespaceList := &corev1.NamespaceList{}
@@ -273,10 +272,13 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *
 	// require.Equal(t, 1, len(namespaceList.Items))
 	// return &namespaceList.Items[0]
 
+	// remove below code block when issue fixed
 	namespace := &corev1.Namespace{}
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	err := cl.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
 	require.NoError(t, err)
+	require.Equal(t, namespace.Labels["owner"], username)
+	require.Equal(t, namespace.Labels["type"], typeName)
 	return namespace
 }
 
@@ -297,8 +299,8 @@ func newNSTmplSet(userName string) *toolchainv1alpha1.NSTemplateSet {
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
 			TierName: "basic",
 			Namespaces: []toolchainv1alpha1.Namespace{
-				{Type: "dev", Revision: "rev1", Template: ""},
-				{Type: "code", Revision: "rev1", Template: ""},
+				{Type: "dev", Revision: "abcde11", Template: ""},
+				{Type: "code", Revision: "abcde21", Template: ""},
 			},
 		},
 	}

@@ -8,9 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/stretchr/testify/assert"
@@ -115,28 +114,28 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		// for dev
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
 		namespace := checkNamespace(t, r.client, username, "dev")
 		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, namespace.GetName())
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkInnerResources(t, fakeClient, namespace.GetName())
 
 		// for code
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
 		namespace = checkNamespace(t, fakeClient, username, "code")
 		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, namespace.GetName())
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkInnerResources(t, fakeClient, namespace.GetName())
 
 		// done
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
 	})
 
-	t.Run("ok_with_namespace_with_children", func(t *testing.T) {
+	t.Run("ok_with_namespace_with_inner_resources", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// create dev
@@ -144,19 +143,19 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		// for code
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
 		namespace := checkNamespace(t, r.client, username, "code")
 		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, namespace.GetName())
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkInnerResources(t, fakeClient, namespace.GetName())
 
 		// done
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
 	})
 
-	t.Run("ok_with_namespace_without_children", func(t *testing.T) {
+	t.Run("ok_with_namespace_without_inner_resources", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// create dev
@@ -164,21 +163,21 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		// for dev
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, namespace.GetName())
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkInnerResources(t, fakeClient, namespace.GetName())
 
 		// for code
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
 		namespace = checkNamespace(t, r.client, username, "code")
 		activate(t, fakeClient, namespace.GetName())
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkChildren(t, fakeClient, namespace.GetName())
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkInnerResources(t, fakeClient, namespace.GetName())
 
 		// done
 		reconcile(r, req)
-		checkStatus(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
 	})
 
 }
@@ -204,9 +203,10 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 		// test
 		reconcile(r, req, "unable to create namespace")
+		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "UnableToProvisionNamespace")
 	})
 
-	t.Run("fail_create_children", func(t *testing.T) {
+	t.Run("fail_create_inner_resources", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		createNamespace(t, fakeClient, username, "", "dev")
@@ -217,6 +217,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 		// test
 		reconcile(r, req, "unable to create some object")
+		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "UnableToProvisionNamespace")
 	})
 
 }
@@ -244,16 +245,18 @@ func createNamespace(t *testing.T, client client.Client, username, revision, typ
 	return ns
 }
 
-func checkStatus(t *testing.T, client *test.FakeClient, username string, wantStatus corev1.ConditionStatus, wantReason string) {
+func checkReadyCond(t *testing.T, client *test.FakeClient, username string, wantStatus corev1.ConditionStatus, wantReason string) {
 	t.Helper()
 
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: namespaceName}, nsTmplSet)
 	require.NoError(t, err)
-	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
-	assert.True(t, found)
-	assert.Equal(t, wantStatus, readyCond.Status)
-	assert.Equal(t, wantReason, readyCond.Reason)
+	wantCond := toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: wantStatus,
+		Reason: wantReason,
+	}
+	test.AssertConditionsMatch(t, nsTmplSet.Status.Conditions, wantCond)
 }
 
 func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *corev1.Namespace {
@@ -282,12 +285,24 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *
 	return namespace
 }
 
-func checkChildren(t *testing.T, client *test.FakeClient, nsName string) {
+func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {
 	t.Helper()
 
 	roleBinding := &authv1.RoleBinding{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: "user-edit", Namespace: nsName}, roleBinding)
 	require.NoError(t, err)
+}
+
+func checkStatus(t *testing.T, client *test.FakeClient, username string, wantStatus corev1.ConditionStatus, wantReason string) {
+	t.Helper()
+
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: namespaceName}, nsTmplSet)
+	require.NoError(t, err)
+	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	assert.True(t, found)
+	assert.Equal(t, wantStatus, readyCond.Status)
+	assert.Equal(t, wantReason, readyCond.Reason)
 }
 
 func newNSTmplSet(userName string) *toolchainv1alpha1.NSTemplateSet {

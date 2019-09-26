@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -481,8 +480,6 @@ func assertRoleBindingExists(t *testing.T, c client.Client, ns string) authv1.Ro
 	require.NoError(t, err)
 	return rb
 }
-
-type decodeFunc func([]byte, *schema.GroupVersionKind, runtime.Object) (runtime.Object, *schema.GroupVersionKind, error)
 
 func decodeTemplate(decoder runtime.Decoder, tmplContent string) (*templatev1.Template, error) {
 	obj, _, err := decoder.Decode([]byte(tmplContent), nil, nil)

@@ -7,6 +7,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
+	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/kubefed/pkg/controller/util"
@@ -18,7 +19,7 @@ type NSTemplates map[string]RevisionedTemplate
 // RevisionedTemplate a template along with its revision number
 type RevisionedTemplate struct {
 	Revision string
-	Template string
+	Template templatev1.Template
 }
 
 // GetNSTemplates gets the templates configured in the NSTemplateTier resource

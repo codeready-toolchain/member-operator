@@ -19,10 +19,8 @@ require (
 	github.com/prometheus/procfs v0.0.3 // indirect
 	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.4.2 // indirect
 	github.com/spf13/pflag v1.0.3
 	github.com/stretchr/testify v1.3.0
-	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
 	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
@@ -36,7 +34,7 @@ require (
 	k8s.io/gengo v0.0.0-20190327210449-e17681d19d3a
 	k8s.io/klog v0.3.3
 	k8s.io/kube-openapi v0.0.0-20190718094010-3cf2ea392886
-	sigs.k8s.io/controller-runtime v0.1.12
+	sigs.k8s.io/controller-runtime v0.2.0
 	sigs.k8s.io/controller-tools v0.1.12
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )

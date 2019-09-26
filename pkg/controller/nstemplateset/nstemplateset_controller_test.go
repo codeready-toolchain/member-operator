@@ -109,77 +109,53 @@ func TestReconcileProvisionOK(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 	}
 
-	t.Run("ok", func(t *testing.T) {
+	t.Run("new_namespace_created_ok", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
-		// for dev
+		// test
 		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		namespace := checkNamespace(t, r.client, username, "dev")
-		activate(t, fakeClient, namespace.GetName())
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkInnerResources(t, fakeClient, namespace.GetName())
 
-		// for code
-		reconcile(r, req)
 		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		namespace = checkNamespace(t, fakeClient, username, "code")
-		activate(t, fakeClient, namespace.GetName())
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkInnerResources(t, fakeClient, namespace.GetName())
-
-		// done
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+		checkNamespace(t, r.client, username, "dev")
 	})
 
-	t.Run("ok_with_namespace_with_inner_resources", func(t *testing.T) {
+	t.Run("new_namespace_created_with_existing_namespace_ok", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// create dev
 		createNamespace(t, fakeClient, username, "rev1", "dev")
 
-		// for code
+		// test
 		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		namespace := checkNamespace(t, r.client, username, "code")
-		activate(t, fakeClient, namespace.GetName())
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkInnerResources(t, fakeClient, namespace.GetName())
 
-		// done
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
+		checkNamespace(t, r.client, username, "code")
 	})
 
-	t.Run("ok_with_namespace_without_inner_resources", func(t *testing.T) {
+	t.Run("inner_resources_created_for_existing_namespace_ok", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// create dev
 		namespace := createNamespace(t, fakeClient, username, "", "dev")
 
-		// for dev
+		// test
 		reconcile(r, req)
+
 		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
 		checkInnerResources(t, fakeClient, namespace.GetName())
+	})
 
-		// for code
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		namespace = checkNamespace(t, r.client, username, "code")
-		activate(t, fakeClient, namespace.GetName())
-		reconcile(r, req)
-		checkReadyCond(t, fakeClient, username, corev1.ConditionFalse, "Provisioning")
-		checkInnerResources(t, fakeClient, namespace.GetName())
+	t.Run("status_provisioned_ok", func(t *testing.T) {
+		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
-		// done
+		// create namesapces
+		createNamespace(t, fakeClient, username, "rev1", "dev")
+		createNamespace(t, fakeClient, username, "rev1", "code")
+
+		// test
 		reconcile(r, req)
 		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
 	})
-
 }
 
 func TestReconcileProvisionFail(t *testing.T) {

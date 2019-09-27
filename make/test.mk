@@ -115,9 +115,9 @@ ifeq ($(E2E_REPO_PATH),"")
 			# fetch the branch \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch --deepen=10 external ${BRANCH_REF}; \
 			# check if branches are ready to be merged \
-			while [ -z $( git merge-base master external/${BRANCH_NAME} ) ]; do \
-				git fetch -q --deepen=10 origin master; \
-				git fetch -q --deepen=10 external ${BRANCH_REF}; \
+			while [[ -z `git merge-base master external/${BRANCH_NAME}` ]]; do \
+			    git fetch -q --deepen=10 origin master; \
+			    git fetch -q --deepen=10 external ${BRANCH_REF}; \
 			done; \
 			# merge the branch with master \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge --allow-unrelated-histories external/${BRANCH_NAME}; \

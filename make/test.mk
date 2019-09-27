@@ -94,7 +94,7 @@ ifeq ($(E2E_REPO_PATH),"")
 	# delete to have clear environment
 	rm -rf ${E2E_REPO_PATH}
 	# clone
-	git clone https://github.com/codeready-toolchain/toolchain-e2e.git ${E2E_REPO_PATH}
+	git clone https://github.com/codeready-toolchain/toolchain-e2e.git --depth 10 ${E2E_REPO_PATH}
     ifneq ($(CLONEREFS_OPTIONS),)
 		@echo "using author link ${AUTHOR_LINK}"
 		@echo "using pull sha ${PULL_SHA}"
@@ -113,9 +113,14 @@ ifeq ($(E2E_REPO_PATH),"")
 			# add the user's fork as remote repo \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} remote add external ${AUTHOR_LINK}/toolchain-e2e.git; \
 			# fetch the branch \
-			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch external ${BRANCH_REF}; \
+			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch --deepen=10 external ${BRANCH_REF}; \
+			# check if branches are ready to be merged \
+			while [ -z $( git merge-base master external/${BRANCH_NAME} ) ]; do \
+				git fetch -q --deepen=10 origin master; \
+				git fetch -q --deepen=10 external ${BRANCH_REF}; \
+			done; \
 			# merge the branch with master \
-			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge --allow-unrelated-histories FETCH_HEAD; \
+			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge --allow-unrelated-histories external/${BRANCH_NAME}; \
 		fi;
     endif
 endif

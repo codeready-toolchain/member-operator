@@ -1,47 +1,33 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	cloud.google.com/go v0.40.0 // indirect
+	cloud.google.com/go v0.46.3 // indirect
 	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
-	github.com/NYTimes/gziphandler v1.1.1 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20190917150354-87b0c74ff7b5
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190920111906-1948fd993dcc
+	github.com/codeready-toolchain/api v0.0.0-20190926105251-44ed4423e3bf
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20190926125002-408e9c1b28de
 	github.com/go-logr/logr v0.1.0
-	github.com/go-openapi/spec v0.19.2 // indirect
-	github.com/go-openapi/swag v0.19.4 // indirect
-	github.com/gobuffalo/envy v1.7.0 // indirect
-	github.com/kisielk/errcheck v1.2.0 // indirect
-	github.com/mailru/easyjson v0.0.0-20190620125010-da37f6c1e481 // indirect
-	github.com/munnerz/goautoneg v0.0.0-20190414153302-2ae31c8b6b30 // indirect
-	github.com/onsi/ginkgo v1.8.0 // indirect
-	github.com/onsi/gomega v1.5.0 // indirect
+	github.com/gobuffalo/envy v1.7.1 // indirect
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
 	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92
 	github.com/operator-framework/operator-sdk v0.10.0
 	github.com/pkg/errors v0.8.1
-	github.com/prometheus/common v0.6.0 // indirect
-	github.com/prometheus/procfs v0.0.3 // indirect
 	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
+	github.com/rogpeppe/go-internal v1.4.0 // indirect
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.4.2 // indirect
-	github.com/spf13/pflag v1.0.3
-	github.com/stretchr/testify v1.3.0
-	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472 // indirect
-	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297 // indirect
-	golang.org/x/sys v0.0.0-20190830142957-1e83adbbebd0 // indirect
-	golang.org/x/tools v0.0.0-20190911225940-c7d52e45e2f2 // indirect
-	k8s.io/api v0.0.0-20190626000116-b178a738ed00
-	k8s.io/apiextensions-apiserver v0.0.0-20190624090600-dfe76d39a269 // indirect
-	k8s.io/apimachinery v0.0.0-20190624085041-961b39a1baa0
+	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.4.0
+	golang.org/x/tools v0.0.0-20190925230517-ea99b82c7b93 // indirect
+	k8s.io/api v0.0.0-20190925180651-d58b53da08f5
+	k8s.io/apimachinery v0.0.0-20190925235427-62598f38f24e
 	k8s.io/apiserver v0.0.0-20190111033246-d50e9ac5404f // indirect
 	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/code-generator v0.0.0-20190717022600-77f3a1fe56bb
-	k8s.io/gengo v0.0.0-20190327210449-e17681d19d3a
-	k8s.io/klog v0.3.3
-	k8s.io/kube-openapi v0.0.0-20190718094010-3cf2ea392886
-	sigs.k8s.io/controller-runtime v0.2.0
-	sigs.k8s.io/controller-tools v0.1.12
+	k8s.io/code-generator v0.0.0-20190925195306-32dfb485ddce
+	k8s.io/gengo v0.0.0-20190907103519-ebc107f98eab
+	k8s.io/klog v1.0.0
+	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
+	sigs.k8s.io/controller-runtime v0.2.2
+	sigs.k8s.io/controller-tools v0.2.1
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
 

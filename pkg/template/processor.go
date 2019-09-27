@@ -2,7 +2,6 @@ package template
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,33 +11,23 @@ import (
 	errs "github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Processor the tool that will process and apply a template with variables
 type Processor struct {
-	cl           client.Client
-	scheme       *runtime.Scheme
-	codecFactory serializer.CodecFactory
+	cl     client.Client
+	scheme *runtime.Scheme
 }
 
 // NewProcessor returns a new Processor
 func NewProcessor(cl client.Client, scheme *runtime.Scheme) Processor {
-	return Processor{cl: cl, scheme: scheme, codecFactory: serializer.NewCodecFactory(scheme)}
+	return Processor{cl: cl, scheme: scheme}
 }
 
 // Process processes the template (ie, replaces the variables with their actual values) and optionally filters the result
 // to return a subset of the template objects
-func (p Processor) Process(tmplContent []byte, values map[string]string, filters ...FilterFunc) ([]runtime.RawExtension, error) {
-	obj, _, err := p.codecFactory.UniversalDeserializer().Decode(tmplContent, nil, nil)
-	if err != nil {
-		return nil, errs.Wrapf(err, "unable to decode template")
-	}
-	tmpl, ok := obj.(*templatev1.Template)
-	if !ok {
-		return nil, fmt.Errorf("unable to convert object type %T to Template, must be a v1.Template", obj)
-	}
+func (p Processor) Process(tmpl *templatev1.Template, values map[string]string, filters ...FilterFunc) ([]runtime.RawExtension, error) {
 	// inject variables in the twmplate
 	for param, val := range values {
 		v := templateprocessing.GetParameterByName(tmpl, param)

@@ -8,6 +8,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
+	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,21 +35,33 @@ func TestGetNSTemplateTier(t *testing.T) {
 			Namespace: "toolchain-host-operator",
 		},
 		Spec: toolchainv1alpha1.NSTemplateTierSpec{
-			Namespaces: []toolchainv1alpha1.Namespace{
+			Namespaces: []toolchainv1alpha1.NSTemplateTierNamespace{
 				{
+					Type:     "code",
 					Revision: "abcdef",
-					Template: "{foo1}",
-					Type:     "ide",
+					Template: templatev1.Template{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "code",
+						},
+					},
 				},
 				{
+					Type:     "dev",
 					Revision: "123456",
-					Template: "{bar1}",
-					Type:     "cicd",
+					Template: templatev1.Template{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "dev",
+						},
+					},
 				},
 				{
-					Revision: "1a2b3c",
-					Template: "{baz1}",
 					Type:     "stage",
+					Revision: "1a2b3c",
+					Template: templatev1.Template{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "stage",
+						},
+					},
 				},
 			},
 		},
@@ -59,21 +72,33 @@ func TestGetNSTemplateTier(t *testing.T) {
 			Namespace: "toolchain-host-operator",
 		},
 		Spec: toolchainv1alpha1.NSTemplateTierSpec{
-			Namespaces: []toolchainv1alpha1.Namespace{
+			Namespaces: []toolchainv1alpha1.NSTemplateTierNamespace{
 				{
+					Type:     "code",
 					Revision: "ghijkl",
-					Template: "{foo1}",
-					Type:     "ide",
+					Template: templatev1.Template{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "code",
+						},
+					},
 				},
 				{
+					Type:     "dev",
 					Revision: "789012",
-					Template: "{bar1}",
-					Type:     "cicd",
+					Template: templatev1.Template{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "dev",
+						},
+					},
 				},
 				{
-					Revision: "4d5e6f",
-					Template: "{baz1}",
 					Type:     "stage",
+					Revision: "4d5e6f",
+					Template: templatev1.Template{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "stage",
+						},
+					},
 				},
 			},
 		},
@@ -100,15 +125,27 @@ func TestGetNSTemplateTier(t *testing.T) {
 		require.Len(t, tmpls, 3)
 		assert.Equal(t, template.RevisionedTemplate{
 			Revision: "abcdef",
-			Template: "{foo1}",
-		}, tmpls["ide"])
+			Template: templatev1.Template{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "code",
+				},
+			},
+		}, tmpls["code"])
 		assert.Equal(t, template.RevisionedTemplate{
 			Revision: "123456",
-			Template: "{bar1}",
-		}, tmpls["cicd"])
+			Template: templatev1.Template{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "dev",
+				},
+			},
+		}, tmpls["dev"])
 		assert.Equal(t, template.RevisionedTemplate{
 			Revision: "1a2b3c",
-			Template: "{baz1}",
+			Template: templatev1.Template{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "stage",
+				},
+			},
 		}, tmpls["stage"])
 	})
 

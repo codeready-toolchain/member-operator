@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	testtemplate "github.com/codeready-toolchain/member-operator/pkg/test/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,6 +24,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	authv1 "github.com/openshift/api/authorization/v1"
+	templatev1 "github.com/openshift/api/template/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -56,7 +59,7 @@ func TestNextMissingNamespace(t *testing.T) {
 	userNamespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-dev", Labels: map[string]string{"owner": "johnsmith", "revision": "rev1", "type": "dev"},
+				Name: "johnsmith-dev", Labels: map[string]string{"owner": "johnsmith", "revision": "abcde11", "type": "dev"},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
@@ -67,10 +70,10 @@ func TestNextMissingNamespace(t *testing.T) {
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
 	}
-	tcNamespaces := []toolchainv1alpha1.Namespace{
-		{Type: "dev", Revision: "rev1"},
-		{Type: "code", Revision: "rev1"},
-		{Type: "stage", Revision: "rev1"},
+	tcNamespaces := []toolchainv1alpha1.NSTemplateSetNamespace{
+		{Type: "dev", Revision: "abcde11"},
+		{Type: "code", Revision: "abcde21"},
+		{Type: "stage", Revision: "abcde31"},
 	}
 
 	// revision not set
@@ -80,7 +83,7 @@ func TestNextMissingNamespace(t *testing.T) {
 	assert.Equal(t, "johnsmith-code", userNS.GetName())
 
 	// missing namespace
-	userNamespaces[1].Labels["revision"] = "rev1"
+	userNamespaces[1].Labels["revision"] = "abcde11"
 	tcNS, userNS, found = nextNamespaceToProvision(tcNamespaces, userNamespaces)
 	assert.True(t, found)
 	assert.Equal(t, "stage", tcNS.Type)
@@ -89,7 +92,7 @@ func TestNextMissingNamespace(t *testing.T) {
 	// namespace not found
 	userNamespaces = append(userNamespaces, corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "johnsmith-stage", Labels: map[string]string{"revision": "rev1", "type": "stage"},
+			Name: "johnsmith-stage", Labels: map[string]string{"revision": "abcde11", "type": "stage"},
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	})
@@ -123,7 +126,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// create dev
-		createNamespace(t, fakeClient, username, "rev1", "dev")
+		createNamespace(t, fakeClient, username, "abcde11", "dev")
 
 		// test
 		reconcile(r, req)
@@ -149,8 +152,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
 
 		// create namesapces
-		createNamespace(t, fakeClient, username, "rev1", "dev")
-		createNamespace(t, fakeClient, username, "rev1", "code")
+		createNamespace(t, fakeClient, username, "abcde11", "dev")
+		createNamespace(t, fakeClient, username, "abcde21", "code")
 
 		// test
 		reconcile(r, req)
@@ -289,7 +292,7 @@ func newNSTmplSet(userName string) *toolchainv1alpha1.NSTemplateSet {
 		},
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
 			TierName: "basic",
-			Namespaces: []toolchainv1alpha1.Namespace{
+			Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
 				{Type: "dev", Revision: "abcde11", Template: ""},
 				{Type: "code", Revision: "abcde21", Template: ""},
 			},
@@ -302,12 +305,14 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	fakeClient := test.NewFakeClient(t, initObjs...)
+	codecFactory := serializer.NewCodecFactory(s)
+	decoder := codecFactory.UniversalDeserializer()
 
+	fakeClient := test.NewFakeClient(t, initObjs...)
 	r := &ReconcileNSTemplateSet{
 		client:             fakeClient,
 		scheme:             s,
-		getTemplateContent: testTemplateContent,
+		getTemplateContent: wrapTetTemplateContent(decoder),
 	}
 	return r, newReconcileRequest(username), fakeClient
 }
@@ -321,10 +326,16 @@ func newReconcileRequest(name string) reconcile.Request {
 	}
 }
 
-func testTemplateContent(tierName, typeName string) ([]byte, error) {
-	tmplFile, err := filepath.Abs(filepath.Join("test-files", fmt.Sprintf("%s-%s.yaml", tierName, typeName)))
-	if err != nil {
-		return nil, err
+func wrapTetTemplateContent(decoder runtime.Decoder) func(tierName, typeName string) (*templatev1.Template, error) {
+	return func(tierName, typeName string) (*templatev1.Template, error) {
+		tmplFile, err := filepath.Abs(filepath.Join("test-files", fmt.Sprintf("%s-%s.yaml", tierName, typeName)))
+		if err != nil {
+			return nil, err
+		}
+		tmplContent, err := ioutil.ReadFile(tmplFile)
+		if err != nil {
+			return nil, err
+		}
+		return testtemplate.DecodeTemplate(decoder, tmplContent)
 	}
-	return ioutil.ReadFile(tmplFile)
 }

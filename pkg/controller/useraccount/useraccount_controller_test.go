@@ -801,9 +801,9 @@ func newUserAccountWithStatus(userName, userID string) *toolchainv1alpha1.UserAc
 func newNSTmplSetSpec() toolchainv1alpha1.NSTemplateSetSpec {
 	return toolchainv1alpha1.NSTemplateSetSpec{
 		TierName: "basic",
-		Namespaces: []toolchainv1alpha1.Namespace{
-			{Type: "dev", Revision: "rev1", Template: ""},
-			{Type: "code", Revision: "rev1", Template: ""},
+		Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
+			{Type: "dev", Revision: "abcde11", Template: ""},
+			{Type: "code", Revision: "abcde21", Template: ""},
 		},
 	}
 }

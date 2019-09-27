@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	templatev1 "github.com/openshift/api/template/v1"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -79,7 +80,7 @@ var _ reconcile.Reconciler = &ReconcileNSTemplateSet{}
 type ReconcileNSTemplateSet struct {
 	client             client.Client
 	scheme             *runtime.Scheme
-	getTemplateContent func(tierName, typeName string) ([]byte, error)
+	getTemplateContent func(tierName, typeName string) (*templatev1.Template, error)
 }
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
@@ -142,7 +143,7 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 	return false, r.ensureNamespace(logger, nsTmplSet, tcNamespace, userNamespace)
 }
 
-func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, userNamespace *corev1.Namespace) error {
+func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) error {
 	username := nsTmplSet.GetName()
 
 	log.Info("provisioning namespace", "namespace", tcNamespace)
@@ -158,17 +159,17 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tcNamespace, params, userNamespace)
 }
 
-func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string) error {
+func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, params map[string]string) error {
 	username := nsTmplSet.GetName()
 
-	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
+	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
 			"failed to to retrieve template for namespace type '%s'", tcNamespace.Type)
 	}
 
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)
-	objs, err := tmplProcessor.Process(tmplContent, params, template.RetainNamespaces)
+	objs, err := tmplProcessor.Process(tmpl, params, template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
 			"failed to process template for namespace type '%s'", tcNamespace.Type)
@@ -207,7 +208,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 	return nil
 }
 
-func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.Namespace, params map[string]string, namespace *corev1.Namespace) error {
+func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, params map[string]string, namespace *corev1.Namespace) error {
 	nsName := namespace.GetName()
 
 	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
@@ -246,7 +247,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 // nextNamespaceToProvision returns first namespace (from given namespaces) with
 // namespace status is active and revision not set
 // or namesapce present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.Namespace, namespaces []corev1.Namespace) (*toolchainv1alpha1.Namespace, *corev1.Namespace, bool) {
+func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.NSTemplateSetNamespace, namespaces []corev1.Namespace) (*toolchainv1alpha1.NSTemplateSetNamespace, *corev1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
 		namespace, found := findNamespace(namespaces, tcNamespace.Type)
 		if found {
@@ -269,12 +270,13 @@ func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Names
 	return corev1.Namespace{}, false
 }
 
-func getTemplateContentFromHost(tierName, typeName string) ([]byte, error) {
+func getTemplateContentFromHost(tierName, typeName string) (*templatev1.Template, error) {
 	templates, err := template.GetNSTemplates(cluster.GetHostCluster, tierName)
 	if err != nil {
 		return nil, err
 	}
-	return []byte(templates[typeName].Template), nil
+	tmpl := templates[typeName].Template
+	return &tmpl, nil
 }
 
 // error handling methods

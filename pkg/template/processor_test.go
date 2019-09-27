@@ -12,14 +12,17 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	errs "github.com/pkg/errors"
 
 	authv1 "github.com/openshift/api/authorization/v1"
+	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,42 +30,43 @@ import (
 
 func TestProcess(t *testing.T) {
 
-	namespace := getNameWithTimestamp("namespace")
 	user := getNameWithTimestamp("user")
-	defaultUser := "toolchain-dev"
 	commit := getNameWithTimestamp("sha")
 	defaultCommit := "123abc"
 
 	s := addToScheme(t)
+	codecFactory := serializer.NewCodecFactory(s)
+	decoder := codecFactory.UniversalDeserializer()
+
 	cl := test.NewFakeClient(t)
 	p := template.NewProcessor(cl, s)
 
 	t.Run("should process template successfully", func(t *testing.T) {
 		// given
 		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
+			"USERNAME": user,
+			"COMMIT":   commit,
 		}
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		require.NoError(t, err)
+
 		// when
-		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		objs, err := p.Process(tmpl, values)
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, objs, 2)
 		// assert namespace
 		assertObject(t, expectedObj{
-			template:    namespaceObj,
-			projectName: namespace,
-			username:    user,
-			commit:      commit,
+			template: namespaceObj,
+			username: user,
+			commit:   commit,
 		}, objs[0])
 		// assert rolebinding
 		assertObject(t, expectedObj{
-			template:    rolebindingObj,
-			projectName: namespace,
-			username:    user,
-			commit:      commit,
+			template: rolebindingObj,
+			username: user,
+			commit:   commit,
 		}, objs[1])
 
 	})
@@ -70,11 +74,14 @@ func TestProcess(t *testing.T) {
 	t.Run("should overwrite default value of commit parameter", func(t *testing.T) {
 		// given
 		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
+			"USERNAME": user,
+			"COMMIT":   commit,
 		}
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		require.NoError(t, err)
+
 		// when
-		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		objs, err := p.Process(tmpl, values)
 
 		// then
 		require.NoError(t, err)
@@ -82,17 +89,15 @@ func TestProcess(t *testing.T) {
 
 		// assert namespace
 		assertObject(t, expectedObj{
-			template:    namespaceObj,
-			projectName: namespace,
-			username:    defaultUser,
-			commit:      commit,
+			template: namespaceObj,
+			username: user,
+			commit:   commit,
 		}, objs[0])
 		// assert rolebinding
 		assertObject(t, expectedObj{
-			template:    rolebindingObj,
-			projectName: namespace,
-			username:    defaultUser,
-			commit:      commit,
+			template: rolebindingObj,
+			username: user,
+			commit:   commit,
 		}, objs[1])
 	})
 
@@ -100,79 +105,67 @@ func TestProcess(t *testing.T) {
 		// given
 		random := getNameWithTimestamp("random")
 		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-			"random":       random, // extra, unused param
+			"USERNAME": user,
+			"COMMIT":   commit,
+			"random":   random, // extra, unused param
 		}
+		tmpl, err := decodeTemplate(decoder, namespaceTmpl)
+		require.NoError(t, err)
+
 		// when
-		objs, err := p.Process([]byte(namespaceTmpl), values)
+		objs, err := p.Process(tmpl, values)
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, objs, 1)
 		// assert namespace
 		assertObject(t, expectedObj{
-			template:    namespaceObj,
-			projectName: namespace,
-			username:    user,
-			commit:      commit,
+			template: namespaceObj,
+			username: user,
+			commit:   commit,
 		}, objs[0])
 	})
 
-	t.Run("should process template with default parameters", func(t *testing.T) {
+	t.Run("should process template with default commit parameter", func(t *testing.T) {
 		// given
 		values := map[string]string{
-			"PROJECT_NAME": namespace,
+			"USERNAME": user,
 		}
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		require.NoError(t, err)
 
 		// when
-		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		objs, err := p.Process(tmpl, values)
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, objs, 2)
 		// assert namespace
 		assertObject(t, expectedObj{
-			template:    namespaceObj,
-			projectName: namespace,
-			username:    defaultUser,
-			commit:      defaultCommit,
+			template: namespaceObj,
+			username: user,
+			commit:   defaultCommit,
 		}, objs[0])
 		// assert rolebinding
 		assertObject(t, expectedObj{
-			template:    rolebindingObj,
-			projectName: namespace,
-			username:    defaultUser,
-			commit:      defaultCommit,
+			template: rolebindingObj,
+			username: user,
+			commit:   defaultCommit,
 		}, objs[1])
 	})
 
 	t.Run("should fail because of missing required parameter", func(t *testing.T) {
 		// given
 		values := make(map[string]string)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		require.NoError(t, err)
 
 		// when
-		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		objs, err := p.Process(tmpl, values)
 
 		// then
-		require.Error(t, err, "fail to process as not providing required param PROJECT_NAME")
+		require.Error(t, err, "fail to process as not providing required param USERNAME")
 		assert.Nil(t, objs)
-	})
-
-	t.Run("should fail to process template for invalid template content", func(t *testing.T) {
-		// given
-		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
-
-		// when
-		_, err := p.Process([]byte(invalidTmpl), values)
-
-		// then
-		assert.Error(t, err)
 	})
 
 	t.Run("filter results", func(t *testing.T) {
@@ -180,44 +173,45 @@ func TestProcess(t *testing.T) {
 		t.Run("return namespace", func(t *testing.T) {
 			// given
 			values := map[string]string{
-				"PROJECT_NAME": namespace,
+				"USERNAME": user,
 			}
+			tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+			require.NoError(t, err)
 
 			// when
-			objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values, template.RetainNamespaces)
+			objs, err := p.Process(tmpl, values, template.RetainNamespaces)
 
 			// then
 			require.NoError(t, err)
 			require.Len(t, objs, 1)
 			// assert rolebinding
 			assertObject(t, expectedObj{
-				template:    namespaceObj,
-				projectName: namespace,
-				username:    defaultUser,
-				commit:      defaultCommit,
+				template: namespaceObj,
+				username: user,
+				commit:   defaultCommit,
 			}, objs[0])
 		})
 
 		t.Run("return other resources", func(t *testing.T) {
 			// given
 			values := map[string]string{
-				"PROJECT_NAME": namespace,
-				"COMMIT":       commit,
-				"USER_NAME":    user,
+				"USERNAME": user,
+				"COMMIT":   commit,
 			}
+			tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+			require.NoError(t, err)
 
 			// when
-			objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values, template.RetainAllButNamespaces)
+			objs, err := p.Process(tmpl, values, template.RetainAllButNamespaces)
 
 			// then
 			require.NoError(t, err)
 			require.Len(t, objs, 1)
 			// assert namespace
 			assertObject(t, expectedObj{
-				template:    rolebindingObj,
-				projectName: namespace,
-				username:    user,
-				commit:      commit,
+				template: rolebindingObj,
+				username: user,
+				commit:   commit,
 			}, objs[0])
 		})
 
@@ -226,22 +220,25 @@ func TestProcess(t *testing.T) {
 
 func TestProcessAndApply(t *testing.T) {
 
-	namespace := getNameWithTimestamp("namespace")
 	commit := getNameWithTimestamp("sha")
 	user := getNameWithTimestamp("user")
 
 	s := addToScheme(t)
+	codecFactory := serializer.NewCodecFactory(s)
+	decoder := codecFactory.UniversalDeserializer()
+
+	values := map[string]string{
+		"USERNAME": user,
+		"COMMIT":   commit,
+	}
 
 	t.Run("should create namespace alone", func(t *testing.T) {
 		// given
-		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		objs, err := p.Process([]byte(namespaceTmpl), values)
+		tmpl, err := decodeTemplate(decoder, namespaceTmpl)
+		require.NoError(t, err)
+		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
 
 		// when
@@ -249,19 +246,16 @@ func TestProcessAndApply(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assertNamespaceExists(t, cl, namespace)
+		assertNamespaceExists(t, cl, user)
 	})
 
 	t.Run("should create role binding alone", func(t *testing.T) {
 		// given
-		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		objs, err := p.Process([]byte(rolebindingTmpl), values)
+		tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
+		require.NoError(t, err)
+		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
 
 		// when
@@ -269,19 +263,16 @@ func TestProcessAndApply(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assertRoleBindingExists(t, cl, namespace)
+		assertRoleBindingExists(t, cl, user)
 	})
 
 	t.Run("should create namespace and role binding", func(t *testing.T) {
 		// given
-		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		require.NoError(t, err)
+		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
 
 		// when
@@ -289,34 +280,33 @@ func TestProcessAndApply(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assertNamespaceExists(t, cl, namespace)
-		assertRoleBindingExists(t, cl, namespace)
+		assertNamespaceExists(t, cl, user)
+		assertRoleBindingExists(t, cl, user)
 
 	})
 
 	t.Run("should update existing role binding", func(t *testing.T) {
 		// given
-		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
-		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		objs, err := p.Process([]byte(rolebindingTmpl), values)
+		tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
+		require.NoError(t, err)
+		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
 		err = p.Apply(objs)
 		require.NoError(t, err)
-		assertRoleBindingExists(t, cl, namespace)
+		assertRoleBindingExists(t, cl, user)
 
 		// when rolebinding changes
-		objs, err = p.Process([]byte(namespaceAndRolebindingWithExtraUserTmpl), values)
+		tmpl, err = decodeTemplate(decoder, namespaceAndRolebindingWithExtraUserTmpl)
+		require.NoError(t, err)
+		objs, err = p.Process(tmpl, values)
 		require.NoError(t, err)
 		err = p.Apply(objs)
 
 		// then
 		require.NoError(t, err)
-		binding := assertRoleBindingExists(t, cl, namespace)
+		binding := assertRoleBindingExists(t, cl, user)
 		require.Len(t, binding.Subjects, 2)
 		assert.Equal(t, "User", binding.Subjects[0].Kind)
 		assert.Equal(t, user, binding.Subjects[0].Name)
@@ -333,14 +323,11 @@ func TestProcessAndApply(t *testing.T) {
 			cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 				return errors.New("failed to create resource")
 			}
-			values := map[string]string{
-				"PROJECT_NAME": namespace,
-				"COMMIT":       commit,
-				"USER_NAME":    user,
-			}
+			tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
+			require.NoError(t, err)
 
 			// when
-			objs, err := p.Process([]byte(rolebindingTmpl), values)
+			objs, err := p.Process(tmpl, values)
 			require.NoError(t, err)
 			err = p.Apply(objs)
 
@@ -355,18 +342,17 @@ func TestProcessAndApply(t *testing.T) {
 			cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
 				return errors.New("failed to update resource")
 			}
-			values := map[string]string{
-				"PROJECT_NAME": namespace,
-				"COMMIT":       commit,
-				"USER_NAME":    user,
-			}
-			objs, err := p.Process([]byte(rolebindingTmpl), values)
+			tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
+			require.NoError(t, err)
+			objs, err := p.Process(tmpl, values)
 			require.NoError(t, err)
 			err = p.Apply(objs)
 			require.NoError(t, err)
 
 			// when
-			objs, err = p.Process([]byte(rolebindingTmpl), values)
+			tmpl, err = decodeTemplate(decoder, rolebindingTmpl)
+			require.NoError(t, err)
+			objs, err = p.Process(tmpl, values)
 			require.NoError(t, err)
 			err = p.Apply(objs)
 
@@ -379,13 +365,14 @@ func TestProcessAndApply(t *testing.T) {
 
 		// given
 		values := map[string]string{
-			"PROJECT_NAME": namespace,
-			"COMMIT":       commit,
-			"USER_NAME":    user,
+			"USERNAME": user,
+			"COMMIT":   commit,
 		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		objs, err := p.Process([]byte(namespaceAndRolebindingTmpl), values)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		require.NoError(t, err)
+		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
 
 		// when adding labels and an owner reference
@@ -408,7 +395,7 @@ func TestProcessAndApply(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		ns := assertNamespaceExists(t, cl, namespace)
+		ns := assertNamespaceExists(t, cl, user)
 		// verify labels
 		assert.Equal(t, map[string]string{
 			"provider": "codeready-toolchain",
@@ -440,19 +427,18 @@ func getNameWithTimestamp(prefix string) string {
 func assertObject(t *testing.T, expectedObj expectedObj, actual runtime.RawExtension) {
 	// objJson, err := actual.Marshal()
 	// require.NoError(t, err, "failed to marshal json from unstructured object")
-	expected, err := newObject(expectedObj.template, expectedObj.projectName, expectedObj.username, expectedObj.commit)
+	expected, err := newObject(expectedObj.template, expectedObj.username, expectedObj.commit)
 	require.NoError(t, err, "failed to create object from template")
 	assert.Equal(t, expected, actual.Object)
 }
 
 type expectedObj struct {
-	template    string
-	projectName string
-	username    string
-	commit      string
+	template string
+	username string
+	commit   string
 }
 
-func newObject(template, projectName, username, commit string) (*unstructured.Unstructured, error) {
+func newObject(template, username, commit string) (*unstructured.Unstructured, error) {
 	tmpl := texttemplate.New("")
 	tmpl, err := tmpl.Parse(template)
 	if err != nil {
@@ -460,13 +446,11 @@ func newObject(template, projectName, username, commit string) (*unstructured.Un
 	}
 	buf := bytes.NewBuffer(nil)
 	err = tmpl.Execute(buf, struct {
-		ProjectName string
-		Username    string
-		Commit      string
+		Username string
+		Commit   string
 	}{
-		ProjectName: projectName,
-		Username:    username,
-		Commit:      commit,
+		Username: username,
+		Commit:   commit,
 	})
 	if err != nil {
 		return nil, err
@@ -497,6 +481,18 @@ func assertRoleBindingExists(t *testing.T, c client.Client, ns string) authv1.Ro
 	return rb
 }
 
+func decodeTemplate(decoder runtime.Decoder, tmplContent string) (*templatev1.Template, error) {
+	obj, _, err := decoder.Decode([]byte(tmplContent), nil, nil)
+	if err != nil {
+		return nil, errs.Wrapf(err, "unable to decode template")
+	}
+	tmpl, ok := obj.(*templatev1.Template)
+	if !ok {
+		return nil, fmt.Errorf("unable to convert object type %T to Template, must be a v1.Template", obj)
+	}
+	return tmpl, nil
+}
+
 const (
 	namespaceTmpl = `apiVersion: template.openshift.io/v1
 kind: Template
@@ -510,17 +506,15 @@ objects:
   kind: Namespace
   metadata:
     annotations:
-      openshift.io/description: ${PROJECT_NAME}-user
-      openshift.io/display-name: ${PROJECT_NAME}
-      openshift.io/requester: ${USER_NAME}
+      openshift.io/description: ${USERNAME}-user
+      openshift.io/display-name: ${USERNAME}
+      openshift.io/requester: ${USERNAME}
     labels:
       provider: codeready-toolchain
       version: ${COMMIT}
-    name: ${PROJECT_NAME}
+    name: ${USERNAME}
 parameters:
-- name: PROJECT_NAME
-  required: true
-- name: USER_NAME
+- name: USERNAME
   value: toolchain-dev
   required: true
 - name: COMMIT
@@ -538,18 +532,16 @@ objects:
 - apiVersion: authorization.openshift.io/v1
   kind: RoleBinding
   metadata:
-    name: ${PROJECT_NAME}-edit
-    namespace: ${PROJECT_NAME}
+    name: ${USERNAME}-edit
+    namespace: ${USERNAME}
   roleRef:
     kind: ClusterRole
     name: edit
   subjects:
   - kind: User
-    name: ${USER_NAME}
+    name: ${USERNAME}
 parameters:
-- name: PROJECT_NAME
-  required: true
-- name: USER_NAME
+- name: USERNAME
   value: toolchain-dev
   required: true
 - name: COMMIT
@@ -568,29 +560,26 @@ objects:
   kind: Namespace
   metadata:
     annotations:
-      openshift.io/description: ${PROJECT_NAME}-user
-      openshift.io/display-name: ${PROJECT_NAME}
-      openshift.io/requester: ${USER_NAME}
+      openshift.io/description: ${USERNAME}-user
+      openshift.io/display-name: ${USERNAME}
+      openshift.io/requester: ${USERNAME}
     labels:
       provider: codeready-toolchain
       version: ${COMMIT}
-    name: ${PROJECT_NAME}
+    name: ${USERNAME}
 - apiVersion: authorization.openshift.io/v1
   kind: RoleBinding
   metadata:
-    name: ${PROJECT_NAME}-edit
-    namespace: ${PROJECT_NAME}
+    name: ${USERNAME}-edit
+    namespace: ${USERNAME}
   roleRef:
     kind: ClusterRole
     name: edit
   subjects:
   - kind: User
-    name: ${USER_NAME}
+    name: ${USERNAME}
 parameters:
-- name: PROJECT_NAME
-  required: true
-- name: USER_NAME
-  value: toolchain-dev
+- name: USERNAME
   required: true
 - name: COMMIT
   value: 123abc
@@ -608,52 +597,48 @@ objects:
   kind: Namespace
   metadata:
     annotations:
-      openshift.io/description: ${PROJECT_NAME}-user
-      openshift.io/display-name: ${PROJECT_NAME}
-      openshift.io/requester: ${USER_NAME}
+      openshift.io/description: ${USERNAME}-user
+      openshift.io/display-name: ${USERNAME}
+      openshift.io/requester: ${USERNAME}
     labels:
       provider: codeready-toolchain
       version: ${COMMIT}
-    name: ${PROJECT_NAME}
+    name: ${USERNAME}
 - apiVersion: authorization.openshift.io/v1
   kind: RoleBinding
   metadata:
-    name: ${PROJECT_NAME}-edit
-    namespace: ${PROJECT_NAME}
+    name: ${USERNAME}-edit
+    namespace: ${USERNAME}
   roleRef:
     kind: ClusterRole
     name: edit
   subjects:
   - kind: User
-    name: ${USER_NAME}
+    name: ${USERNAME}
   - kind: User
     name: extraUser
 parameters:
-- name: PROJECT_NAME
-  required: true
-- name: USER_NAME
+- name: USERNAME
   value: toolchain-dev
   required: true
 - name: COMMIT
   value: 123abc
   required: true`
 
-	invalidTmpl = `foo`
-
 	namespaceObj = `{ 
 	"apiVersion": "v1",
 	"kind": "Namespace",
 	"metadata": {
 		"annotations": {
-			"openshift.io/description": "{{ .ProjectName }}-user",
-			"openshift.io/display-name": "{{ .ProjectName }}",
+			"openshift.io/description": "{{ .Username }}-user",
+			"openshift.io/display-name": "{{ .Username }}",
 			"openshift.io/requester": "{{ .Username }}"
 		},
 		"labels": {
 			"provider": "codeready-toolchain",
 			"version": "{{ .Commit }}"
 		},
-		"name": "{{ .ProjectName }}"
+		"name": "{{ .Username }}"
 	}
 }`
 
@@ -661,8 +646,8 @@ parameters:
 	"apiVersion": "authorization.openshift.io/v1",
 	"kind": "RoleBinding",
 	"metadata": {
-		"name": "{{ .ProjectName }}-edit",
-    	"namespace": "{{ .ProjectName }}"
+		"name": "{{ .Username }}-edit",
+    	"namespace": "{{ .Username }}"
 	},
 	"roleRef": {
 		"kind": "ClusterRole",

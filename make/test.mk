@@ -100,6 +100,7 @@ ifeq ($(E2E_REPO_PATH),"")
 		@echo "using pull sha ${PULL_SHA}"
 		# get branch ref of the fork the PR was created from
 		$(eval BRANCH_REF := $(shell curl ${AUTHOR_LINK}/member-operator.git/info/refs?service=git-upload-pack --output - 2>/dev/null | grep -a ${PULL_SHA} | awk '{print $$2}'))
+		$(eval BRANCH_NAME := $(shell echo ${BRANCH_REF} | awk -F'/' '{print $$3}'))
 		@echo "detected branch ref ${BRANCH_REF}"
 		# check if a branch with the same ref exists in the user's fork of toolchain-e2e repo
 		$(eval REMOTE_E2E_BRANCH := $(shell curl ${AUTHOR_LINK}/toolchain-e2e.git/info/refs?service=git-upload-pack --output - 2>/dev/null | grep -a ${BRANCH_REF} | awk '{print $$2}'))
@@ -113,11 +114,11 @@ ifeq ($(E2E_REPO_PATH),"")
 			# add the user's fork as remote repo \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} remote add external ${AUTHOR_LINK}/toolchain-e2e.git; \
 			# fetch the branch \
-			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch --deepen=10 external ${BRANCH_REF}; \
+			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch --deepen=10 external ${BRANCH_REF}:${BRANCH_NAME}; \
 			# check if branches are ready to be merged \
-			while [[ -z `git merge-base master external/${BRANCH_NAME}` ]]; do \
-			    git fetch -q --deepen=10 origin master; \
-			    git fetch -q --deepen=10 external ${BRANCH_REF}; \
+			while [[ -z `git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge-base master external/${BRANCH_NAME}` ]]; do \
+			    git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch -q --deepen=10 origin master; \
+			    git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch -q --deepen=10 external ${BRANCH_REF}; \
 			done; \
 			# merge the branch with master \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge --allow-unrelated-histories external/${BRANCH_NAME}; \

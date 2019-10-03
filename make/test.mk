@@ -94,7 +94,7 @@ ifeq ($(E2E_REPO_PATH),"")
 	# delete to have clear environment
 	rm -rf ${E2E_REPO_PATH}
 	# clone
-	git clone https://github.com/codeready-toolchain/toolchain-e2e.git --depth 1 ${E2E_REPO_PATH}
+	git clone https://github.com/codeready-toolchain/toolchain-e2e.git ${E2E_REPO_PATH}
     ifneq ($(CLONEREFS_OPTIONS),)
 		@echo "using author link ${AUTHOR_LINK}"
 		@echo "using pull sha ${PULL_SHA}"
@@ -106,6 +106,8 @@ ifeq ($(E2E_REPO_PATH),"")
 		@echo "branch ref of the user's fork: \"${REMOTE_E2E_BRANCH}\" - if empty then not found"
 		# check if the branch with the same name exists, if so then merge it with master and use the merge branch, if not then use master
 		if [[ -n "${REMOTE_E2E_BRANCH}" ]]; then \
+			git config --global user.email "devtools@redhat.com"; \
+			git config --global user.name "Devtools"; \
 			# retrieve the branch name \
 			BRANCH_NAME=`echo ${BRANCH_REF} | awk -F'/' '{print $$3}'`; \
 			# add the user's fork as remote repo \

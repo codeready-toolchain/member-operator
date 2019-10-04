@@ -200,15 +200,6 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 }
 
-func activate(t *testing.T, client client.Client, nsName string) {
-	ns := &corev1.Namespace{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: nsName}, ns)
-	require.NoError(t, err)
-	ns.Status.Phase = corev1.NamespaceActive
-	err = client.Update(context.TODO(), ns)
-	require.NoError(t, err)
-}
-
 func createNamespace(t *testing.T, client client.Client, username, revision, typeName string) *corev1.Namespace {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	ns := &corev1.Namespace{

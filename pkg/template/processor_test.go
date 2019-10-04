@@ -13,8 +13,8 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
-	testtemplate "github.com/codeready-toolchain/member-operator/pkg/test/template"
 	authv1 "github.com/openshift/api/authorization/v1"
+	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -46,7 +46,7 @@ func TestProcess(t *testing.T) {
 			"USERNAME": user,
 			"COMMIT":   commit,
 		}
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 		require.NoError(t, err)
 
 		// when
@@ -76,7 +76,7 @@ func TestProcess(t *testing.T) {
 			"USERNAME": user,
 			"COMMIT":   commit,
 		}
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 		require.NoError(t, err)
 
 		// when
@@ -108,7 +108,7 @@ func TestProcess(t *testing.T) {
 			"COMMIT":   commit,
 			"random":   random, // extra, unused param
 		}
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceTmpl)
 		require.NoError(t, err)
 
 		// when
@@ -130,7 +130,7 @@ func TestProcess(t *testing.T) {
 		values := map[string]string{
 			"USERNAME": user,
 		}
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 		require.NoError(t, err)
 
 		// when
@@ -156,7 +156,7 @@ func TestProcess(t *testing.T) {
 	t.Run("should fail because of missing required parameter", func(t *testing.T) {
 		// given
 		values := make(map[string]string)
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 		require.NoError(t, err)
 
 		// when
@@ -174,7 +174,7 @@ func TestProcess(t *testing.T) {
 			values := map[string]string{
 				"USERNAME": user,
 			}
-			tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+			tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 			require.NoError(t, err)
 
 			// when
@@ -197,7 +197,7 @@ func TestProcess(t *testing.T) {
 				"USERNAME": user,
 				"COMMIT":   commit,
 			}
-			tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+			tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 			require.NoError(t, err)
 
 			// when
@@ -235,7 +235,7 @@ func TestProcessAndApply(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceTmpl)
 		require.NoError(t, err)
 		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestProcessAndApply(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		tmpl, err := testtemplate.DecodeTemplate(decoder, rolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
 		require.NoError(t, err)
 		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestProcessAndApply(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 		require.NoError(t, err)
 		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
@@ -288,7 +288,7 @@ func TestProcessAndApply(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		tmpl, err := testtemplate.DecodeTemplate(decoder, rolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
 		require.NoError(t, err)
 		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestProcessAndApply(t *testing.T) {
 		assertRoleBindingExists(t, cl, user)
 
 		// when rolebinding changes
-		tmpl, err = testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingWithExtraUserTmpl)
+		tmpl, err = decodeTemplate(decoder, namespaceAndRolebindingWithExtraUserTmpl)
 		require.NoError(t, err)
 		objs, err = p.Process(tmpl, values)
 		require.NoError(t, err)
@@ -322,7 +322,7 @@ func TestProcessAndApply(t *testing.T) {
 			cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
 				return errors.New("failed to create resource")
 			}
-			tmpl, err := testtemplate.DecodeTemplate(decoder, rolebindingTmpl)
+			tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
 			require.NoError(t, err)
 
 			// when
@@ -341,7 +341,7 @@ func TestProcessAndApply(t *testing.T) {
 			cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
 				return errors.New("failed to update resource")
 			}
-			tmpl, err := testtemplate.DecodeTemplate(decoder, rolebindingTmpl)
+			tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
 			require.NoError(t, err)
 			objs, err := p.Process(tmpl, values)
 			require.NoError(t, err)
@@ -349,7 +349,7 @@ func TestProcessAndApply(t *testing.T) {
 			require.NoError(t, err)
 
 			// when
-			tmpl, err = testtemplate.DecodeTemplate(decoder, rolebindingTmpl)
+			tmpl, err = decodeTemplate(decoder, rolebindingTmpl)
 			require.NoError(t, err)
 			objs, err = p.Process(tmpl, values)
 			require.NoError(t, err)
@@ -369,7 +369,7 @@ func TestProcessAndApply(t *testing.T) {
 		}
 		cl := test.NewFakeClient(t)
 		p := template.NewProcessor(cl, s)
-		tmpl, err := testtemplate.DecodeTemplate(decoder, namespaceAndRolebindingTmpl)
+		tmpl, err := decodeTemplate(decoder, namespaceAndRolebindingTmpl)
 		require.NoError(t, err)
 		objs, err := p.Process(tmpl, values)
 		require.NoError(t, err)
@@ -480,8 +480,17 @@ func assertRoleBindingExists(t *testing.T, c client.Client, ns string) authv1.Ro
 	return rb
 }
 
-var (
-	namespaceTmpl = []byte(`apiVersion: template.openshift.io/v1
+func decodeTemplate(decoder runtime.Decoder, tmplContent string) (*templatev1.Template, error) {
+	tmpl := &templatev1.Template{}
+	_, _, err := decoder.Decode([]byte(tmplContent), nil, tmpl)
+	if err != nil {
+		return nil, err
+	}
+	return tmpl, err
+}
+
+const (
+	namespaceTmpl = `apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
   labels:
@@ -506,9 +515,9 @@ parameters:
   required: true
 - name: COMMIT
   value: 123abc
-  required: true`)
+  required: true`
 
-	rolebindingTmpl = []byte(`apiVersion: template.openshift.io/v1
+	rolebindingTmpl = `apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
   labels:
@@ -533,9 +542,9 @@ parameters:
   required: true
 - name: COMMIT
   value: 123abc
-  required: true`)
+  required: true`
 
-	namespaceAndRolebindingTmpl = []byte(`apiVersion: template.openshift.io/v1
+	namespaceAndRolebindingTmpl = `apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
   labels:
@@ -570,9 +579,9 @@ parameters:
   required: true
 - name: COMMIT
   value: 123abc
-  required: true`)
+  required: true`
 
-	namespaceAndRolebindingWithExtraUserTmpl = []byte(`apiVersion: template.openshift.io/v1
+	namespaceAndRolebindingWithExtraUserTmpl = `apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
   labels:
@@ -610,7 +619,7 @@ parameters:
   required: true
 - name: COMMIT
   value: 123abc
-  required: true`)
+  required: true`
 
 	namespaceObj = `{ 
 	"apiVersion": "v1",

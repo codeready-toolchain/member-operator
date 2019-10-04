@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	testtemplate "github.com/codeready-toolchain/member-operator/pkg/test/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -336,6 +335,12 @@ func wrapTetTemplateContent(decoder runtime.Decoder) func(tierName, typeName str
 		if err != nil {
 			return nil, err
 		}
-		return testtemplate.DecodeTemplate(decoder, tmplContent)
+
+		tmpl := &templatev1.Template{}
+		_, _, err = decoder.Decode(tmplContent, nil, tmpl)
+		if err != nil {
+			return nil, err
+		}
+		return tmpl, err
 	}
 }

@@ -75,28 +75,40 @@ func TestNextMissingNamespace(t *testing.T) {
 		{Type: "stage", Revision: "abcde31"},
 	}
 
-	// revision not set
-	tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
-	assert.True(t, found)
-	assert.Equal(t, "code", tcNS.Type)
-	assert.Equal(t, "johnsmith-code", userNS.GetName())
+	t.Run("revision_not_set", func(t *testing.T) {
+		// test
+		tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
 
-	// missing namespace
-	userNamespaces[1].Labels["revision"] = "abcde11"
-	tcNS, userNS, found = nextNamespaceToProvision(tcNamespaces, userNamespaces)
-	assert.True(t, found)
-	assert.Equal(t, "stage", tcNS.Type)
-	assert.Nil(t, userNS)
-
-	// namespace not found
-	userNamespaces = append(userNamespaces, corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "johnsmith-stage", Labels: map[string]string{"revision": "abcde11", "type": "stage"},
-		},
-		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
+		assert.True(t, found)
+		assert.Equal(t, "code", tcNS.Type)
+		assert.Equal(t, "johnsmith-code", userNS.GetName())
 	})
-	_, _, found = nextNamespaceToProvision(tcNamespaces, userNamespaces)
-	assert.False(t, found)
+
+	t.Run("missing_namespace", func(t *testing.T) {
+		userNamespaces[1].Labels["revision"] = "abcde11"
+
+		// test
+		tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
+
+		assert.True(t, found)
+		assert.Equal(t, "stage", tcNS.Type)
+		assert.Nil(t, userNS)
+	})
+
+	t.Run("namespace_not_found", func(t *testing.T) {
+		userNamespaces[1].Labels["revision"] = "abcde11"
+		userNamespaces = append(userNamespaces, corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "johnsmith-stage", Labels: map[string]string{"revision": "abcde11", "type": "stage"},
+			},
+			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
+		})
+
+		// test
+		_, _, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
+
+		assert.False(t, found)
+	})
 }
 
 func TestReconcileProvisionOK(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -109,6 +111,68 @@ func TestNextMissingNamespace(t *testing.T) {
 
 		assert.False(t, found)
 	})
+}
+
+func TestGetNamespaceName(t *testing.T) {
+	t.Run("request_namespace", func(t *testing.T) {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "any-name",
+				Namespace: namespaceName,
+			},
+		}
+
+		// test
+		nsName, err := getNamespaceName(req)
+
+		require.NoError(t, err)
+		assert.Equal(t, namespaceName, nsName)
+	})
+
+	t.Run("watch_namespace", func(t *testing.T) {
+		currWatchNs := os.Getenv(k8sutil.WatchNamespaceEnvVar)
+
+		err := os.Setenv(k8sutil.WatchNamespaceEnvVar, namespaceName)
+		require.NoError(t, err)
+		defer func() {
+			if currWatchNs == "" {
+				err := os.Unsetenv(k8sutil.WatchNamespaceEnvVar)
+				require.NoError(t, err)
+				return
+			}
+			err := os.Setenv(k8sutil.WatchNamespaceEnvVar, currWatchNs)
+			require.NoError(t, err)
+		}()
+
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "any-name",
+				Namespace: "", // blank
+			},
+		}
+
+		// test
+		nsName, err := getNamespaceName(req)
+
+		require.NoError(t, err)
+		assert.Equal(t, namespaceName, nsName)
+	})
+
+	t.Run("no_namespace", func(t *testing.T) {
+		req := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "any-name",
+				Namespace: "", // blank
+			},
+		}
+
+		// test
+		nsName, err := getNamespaceName(req)
+
+		require.Error(t, err)
+		assert.Equal(t, "", nsName)
+	})
+
 }
 
 func TestReconcileProvisionOK(t *testing.T) {

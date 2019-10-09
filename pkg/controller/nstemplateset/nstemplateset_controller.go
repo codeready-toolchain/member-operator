@@ -90,13 +90,10 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 	reqLogger.Info("Reconciling NSTemplateSet")
 
 	var err error
-	namespace := request.Namespace
-	if namespace == "" {
-		namespace, err = k8sutil.GetWatchNamespace()
-		if err != nil {
-			reqLogger.Error(err, "failed to determine resource namespace")
-			return reconcile.Result{}, err
-		}
+	namespace, err := getNamespaceName(request)
+	if err != nil {
+		reqLogger.Error(err, "failed to determine resource namespace")
+		return reconcile.Result{}, err
 	}
 
 	// Fetch the NSTemplateSet instance
@@ -277,6 +274,14 @@ func getTemplateContentFromHost(tierName, typeName string) (*templatev1.Template
 	}
 	tmpl := templates[typeName].Template
 	return &tmpl, nil
+}
+
+func getNamespaceName(request reconcile.Request) (string, error) {
+	namespace := request.Namespace
+	if namespace == "" {
+		return k8sutil.GetWatchNamespace()
+	}
+	return namespace, nil
 }
 
 // error handling methods

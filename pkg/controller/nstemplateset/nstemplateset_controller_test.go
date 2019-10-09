@@ -261,8 +261,8 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	err := cl.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
 	require.NoError(t, err)
-	require.Equal(t, namespace.Labels["owner"], username)
-	require.Equal(t, namespace.Labels["type"], typeName)
+	require.Equal(t, username, namespace.Labels["owner"])
+	require.Equal(t, typeName, namespace.Labels["type"])
 	return namespace
 }
 

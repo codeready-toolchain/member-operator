@@ -232,7 +232,15 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		// test
 		reconcile(r, req)
+
 		checkReadyCond(t, fakeClient, username, corev1.ConditionTrue, "Provisioned")
+	})
+
+	t.Run("nstmplset_not_found", func(t *testing.T) {
+		r, req, _ := prepareReconcile(t, username)
+
+		// test
+		reconcile(r, req)
 	})
 }
 
@@ -257,6 +265,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 		// test
 		reconcile(r, req, "unable to create namespace")
+
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "UnableToProvisionNamespace")
 	})
 
@@ -271,9 +280,31 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 		// test
 		reconcile(r, req, "unable to create some object")
+
 		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "UnableToProvisionNamespace")
 	})
 
+	t.Run("fail_list_namespace", func(t *testing.T) {
+		r, req, fakeClient := prepareReconcile(t, username, nsTmplSet)
+		fakeClient.MockList = func(ctx context.Context, opts *client.ListOptions, list runtime.Object) error {
+			return errors.New("unable to list namespace")
+		}
+
+		// test
+		reconcile(r, req, "unable to list namespace")
+
+		checkStatus(t, fakeClient, username, corev1.ConditionFalse, "UnableToProvision")
+	})
+
+	t.Run("fail_get_nstmplset", func(t *testing.T) {
+		r, req, fakeClient := prepareReconcile(t, username)
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+			return errors.New("unable to get NSTemplate")
+		}
+
+		// test
+		reconcile(r, req, "unable to get NSTemplate")
+	})
 }
 
 func createNamespace(t *testing.T, client client.Client, username, revision, typeName string) *corev1.Namespace {

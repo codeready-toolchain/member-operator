@@ -5,7 +5,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
 	github.com/codeready-toolchain/api v0.0.0-20191009081803-8f4e395353de
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20190926125002-408e9c1b28de
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20191010043304-822e291d04cb
 	github.com/go-logr/logr v0.1.0
 	github.com/gobuffalo/envy v1.7.1 // indirect
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
@@ -30,8 +30,6 @@ require (
 	sigs.k8s.io/controller-tools v0.2.1
 	sigs.k8s.io/kubefed v0.1.0-rc2
 )
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/MatousJobanek/toolchain-common v0.0.0-20191009091227-b631ea4cbdc3
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible

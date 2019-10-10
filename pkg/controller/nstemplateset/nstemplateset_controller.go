@@ -214,7 +214,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 	}
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 
 	if namespace.Labels == nil {
@@ -225,7 +225,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
 
-	log.Info("namespace provisioned", "namespace", tcNamespace)
+	log.Info("namespace provisioned with required resources", "namespace", tcNamespace)
 
 	// TODO add validation for other objects
 	return nil
@@ -233,12 +233,12 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 
 // nextNamespaceToProvision returns first namespace (from given namespaces) with
 // namespace status is active and revision not set
-// or namesapce present in tcNamespaces but not found in given namespaces
+// or namespace present in tcNamespaces but not found in given namespaces
 func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.NSTemplateSetNamespace, namespaces []corev1.Namespace) (*toolchainv1alpha1.NSTemplateSetNamespace, *corev1.Namespace, bool) {
 	for _, tcNamespace := range tcNamespaces {
 		namespace, found := findNamespace(namespaces, tcNamespace.Type)
 		if found {
-			if namespace.Status.Phase == corev1.NamespaceActive && namespace.GetLabels()["revision"] == "" {
+			if namespace.Status.Phase == corev1.NamespaceActive && namespace.Labels["revision"] == "" {
 				return &tcNamespace, &namespace, true
 			}
 		} else {
@@ -250,7 +250,7 @@ func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.NSTemplateSetName
 
 func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Namespace, bool) {
 	for _, ns := range namespaces {
-		if ns.GetLabels()["type"] == typeName {
+		if ns.Labels["type"] == typeName {
 			return ns, true
 		}
 	}

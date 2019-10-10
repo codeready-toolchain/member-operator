@@ -125,8 +125,7 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 	opts := client.MatchingLabels(labels)
 	userNamespaceList := &corev1.NamespaceList{}
 	if err := r.client.List(context.TODO(), opts, userNamespaceList); err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
-			"failed to list namespace with label owner '%s'", username)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
 	userNamespaces := userNamespaceList.Items
 
@@ -161,22 +160,19 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 
 	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to to retrieve template for namespace type '%s'", tcNamespace.Type)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to to retrieve template for namespace type '%s'", tcNamespace.Type)
 	}
 
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)
 	objs, err := tmplProcessor.Process(tmpl, params, template.RetainNamespaces)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to process template for namespace type '%s'", tcNamespace.Type)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tcNamespace.Type)
 	}
 
 	for _, rawObj := range objs {
 		acc, err := meta.Accessor(rawObj.Object)
 		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-				"invalid element in template for namespace type '%s'", tcNamespace.Type)
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "invalid element in template for namespace type '%s'", tcNamespace.Type)
 		}
 
 		// set labels
@@ -190,15 +186,13 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 
 		// set owner ref
 		if err := controllerutil.SetControllerReference(nsTmplSet, acc, r.scheme); err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-				"failed to set controller reference for namespace type '%s'", tcNamespace.Type)
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller reference for namespace type '%s'", tcNamespace.Type)
 		}
 	}
 
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to create namespace with type '%s'", tcNamespace.Type)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tcNamespace.Type)
 	}
 
 	log.Info("namespace provisioned", "namespace", tcNamespace)
@@ -210,20 +204,17 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 
 	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to to retrieve template for namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to to retrieve template for namespace '%s'", nsName)
 	}
 
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)
 	objs, err := tmplProcessor.Process(tmplContent, params, template.RetainAllButNamespaces)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to process template for namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to provision namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s'", nsName)
 	}
 
 	if namespace.Labels == nil {
@@ -231,8 +222,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 	}
 	namespace.Labels["revision"] = tcNamespace.Revision
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
-			"failed to update namespace '%s'", nsName)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
 
 	log.Info("namespace provisioned", "namespace", tcNamespace)

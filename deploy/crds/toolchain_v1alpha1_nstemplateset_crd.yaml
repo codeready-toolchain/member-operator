@@ -41,7 +41,7 @@ spec:
         spec:
           properties:
             namespaces:
-              description: The namespace templates
+              description: The namespace templates +listType
               items:
                 properties:
                   revision:
@@ -69,7 +69,8 @@ spec:
           properties:
             conditions:
               description: 'Conditions is an array of current NSTemplateSet conditions
-                Supported condition types: ConditionReady +patchMergeKey=type +patchStrategy=merge'
+                Supported condition types: ConditionReady +patchMergeKey=type +patchStrategy=merge
+                +listType'
               items:
                 properties:
                   lastTransitionTime:

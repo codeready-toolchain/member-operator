@@ -266,7 +266,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to create namespace")
 
-		checkStatus(t, fakeClient, corev1.ConditionFalse, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_create_inner_resources", func(t *testing.T) {
@@ -281,7 +281,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to create some object")
 
-		checkStatus(t, fakeClient, corev1.ConditionFalse, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_update_status_for_inner_resources", func(t *testing.T) {
@@ -296,7 +296,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to update NSTmlpSet")
 
-		checkStatus(t, fakeClient, corev1.ConditionFalse, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_list_namespace", func(t *testing.T) {
@@ -308,7 +308,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to list namespace")
 
-		checkStatus(t, fakeClient, corev1.ConditionFalse, "UnableToProvision")
+		checkStatus(t, fakeClient, "UnableToProvision")
 	})
 
 	t.Run("fail_get_nstmplset", func(t *testing.T) {
@@ -349,7 +349,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "failed to to retrieve template for namespace")
 
-		checkStatus(t, fakeClient, corev1.ConditionFalse, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_get_template_for_inner_resource", func(t *testing.T) {
@@ -372,7 +372,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "failed to to retrieve template for namespace")
 
-		checkStatus(t, fakeClient, corev1.ConditionFalse, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
 	})
 
 	t.Run("no_namespace", func(t *testing.T) {
@@ -522,7 +522,7 @@ func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {
 	require.NoError(t, err)
 }
 
-func checkStatus(t *testing.T, client *test.FakeClient, wantStatus corev1.ConditionStatus, wantReason string) {
+func checkStatus(t *testing.T, client *test.FakeClient, wantReason string) {
 	t.Helper()
 
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
@@ -530,11 +530,11 @@ func checkStatus(t *testing.T, client *test.FakeClient, wantStatus corev1.Condit
 	require.NoError(t, err)
 	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
 	assert.True(t, found)
-	assert.Equal(t, wantStatus, readyCond.Status)
+	assert.Equal(t, corev1.ConditionFalse, readyCond.Status)
 	assert.Equal(t, wantReason, readyCond.Reason)
 }
 
-func newNSTmplSet(conditions ...toolchainv1alpha1.Condition) *toolchainv1alpha1.NSTemplateSet {
+func newNSTmplSet() *toolchainv1alpha1.NSTemplateSet {
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      username,
@@ -546,9 +546,6 @@ func newNSTmplSet(conditions ...toolchainv1alpha1.Condition) *toolchainv1alpha1.
 				{Type: "dev", Revision: "abcde11", Template: ""},
 				{Type: "code", Revision: "abcde21", Template: ""},
 			},
-		},
-		Status: toolchainv1alpha1.NSTemplateSetStatus{
-			Conditions: conditions,
 		},
 	}
 	return nsTmplSet

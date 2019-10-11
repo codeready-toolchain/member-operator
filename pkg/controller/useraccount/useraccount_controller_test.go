@@ -396,6 +396,35 @@ func TestReconcile(t *testing.T) {
 			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToCreateNSTemplateSet", "unable to create NSTemplateSet")
 		})
 
+		t.Run("provision status failed", func(t *testing.T) {
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object) error {
+				return errors.New("unable to update status")
+			}
+
+			// test
+			_, err := r.Reconcile(req)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unable to update status")
+		})
+
+		t.Run("namespace provision status failed", func(t *testing.T) {
+			userAcc := newUserAccountWithStatus(username, userID)
+			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
+
+			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object) error {
+				return errors.New("unable to update status")
+			}
+
+			// test
+			_, err := r.Reconcile(req)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unable to update status")
+		})
+
 	})
 
 	// Last cycle of reconcile. User, Identity created/updated.

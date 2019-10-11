@@ -4,8 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -90,6 +94,24 @@ func main() {
 	// Become the leader before proceeding
 	err = leader.Become(ctx, "member-operator-lock")
 	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	// Setup Scheme for all resources
+	s := scheme.Scheme
+	if err := apis.AddToScheme(s); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	cl, err := client.New(cfg, client.Options{})
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	if err := cluster.EnsureKubeFedClusterCrd(s, cl); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}

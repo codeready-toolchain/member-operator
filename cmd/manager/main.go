@@ -96,21 +96,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup Scheme for all resources
-	s := scheme.Scheme
-	if err := apis.AddToScheme(s); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
-	cl, err := client.New(cfg, client.Options{})
-	if err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
-	if err := cluster.EnsureKubeFedClusterCrd(s, cl); err != nil {
-		log.Error(err, "")
+	if err := ensureKubeFedClusterCrd(cfg); err != nil {
+		log.Error(err, "Unable to ensure the existence of the KubeFedCluster CRD")
 		os.Exit(1)
 	}
 
@@ -182,6 +169,29 @@ func main() {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
+}
+
+// ensureKubeFedClusterCrd ensure that KubeFedCluster CRD exists in the cluster.
+// This function has to be created before creating/starting cache, the client and controllers
+func ensureKubeFedClusterCrd(config *rest.Config) error {
+	// setup Scheme for KubeFedCluster CRD creator
+	s := scheme.Scheme
+	if err := apis.AddToScheme(s); err != nil {
+		return err
+	}
+
+	// create client that will be used only for creating KubeFedCluster CRD
+	cl, err := client.New(config, client.Options{})
+	if err != nil {
+		return err
+	}
+
+	// create the KubeFedCluster CRD
+	if err := cluster.EnsureKubeFedClusterCrd(s, cl); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // serveCRMetrics gets the Operator/CustomResource GVKs and generates metrics based on those types.

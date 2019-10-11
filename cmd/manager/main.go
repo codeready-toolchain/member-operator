@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"runtime"
-
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -94,6 +96,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup Scheme for all resources
+	s := scheme.Scheme
+	if err := apis.AddToScheme(s); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	cl, err := client.New(cfg, client.Options{})
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	if err := cluster.EnsureKubeFedClusterCrd(s, cl); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
 	// Create a new Cmd to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, manager.Options{
 		Namespace:          namespace,
@@ -151,7 +171,7 @@ func main() {
 
 	log.Info("Starting KubeFedCluster controllers.")
 	if err = controller.StartKubeFedClusterControllers(mgr, stopChannel); err != nil {
-		log.Error(err, "")
+		log.Error(err, "Unable to start the KubeFedCluster controllers")
 		os.Exit(1)
 	}
 

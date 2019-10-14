@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"k8s.io/client-go/kubernetes/scheme"
 	"os"
 	"runtime"
-
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -94,6 +96,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := ensureKubeFedClusterCrd(cfg); err != nil {
+		log.Error(err, "Unable to ensure the existence of the KubeFedCluster CRD")
+		os.Exit(1)
+	}
+
 	// Create a new Cmd to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, manager.Options{
 		Namespace:          namespace,
@@ -151,7 +158,7 @@ func main() {
 
 	log.Info("Starting KubeFedCluster controllers.")
 	if err = controller.StartKubeFedClusterControllers(mgr, stopChannel); err != nil {
-		log.Error(err, "")
+		log.Error(err, "Unable to start the KubeFedCluster controllers")
 		os.Exit(1)
 	}
 
@@ -162,6 +169,29 @@ func main() {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
+}
+
+// ensureKubeFedClusterCrd ensure that KubeFedCluster CRD exists in the cluster.
+// This function has to be created before creating/starting cache, the client and controllers
+func ensureKubeFedClusterCrd(config *rest.Config) error {
+	// setup Scheme for KubeFedCluster CRD creator
+	s := scheme.Scheme
+	if err := apis.AddToScheme(s); err != nil {
+		return err
+	}
+
+	// create client that will be used only for creating KubeFedCluster CRD
+	cl, err := client.New(config, client.Options{})
+	if err != nil {
+		return err
+	}
+
+	// create the KubeFedCluster CRD
+	if err := cluster.EnsureKubeFedClusterCrd(s, cl); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // serveCRMetrics gets the Operator/CustomResource GVKs and generates metrics based on those types.

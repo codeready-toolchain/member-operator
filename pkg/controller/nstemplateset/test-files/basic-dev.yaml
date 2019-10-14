@@ -12,7 +12,7 @@ objects:
       labels:
         provider: codeready-toolchain
         project: codeready-toolchain
-      name: ${USER_NAME}-dev
+      name: ${USERNAME}-dev
   - apiVersion: authorization.openshift.io/v1
     kind: RoleBinding
     metadata:
@@ -20,14 +20,14 @@ objects:
         provider: codeready-toolchain
         app: codeready-toolchain
       name: user-edit
-      namespace: ${USER_NAME}-dev
+      namespace: ${USERNAME}-dev
     roleRef:
       name: edit
     subjects:
       - kind: User
-        name: ${USER_NAME}
+        name: ${USERNAME}
     userNames:
-      - ${USER_NAME}
+      - ${USERNAME}
 parameters:
-  - name: USER_NAME
+  - name: USERNAME
     value: johnsmith

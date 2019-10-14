@@ -147,7 +147,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 		return err
 	}
 
-	params := map[string]string{"USER_NAME": username}
+	params := map[string]string{"USERNAME": username}
 
 	if userNamespace == nil {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tcNamespace, params)

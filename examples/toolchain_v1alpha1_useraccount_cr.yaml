@@ -9,9 +9,9 @@ spec:
   nsTemplateSet:
     tierName: basic
     namespaces:
-      - type: ide
-        revision: ab12ef
-      - type: cicd
+      - type: dev
         revision: 34efcd
+      - type: code
+        revision: ab12ef
       - type: stage
         revision: cdef56

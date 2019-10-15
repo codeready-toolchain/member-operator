@@ -12,7 +12,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	errs "github.com/pkg/errors"
 
 	authv1 "github.com/openshift/api/authorization/v1"
 	templatev1 "github.com/openshift/api/template/v1"
@@ -482,15 +481,12 @@ func assertRoleBindingExists(t *testing.T, c client.Client, ns string) authv1.Ro
 }
 
 func decodeTemplate(decoder runtime.Decoder, tmplContent string) (*templatev1.Template, error) {
-	obj, _, err := decoder.Decode([]byte(tmplContent), nil, nil)
+	tmpl := &templatev1.Template{}
+	_, _, err := decoder.Decode([]byte(tmplContent), nil, tmpl)
 	if err != nil {
-		return nil, errs.Wrapf(err, "unable to decode template")
+		return nil, err
 	}
-	tmpl, ok := obj.(*templatev1.Template)
-	if !ok {
-		return nil, fmt.Errorf("unable to convert object type %T to Template, must be a v1.Template", obj)
-	}
-	return tmpl, nil
+	return tmpl, err
 }
 
 const (

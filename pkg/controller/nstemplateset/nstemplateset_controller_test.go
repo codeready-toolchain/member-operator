@@ -488,7 +488,7 @@ func checkReadyCond(t *testing.T, client *test.FakeClient, wantStatus corev1.Con
 	test.AssertConditionsMatch(t, nsTmplSet.Status.Conditions, wantCond)
 }
 
-func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *corev1.Namespace {
+func checkNamespace(t *testing.T, cl client.Client, username, typeName string) {
 	t.Helper()
 
 	// TODO uncomment below code when issue fixed.
@@ -511,7 +511,6 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) *
 	require.NoError(t, err)
 	require.Equal(t, username, namespace.Labels["owner"])
 	require.Equal(t, typeName, namespace.Labels["type"])
-	return namespace
 }
 
 func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {

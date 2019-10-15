@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: '[{"apiVersion":"toolchain.dev.openshift.com/v1alpha1","kind":"NSTemplateSet","metadata":{"labels":{"username":"johnsmith"},"name":"johnsmith"},"spec":{"namespaces":[{"revision":"ab12ef","type":"ide"},{"revision":"34efcd","type":"cicd"},{"revision":"cdef56","type":"stage"}],"tierName":"basic"}},{"apiVersion":"toolchain.dev.openshift.com/v1alpha1","kind":"UserAccount","metadata":{"name":"johnsmith","namespace":"toolchain-member-operator"},"spec":{"nsLimit":"admin","nsTemplateSet":{"namespaces":[{"revision":"ab12ef","type":"ide"},{"revision":"34efcd","type":"cicd"},{"revision":"cdef56","type":"stage"}],"tierName":"basic"},"userID":"1a03ecac-7c0b-44fc-b66d-12dd7fb21c40"}}]'
+    alm-examples: '[{"apiVersion":"toolchain.dev.openshift.com/v1alpha1","kind":"NSTemplateSet","metadata":{"labels":{"username":"johnsmith"},"name":"johnsmith"},"spec":{"namespaces":[{"revision":"ab12ef","type":"ide"},{"revision":"34efcd","type":"cicd"},{"revision":"cdef56","type":"stage"}],"tierName":"basic"}},{"apiVersion":"toolchain.dev.openshift.com/v1alpha1","kind":"UserAccount","metadata":{"name":"johnsmith","namespace":"toolchain-member-operator"},"spec":{"nsLimit":"admin","nsTemplateSet":{"namespaces":[{"revision":"34efcd","type":"dev"},{"revision":"ab12ef","type":"code"},{"revision":"cdef56","type":"stage"}],"tierName":"basic"},"userID":"1a03ecac-7c0b-44fc-b66d-12dd7fb21c40"}}]'
     capabilities: Basic Install
   name: member-operator.v0.0.1
   namespace: placeholder
@@ -100,10 +100,10 @@ spec:
           resources:
           - customresourcedefinitions
           verbs:
-          - 'get'
-          - 'create'
-          - 'list'
-          - 'watch'
+          - get
+          - create
+          - list
+          - watch
         serviceAccountName: member-operator
       deployments:
       - name: member-operator

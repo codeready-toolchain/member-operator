@@ -42,6 +42,16 @@ spec:
           verbs:
           - list
         - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
+          - get
+          - create
+          - update
+          - list
+          - watch
+        - apiGroups:
           - user.openshift.io
           resources:
           - identities
@@ -68,14 +78,32 @@ spec:
           verbs:
           - '*'
         - apiGroups:
+          - rbac.authorization.k8s.io
+          - authorization.openshift.io
+          resources:
+          - rolebindings
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          - authorization.openshift.io
+          resources:
+          - clusterroles
+          verbs:
+          - '*'
+        - apiGroups:
           - apiextensions.k8s.io
           resources:
           - customresourcedefinitions
           verbs:
-          - get
-          - create
-          - list
-          - watch
+          - 'get'
+          - 'create'
+          - 'list'
+          - 'watch'
         serviceAccountName: member-operator
       deployments:
       - name: member-operator

@@ -13,7 +13,7 @@ build: $(OUT_DIR)/operator
 $(OUT_DIR)/operator:
 	$(Q)CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
 		go build ${V_FLAG} \
-		-ldflags "-X ${GO_PACKAGE_PATH}/cmd/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/cmd/version.BuildTime=${BUILD_TIME}" \
+		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
 		-o $(OUT_DIR)/bin/member-operator \
 		cmd/manager/main.go
 

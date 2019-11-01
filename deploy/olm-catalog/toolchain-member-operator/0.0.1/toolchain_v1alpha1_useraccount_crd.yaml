@@ -2,8 +2,6 @@ apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   creationTimestamp: null
-  labels:
-    controller-tools.k8s.io: "1.0"
   name: useraccounts.toolchain.dev.openshift.com
 spec:
   additionalPrinterColumns:
@@ -30,12 +28,15 @@ spec:
   group: toolchain.dev.openshift.com
   names:
     kind: UserAccount
+    listKind: UserAccountList
     plural: useraccounts
+    singular: useraccount
   scope: Namespaced
   subresources:
     status: {}
   validation:
     openAPIV3Schema:
+      description: UserAccount is the Schema for the useraccounts API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -50,6 +51,7 @@ spec:
         metadata:
           type: object
         spec:
+          description: UserAccountSpec defines the desired state of UserAccount
           properties:
             disabled:
               description: If set to true then the corresponding user should not be
@@ -62,8 +64,10 @@ spec:
               description: Namespace template set
               properties:
                 namespaces:
-                  description: The namespace templates +listType
+                  description: The namespace templates
                   items:
+                    description: NSTemplateSetNamespace the namespace definition in
+                      an NSTemplateSet resource
                     properties:
                       revision:
                         description: The revision of the corresponding template
@@ -75,16 +79,16 @@ spec:
                         description: 'The type of the namespace. For example: ide|cicd|stage|default'
                         type: string
                     required:
-                    - type
                     - revision
+                    - type
                     type: object
                   type: array
                 tierName:
                   description: The name of the tier represented by this template set
                   type: string
               required:
-              - tierName
               - namespaces
+              - tierName
               type: object
             userID:
               description: UserID is the user ID from RHD Identity Provider token
@@ -92,16 +96,16 @@ spec:
                 resources
               type: string
           required:
-          - userID
           - nsLimit
           - nsTemplateSet
+          - userID
           type: object
         status:
+          description: UserAccountStatus defines the observed state of UserAccount
           properties:
             conditions:
               description: 'Conditions is an array of current User Account conditions
-                Supported condition types: ConditionReady +patchMergeKey=type +patchStrategy=merge
-                +listType'
+                Supported condition types: ConditionReady'
               items:
                 properties:
                   lastTransitionTime:
@@ -123,12 +127,16 @@ spec:
                     description: Type of condition
                     type: string
                 required:
-                - type
                 - status
+                - type
                 type: object
               type: array
           type: object
   version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
 status:
   acceptedNames:
     kind: ""

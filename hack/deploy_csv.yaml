@@ -121,7 +121,6 @@ data:
                       type: object
                     type: array
                 type: object
-            type: object
         version: v1alpha1
         versions:
         - name: v1alpha1
@@ -267,7 +266,6 @@ data:
                       type: object
                     type: array
                 type: object
-            type: object
         version: v1alpha1
         versions:
         - name: v1alpha1

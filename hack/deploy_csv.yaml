@@ -24,6 +24,16 @@ data:
         creationTimestamp: null
         name: nstemplatesets.toolchain.dev.openshift.com
       spec:
+        additionalPrinterColumns:
+        - JSONPath: .spec.tierName
+          name: Tier Name
+          type: string
+        - JSONPath: .status.conditions[?(@.type=="Ready")].status
+          name: Ready
+          type: string
+        - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+          name: Reason
+          type: string
         group: toolchain.dev.openshift.com
         names:
           kind: NSTemplateSet
@@ -31,102 +41,92 @@ data:
           plural: nstemplatesets
           singular: nstemplateset
         scope: Namespaced
+        subresources:
+          status: {}
+        validation:
+          openAPIV3Schema:
+            description: NSTemplateSet is the Schema for the nstemplatesets API
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: NSTemplateSetSpec defines the desired state of NSTemplateSet
+                properties:
+                  namespaces:
+                    description: The namespace templates
+                    items:
+                      description: NSTemplateSetNamespace the namespace definition in an
+                        NSTemplateSet resource
+                      properties:
+                        revision:
+                          description: The revision of the corresponding template
+                          type: string
+                        template:
+                          description: Optional field. Used to specify a custom template
+                          type: string
+                        type:
+                          description: 'The type of the namespace. For example: ide|cicd|stage|default'
+                          type: string
+                      required:
+                      - revision
+                      - type
+                      type: object
+                    type: array
+                  tierName:
+                    description: The name of the tier represented by this template set
+                    type: string
+                required:
+                - namespaces
+                - tierName
+                type: object
+              status:
+                description: NSTemplateSetStatus defines the observed state of NSTemplateSet
+                properties:
+                  conditions:
+                    description: 'Conditions is an array of current NSTemplateSet conditions
+                      Supported condition types: ConditionReady'
+                    items:
+                      properties:
+                        lastTransitionTime:
+                          description: Last time the condition transit from one status to
+                            another.
+                          format: date-time
+                          type: string
+                        message:
+                          description: Human readable message indicating details about last
+                            transition.
+                          type: string
+                        reason:
+                          description: (brief) reason for the condition's last transition.
+                          type: string
+                        status:
+                          description: Status of the condition, one of True, False, Unknown.
+                          type: string
+                        type:
+                          description: Type of condition
+                          type: string
+                      required:
+                      - status
+                      - type
+                      type: object
+                    type: array
+                type: object
+            type: object
         version: v1alpha1
         versions:
-        - additionalPrinterColumns:
-          - JSONPath: .spec.tierName
-            name: Tier Name
-            type: string
-          - JSONPath: .status.conditions[?(@.type=="Ready")].status
-            name: Ready
-            type: string
-          - JSONPath: .status.conditions[?(@.type=="Ready")].reason
-            name: Reason
-            type: string
-          name: v1alpha1
-          schema:
-            openAPIV3Schema:
-              description: NSTemplateSet is the Schema for the nstemplatesets API
-              properties:
-                apiVersion:
-                  description: 'APIVersion defines the versioned schema of this representation
-                    of an object. Servers should convert recognized schemas to the latest
-                    internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
-                  type: string
-                kind:
-                  description: 'Kind is a string value representing the REST resource this
-                    object represents. Servers may infer this from the endpoint the client
-                    submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
-                  type: string
-                metadata:
-                  type: object
-                spec:
-                  description: NSTemplateSetSpec defines the desired state of NSTemplateSet
-                  properties:
-                    namespaces:
-                      description: The namespace templates
-                      items:
-                        description: NSTemplateSetNamespace the namespace definition in
-                          an NSTemplateSet resource
-                        properties:
-                          revision:
-                            description: The revision of the corresponding template
-                            type: string
-                          template:
-                            description: Optional field. Used to specify a custom template
-                            type: string
-                          type:
-                            description: 'The type of the namespace. For example: ide|cicd|stage|default'
-                            type: string
-                        required:
-                        - revision
-                        - type
-                        type: object
-                      type: array
-                    tierName:
-                      description: The name of the tier represented by this template set
-                      type: string
-                  required:
-                  - namespaces
-                  - tierName
-                  type: object
-                status:
-                  description: NSTemplateSetStatus defines the observed state of NSTemplateSet
-                  properties:
-                    conditions:
-                      description: 'Conditions is an array of current NSTemplateSet conditions
-                        Supported condition types: ConditionReady'
-                      items:
-                        properties:
-                          lastTransitionTime:
-                            description: Last time the condition transit from one status
-                              to another.
-                            format: date-time
-                            type: string
-                          message:
-                            description: Human readable message indicating details about
-                              last transition.
-                            type: string
-                          reason:
-                            description: (brief) reason for the condition's last transition.
-                            type: string
-                          status:
-                            description: Status of the condition, one of True, False, Unknown.
-                            type: string
-                          type:
-                            description: Type of condition
-                            type: string
-                        required:
-                        - status
-                        - type
-                        type: object
-                      type: array
-                  type: object
-              type: object
+        - name: v1alpha1
           served: true
           storage: true
-          subresources:
-            status: {}
       status:
         acceptedNames:
           kind: ""
@@ -139,6 +139,27 @@ data:
         creationTimestamp: null
         name: useraccounts.toolchain.dev.openshift.com
       spec:
+        additionalPrinterColumns:
+        - JSONPath: .spec.userID
+          name: User ID
+          priority: 1
+          type: string
+        - JSONPath: .spec.nsLimit
+          name: NS Limit
+          type: string
+        - JSONPath: .spec.nsTemplateSet.tierName
+          name: Tier Name
+          type: string
+        - JSONPath: .status.conditions[?(@.type=="Ready")].status
+          name: Ready
+          type: string
+        - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+          name: Reason
+          type: string
+        - JSONPath: .spec.disabled
+          name: Disabled
+          priority: 1
+          type: boolean
         group: toolchain.dev.openshift.com
         names:
           kind: UserAccount
@@ -146,134 +167,112 @@ data:
           plural: useraccounts
           singular: useraccount
         scope: Namespaced
-        version: v1alpha1
-        versions:
-        - additionalPrinterColumns:
-          - JSONPath: .spec.userID
-            name: User ID
-            priority: 1
-            type: string
-          - JSONPath: .spec.nsLimit
-            name: NS Limit
-            type: string
-          - JSONPath: .spec.nsTemplateSet.tierName
-            name: Tier Name
-            type: string
-          - JSONPath: .status.conditions[?(@.type=="Ready")].status
-            name: Ready
-            type: string
-          - JSONPath: .status.conditions[?(@.type=="Ready")].reason
-            name: Reason
-            type: string
-          - JSONPath: .spec.disabled
-            name: Disabled
-            priority: 1
-            type: boolean
-          name: v1alpha1
-          schema:
-            openAPIV3Schema:
-              description: UserAccount is the Schema for the useraccounts API
-              properties:
-                apiVersion:
-                  description: 'APIVersion defines the versioned schema of this representation
-                    of an object. Servers should convert recognized schemas to the latest
-                    internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
-                  type: string
-                kind:
-                  description: 'Kind is a string value representing the REST resource this
-                    object represents. Servers may infer this from the endpoint the client
-                    submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
-                  type: string
-                metadata:
-                  type: object
-                spec:
-                  description: UserAccountSpec defines the desired state of UserAccount
-                  properties:
-                    disabled:
-                      description: If set to true then the corresponding user should not
-                        be able to login "false" is assumed by default
-                      type: boolean
-                    nsLimit:
-                      description: The namespace limit name
-                      type: string
-                    nsTemplateSet:
-                      description: Namespace template set
+        subresources:
+          status: {}
+        validation:
+          openAPIV3Schema:
+            description: UserAccount is the Schema for the useraccounts API
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: UserAccountSpec defines the desired state of UserAccount
+                properties:
+                  disabled:
+                    description: If set to true then the corresponding user should not be
+                      able to login "false" is assumed by default
+                    type: boolean
+                  nsLimit:
+                    description: The namespace limit name
+                    type: string
+                  nsTemplateSet:
+                    description: Namespace template set
+                    properties:
+                      namespaces:
+                        description: The namespace templates
+                        items:
+                          description: NSTemplateSetNamespace the namespace definition in
+                            an NSTemplateSet resource
+                          properties:
+                            revision:
+                              description: The revision of the corresponding template
+                              type: string
+                            template:
+                              description: Optional field. Used to specify a custom template
+                              type: string
+                            type:
+                              description: 'The type of the namespace. For example: ide|cicd|stage|default'
+                              type: string
+                          required:
+                          - revision
+                          - type
+                          type: object
+                        type: array
+                      tierName:
+                        description: The name of the tier represented by this template set
+                        type: string
+                    required:
+                    - namespaces
+                    - tierName
+                    type: object
+                  userID:
+                    description: UserID is the user ID from RHD Identity Provider token
+                      (“sub” claim) Is to be used to create Identity and UserIdentityMapping
+                      resources
+                    type: string
+                required:
+                - nsLimit
+                - nsTemplateSet
+                - userID
+                type: object
+              status:
+                description: UserAccountStatus defines the observed state of UserAccount
+                properties:
+                  conditions:
+                    description: 'Conditions is an array of current User Account conditions
+                      Supported condition types: ConditionReady'
+                    items:
                       properties:
-                        namespaces:
-                          description: The namespace templates
-                          items:
-                            description: NSTemplateSetNamespace the namespace definition
-                              in an NSTemplateSet resource
-                            properties:
-                              revision:
-                                description: The revision of the corresponding template
-                                type: string
-                              template:
-                                description: Optional field. Used to specify a custom template
-                                type: string
-                              type:
-                                description: 'The type of the namespace. For example: ide|cicd|stage|default'
-                                type: string
-                            required:
-                            - revision
-                            - type
-                            type: object
-                          type: array
-                        tierName:
-                          description: The name of the tier represented by this template
-                            set
+                        lastTransitionTime:
+                          description: Last time the condition transit from one status to
+                            another.
+                          format: date-time
+                          type: string
+                        message:
+                          description: Human readable message indicating details about last
+                            transition.
+                          type: string
+                        reason:
+                          description: (brief) reason for the condition's last transition.
+                          type: string
+                        status:
+                          description: Status of the condition, one of True, False, Unknown.
+                          type: string
+                        type:
+                          description: Type of condition
                           type: string
                       required:
-                      - namespaces
-                      - tierName
+                      - status
+                      - type
                       type: object
-                    userID:
-                      description: UserID is the user ID from RHD Identity Provider token
-                        (“sub” claim) Is to be used to create Identity and UserIdentityMapping
-                        resources
-                      type: string
-                  required:
-                  - nsLimit
-                  - nsTemplateSet
-                  - userID
-                  type: object
-                status:
-                  description: UserAccountStatus defines the observed state of UserAccount
-                  properties:
-                    conditions:
-                      description: 'Conditions is an array of current User Account conditions
-                        Supported condition types: ConditionReady'
-                      items:
-                        properties:
-                          lastTransitionTime:
-                            description: Last time the condition transit from one status
-                              to another.
-                            format: date-time
-                            type: string
-                          message:
-                            description: Human readable message indicating details about
-                              last transition.
-                            type: string
-                          reason:
-                            description: (brief) reason for the condition's last transition.
-                            type: string
-                          status:
-                            description: Status of the condition, one of True, False, Unknown.
-                            type: string
-                          type:
-                            description: Type of condition
-                            type: string
-                        required:
-                        - status
-                        - type
-                        type: object
-                      type: array
-                  type: object
-              type: object
+                    type: array
+                type: object
+            type: object
+        version: v1alpha1
+        versions:
+        - name: v1alpha1
           served: true
           storage: true
-          subresources:
-            status: {}
       status:
         acceptedNames:
           kind: ""
@@ -287,6 +286,33 @@ data:
         annotations:
           alm-examples: |-
             [
+              {
+                "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
+                "kind": "NSTemplateSet",
+                "metadata": {
+                  "labels": {
+                    "username": "johnsmith"
+                  },
+                  "name": "johnsmith"
+                },
+                "spec": {
+                  "namespaces": [
+                    {
+                      "revision": "ab12ef",
+                      "type": "ide"
+                    },
+                    {
+                      "revision": "34efcd",
+                      "type": "cicd"
+                    },
+                    {
+                      "revision": "cdef56",
+                      "type": "stage"
+                    }
+                  ],
+                  "tierName": "basic"
+                }
+              },
               {
                 "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
                 "kind": "UserAccount",
@@ -314,33 +340,6 @@ data:
                     "tierName": "basic"
                   },
                   "userID": "1a03ecac-7c0b-44fc-b66d-12dd7fb21c40"
-                }
-              },
-              {
-                "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
-                "kind": "NSTemplateSet",
-                "metadata": {
-                  "labels": {
-                    "username": "johnsmith"
-                  },
-                  "name": "johnsmith"
-                },
-                "spec": {
-                  "namespaces": [
-                    {
-                      "revision": "ab12ef",
-                      "type": "ide"
-                    },
-                    {
-                      "revision": "34efcd",
-                      "type": "cicd"
-                    },
-                    {
-                      "revision": "cdef56",
-                      "type": "stage"
-                    }
-                  ],
-                  "tierName": "basic"
                 }
               }
             ]

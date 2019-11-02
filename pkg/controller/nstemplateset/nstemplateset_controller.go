@@ -124,7 +124,7 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 	labels := map[string]string{"owner": username}
 	opts := client.MatchingLabels(labels)
 	userNamespaceList := &corev1.NamespaceList{}
-	if err := r.client.List(context.TODO(), opts, userNamespaceList); err != nil {
+	if err := r.client.List(context.TODO(), userNamespaceList, opts); err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
 	userNamespaces := userNamespaceList.Items

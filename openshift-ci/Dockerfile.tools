@@ -29,6 +29,7 @@ RUN yum install epel-release -y \
     python36-virtualenv \
     jq \
     go-bindata \
+    gcc \
     && yum clean all
 
 WORKDIR /tmp

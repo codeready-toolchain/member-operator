@@ -41,7 +41,7 @@ rules:
   - watch
   - delete
 - apiGroups:
-  - core.kubefed.k8s.io
+  - core.kubefed.io
   resources:
   - kubefedclusters
   verbs:

@@ -5,7 +5,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
 	github.com/codeready-toolchain/api v0.0.0-20191106003206-a7c89ec224a0
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20191105071015-b90a5cc99f43
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20191107090247-4a50057c1ed0
 	github.com/go-logr/logr v0.1.0
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
 	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92
@@ -42,7 +42,6 @@ replace (
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
-	github.com/codeready-toolchain/toolchain-common => github.com/alexeykazakov/toolchain-common v0.0.0-20191106045741-41482fd42031
 	github.com/coreos/prometheus-operator => github.com/coreos/prometheus-operator v0.29.0
 )
 

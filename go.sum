@@ -76,8 +76,12 @@ github.com/bradfitz/go-smtpd v0.0.0-20170404230938-deb6d6237625/go.mod h1:HYsPBT
 github.com/census-instrumentation/opencensus-proto v0.2.0/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/chai2010/gettext-go v0.0.0-20170215093142-bf70f2a70fb1/go.mod h1:/iP1qXHoty45bqomnu2LM+VVyAEdWN+vtSHGlQgyxbw=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
+github.com/codeready-toolchain/api v0.0.0-20191101182303-0a050462a248/go.mod h1:lGbrD0uax8k3WL74XMxw0Bk/ukZNTQm/Kg0i95qcsEg=
 github.com/codeready-toolchain/api v0.0.0-20191106003206-a7c89ec224a0 h1:vdO45IE7ReB31/1hxVmiZn02NO8YUGkTtRpsoaplNUg=
 github.com/codeready-toolchain/api v0.0.0-20191106003206-a7c89ec224a0/go.mod h1:CH0alaeNSnaaLRWFZv3AOfPwFagc2Zybxql4aMuWPNQ=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20191105071015-b90a5cc99f43/go.mod h1:fG7Y08JsYJutHdyUuNqhEH2Ehm9nw2nQsAZHkMxGkFA=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20191107090247-4a50057c1ed0 h1:/ja+imO1Q98GkqPs9oHbydupI50LcLLMFiTNTvCz8LY=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20191107090247-4a50057c1ed0/go.mod h1:1ftat2nukcwlnM2RWAaYG/0j/n5wQB6fyAjm1RX/dsc=
 github.com/coreos/bbolt v1.3.0/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/bbolt v1.3.3/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/etcd v3.3.9+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
@@ -765,6 +769,7 @@ sigs.k8s.io/controller-runtime v0.2.2/go.mod h1:9dyohw3ZtoXQuV1e766PHUn+cmrRCIcB
 sigs.k8s.io/controller-tools v0.2.0/go.mod h1:8t/X+FVWvk6TaBcsa+UKUBbn7GMtvyBKX30SGl4em6Y=
 sigs.k8s.io/controller-tools v0.2.1 h1:HoCik83vXOpPi7KSJWdPRmiGntyOzK0v0BTV4U+pl8o=
 sigs.k8s.io/controller-tools v0.2.1/go.mod h1:cenyhL7t2e7izk/Zy7ZxDqQ9YEj0niU5VDL1PWMgZ5s=
+sigs.k8s.io/kubefed v0.1.0-rc2/go.mod h1:V1YuAhi6d/zPg61MydwJWsV2z04K749Mvm3g2tx1M7E=
 sigs.k8s.io/kubefed v0.1.0-rc6.0.20191023070212-24d45e9f4f15 h1:TMKJm5RTvOyoj/JC+8j3quRqj5ONP7Y9rahsJN4vSV4=
 sigs.k8s.io/kubefed v0.1.0-rc6.0.20191023070212-24d45e9f4f15/go.mod h1:V1YuAhi6d/zPg61MydwJWsV2z04K749Mvm3g2tx1M7E=
 sigs.k8s.io/kustomize v2.0.3+incompatible/go.mod h1:MkjgH3RdOWrievjo6c9T245dYlB5QeXV4WCbnt/PEpU=

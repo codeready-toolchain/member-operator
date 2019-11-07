@@ -319,7 +319,7 @@ func TestProcessAndApply(t *testing.T) {
 			// given
 			cl := test.NewFakeClient(t)
 			p := template.NewProcessor(cl, s)
-			cl.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			cl.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 				return errors.New("failed to create resource")
 			}
 			tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
@@ -338,7 +338,7 @@ func TestProcessAndApply(t *testing.T) {
 			// given
 			cl := test.NewFakeClient(t)
 			p := template.NewProcessor(cl, s)
-			cl.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+			cl.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 				return errors.New("failed to update resource")
 			}
 			tmpl, err := decodeTemplate(decoder, rolebindingTmpl)

@@ -486,6 +486,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		err := reconciler.setStatusReady(nsTmplSet)
 
 		// then
+		require.NoError(t, err)
 		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
 		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: namespaceName, Name: username}, updatedNSTmplSet)
 		require.NoError(t, err)
@@ -504,6 +505,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		_, err := r.Reconcile(req)
 
 		// then
+		require.NoError(t, err)
 		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespaceName, Name: username}, updatedNSTmplSet)
 		require.NoError(t, err)

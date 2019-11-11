@@ -157,7 +157,7 @@ func TestReconcile(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
 			r, req, fakeClient := prepareReconcile(t, username, userAcc)
-			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create user")
 			}
 
@@ -190,7 +190,7 @@ func TestReconcile(t *testing.T) {
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
 			}}
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
-			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update user")
 			}
 
@@ -270,7 +270,7 @@ func TestReconcile(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser)
-			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create identity")
 			}
 
@@ -303,7 +303,7 @@ func TestReconcile(t *testing.T) {
 				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
 			}}
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
-			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update identity")
 			}
 
@@ -385,7 +385,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("create nstmplset failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
-			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create NSTemplateSet")
 			}
 
@@ -398,7 +398,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("provision status failed", func(t *testing.T) {
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
-			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update status")
 			}
 
@@ -414,7 +414,7 @@ func TestReconcile(t *testing.T) {
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
 
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
-			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object) error {
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update status")
 			}
 
@@ -515,7 +515,7 @@ func TestReconcile(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		// Mock setting finalizer failure
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return fmt.Errorf("unable to add finalizer for user account %s", userAcc.Name)
 		}
 
@@ -573,7 +573,7 @@ func TestReconcile(t *testing.T) {
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Mock finalizer removal failure
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
 		}
 
@@ -613,7 +613,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Mock deleting identity failure
-		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOptionFunc) error {
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("unable to delete identity for user account %s", userAcc.Name)
 		}
 
@@ -663,7 +663,7 @@ func TestReconcile(t *testing.T) {
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Mock deleting user failure
-		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOptionFunc) error {
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("unable to delete user for user account %s", userAcc.Name)
 		}
 

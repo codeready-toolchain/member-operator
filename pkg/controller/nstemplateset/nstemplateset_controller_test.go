@@ -259,7 +259,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 	t.Run("fail_create_namespace", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create namespace")
 		}
 
@@ -274,7 +274,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 		createNamespace(t, fakeClient, "", "dev")
 
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create some object")
 		}
 
@@ -289,7 +289,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 		createNamespace(t, fakeClient, "", "dev")
 
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object) error {
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update NSTmlpSet")
 		}
 
@@ -301,7 +301,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 	t.Run("fail_list_namespace", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
-		fakeClient.MockList = func(ctx context.Context, opts *client.ListOptions, list runtime.Object) error {
+		fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 			return errors.New("unable to list namespace")
 		}
 
@@ -323,7 +323,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 	t.Run("fail_status_provisioning", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update status")
 		}
 

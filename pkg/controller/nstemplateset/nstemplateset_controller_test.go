@@ -459,6 +459,57 @@ func TestUpdateStatus(t *testing.T) {
 		})
 	})
 }
+func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
+	logf.SetLogger(logf.ZapLogger(true))
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	failedCond := toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.ConditionReady,
+		Status:  corev1.ConditionFalse,
+		Reason:  unableToProvisionNamespaceReason,
+		Message: "Operation cannot be fulfilled on namespaces bla bla bla",
+	}
+	provisionedCond := toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionTrue,
+		Reason: provisionedReason,
+	}
+
+	t.Run("when status is set to false with message, then next update to true should remove the message", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet()
+		nsTmplSet.Status.Conditions = []toolchainv1alpha1.Condition{failedCond}
+		reconciler, _ := prepareController(t, nsTmplSet)
+
+		// when
+		err := reconciler.setStatusReady(nsTmplSet)
+
+		// then
+		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: namespaceName, Name: username}, updatedNSTmplSet)
+		require.NoError(t, err)
+		test.AssertConditionsMatch(t, updatedNSTmplSet.Status.Conditions, provisionedCond)
+	})
+
+	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet()
+		nsTmplSet.Status.Conditions = []toolchainv1alpha1.Condition{failedCond}
+		r, req, _ := prepareReconcile(t, nsTmplSet)
+		createNamespace(t, r.client, "abcde11", "dev")
+		createNamespace(t, r.client, "abcde21", "code")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespaceName, Name: username}, updatedNSTmplSet)
+		require.NoError(t, err)
+		test.AssertConditionsMatch(t, updatedNSTmplSet.Status.Conditions, provisionedCond)
+	})
+}
 
 func createNamespace(t *testing.T, client client.Client, revision, typeName string) *corev1.Namespace {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)

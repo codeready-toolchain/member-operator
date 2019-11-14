@@ -287,6 +287,22 @@ func TestProcessAndApply(t *testing.T) {
 	t.Run("should update existing role binding", func(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
+		cl.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+			if rb, ok := obj.(*unstructured.Unstructured); ok {
+				rb.SetResourceVersion("1")
+				return cl.Client.Create(ctx, obj, opts...)
+			}
+			return cl.Client.Create(ctx, obj, opts...)
+		}
+		cl.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+			if u, ok := obj.(*unstructured.Unstructured); ok {
+				t.Logf("updating resource of kind %s with version %s\n", u.GetKind(), u.GetResourceVersion())
+				if u.GetKind() == "RoleBinding" && u.GetResourceVersion() != "1" {
+					return fmt.Errorf("invalid resource version: %q", u.GetResourceVersion())
+				}
+			}
+			return cl.Client.Update(ctx, obj, opts...)
+		}
 		p := template.NewProcessor(cl, s)
 		tmpl, err := decodeTemplate(decoder, rolebindingTmpl)
 		require.NoError(t, err)

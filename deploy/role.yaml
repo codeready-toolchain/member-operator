@@ -38,4 +38,3 @@ rules:
   - kubefedclusters/status
   verbs:
   - update
-

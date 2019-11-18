@@ -8,9 +8,12 @@ import (
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/openshift/library-go/pkg/template/generator"
 	"github.com/openshift/library-go/pkg/template/templateprocessing"
+	"github.com/pkg/errors"
 	errs "github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -70,8 +73,26 @@ func createOrUpdateObj(cl client.Client, obj runtime.Object) error {
 		if !apierrors.IsAlreadyExists(err) {
 			return errs.Wrapf(err, "failed to create object %v", obj)
 		}
-
-		if err = cl.Update(context.TODO(), obj); err != nil {
+		if u, ok := obj.(*unstructured.Unstructured); ok {
+			// get the existing NSTemplateTier
+			existing := &unstructured.Unstructured{}
+			existing.SetKind(u.GetKind())
+			existing.SetAPIVersion(u.GetAPIVersion())
+			err = cl.Get(context.TODO(), types.NamespacedName{
+				Namespace: u.GetNamespace(),
+				Name:      u.GetName(),
+			}, existing)
+			if err != nil {
+				return errors.Wrapf(err, "unable to get the resource of kind '%s' and name '%s' in namespace '%s'", u.GetKind(), u.GetName(), u.GetNamespace())
+			}
+			// retrieve the current 'resourceVersion' to set it in the resource passed to the `client.Update()`
+			// otherwise we would get an error with the following message:
+			// "nstemplatetiers.toolchain.dev.openshift.com \"basic\" is invalid: metadata.resourceVersion: Invalid value: 0x0: must be specified for an update"
+			u.SetResourceVersion(existing.GetResourceVersion())
+			if err := cl.Update(context.TODO(), u); err != nil {
+				return errors.Wrapf(err, "unable to update the resource of kind '%s' and name '%s' in namespace '%s'", u.GetKind(), u.GetName(), u.GetNamespace())
+			}
+		} else if err = cl.Update(context.TODO(), obj); err != nil {
 			return errs.Wrapf(err, "failed to update object %v", obj)
 		}
 		return nil

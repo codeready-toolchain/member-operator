@@ -13,6 +13,9 @@ rules:
   - events
   - configmaps
   - secrets
+  - bindings
+  - podtemplates
+  - serviceaccounts
   verbs:
   - "*"
 - apiGroups:
@@ -38,3 +41,20 @@ rules:
   - kubefedclusters/status
   verbs:
   - update
+- apiGroups:
+  - authorization.openshift.io
+  resources:
+  - subjectrulesreviews
+  - subjectaccessreviews
+  - localsubjectaccessreviews
+  - resourceaccessreviews
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - template.openshift.io
+  resources:
+  - templateinstances
+  verbs:
+  - get
+  - list

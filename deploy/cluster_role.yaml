@@ -86,3 +86,12 @@ rules:
   verbs:
   - "get"
   - "list"
+- apiGroups:
+  - authorization.openshift.io
+  resources:
+  - clusterrolebindings
+  - subjectaccessreviews
+  - resourceaccessreviews
+  verbs:
+  - get
+  - list

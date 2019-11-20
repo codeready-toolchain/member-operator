@@ -169,6 +169,15 @@ spec:
           verbs:
           - get
           - list
+        - apiGroups:
+          - authorization.openshift.io
+          resources:
+          - clusterrolebindings
+          - subjectaccessreviews
+          - resourceaccessreviews
+          verbs:
+          - get
+          - list
         serviceAccountName: member-operator
       deployments:
       - name: member-operator
@@ -214,6 +223,9 @@ spec:
           - events
           - configmaps
           - secrets
+          - bindings
+          - podtemplates
+          - serviceaccounts
           verbs:
           - '*'
         - apiGroups:
@@ -239,6 +251,23 @@ spec:
           - kubefedclusters/status
           verbs:
           - update
+        - apiGroups:
+          - authorization.openshift.io
+          resources:
+          - subjectrulesreviews
+          - subjectaccessreviews
+          - localsubjectaccessreviews
+          - resourceaccessreviews
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - template.openshift.io
+          resources:
+          - templateinstances
+          verbs:
+          - get
+          - list
         serviceAccountName: member-operator
     strategy: deployment
   installModes:

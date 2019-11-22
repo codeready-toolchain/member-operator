@@ -4,8 +4,8 @@ require (
 	cloud.google.com/go v0.46.3 // indirect
 	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20191107090146-e29aacb17012
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20191107144135-e8ba3faab2c8
+	github.com/codeready-toolchain/api v0.0.0-20191115062940-693a0063cf16
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20191121080604-19eb69496fd9
 	github.com/go-logr/logr v0.1.0
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
 	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92

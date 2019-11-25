@@ -1,14 +1,13 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	cloud.google.com/go v0.46.3 // indirect
-	github.com/Azure/go-autorest/autorest v0.9.1 // indirect
-	github.com/Azure/go-autorest/autorest/adal v0.6.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20191115062940-693a0063cf16
+	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
+	github.com/codeready-toolchain/api v0.0.0-20191129104300-b4af5bf7d40a
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20191121080604-19eb69496fd9
 	github.com/go-logr/logr v0.1.0
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
-	github.com/openshift/library-go v0.0.0-20190815190847-97bb8b699c92
+	github.com/openshift/library-go v0.0.0-20191121124438-7c776f7cc17a
 	github.com/operator-framework/operator-sdk v0.11.0
 	github.com/pkg/errors v0.8.1
 	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
@@ -17,10 +16,8 @@ require (
 	github.com/stretchr/testify v1.4.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
-	k8s.io/apiserver v0.0.0-20190111033246-d50e9ac5404f // indirect
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d // indirect
 	sigs.k8s.io/controller-runtime v0.2.2
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20191023070212-24d45e9f4f15
 )

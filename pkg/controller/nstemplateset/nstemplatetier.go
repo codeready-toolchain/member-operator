@@ -1,4 +1,4 @@
-package template
+package nstemplateset
 
 import (
 	"context"
@@ -13,18 +13,18 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-// NSTemplates the templates along with their revision number for a given tier
-type NSTemplates map[string]RevisionedTemplate
+// nsTemplates the templates along with their revision number for a given tier
+type nsTemplates map[string]revisionedTemplate
 
-// RevisionedTemplate a template along with its revision number
-type RevisionedTemplate struct {
+// revisionedTemplate a template along with its revision number
+type revisionedTemplate struct {
 	Revision string
 	Template templatev1.Template
 }
 
-// GetNSTemplates gets the templates configured in the NSTemplateTier resource
+// getNSTemplates gets the templates configured in the NSTemplateTier resource
 // which is fetched from the host cluster.
-func GetNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string) (NSTemplates, error) {
+func getNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string) (nsTemplates, error) {
 	// retrieve the FedCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {
@@ -42,9 +42,9 @@ func GetNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to retrieve the NSTemplateTier '%s' from 'Host' cluster", tierName)
 	}
-	result := NSTemplates{}
+	result := nsTemplates{}
 	for _, ns := range tier.Spec.Namespaces {
-		result[ns.Type] = RevisionedTemplate{
+		result[ns.Type] = revisionedTemplate{
 			Revision: ns.Revision,
 			Template: ns.Template,
 		}

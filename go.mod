@@ -22,6 +22,8 @@ require (
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20191023070212-24d45e9f4f15
 )
 
+replace github.com/codeready-toolchain/toolchain-common => github.com/matousjobanek/toolchain-common v0.0.0-20191129152151-06373bbf5929
+
 // Pinned to kubernetes-1.14.1
 replace (
 	k8s.io/api => k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b

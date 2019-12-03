@@ -2,8 +2,8 @@ package nstemplateset
 
 import (
 	"context"
+	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
-	"github.com/codeready-toolchain/member-operator/pkg/template"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/go-logr/logr"
@@ -258,7 +258,7 @@ func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Names
 }
 
 func getTemplateContentFromHost(tierName, typeName string) (*templatev1.Template, error) {
-	templates, err := template.GetNSTemplates(cluster.GetHostCluster, tierName)
+	templates, err := getNSTemplates(cluster.GetHostCluster, tierName)
 	if err != nil {
 		return nil, err
 	}

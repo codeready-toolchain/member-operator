@@ -3,18 +3,18 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
-  name: codeready-toolchain-saas-toolchain-member-operator
+  name: source-toolchain-member-operator
   namespace: openshift-marketplace
 spec:
-  configMap: codeready-toolchain-saas-toolchain-member-operator
-  displayName: Codeready Toolchain Saas Toolchain Member Operator
+  configMap: cm-toolchain-member-operator
+  displayName: Toolchain Member Operator
   publisher: Red Hat
   sourceType: internal
 ---
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: codeready-toolchain-saas-toolchain-member-operator
+  name: cm-toolchain-member-operator
   namespace: openshift-marketplace
 data:
   customResourceDefinitions: |-

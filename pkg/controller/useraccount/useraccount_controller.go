@@ -3,7 +3,6 @@ package useraccount
 import (
 	"context"
 	"fmt"
-	//logger "github.com/codeready-toolchain/registration-service/pkg/log"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"

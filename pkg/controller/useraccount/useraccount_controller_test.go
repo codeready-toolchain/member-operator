@@ -776,6 +776,76 @@ func TestUpdateStatus(t *testing.T) {
 	})
 }
 
+func TestDisabledUserAccount(t *testing.T) {
+	logf.SetLogger(logf.ZapLogger(true))
+	username := "johndoe"
+	userID := uuid.NewV4().String()
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
+	t.Run("disabled useraccount", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, _ := prepareReconcile(t, username, userAcc)
+
+		//when
+		res, err := r.Reconcile(req)
+
+		//then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity exists
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated user exists
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.NoError(t, err)
+
+		// Set disabled to true
+		userAcc.Spec.Disabled = true
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+	})
+}
+
 func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -786,6 +856,7 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID:        userID,
 			NSTemplateSet: newNSTmplSetSpec(),
+			Disabled:false,
 		},
 	}
 	return userAcc
@@ -802,6 +873,7 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID: userID,
+			Disabled:false,
 		},
 	}
 	return userAcc

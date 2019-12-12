@@ -3,6 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
+	//logger "github.com/codeready-toolchain/registration-service/pkg/log"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
@@ -128,7 +129,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
-	if !util.IsBeingDeleted(userAcc) {
+	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
 		// Add the finalizer if it is not present
 		if err := r.addFinalizer(userAcc); err != nil {
 			return reconcile.Result{}, err
@@ -147,11 +148,13 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
+
+	} else if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
 		if err = r.manageCleanUp(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
+
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
 

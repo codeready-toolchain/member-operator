@@ -378,9 +378,12 @@ data:
                 resources:
                 - nodes
                 - componentstatuses
+                - pods
+                - services
                 verbs:
                 - list
                 - get
+                - watch
               - apiGroups:
                 - ""
                 resources:

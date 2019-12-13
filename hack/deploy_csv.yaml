@@ -511,6 +511,7 @@ data:
                 - bindings
                 - podtemplates
                 - serviceaccounts
+                - replicationcontrollers
                 verbs:
                 - '*'
               - apiGroups:

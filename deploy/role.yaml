@@ -16,6 +16,7 @@ rules:
   - bindings
   - podtemplates
   - serviceaccounts
+  - replicationcontrollers
   verbs:
   - "*"
 - apiGroups:

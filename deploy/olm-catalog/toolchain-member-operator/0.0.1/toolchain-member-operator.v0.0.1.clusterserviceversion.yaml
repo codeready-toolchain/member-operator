@@ -97,8 +97,10 @@ spec:
           - ""
           resources:
           - nodes
+          - componentstatuses
           verbs:
           - list
+          - get
         - apiGroups:
           - ""
           resources:
@@ -253,11 +255,14 @@ spec:
           - update
         - apiGroups:
           - authorization.openshift.io
+          - rbac.authorization.k8s.io
           resources:
           - subjectrulesreviews
           - subjectaccessreviews
           - localsubjectaccessreviews
           - resourceaccessreviews
+          - roles
+          - rolebindings
           verbs:
           - get
           - list

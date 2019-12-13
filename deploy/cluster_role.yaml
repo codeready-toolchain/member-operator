@@ -14,8 +14,10 @@ rules:
   - ""
   resources:
   - nodes
+  - componentstatuses
   verbs:
   - list
+  - get
 - apiGroups:
   - ""
   resources:

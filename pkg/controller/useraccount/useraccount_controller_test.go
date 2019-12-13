@@ -791,6 +791,8 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		//when
 		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
@@ -856,7 +858,7 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID:        userID,
 			NSTemplateSet: newNSTmplSetSpec(),
-			Disabled:false,
+			Disabled:      false,
 		},
 	}
 	return userAcc
@@ -872,8 +874,8 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 			Finalizers: finalizers,
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID: userID,
-			Disabled:false,
+			UserID:   userID,
+			Disabled: false,
 		},
 	}
 	return userAcc

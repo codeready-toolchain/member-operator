@@ -3,6 +3,7 @@ package useraccountstatus
 import (
 	"context"
 	"fmt"
+
 	"github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"k8s.io/apimachinery/pkg/types"
@@ -88,33 +89,33 @@ func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (recon
 		return reconcile.Result{}, err
 	}
 
-	err = r.updateMasterUserRecord(userAcc)
+	err, mur := r.updateMasterUserRecord(userAcc)
 	if err != nil {
-		reqLogger.Error(err, "unable to update the master user record")
+		reqLogger.Error(err, "unable to update the master user record", "MasterUserRecord", mur, "UserAccount", userAcc)
 		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileUserAccountStatus) updateMasterUserRecord(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *ReconcileUserAccountStatus) updateMasterUserRecord(userAcc *toolchainv1alpha1.UserAccount) (error, *toolchainv1alpha1.MasterUserRecord) {
 	fedCluster, ok := r.getHostCluster()
 	if !ok {
-		return fmt.Errorf("there is no host cluster registered")
+		return fmt.Errorf("there is no host cluster registered"), nil
 	}
 	if !util.IsClusterReady(fedCluster.ClusterStatus) {
-		return fmt.Errorf("the host cluster is not ready")
+		return fmt.Errorf("the host cluster is not ready"), nil
 	}
-	userRecord := &toolchainv1alpha1.MasterUserRecord{}
+	mur := &toolchainv1alpha1.MasterUserRecord{}
 	name := types.NamespacedName{Namespace: fedCluster.OperatorNamespace, Name: userAcc.Name}
-	err := fedCluster.Client.Get(context.TODO(), name, userRecord)
+	err := fedCluster.Client.Get(context.TODO(), name, mur)
 	if err != nil {
-		return err
+		return err, nil
 	}
-	for i, account := range userRecord.Spec.UserAccounts {
+	for i, account := range mur.Spec.UserAccounts {
 		if account.TargetCluster == fedCluster.OwnerClusterName {
-			userRecord.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
-			return fedCluster.Client.Update(context.TODO(), userRecord)
+			mur.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
+			return fedCluster.Client.Update(context.TODO(), mur), mur
 		}
 	}
-	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", fedCluster.OwnerClusterName)
+	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", fedCluster.OwnerClusterName), mur
 }

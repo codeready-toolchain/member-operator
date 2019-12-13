@@ -97,8 +97,13 @@ spec:
           - ""
           resources:
           - nodes
+          - componentstatuses
+          - pods
+          - services
           verbs:
           - list
+          - get
+          - watch
         - apiGroups:
           - ""
           resources:
@@ -226,6 +231,7 @@ spec:
           - bindings
           - podtemplates
           - serviceaccounts
+          - replicationcontrollers
           verbs:
           - '*'
         - apiGroups:
@@ -253,11 +259,14 @@ spec:
           - update
         - apiGroups:
           - authorization.openshift.io
+          - rbac.authorization.k8s.io
           resources:
           - subjectrulesreviews
           - subjectaccessreviews
           - localsubjectaccessreviews
           - resourceaccessreviews
+          - roles
+          - rolebindings
           verbs:
           - get
           - list

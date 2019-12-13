@@ -377,8 +377,13 @@ data:
                 - ""
                 resources:
                 - nodes
+                - componentstatuses
+                - pods
+                - services
                 verbs:
                 - list
+                - get
+                - watch
               - apiGroups:
                 - ""
                 resources:
@@ -506,6 +511,7 @@ data:
                 - bindings
                 - podtemplates
                 - serviceaccounts
+                - replicationcontrollers
                 verbs:
                 - '*'
               - apiGroups:
@@ -533,11 +539,14 @@ data:
                 - update
               - apiGroups:
                 - authorization.openshift.io
+                - rbac.authorization.k8s.io
                 resources:
                 - subjectrulesreviews
                 - subjectaccessreviews
                 - localsubjectaccessreviews
                 - resourceaccessreviews
+                - roles
+                - rolebindings
                 verbs:
                 - get
                 - list

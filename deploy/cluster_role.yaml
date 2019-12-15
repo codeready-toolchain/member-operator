@@ -62,7 +62,7 @@ rules:
   - authorization.openshift.io
   resources:
   - rolebindings
-  - role
+  - roles
   - clusterroles
   verbs:
   - "*"

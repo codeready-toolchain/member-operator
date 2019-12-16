@@ -425,16 +425,7 @@ data:
                 - authorization.openshift.io
                 resources:
                 - rolebindings
-                verbs:
-                - get
-                - list
-                - watch
-                - create
-                - update
-              - apiGroups:
-                - rbac.authorization.k8s.io
-                - authorization.openshift.io
-                resources:
+                - roles
                 - clusterroles
                 verbs:
                 - '*'
@@ -456,6 +447,7 @@ data:
                 - list
               - apiGroups:
                 - authorization.openshift.io
+                - rbac.authorization.k8s.io
                 resources:
                 - clusterrolebindings
                 - subjectaccessreviews

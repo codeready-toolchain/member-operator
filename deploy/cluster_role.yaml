@@ -62,19 +62,10 @@ rules:
   - authorization.openshift.io
   resources:
   - rolebindings
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-- apiGroups:
-  - rbac.authorization.k8s.io
-  - authorization.openshift.io
-  resources:
+  - roles
   - clusterroles
   verbs:
-  - '*'
+  - "*"
 - apiGroups:
   - apiextensions.k8s.io
   resources:
@@ -93,6 +84,7 @@ rules:
   - "list"
 - apiGroups:
   - authorization.openshift.io
+  - rbac.authorization.k8s.io
   resources:
   - clusterrolebindings
   - subjectaccessreviews

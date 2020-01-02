@@ -92,3 +92,10 @@ rules:
   verbs:
   - get
   - list
+- apiGroups:
+  - template.openshift.io
+  resources:
+  - processedtemplates
+  verbs:
+  - "get"
+  - "list"

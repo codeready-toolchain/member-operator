@@ -455,6 +455,13 @@ data:
                 verbs:
                 - get
                 - list
+              - apiGroups:
+                - template.openshift.io
+                resources:
+                - processedtemplates
+                verbs:
+                - get
+                - list
               serviceAccountName: member-operator
             deployments:
             - name: member-operator

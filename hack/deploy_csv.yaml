@@ -380,6 +380,7 @@ data:
                 - componentstatuses
                 - pods
                 - services
+                - bindings
                 verbs:
                 - list
                 - get

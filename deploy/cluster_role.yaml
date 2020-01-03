@@ -17,6 +17,7 @@ rules:
   - componentstatuses
   - pods
   - services
+  - bindings
   verbs:
   - list
   - get

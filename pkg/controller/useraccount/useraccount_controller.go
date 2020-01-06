@@ -41,6 +41,7 @@ const (
 
 	// Finalizers
 	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
+	userAccFinalizerDisabled = "finalizer.toolchain.dev.openshift.com.disabled"
 )
 
 var log = logf.Log.WithName("controller_useraccount")
@@ -128,27 +129,26 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
-	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
+	if !util.IsBeingDeleted(userAcc) {
 		// Add the finalizer if it is not present
-		if err := r.addFinalizer(userAcc); err != nil {
+		if err := r.addFinalizer(userAcc, userAccFinalizerName); err != nil {
 			return reconcile.Result{}, err
 		}
-
+	}
+	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
 		var createdOrUpdated bool
 		var user *userv1.User
 		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-
-	} else if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
+	}
+	if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
 		if err = r.manageCleanUp(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -299,10 +299,10 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 }
 
 // setFinalizers sets the finalizers for UserAccount
-func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
 	// Add the finalizer if it is not present
-	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
-		util.AddFinalizer(userAcc, userAccFinalizerName)
+	if !util.HasFinalizer(userAcc, finalizer) {
+		util.AddFinalizer(userAcc, finalizer)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err
 		}

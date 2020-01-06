@@ -41,7 +41,6 @@ const (
 
 	// Finalizers
 	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
-	userAccFinalizerDisabled = "finalizer.toolchain.dev.openshift.com.disabled"
 )
 
 var log = logf.Log.WithName("controller_useraccount")
@@ -131,7 +130,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
 	if !util.IsBeingDeleted(userAcc) {
 		// Add the finalizer if it is not present
-		if err := r.addFinalizer(userAcc, userAccFinalizerName); err != nil {
+		if err := r.addFinalizer(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -299,10 +298,10 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 }
 
 // setFinalizers sets the finalizers for UserAccount
-func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount, finalizer string) error {
+func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
-	if !util.HasFinalizer(userAcc, finalizer) {
-		util.AddFinalizer(userAcc, finalizer)
+	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
+		util.AddFinalizer(userAcc, userAccFinalizerName)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err
 		}

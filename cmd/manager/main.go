@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 
+	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -198,7 +199,7 @@ func ensureKubeFedClusterCRD(config *rest.Config) error {
 func serveCRMetrics(cfg *rest.Config) error {
 	// Below function returns filtered operator/CustomResource specific GVKs.
 	// For more control override the below GVK list with your own custom logic.
-	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(apis.AddToScheme)
+	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(api.AddToScheme)
 	if err != nil {
 		return err
 	}

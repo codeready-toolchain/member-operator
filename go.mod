@@ -4,7 +4,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
 	github.com/codeready-toolchain/api v0.0.0-20200106162618-9b2c84309f9d
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20191203230412-406b2c86bd6c
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20191206153324-4205c5ebe624
 	github.com/go-logr/logr v0.1.0
 	github.com/openshift/api v3.9.1-0.20190730142803-0922aa5a655b+incompatible
 	github.com/operator-framework/operator-sdk v0.11.0
@@ -24,6 +24,9 @@ require (
 
 // Pinned to kubernetes-1.14.1
 replace (
+	// using 'github.com/openshift/api@release-4.2'
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20190927182313-d4a64ec2cbd8
+
 	k8s.io/api => k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190409022649-727a075fdec8
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190404173353-6a84e37a896d

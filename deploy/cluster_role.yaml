@@ -14,13 +14,8 @@ rules:
   - ""
   resources:
   - nodes
-  - componentstatuses
-  - pods
-  - services
   verbs:
   - list
-  - get
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -73,29 +68,10 @@ rules:
   verbs:
   - "get"
   - "create"
-  - "list"
-  - "watch"
 - apiGroups:
   - route.openshift.io
   resources:
   - routes
-  verbs:
-  - "get"
-  - "list"
-- apiGroups:
-  - authorization.openshift.io
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterrolebindings
-  - subjectaccessreviews
-  - resourceaccessreviews
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - template.openshift.io
-  resources:
-  - processedtemplates
   verbs:
   - "get"
   - "list"

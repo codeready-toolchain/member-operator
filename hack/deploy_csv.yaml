@@ -377,8 +377,13 @@ data:
                 - ""
                 resources:
                 - nodes
+                - componentstatuses
+                - pods
+                - services
                 verbs:
                 - list
+                - get
+                - watch
               - apiGroups:
                 - ""
                 resources:
@@ -420,16 +425,7 @@ data:
                 - authorization.openshift.io
                 resources:
                 - rolebindings
-                verbs:
-                - get
-                - list
-                - watch
-                - create
-                - update
-              - apiGroups:
-                - rbac.authorization.k8s.io
-                - authorization.openshift.io
-                resources:
+                - roles
                 - clusterroles
                 verbs:
                 - '*'
@@ -451,10 +447,18 @@ data:
                 - list
               - apiGroups:
                 - authorization.openshift.io
+                - rbac.authorization.k8s.io
                 resources:
                 - clusterrolebindings
                 - subjectaccessreviews
                 - resourceaccessreviews
+                verbs:
+                - get
+                - list
+              - apiGroups:
+                - template.openshift.io
+                resources:
+                - processedtemplates
                 verbs:
                 - get
                 - list
@@ -506,6 +510,7 @@ data:
                 - bindings
                 - podtemplates
                 - serviceaccounts
+                - replicationcontrollers
                 verbs:
                 - '*'
               - apiGroups:
@@ -533,11 +538,14 @@ data:
                 - update
               - apiGroups:
                 - authorization.openshift.io
+                - rbac.authorization.k8s.io
                 resources:
                 - subjectrulesreviews
                 - subjectaccessreviews
                 - localsubjectaccessreviews
                 - resourceaccessreviews
+                - roles
+                - rolebindings
                 verbs:
                 - get
                 - list

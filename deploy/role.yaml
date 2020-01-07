@@ -16,6 +16,7 @@ rules:
   - bindings
   - podtemplates
   - serviceaccounts
+  - replicationcontrollers
   verbs:
   - "*"
 - apiGroups:
@@ -43,11 +44,14 @@ rules:
   - update
 - apiGroups:
   - authorization.openshift.io
+  - rbac.authorization.k8s.io
   resources:
   - subjectrulesreviews
   - subjectaccessreviews
   - localsubjectaccessreviews
   - resourceaccessreviews
+  - roles
+  - rolebindings
   verbs:
   - get
   - list

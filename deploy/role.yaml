@@ -38,4 +38,4 @@ rules:
   resources:
   - kubefedclusters/status
   verbs:
-  - update
+  - "update"

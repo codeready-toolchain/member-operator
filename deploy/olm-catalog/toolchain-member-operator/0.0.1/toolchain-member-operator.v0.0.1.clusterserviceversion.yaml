@@ -117,12 +117,7 @@ spec:
           - useridentitymappings
           - groups
           verbs:
-          - get
-          - create
-          - update
-          - list
-          - watch
-          - delete
+          - '*'
         - apiGroups:
           - core.kubefed.io
           resources:

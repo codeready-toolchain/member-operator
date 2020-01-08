@@ -22,6 +22,8 @@ require (
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20191023070212-24d45e9f4f15
 )
 
+replace github.com/codeready-toolchain/api => github.com/alexeykazakov/api v0.0.0-20200108223257-d11e1101fffb
+
 // Pinned to kubernetes-1.14.1
 replace (
 	// using 'github.com/openshift/api@release-4.2'

@@ -14,13 +14,8 @@ rules:
   - ""
   resources:
   - nodes
-  - componentstatuses
-  - pods
-  - services
   verbs:
-  - list
-  - get
-  - watch
+  - "list"
 - apiGroups:
   - ""
   resources:
@@ -39,12 +34,7 @@ rules:
   - useridentitymappings
   - groups
   verbs:
-  - get
-  - create
-  - update
-  - list
-  - watch
-  - delete
+  - "*"
 - apiGroups:
   - core.kubefed.io
   resources:
@@ -54,9 +44,9 @@ rules:
 - apiGroups:
   - toolchain.dev.openshift.com
   resources:
-  - '*'
+  - "*"
   verbs:
-  - '*'
+  - "*"
 - apiGroups:
   - rbac.authorization.k8s.io
   - authorization.openshift.io
@@ -73,29 +63,10 @@ rules:
   verbs:
   - "get"
   - "create"
-  - "list"
-  - "watch"
 - apiGroups:
   - route.openshift.io
   resources:
   - routes
-  verbs:
-  - "get"
-  - "list"
-- apiGroups:
-  - authorization.openshift.io
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterrolebindings
-  - subjectaccessreviews
-  - resourceaccessreviews
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - template.openshift.io
-  resources:
-  - processedtemplates
   verbs:
   - "get"
   - "list"

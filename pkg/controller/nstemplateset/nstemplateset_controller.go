@@ -2,13 +2,18 @@ package nstemplateset
 
 import (
 	"context"
-	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+
 	"github.com/go-logr/logr"
+	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
+	errs "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,13 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	templatev1 "github.com/openshift/api/template/v1"
-	errs "github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var log = logf.Log.WithName("controller_nstemplateset")
@@ -121,7 +121,7 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 	username := nsTmplSet.GetName()
 
 	// fetch all namespace with owner=username label
-	labels := map[string]string{"owner": username}
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 	opts := client.MatchingLabels(labels)
 	userNamespaceList := &corev1.NamespaceList{}
 	if err := r.client.List(context.TODO(), userNamespaceList, opts); err != nil {
@@ -180,8 +180,8 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 		if labels == nil {
 			labels = make(map[string]string)
 		}
-		labels["owner"] = username
-		labels["type"] = tcNamespace.Type
+		labels[toolchainv1alpha1.OwnerLabelKey] = username
+		labels[toolchainv1alpha1.TypeLabelKey] = tcNamespace.Type
 		acc.SetLabels(labels)
 
 		// set owner ref
@@ -220,7 +220,7 @@ func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logge
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
 	}
-	namespace.Labels["revision"] = tcNamespace.Revision
+	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
@@ -238,7 +238,7 @@ func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.NSTemplateSetName
 	for _, tcNamespace := range tcNamespaces {
 		namespace, found := findNamespace(namespaces, tcNamespace.Type)
 		if found {
-			if namespace.Status.Phase == corev1.NamespaceActive && namespace.Labels["revision"] == "" {
+			if namespace.Status.Phase == corev1.NamespaceActive && namespace.Labels[toolchainv1alpha1.RevisionLabelKey] == "" {
 				return &tcNamespace, &namespace, true
 			}
 		} else {
@@ -250,7 +250,7 @@ func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.NSTemplateSetName
 
 func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Namespace, bool) {
 	for _, ns := range namespaces {
-		if ns.Labels["type"] == typeName {
+		if ns.Labels[toolchainv1alpha1.TypeLabelKey] == typeName {
 			return ns, true
 		}
 	}

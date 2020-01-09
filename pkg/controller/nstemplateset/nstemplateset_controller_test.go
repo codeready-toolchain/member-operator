@@ -39,8 +39,12 @@ const (
 
 func TestFindNamespace(t *testing.T) {
 	namespaces := []corev1.Namespace{
-		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-dev", Labels: map[string]string{"type": "dev"}}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-code", Labels: map[string]string{"type": "code"}}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-dev", Labels: map[string]string{
+			"toolchain.dev.openshift.com/type": "dev",
+		}}},
+		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-code", Labels: map[string]string{
+			"toolchain.dev.openshift.com/type": "code",
+		}}},
 	}
 
 	t.Run("found", func(t *testing.T) {
@@ -48,7 +52,7 @@ func TestFindNamespace(t *testing.T) {
 		namespace, found := findNamespace(namespaces, typeName)
 		assert.True(t, found)
 		assert.NotNil(t, namespace)
-		assert.Equal(t, typeName, namespace.GetLabels()["type"])
+		assert.Equal(t, typeName, namespace.GetLabels()["toolchain.dev.openshift.com/type"])
 	})
 
 	t.Run("not_found", func(t *testing.T) {
@@ -62,13 +66,20 @@ func TestNextMissingNamespace(t *testing.T) {
 	userNamespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-dev", Labels: map[string]string{"owner": "johnsmith", "revision": "abcde11", "type": "dev"},
+				Name: "johnsmith-dev", Labels: map[string]string{
+					"toolchain.dev.openshift.com/owner":    "johnsmith",
+					"toolchain.dev.openshift.com/revision": "abcde11",
+					"toolchain.dev.openshift.com/type":     "dev",
+				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-code", Labels: map[string]string{"owner": "johnsmith", "type": "code"},
+				Name: "johnsmith-code", Labels: map[string]string{
+					"toolchain.dev.openshift.com/owner": "johnsmith",
+					"toolchain.dev.openshift.com/type":  "code",
+				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
@@ -89,7 +100,7 @@ func TestNextMissingNamespace(t *testing.T) {
 	})
 
 	t.Run("missing_namespace", func(t *testing.T) {
-		userNamespaces[1].Labels["revision"] = "abcde11"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde11"
 
 		// test
 		tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
@@ -100,10 +111,13 @@ func TestNextMissingNamespace(t *testing.T) {
 	})
 
 	t.Run("namespace_not_found", func(t *testing.T) {
-		userNamespaces[1].Labels["revision"] = "abcde11"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde11"
 		userNamespaces = append(userNamespaces, corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-stage", Labels: map[string]string{"revision": "abcde11", "type": "stage"},
+				Name: "johnsmith-stage", Labels: map[string]string{
+					"toolchain.dev.openshift.com/revision": "abcde11",
+					"toolchain.dev.openshift.com/type":     "stage",
+				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		})
@@ -517,8 +531,12 @@ func createNamespace(t *testing.T, client client.Client, revision, typeName stri
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   nsName,
-			Labels: map[string]string{"owner": username, "revision": revision, "type": typeName},
+			Name: nsName,
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/revision": revision,
+				"toolchain.dev.openshift.com/type":     typeName,
+			},
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	}
@@ -562,8 +580,8 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	err := cl.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
 	require.NoError(t, err)
-	require.Equal(t, username, namespace.Labels["owner"])
-	require.Equal(t, typeName, namespace.Labels["type"])
+	require.Equal(t, username, namespace.Labels["toolchain.dev.openshift.com/owner"])
+	require.Equal(t, typeName, namespace.Labels["toolchain.dev.openshift.com/type"])
 }
 
 func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {

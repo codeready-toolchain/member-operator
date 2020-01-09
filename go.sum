@@ -48,8 +48,6 @@ github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWX
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
-github.com/alexeykazakov/api v0.0.0-20200108223257-d11e1101fffb h1:KL9ajyFCB2FZO23DEgAf7YV6GJewb9748dqxtovCuCA=
-github.com/alexeykazakov/api v0.0.0-20200108223257-d11e1101fffb/go.mod h1:zPbdWiEiv9SpZMvyRkY6E6n7Eynm5Y0uhJhBiGXjkg0=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=
 github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
@@ -65,8 +63,8 @@ github.com/chai2010/gettext-go v0.0.0-20170215093142-bf70f2a70fb1/go.mod h1:/iP1
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/codeready-toolchain/api v0.0.0-20191203182149-f994640853b0 h1:APb57ts/dN2/vJb+9Fjc5I3QpOx/OBWzObGKj6zdPPU=
 github.com/codeready-toolchain/api v0.0.0-20191203182149-f994640853b0/go.mod h1:K2iSNSOwpQf+Wo3LdmrGaPlha2BLwuywwWrnbuiy8Pg=
-github.com/codeready-toolchain/api v0.0.0-20200106162618-9b2c84309f9d h1:eKA5oNOO/Z2f9n9mjEdoVgRUSlj8HIzK49QDVrlpghY=
-github.com/codeready-toolchain/api v0.0.0-20200106162618-9b2c84309f9d/go.mod h1:st8k0LKhkg1Z7hNNia2NYLiFoNCxeBfJwpwgRdzqrLg=
+github.com/codeready-toolchain/api v0.0.0-20200109145334-5e7cde0ac10d h1:KPZ4RCOUHRnAwrFKGHS+orAotRVg4SOlYQdmg3wCB+M=
+github.com/codeready-toolchain/api v0.0.0-20200109145334-5e7cde0ac10d/go.mod h1:zPbdWiEiv9SpZMvyRkY6E6n7Eynm5Y0uhJhBiGXjkg0=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20191206153324-4205c5ebe624 h1:m3y0VL12u4Aso1+LfaFHDgvWgj62Q+22kDFWTjaPqrg=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20191206153324-4205c5ebe624/go.mod h1:fQpxuAw8pI0BwVJhgKHN9vbWko/eWsCzsZ+9pknFVLQ=
 github.com/coreos/bbolt v1.3.0/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=

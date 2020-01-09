@@ -32,12 +32,12 @@ import (
 
 const (
 	// Status condition reasons
-	unableToCreateUserReason          = "UnableToCreateUser"
-	unableToCreateIdentityReason      = "UnableToCreateIdentity"
-	unableToCreateMappingReason       = "UnableToCreateMapping"
-	unableToCreateNSTemplateSetReason = "UnableToCreateNSTemplateSet"
-	provisioningReason                = "Provisioning"
-	provisionedReason                 = "Provisioned"
+	//unableToCreateUserReason          = "UnableToCreateUser"
+	//unableToCreateIdentityReason      = "UnableToCreateIdentity"
+	//unableToCreateMappingReason       = "UnableToCreateMapping"
+	//unableToCreateNSTemplateSetReason = "UnableToCreateNSTemplateSet"
+	//provisioningReason                = "Provisioning"
+	//provisionedReason                 = "Provisioned"
 
 	// Finalizers
 	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
@@ -150,6 +150,24 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
 		if err = r.manageCleanUp(userAcc); err != nil {
 			return reconcile.Result{}, err
+		}
+
+		// TINA TODO: Move this to a different function
+		if userAcc.Spec.Disabled {
+			name := ToIdentityName(userAcc.Spec.UserID)
+			identity := &userv1.Identity{}
+			identityErr := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity)
+			if errors.IsNotFound(identityErr) {
+				user := &userv1.User{}
+				userErr := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+				if errors.IsNotFound(userErr) {
+					return reconcile.Result{}, r.setStatusDisabled(userAcc)
+				} else {
+					// log error and return it
+				}
+			} else {
+				// log error and return it
+			}
 		}
 	}
 
@@ -454,6 +472,16 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: provisionedReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.UserAccount) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: "Disabled",
 		})
 }
 

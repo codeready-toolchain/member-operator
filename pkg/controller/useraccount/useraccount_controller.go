@@ -32,12 +32,12 @@ import (
 
 const (
 	// Status condition reasons
-	//unableToCreateUserReason          = "UnableToCreateUser"
-	//unableToCreateIdentityReason      = "UnableToCreateIdentity"
-	//unableToCreateMappingReason       = "UnableToCreateMapping"
-	//unableToCreateNSTemplateSetReason = "UnableToCreateNSTemplateSet"
-	//provisioningReason                = "Provisioning"
-	//provisionedReason                 = "Provisioned"
+	unableToCreateUserReason          = "UnableToCreateUser"
+	unableToCreateIdentityReason      = "UnableToCreateIdentity"
+	unableToCreateMappingReason       = "UnableToCreateMapping"
+	unableToCreateNSTemplateSetReason = "UnableToCreateNSTemplateSet"
+	provisioningReason                = "Provisioning"
+	provisionedReason                 = "Provisioned"
 
 	// Finalizers
 	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"

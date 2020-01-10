@@ -31,14 +31,6 @@ import (
 )
 
 const (
-	// Status condition reasons
-	unableToCreateUserReason          = "UnableToCreateUser"
-	unableToCreateIdentityReason      = "UnableToCreateIdentity"
-	unableToCreateMappingReason       = "UnableToCreateMapping"
-	unableToCreateNSTemplateSetReason = "UnableToCreateNSTemplateSet"
-	provisioningReason                = "Provisioning"
-	provisionedReason                 = "Provisioned"
-
 	// Finalizers
 	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
 )
@@ -387,7 +379,7 @@ func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1a
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  unableToCreateUserReason,
+			Reason:  toolchainv1alpha1.UnableToCreateUserReason,
 			Message: message,
 		})
 }
@@ -398,7 +390,7 @@ func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchai
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  unableToCreateIdentityReason,
+			Reason:  toolchainv1alpha1.UnableToCreateIdentityReason,
 			Message: message,
 		})
 }
@@ -409,7 +401,7 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  unableToCreateMappingReason,
+			Reason:  toolchainv1alpha1.UnableToCreateMappingReason,
 			Message: message,
 		})
 }
@@ -420,7 +412,7 @@ func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *too
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  unableToCreateNSTemplateSetReason,
+			Reason:  toolchainv1alpha1.UnableToCreateNSTemplateSetReason,
 			Message: message,
 		})
 }
@@ -442,7 +434,7 @@ func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
-			Reason: provisioningReason,
+			Reason: toolchainv1alpha1.ProvisioningReason,
 		})
 }
 
@@ -452,7 +444,7 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
-			Reason: provisionedReason,
+			Reason: toolchainv1alpha1.ProvisionedReason,
 		})
 }
 

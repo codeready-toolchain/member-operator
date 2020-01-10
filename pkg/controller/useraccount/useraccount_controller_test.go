@@ -110,7 +110,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.ConditionReady,
 					Status: corev1.ConditionFalse,
-					Reason: "Provisioning",
+					Reason: toolchainv1alpha1.ProvisioningReason,
 				})
 
 			// Check the created/updated user
@@ -176,7 +176,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateUser",
+					Reason:  toolchainv1alpha1.UnableToCreateUserReason,
 					Message: "unable to create user",
 				})
 		})
@@ -209,7 +209,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateMapping",
+					Reason:  toolchainv1alpha1.UnableToCreateMappingReason,
 					Message: "unable to update user",
 				})
 		})
@@ -233,7 +233,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:   toolchainv1alpha1.ConditionReady,
 					Status: corev1.ConditionFalse,
-					Reason: "Provisioning",
+					Reason: toolchainv1alpha1.ProvisioningReason,
 				})
 
 			// Check the created/updated identity
@@ -289,7 +289,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateIdentity",
+					Reason:  toolchainv1alpha1.UnableToCreateIdentityReason,
 					Message: "unable to create identity",
 				})
 		})
@@ -322,7 +322,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.Condition{
 					Type:    toolchainv1alpha1.ConditionReady,
 					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateMapping",
+					Reason:  toolchainv1alpha1.UnableToCreateMappingReason,
 					Message: "unable to update identity",
 				})
 		})
@@ -447,7 +447,7 @@ func TestReconcile(t *testing.T) {
 			toolchainv1alpha1.Condition{
 				Type:   toolchainv1alpha1.ConditionReady,
 				Status: corev1.ConditionTrue,
-				Reason: "Provisioned",
+				Reason: toolchainv1alpha1.ProvisionedReason,
 			})
 	})
 

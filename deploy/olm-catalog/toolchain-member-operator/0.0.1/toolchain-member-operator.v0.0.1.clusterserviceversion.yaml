@@ -97,13 +97,8 @@ spec:
           - ""
           resources:
           - nodes
-          - componentstatuses
-          - pods
-          - services
           verbs:
           - list
-          - get
-          - watch
         - apiGroups:
           - ""
           resources:
@@ -122,12 +117,7 @@ spec:
           - useridentitymappings
           - groups
           verbs:
-          - get
-          - create
-          - update
-          - list
-          - watch
-          - delete
+          - '*'
         - apiGroups:
           - core.kubefed.io
           resources:
@@ -156,29 +146,10 @@ spec:
           verbs:
           - get
           - create
-          - list
-          - watch
         - apiGroups:
           - route.openshift.io
           resources:
           - routes
-          verbs:
-          - get
-          - list
-        - apiGroups:
-          - authorization.openshift.io
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterrolebindings
-          - subjectaccessreviews
-          - resourceaccessreviews
-          verbs:
-          - get
-          - list
-        - apiGroups:
-          - template.openshift.io
-          resources:
-          - processedtemplates
           verbs:
           - get
           - list
@@ -227,10 +198,7 @@ spec:
           - events
           - configmaps
           - secrets
-          - bindings
-          - podtemplates
           - serviceaccounts
-          - replicationcontrollers
           verbs:
           - '*'
         - apiGroups:
@@ -256,26 +224,6 @@ spec:
           - kubefedclusters/status
           verbs:
           - update
-        - apiGroups:
-          - authorization.openshift.io
-          - rbac.authorization.k8s.io
-          resources:
-          - subjectrulesreviews
-          - subjectaccessreviews
-          - localsubjectaccessreviews
-          - resourceaccessreviews
-          - roles
-          - rolebindings
-          verbs:
-          - get
-          - list
-        - apiGroups:
-          - template.openshift.io
-          resources:
-          - templateinstances
-          verbs:
-          - get
-          - list
         serviceAccountName: member-operator
     strategy: deployment
   installModes:

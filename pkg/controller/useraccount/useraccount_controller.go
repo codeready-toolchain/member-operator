@@ -379,7 +379,7 @@ func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1a
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UnableToCreateUserReason,
+			Reason:  toolchainv1alpha1.UserAccountUnableToCreateUserReason,
 			Message: message,
 		})
 }
@@ -390,7 +390,7 @@ func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchai
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UnableToCreateIdentityReason,
+			Reason:  toolchainv1alpha1.UserAccountUnableToCreateIdentityReason,
 			Message: message,
 		})
 }
@@ -401,7 +401,7 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UnableToCreateMappingReason,
+			Reason:  toolchainv1alpha1.UserAccountUnableToCreateMappingReason,
 			Message: message,
 		})
 }
@@ -412,7 +412,7 @@ func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *too
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UnableToCreateNSTemplateSetReason,
+			Reason:  toolchainv1alpha1.UserAccountUnableToCreateNSTemplateSetReason,
 			Message: message,
 		})
 }
@@ -434,7 +434,7 @@ func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
-			Reason: toolchainv1alpha1.ProvisioningReason,
+			Reason: toolchainv1alpha1.UserAccountProvisioningReason,
 		})
 }
 
@@ -444,7 +444,7 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
-			Reason: toolchainv1alpha1.ProvisionedReason,
+			Reason: toolchainv1alpha1.UserAccountProvisionedReason,
 		})
 }
 

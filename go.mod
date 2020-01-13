@@ -24,6 +24,7 @@ require (
 
 // Pinned to kubernetes-1.14.1
 replace (
+	github.com/codeready-toolchain/api v0.0.0-20200110043643-8b83f07304f7 => github.com/tinakurian/api v0.0.0-20200110162517-96ec111a649e
 	// using 'github.com/openshift/api@release-4.2'
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20190927182313-d4a64ec2cbd8
 

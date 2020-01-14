@@ -144,26 +144,31 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, err
 		}
 
-		// TINA TODO: Move this to a different function
 		if userAcc.Spec.Disabled {
-			name := ToIdentityName(userAcc.Spec.UserID)
-			identity := &userv1.Identity{}
-			identityErr := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity)
-			if errors.IsNotFound(identityErr) {
-				user := &userv1.User{}
-				userErr := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-				if errors.IsNotFound(userErr) {
-					return reconcile.Result{}, r.setStatusDisabled(userAcc)
-				} else {
-					// log error and return it
-				}
+			disabled, err := r.setDisabledStatus(userAcc)
+			if disabled == true {
+				return reconcile.Result{}, r.setStatusDisabled(userAcc)
 			} else {
-				// log error and return it
+				return reconcile.Result{}, err
 			}
 		}
 	}
 
 	return reconcile.Result{}, r.setStatusReady(userAcc)
+}
+
+func (r *ReconcileUserAccount) setDisabledStatus(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	name := ToIdentityName(userAcc.Spec.UserID)
+	identity := &userv1.Identity{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity)
+	if errors.IsNotFound(err) {
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		if errors.IsNotFound(err) {
+			return true, nil
+		}
+	}
+	return false, err
 }
 
 func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {

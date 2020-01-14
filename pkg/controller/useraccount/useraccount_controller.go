@@ -146,7 +146,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 		if userAcc.Spec.Disabled {
 			disabled, err := r.setDisabledStatus(userAcc)
-			if disabled == true {
+			if disabled {
 				return reconcile.Result{}, r.setStatusDisabled(userAcc)
 			} else {
 				return reconcile.Result{}, err

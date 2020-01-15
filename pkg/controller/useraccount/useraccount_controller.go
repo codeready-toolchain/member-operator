@@ -143,14 +143,14 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if err = r.manageCleanUp(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
-	}
 
-	if userAcc.Spec.Disabled {
-		disabled, err := r.checkAccountDisabled(userAcc)
-		if disabled {
-			return reconcile.Result{}, r.setStatusDisabled(userAcc)
-		} else {
-			return reconcile.Result{}, err
+		if userAcc.Spec.Disabled {
+			disabled, err := r.checkAccountDisabled(userAcc)
+			if disabled {
+				return reconcile.Result{}, r.setStatusDisabled(userAcc)
+			} else {
+				return reconcile.Result{}, err
+			}
 		}
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)

@@ -140,7 +140,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 	}
 	if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
-		if err = r.manageCleanUp(userAcc); err != nil {
+		if err = r.deleteUserIdentity(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -324,8 +324,8 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 	return nil
 }
 
-// manageCleanUp deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) manageCleanUp(userAcc *toolchainv1alpha1.UserAccount) error {
+// deleteUserIdentity deletes the identity, user and finalizer when the UserAccount is being deleted
+func (r *ReconcileUserAccount) deleteUserIdentity(userAcc *toolchainv1alpha1.UserAccount) error {
 	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
 		return err
 	}

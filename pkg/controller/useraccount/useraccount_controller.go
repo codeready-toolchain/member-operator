@@ -121,25 +121,27 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
 	if !util.IsBeingDeleted(userAcc) {
+		reqLogger.Info("Adding finalizer on UserAccount")
 		// Add the finalizer if it is not present
 		if err := r.addFinalizer(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
-	}
-	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
-		var createdOrUpdated bool
-		var user *userv1.User
-		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
-			return reconcile.Result{}, err
+		if !userAcc.Spec.Disabled {
+			reqLogger.Info("Ensuring user and identity associated with UserAccount")
+			var createdOrUpdated bool
+			var user *userv1.User
+			if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
+				return reconcile.Result{}, err
+			}
+			if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+				return reconcile.Result{}, err
+			}
+			if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
+				return reconcile.Result{}, err
+			}
 		}
-		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
-			return reconcile.Result{}, err
-		}
-		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
-			return reconcile.Result{}, err
-		}
-	}
-	if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
+	} else if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
+		reqLogger.Info("Deleting user and identity associated with UserAccount")
 		if err = r.deleteUserIdentity(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}

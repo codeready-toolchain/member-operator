@@ -120,7 +120,6 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
-
 	if !util.IsBeingDeleted(userAcc) {
 		reqLogger.Info("Adding finalizer on UserAccount")
 		// Add the finalizer if it is not present
@@ -148,29 +147,10 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 
 		if userAcc.Spec.Disabled {
-			disabled, err := r.checkAccountDisabled(userAcc)
-			if disabled {
-				return reconcile.Result{}, r.setStatusDisabled(userAcc)
-			} else {
-				return reconcile.Result{}, err
-			}
+			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
-}
-
-func (r *ReconcileUserAccount) checkAccountDisabled(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	name := ToIdentityName(userAcc.Spec.UserID)
-	identity := &userv1.Identity{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity)
-	if errors.IsNotFound(err) {
-		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		if errors.IsNotFound(err) {
-			return true, nil
-		}
-	}
-	return false, err
 }
 
 func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {

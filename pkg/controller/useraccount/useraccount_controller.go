@@ -147,6 +147,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 
 		if userAcc.Spec.Disabled {
+			reqLogger.Info("Setting useraccount status to disabled")
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
 	}
@@ -460,7 +461,7 @@ func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.User
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
-			Reason: "Disabled",
+			Reason: toolchainv1alpha1.UserAccountDisabledReason,
 		})
 }
 

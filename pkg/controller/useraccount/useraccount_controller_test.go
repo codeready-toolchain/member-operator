@@ -817,6 +817,11 @@ func TestDisabledUserAccount(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
 
+		// Get NSTemplate
+		tmplTier := &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
+		require.NoError(t, err)
+
 		// Set disabled to true
 		userAcc.Spec.Disabled = true
 		err = r.client.Update(context.TODO(), userAcc)
@@ -847,6 +852,39 @@ func TestDisabledUserAccount(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
+
+		// Get NSTemplate
+		tmplTier = &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
+		require.NoError(t, err)
+
+		// Set disabled to false
+		userAcc.Spec.Disabled = false
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		// Reconcile to ensure user
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// User should now exist
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.NoError(t, err)
+
+		// Reconcile to ensure identity
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Identity should now exist
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.NoError(t, err)
+
+		// Get NSTemplate
+		tmplTier = &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
+		require.NoError(t, err)
 	})
 }
 

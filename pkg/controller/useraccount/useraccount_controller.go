@@ -142,7 +142,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) && util.IsBeingDeleted(userAcc) {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
-		_, err := r.deleteUserAndIdentity(reqLogger, userAcc)
+		_, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
 			return reconcile.Result{}, err
 		}

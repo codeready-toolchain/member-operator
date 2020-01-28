@@ -573,7 +573,6 @@ func TestReconcile(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
-
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}

@@ -140,7 +140,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if util.HasFinalizer(userAcc, userAccFinalizerName) && util.IsBeingDeleted(userAcc)  {
+	} else if util.HasFinalizer(userAcc, userAccFinalizerName) && util.IsBeingDeleted(userAcc) {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
 		_, err := r.deleteUserAndIdentity(reqLogger, userAcc)
 		if err != nil {
@@ -156,7 +156,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		return reconcile.Result{}, nil
 	} else if userAcc.Spec.Disabled {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
-		wasDeleted, err := r.deleteUserAndIdentity(reqLogger, userAcc)
+		wasDeleted, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
@@ -327,7 +327,7 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 }
 
 // deleteUserAndIdentity deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) deleteUserAndIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	deletedIdentity, err := r.deleteIdentity(userAcc)
 	deletedUser, err := r.deleteUser(userAcc)
 	if deletedIdentity || deletedUser {
@@ -471,9 +471,9 @@ func (r *ReconcileUserAccount) setStatusDisabling(userAcc *toolchainv1alpha1.Use
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.ConditionReady,
-			Status: corev1.ConditionFalse,
-			Reason: toolchainv1alpha1.UserAccountDisablingReason,
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.UserAccountDisablingReason,
 			Message: message,
 		})
 }

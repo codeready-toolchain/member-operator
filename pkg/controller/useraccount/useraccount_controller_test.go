@@ -550,28 +550,6 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// Check that the associated identity has been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// Check that the associated user has been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
 		// Mock finalizer removal failure
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
@@ -580,6 +558,21 @@ func TestReconcile(t *testing.T) {
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
+
+		// Check that the associated identity has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Check that the associated user has been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
 
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp
@@ -628,7 +621,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 	})
 	// delete user fails
-	t.Run("delete user fails", func(t *testing.T) {
+	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
@@ -651,25 +644,20 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
+		// Mock deleting user failure
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("unable to delete user/identity for user account %s", userAcc.Name)
+		}
+
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
+		require.EqualError(t, err, fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
-		// Mock deleting user failure
-		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-			return fmt.Errorf("unable to delete user for user account %s", userAcc.Name)
-		}
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.EqualError(t, err, fmt.Sprintf("unable to delete user for user account %s", userAcc.Name))
+		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
 		// when reconciling the useraccount with a deletion timestamp

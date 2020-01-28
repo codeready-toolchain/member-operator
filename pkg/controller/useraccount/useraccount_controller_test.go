@@ -784,10 +784,38 @@ func TestDisabledUserAccount(t *testing.T) {
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	t.Run("disabled useraccount", func(t *testing.T) {
+	userAcc := newUserAccount(username, userID)
+	userUID := types.UID(username + "user")
+	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
+		Name:      ToIdentityName(userAcc.Spec.UserID),
+		Namespace: "toolchain-member",
+		UID:       types.UID(username + "identity"),
+	}, User: corev1.ObjectReference{
+		Name: username,
+		UID:  userUID,
+	}}
+	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
+		Name:            username,
+		Namespace:       "toolchain-member",
+		UID:             userUID,
+		OwnerReferences: []metav1.OwnerReference{},
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
+	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userAcc.Name,
+			Namespace: "toolchain-member",
+		},
+		Spec: newNSTmplSetSpec(),
+		Status: toolchainv1alpha1.NSTemplateSetStatus{
+			Conditions: []toolchainv1alpha1.Condition{
+				{Type: toolchainv1alpha1.ConditionReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	t.Run("disabling useraccount", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
-		r, req, _ := prepareReconcile(t, username, userAcc)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		res, err := r.Reconcile(req)
@@ -795,33 +823,6 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		//then
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// Check that the associated identity exists
-		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.NoError(t, err)
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// Check that the associated user exists
-		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.NoError(t, err)
-
-		// Get NSTemplate
-		tmplTier := &toolchainv1alpha1.NSTemplateSet{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
-		require.NoError(t, err)
-
 		// Set disabled to true
 		userAcc.Spec.Disabled = true
 		err = r.client.Update(context.TODO(), userAcc)
@@ -839,52 +840,177 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
+		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
+		user := &userv1.User{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Get NSTemplate
-		tmplTier = &toolchainv1alpha1.NSTemplateSet{}
+		tmplTier := &toolchainv1alpha1.NSTemplateSet{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
 		require.NoError(t, err)
+	})
 
-		// Set disabled to false
-		userAcc.Spec.Disabled = false
+	t.Run("disabled useraccount", func(t *testing.T) {
+		userAcc := newDisabledUserAccount(username, userID)
+
+		// given
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(userAcc.Status.Conditions))
+		assert.Equal(t, "Disabled", userAcc.Status.Conditions[0].Reason)
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+	})
+
+	t.Run("disabling useraccount without user", func(t *testing.T) {
+		// given
+		userAcc := newDisabledUserAccount(username, userID)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
+
+		// when
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(userAcc.Status.Conditions))
+		assert.Equal(t, "Disabling", userAcc.Status.Conditions[0].Reason)
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Get NSTemplate
+		tmplTier := &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
+		require.NoError(t, err)
+	})
+
+	t.Run("disabling useraccount without identity", func(t *testing.T) {
+		// given
+		userAcc := newDisabledUserAccount(username, userID)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
+
+		// when
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(userAcc.Status.Conditions))
+		assert.Equal(t, "Disabling", userAcc.Status.Conditions[0].Reason)
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		// Get NSTemplate
+		tmplTier := &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
+		require.NoError(t, err)
+	})
+
+	t.Run("deleting disabled useraccount", func(t *testing.T) {
+
+		userAcc := newDisabledUserAccountWithFinalizer(username, userID)
+
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
-		// Reconcile to ensure user
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		// User should now exist
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.NoError(t, err)
-
-		// Reconcile to ensure identity
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		// Identity should now exist
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.NoError(t, err)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
 
-		// Get NSTemplate
-		tmplTier = &toolchainv1alpha1.NSTemplateSet{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, tmplTier)
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
+		require.False(t, util.HasFinalizer(userAcc, userAccFinalizerName))
 	})
 }
 
@@ -904,6 +1030,22 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 	return userAcc
 }
 
+func newDisabledUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
+	userAcc := &toolchainv1alpha1.UserAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userName,
+			Namespace: "toolchain-member",
+			UID:       types.UID(uuid.NewV4().String()),
+		},
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			UserID:        userID,
+			NSTemplateSet: newNSTmplSetSpec(),
+			Disabled:      true,
+		},
+	}
+	return userAcc
+}
+
 func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
 	finalizers := []string{userAccFinalizerName}
 	userAcc := &toolchainv1alpha1.UserAccount{
@@ -916,6 +1058,23 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID:   userID,
 			Disabled: false,
+		},
+	}
+	return userAcc
+}
+
+func newDisabledUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
+	finalizers := []string{userAccFinalizerName}
+	userAcc := &toolchainv1alpha1.UserAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       userName,
+			Namespace:  "toolchain-member",
+			UID:        types.UID(uuid.NewV4().String()),
+			Finalizers: finalizers,
+		},
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			UserID:   userID,
+			Disabled: true,
 		},
 	}
 	return userAcc

@@ -142,14 +142,26 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) || userAcc.Spec.Disabled {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
-		if err = r.deleteUserAndIdentity(userAcc); err != nil {
+		wasDeleted, err := r.deleteUserAndIdentity(userAcc)
+		if err != nil {
 			return reconcile.Result{}, err
 		}
 
-		if userAcc.Spec.Disabled {
+		if !wasDeleted && userAcc.Spec.Disabled {
 			reqLogger.Info("Setting useraccount status to disabled")
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
+		} else if userAcc.Spec.Disabled {
+			reqLogger.Info("Setting useraccount status to disabling")
+			return reconcile.Result{}, r.setStatusDisabling(userAcc)
 		}
+
+		// Remove finalizer from UserAccount
+		util.RemoveFinalizer(userAcc, userAccFinalizerName)
+		if err := r.client.Update(context.Background(), userAcc); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
@@ -309,20 +321,18 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 }
 
 // deleteUserAndIdentity deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) error {
-	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
-		return err
-	}
-	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
-		return err
-	}
-	// Remove finalizer from UserAccount
-	util.RemoveFinalizer(userAcc, userAccFinalizerName)
-	if err := r.client.Update(context.Background(), userAcc); err != nil {
-		return err
+func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	deleted, err := r.deleteIdentity(userAcc)
+	if deleted {
+		return true, nil
 	}
 
-	return nil
+	deleted, err = r.deleteUser(userAcc)
+	if deleted {
+		return true, nil
+	}
+
+	return false, err
 }
 
 // deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,
@@ -452,6 +462,16 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.UserAccountProvisionedReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusDisabling(userAcc *toolchainv1alpha1.UserAccount) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.UserAccountDisablingReason,
 		})
 }
 

@@ -835,7 +835,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(userAcc.Status.Conditions))
-		assert.Equal(t, "Disabled", userAcc.Status.Conditions[0].Reason)
+		assert.Equal(t, "Disabling", userAcc.Status.Conditions[0].Reason)
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true

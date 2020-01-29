@@ -142,15 +142,17 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) && util.IsBeingDeleted(userAcc) {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
-		_, err := r.deleteUserAndIdentity(userAcc)
+		deleted, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
 
 		// Remove finalizer from UserAccount
-		util.RemoveFinalizer(userAcc, userAccFinalizerName)
-		if err := r.client.Update(context.Background(), userAcc); err != nil {
-			return reconcile.Result{}, err
+		if deleted {
+			util.RemoveFinalizer(userAcc, userAccFinalizerName)
+			if err := r.client.Update(context.Background(), userAcc); err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 
 		return reconcile.Result{}, nil
@@ -161,13 +163,13 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
 
-		if !wasDeleted {
+		if wasDeleted {
 			reqLogger.Info("Setting useraccount status to disabled")
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
-
 		reqLogger.Info("Setting useraccount status to disabling")
 		return reconcile.Result{}, r.setStatusDisabling(userAcc, "deleting user and identity resources")
+
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
@@ -328,13 +330,16 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 
 // deleteUserAndIdentity deletes the identity, user and finalizer when the UserAccount is being deleted
 func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	deletedIdentity, err := r.deleteIdentity(userAcc)
-	deletedUser, err := r.deleteUser(userAcc)
-	if deletedIdentity || deletedUser {
-		return true, nil
+
+	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
+		return false, err
 	}
 
-	return false, err
+	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,

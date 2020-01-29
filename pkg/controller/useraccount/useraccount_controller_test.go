@@ -556,6 +556,14 @@ func TestReconcile(t *testing.T) {
 		}
 
 		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
 
@@ -813,6 +821,10 @@ func TestDisabledUserAccount(t *testing.T) {
 		// Set disabled to true
 		userAcc.Spec.Disabled = true
 		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
 		res, err = r.Reconcile(req)

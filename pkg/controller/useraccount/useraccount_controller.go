@@ -30,11 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const (
-	// Finalizers
-	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
-)
-
 var log = logf.Log.WithName("controller_useraccount")
 
 // Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -139,7 +134,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if util.HasFinalizer(userAcc, userAccFinalizerName) {
+	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
 		if err = r.manageCleanUp(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -291,8 +286,8 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 // setFinalizers sets the finalizers for UserAccount
 func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
-	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
-		util.AddFinalizer(userAcc, userAccFinalizerName)
+	if !util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
+		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err
 		}
@@ -310,7 +305,7 @@ func (r *ReconcileUserAccount) manageCleanUp(userAcc *toolchainv1alpha1.UserAcco
 		return err
 	}
 	// Remove finalizer from UserAccount
-	util.RemoveFinalizer(userAcc, userAccFinalizerName)
+	util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 	if err := r.client.Update(context.Background(), userAcc); err != nil {
 		return err
 	}
@@ -488,8 +483,9 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1.NSTemplateSet {
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      userAcc.Name,
-			Namespace: userAcc.Namespace,
+			Name:       userAcc.Name,
+			Namespace:  userAcc.Namespace,
+			Finalizers: []string{toolchainv1alpha1.FinalizerName},
 		},
 		Spec: userAcc.Spec.NSTemplateSet,
 	}

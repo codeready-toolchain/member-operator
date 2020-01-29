@@ -6,6 +6,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
 	"github.com/go-logr/logr"
@@ -13,6 +14,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
+	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -20,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -30,20 +31,13 @@ import (
 
 var log = logf.Log.WithName("controller_nstemplateset")
 
-const (
-	// Status condition reasons
-	unableToProvisionReason          = "UnableToProvision"
-	unableToProvisionNamespaceReason = "UnableToProvisionNamespace"
-	provisioningReason               = "Provisioning"
-	provisionedReason                = "Provisioned"
-)
-
+// Add creates a new NSTemplateSetReconciler and starts it (ie, watches resources and reconciles the cluster state)
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileNSTemplateSet{
+	return &NSTemplateSetReconciler{
 		client:             mgr.GetClient(),
 		scheme:             mgr.GetScheme(),
 		getTemplateContent: getTemplateContentFromHost,
@@ -57,27 +51,47 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to primary resource
+	// Watch for changes to primary resources: NSTemplateSets
 	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to secondary resource
-	enqueueRequestForOwner := &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &toolchainv1alpha1.NSTemplateSet{},
-	}
-	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, enqueueRequestForOwner); err != nil {
+	// Watch for changes to secondary resources: Namespaces associated with an NSTemplateSet (not owned, though - see https://issues.redhat.com/browse/CRT-429)
+	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.LabelKeyPrefix+"owner")); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileNSTemplateSet{}
+// // NamespacetoNSTemplateSetMapper a mapper that will convert events on a namespace to requests on
+// // its associated ("owner") NSTemplateSet resource, if the aforementioned namespace belongs to a
+// // CodeReady Toolchain user.
+// type NamespacetoNSTemplateSetMapper struct{}
 
-type ReconcileNSTemplateSet struct {
+// var _ handler.Mapper = NamespacetoNSTemplateSetMapper{}
+
+// // Map maps the namespace to a request on the "owner" (or "associated") NSTemplateSet
+// func (m NamespacetoNSTemplateSetMapper) Map(obj handler.MapObject) []reconcile.Request {
+// 	if ns, ok := obj.Object.(*corev1.Namespace); ok {
+// 		// look-up the "owner" NSTemplateSet using on the namespace's "toolchain.dev.openshift.com/owner" label (if applicable)
+// 		if ownerLbl, exists := ns.Labels[toolchainv1alpha1.LabelKeyPrefix+"owner"]; exists {
+// 			return []reconcile.Request{
+// 				{
+// 					NamespacedName: types.NamespacedName{Namespace: "toolchain-member-operator", Name: ownerLbl},
+// 				},
+// 			}
+// 		}
+// 	}
+// 	// the obj was not a namespace or it did not have the required label.
+// 	return []reconcile.Request{}
+// }
+
+var _ reconcile.Reconciler = &NSTemplateSetReconciler{}
+
+// NSTemplateSetReconciler the NSTemplateSet reconciler
+type NSTemplateSetReconciler struct {
 	client             client.Client
 	scheme             *runtime.Scheme
 	getTemplateContent func(tierName, typeName string) (*templatev1.Template, error)
@@ -85,7 +99,7 @@ type ReconcileNSTemplateSet struct {
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec
-func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling NSTemplateSet")
 
@@ -106,6 +120,38 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 		reqLogger.Error(err, "failed to get NSTemplateSet")
 		return reconcile.Result{}, err
 	}
+	if util.IsBeingDeleted(nsTmplSet) {
+		// if the NSTemplateSet has no finalizer, then we don't have anything to do
+		if len(nsTmplSet.Finalizers) == 0 {
+			reqLogger.Info("NSTemplateSet resource is terminated")
+			return reconcile.Result{}, nil
+		}
+		// since the NSTmplSet resource is being deleted, we need to delete all "child" namespaces explicitly
+		username := nsTmplSet.GetName()
+		userNamespaces, err := r.fetchUserNamespaces(username)
+		if err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to list namespace with label owner '%s'", username)
+		}
+		// delete the first namespace which (still) exists and is not in a terminating state
+		reqLogger.Info("checking user namepaces associated with the deleted NSTemplateSet...")
+		for _, userNS := range userNamespaces {
+			if !util.IsBeingDeleted(&userNS) {
+				reqLogger.Info("deleting a user namepace associated with the deleted NSTemplateSet", "namespace", userNS.Name)
+				if err := r.client.Delete(context.TODO(), &userNS); err != nil {
+					return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to delete user namespace '%s'", userNS.Name)
+				}
+				// set the NSTemplateSet status to `ready=false / reason=terminating` while the user namespaces are being terminated...
+				return reconcile.Result{}, r.setStatusTerminating(nsTmplSet)
+			}
+		}
+		// if no namespace was to be deleted, then we can remove the finalizer and we're done
+		reqLogger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
+		nsTmplSet.SetFinalizers([]string{})
+		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to remove finalier on NSTemplateSet '%s'", nsTmplSet.Name)
+		}
+		return reconcile.Result{}, nil
+	}
 
 	done, err := r.ensureUserNamespaces(reqLogger, nsTmplSet)
 	if !done || err != nil {
@@ -117,18 +163,24 @@ func (r *ReconcileNSTemplateSet) Reconcile(request reconcile.Request) (reconcile
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
 }
 
-func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	username := nsTmplSet.GetName()
-
+func (r *NSTemplateSetReconciler) fetchUserNamespaces(username string) ([]corev1.Namespace, error) {
 	// fetch all namespace with owner=username label
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 	opts := client.MatchingLabels(labels)
 	userNamespaceList := &corev1.NamespaceList{}
 	if err := r.client.List(context.TODO(), userNamespaceList, opts); err != nil {
+		return nil, err
+	}
+	return userNamespaceList.Items, nil
+
+}
+
+func (r *NSTemplateSetReconciler) ensureUserNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+	username := nsTmplSet.GetName()
+	userNamespaces, err := r.fetchUserNamespaces(username)
+	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
-	userNamespaces := userNamespaceList.Items
-
 	// find next namespace for provisioning namespace resource
 	tcNamespace, userNamespace, found := nextNamespaceToProvision(nsTmplSet.Spec.Namespaces, userNamespaces)
 	if !found {
@@ -139,7 +191,7 @@ func (r *ReconcileNSTemplateSet) ensureUserNamespaces(logger logr.Logger, nsTmpl
 	return false, r.ensureNamespace(logger, nsTmplSet, tcNamespace, userNamespace)
 }
 
-func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) error {
+func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) error {
 	username := nsTmplSet.GetName()
 
 	log.Info("provisioning namespace", "namespace", tcNamespace)
@@ -155,7 +207,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespace(logger logr.Logger, nsTmplSet *
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tcNamespace, params, userNamespace)
 }
 
-func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, params map[string]string) error {
+func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, params map[string]string) error {
 	username := nsTmplSet.GetName()
 
 	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
@@ -184,10 +236,11 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 		labels[toolchainv1alpha1.TypeLabelKey] = tcNamespace.Type
 		acc.SetLabels(labels)
 
-		// set owner ref
-		if err := controllerutil.SetControllerReference(nsTmplSet, acc, r.scheme); err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to set controller reference for namespace type '%s'", tcNamespace.Type)
-		}
+		// Note: we don't see an owner reference between the NSTemplateSet (namespaced resource) and the namespace (cluster-wide resource)
+		// because a namespaced resource cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
+		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
+		// see https://issues.redhat.com/browse/CRT-429
+
 	}
 
 	err = tmplProcessor.Apply(objs)
@@ -199,7 +252,7 @@ func (r *ReconcileNSTemplateSet) ensureNamespaceResource(logger logr.Logger, nsT
 	return nil
 }
 
-func (r *ReconcileNSTemplateSet) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, params map[string]string, namespace *corev1.Namespace) error {
+func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, params map[string]string, namespace *corev1.Namespace) error {
 	nsName := namespace.GetName()
 
 	tmplContent, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
@@ -276,7 +329,7 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 
 // error handling methods
 
-func (r *ReconcileNSTemplateSet) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, statusUpdater func(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error, err error, format string, args ...interface{}) error {
+func (r *NSTemplateSetReconciler) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, statusUpdater func(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
@@ -286,7 +339,7 @@ func (r *ReconcileNSTemplateSet) wrapErrorWithStatusUpdate(logger logr.Logger, n
 	return errs.Wrapf(err, format, args...)
 }
 
-func (r *ReconcileNSTemplateSet) updateStatusConditions(nsTmplSet *toolchainv1alpha1.NSTemplateSet, newConditions ...toolchainv1alpha1.Condition) error {
+func (r *NSTemplateSetReconciler) updateStatusConditions(nsTmplSet *toolchainv1alpha1.NSTemplateSet, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool
 	nsTmplSet.Status.Conditions, updated = condition.AddOrUpdateStatusConditions(nsTmplSet.Status.Conditions, newConditions...)
 	if !updated {
@@ -296,44 +349,65 @@ func (r *ReconcileNSTemplateSet) updateStatusConditions(nsTmplSet *toolchainv1al
 	return r.client.Status().Update(context.TODO(), nsTmplSet)
 }
 
-func (r *ReconcileNSTemplateSet) setStatusProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *NSTemplateSetReconciler) setStatusProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  unableToProvisionReason,
+			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionReason,
 			Message: message,
 		})
 }
 
-func (r *ReconcileNSTemplateSet) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *NSTemplateSetReconciler) setStatusDeletingFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+	return r.updateStatusConditions(
+		nsTmplSet,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionReason,
+			Message: message,
+		})
+}
+
+func (r *NSTemplateSetReconciler) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
-			Reason: provisioningReason,
+			Reason: toolchainv1alpha1.NSTemplateSetProvisioningReason,
 		})
 }
 
-func (r *ReconcileNSTemplateSet) setStatusReady(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *NSTemplateSetReconciler) setStatusReady(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
-			Reason: provisionedReason,
+			Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
 		})
 }
 
-func (r *ReconcileNSTemplateSet) setStatusNamespaceProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *NSTemplateSetReconciler) setStatusTerminating(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	return r.updateStatusConditions(
+		nsTmplSet,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+		})
+}
+
+func (r *NSTemplateSetReconciler) setStatusNamespaceProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  unableToProvisionNamespaceReason,
+			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
 			Message: message,
 		})
 }

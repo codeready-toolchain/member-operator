@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -196,7 +197,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 	nsTmplSet := newNSTmplSet()
 
-	reconcile := func(r *ReconcileNSTemplateSet, req reconcile.Request) {
+	reconcile := func(r *NSTemplateSetReconciler, req reconcile.Request) {
 		res, err := r.Reconcile(req)
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
@@ -264,7 +265,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 	nsTmplSet := newNSTmplSet()
 
-	reconcile := func(r *ReconcileNSTemplateSet, req reconcile.Request, errMsg string) {
+	reconcile := func(r *NSTemplateSetReconciler, req reconcile.Request, errMsg string) {
 		res, err := r.Reconcile(req)
 		require.Error(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
@@ -481,13 +482,13 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	failedCond := toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
-		Reason:  unableToProvisionNamespaceReason,
+		Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
 		Message: "Operation cannot be fulfilled on namespaces bla bla bla",
 	}
 	provisionedCond := toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
-		Reason: provisionedReason,
+		Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
 	}
 
 	t.Run("when status is set to false with message, then next update to true should remove the message", func(t *testing.T) {
@@ -525,6 +526,137 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, updatedNSTmplSet.Status.Conditions, provisionedCond)
 	})
+}
+
+func TestDeleteNSTemplateSet(t *testing.T) {
+
+	logf.SetLogger(logf.ZapLogger(true))
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
+	t.Run("with 2 user namespaces to delete", func(t *testing.T) {
+		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
+		nsTmplSet := newNSTmplSet()
+		deletionTS := metav1.NewTime(time.Now())
+		nsTmplSet.SetDeletionTimestamp(&deletionTS) // mark resource as deleted
+		r, req, c := prepareReconcile(t, nsTmplSet)
+		for _, ns := range nsTmplSet.Spec.Namespaces {
+			createNamespace(t, r.client, ns.Revision, ns.Type)
+		}
+		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				// mark namespaces as deleted...
+				deletionTS := metav1.NewTime(time.Now())
+				obj.SetDeletionTimestamp(&deletionTS)
+				// ... but replace them in the fake client cache yet instead of deleting them
+				return c.Client.Update(ctx, obj)
+			}
+			return c.Client.Delete(ctx, obj, opts...)
+		}
+
+		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
+			// when a first reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
+			_, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			// get the first namespace and check its deletion timestamp
+			firstNS := corev1.Namespace{}
+			firstNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[0].Type)
+			err = r.client.Get(context.TODO(), types.NamespacedName{
+				Name: firstNSName,
+			}, &firstNS)
+			require.NoError(t, err)
+			assert.NotNil(t, firstNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", firstNSName)
+			// get the NSTemplateSet resource again and check its status
+			updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: nsTmplSet.Namespace,
+				Name:      nsTmplSet.Name,
+			}, &updateNSTemplateSet)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, updateNSTemplateSet.Status.Conditions, toolchainv1alpha1.Condition{
+				Type:   toolchainv1alpha1.ConditionReady,
+				Status: corev1.ConditionFalse,
+				Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+			})
+			// and the finalizer should NOt have been removed yet
+			assert.Equal(t, []string{toolchainv1alpha1.FinalizerName}, updateNSTemplateSet.Finalizers)
+
+			t.Run("reconcile after first user namespace deletion", func(t *testing.T) {
+				// given a second reconcile loop was triggered (because a user namespace was deleted)
+				_, req, _ := prepareReconcile(t, nsTmplSet)
+				// when
+				_, err := r.Reconcile(req)
+				// then
+				require.NoError(t, err)
+				// get the second namespace and check its deletion timestamp
+				secondNS := corev1.Namespace{}
+				secondtNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[1].Type)
+				err = r.client.Get(context.TODO(), types.NamespacedName{
+					Name: secondtNSName,
+				}, &secondNS)
+				require.NoError(t, err)
+				assert.NotNil(t, secondNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", secondtNSName)
+
+				t.Run("reconcile after second user namespace deletion", func(t *testing.T) {
+					// given a second reconcile loop was triggered (because a user namespace was deleted)
+					_, req, _ := prepareReconcile(t, nsTmplSet)
+					// when
+					_, err := r.Reconcile(req)
+					// then
+					require.NoError(t, err)
+					// get the NSTemplateSet resource again and check its finalizers
+					updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+					err = r.client.Get(context.TODO(), types.NamespacedName{
+						Namespace: nsTmplSet.Namespace,
+						Name:      nsTmplSet.Name,
+					}, &updateNSTemplateSet)
+					// then
+					require.NoError(t, err)
+					assert.Empty(t, updateNSTemplateSet.Finalizers)
+
+				})
+			})
+		})
+	})
+
+	t.Run("without any user namespace to delete", func(t *testing.T) {
+		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
+		nsTmplSet := newNSTmplSet()
+		deletionTS := metav1.NewTime(time.Now())
+		nsTmplSet.SetDeletionTimestamp(&deletionTS) // mark resource as deleted
+		r, req, c := prepareReconcile(t, nsTmplSet)
+		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				// mark namespaces as deleted...
+				deletionTS := metav1.NewTime(time.Now())
+				obj.SetDeletionTimestamp(&deletionTS)
+				// ... but replace them in the fake client cache yet instead of deleting them
+				return c.Client.Update(ctx, obj)
+			}
+			return c.Client.Delete(ctx, obj, opts...)
+		}
+		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
+			// when a first reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
+			_, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+
+			// get the NSTemplateSet resource again and check its finalizers
+			updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: nsTmplSet.Namespace,
+				Name:      nsTmplSet.Name,
+			}, &updateNSTemplateSet)
+			// then
+			require.NoError(t, err)
+			assert.Empty(t, updateNSTemplateSet.Finalizers)
+		})
+	})
+
 }
 
 func createNamespace(t *testing.T, client client.Client, revision, typeName string) *corev1.Namespace {
@@ -580,8 +712,9 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	err := cl.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
 	require.NoError(t, err)
-	require.Equal(t, username, namespace.Labels["toolchain.dev.openshift.com/owner"])
-	require.Equal(t, typeName, namespace.Labels["toolchain.dev.openshift.com/type"])
+	assert.Equal(t, username, namespace.Labels["toolchain.dev.openshift.com/owner"])
+	assert.Equal(t, typeName, namespace.Labels["toolchain.dev.openshift.com/type"])
+	assert.Empty(t, namespace.OwnerReferences) // namespace has not explicit owner reference.
 }
 
 func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {
@@ -607,8 +740,9 @@ func checkStatus(t *testing.T, client *test.FakeClient, wantReason string) {
 func newNSTmplSet() *toolchainv1alpha1.NSTemplateSet {
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      username,
-			Namespace: namespaceName,
+			Name:       username,
+			Namespace:  namespaceName,
+			Finalizers: []string{toolchainv1alpha1.FinalizerName},
 		},
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
 			TierName: "basic",
@@ -621,12 +755,12 @@ func newNSTmplSet() *toolchainv1alpha1.NSTemplateSet {
 	return nsTmplSet
 }
 
-func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTemplateSet, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSetReconciler, reconcile.Request, *test.FakeClient) {
 	r, fakeClient := prepareController(t, initObjs...)
 	return r, newReconcileRequest(username), fakeClient
 }
 
-func prepareController(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTemplateSet, *test.FakeClient) {
+func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSetReconciler, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -634,7 +768,7 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTe
 	decoder := codecFactory.UniversalDeserializer()
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	r := &ReconcileNSTemplateSet{
+	r := &NSTemplateSetReconciler{
 		client:             fakeClient,
 		scheme:             s,
 		getTemplateContent: wrapTetTemplateContent(decoder),
@@ -645,8 +779,8 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTe
 func newReconcileRequest(name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
-			Name:      name,
 			Namespace: namespaceName,
+			Name:      name,
 		},
 	}
 }

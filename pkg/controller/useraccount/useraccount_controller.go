@@ -144,30 +144,28 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
 		deleted, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
-			return reconcile.Result{}, err
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
 		}
 
 		// Remove finalizer from UserAccount
 		if deleted {
 			util.RemoveFinalizer(userAcc, userAccFinalizerName)
 			if err := r.client.Update(context.Background(), userAcc); err != nil {
-				return reconcile.Result{}, err
+				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
 			}
 		}
 
 		return reconcile.Result{}, nil
 	} else if userAcc.Spec.Disabled {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
-		wasDeleted, err := r.deleteUserAndIdentity(userAcc)
+		deleted, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
 
-		if wasDeleted {
-			reqLogger.Info("Setting useraccount status to disabled")
+		if deleted {
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
-		reqLogger.Info("Setting useraccount status to disabling")
 		return reconcile.Result{}, r.setStatusDisabling(userAcc, "deleting user and identity resources")
 
 	}
@@ -328,7 +326,8 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 	return nil
 }
 
-// deleteUserAndIdentity deletes the identity, user and finalizer when the UserAccount is being deleted
+// deleteUserAndIdentity deletes the identity and user. Returns bool and error indicating that
+// whether the user/identity were deleted.
 func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 
 	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
@@ -493,6 +492,16 @@ func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.User
 		})
 }
 
+func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
+			Message: message,
+		})
+}
 // updateStatusConditions updates user account status conditions with the new conditions
 func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool

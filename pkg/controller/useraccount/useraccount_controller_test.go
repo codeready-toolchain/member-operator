@@ -641,6 +641,18 @@ func TestReconcile(t *testing.T) {
 		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
+
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
+			toolchainv1alpha1.Condition{
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Terminating",
+				Message: fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name),
+			})
 	})
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
@@ -686,6 +698,18 @@ func TestReconcile(t *testing.T) {
 		user := &userv1.User{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
+
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+
+		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
+			toolchainv1alpha1.Condition{
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Terminating",
+				Message: fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name),
+			})
 	})
 }
 

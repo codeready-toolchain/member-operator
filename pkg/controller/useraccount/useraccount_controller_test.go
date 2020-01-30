@@ -169,16 +169,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateUser",
-					Message: "unable to create user",
-				})
+			assertStatus(t, r, userAcc, "UnableToCreateUser", "unable to create user")
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -202,16 +193,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateMapping",
-					Message: "unable to update user",
-				})
+			assertStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update user")
 		})
 	})
 
@@ -282,16 +264,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateIdentity",
-					Message: "unable to create identity",
-				})
+			assertStatus(t, r, userAcc, "UnableToCreateIdentity", "unable to create identity")
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -315,16 +288,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateMapping",
-					Message: "unable to update identity",
-				})
+			assertStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update identity")
 		})
 	})
 
@@ -479,6 +443,8 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
+		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
@@ -489,6 +455,8 @@ func TestReconcile(t *testing.T) {
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
+
+		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -562,25 +530,19 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
+		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+
 		res, err = r.Reconcile(req)
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
+
+		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("failed to remove finalizer: unable to remove finalizer for user account %s", userAcc.Name))
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Terminating",
-				Message: fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name),
-			})
+		assertStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -642,17 +604,7 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Terminating",
-				Message: fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name),
-			})
+		assertStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
 	})
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
@@ -687,6 +639,8 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to delete user/identity for user account %s", userAcc.Name))
 
+		assertStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name))
+
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
@@ -698,18 +652,6 @@ func TestReconcile(t *testing.T) {
 		user := &userv1.User{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
-
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Terminating",
-				Message: fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name),
-			})
 	})
 }
 
@@ -866,31 +808,13 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Disabling",
-				Message: "deleting user and identity resources",
-			})
+		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Disabling",
-				Message: "deleting user and identity resources",
-			})
+		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -914,15 +838,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Disabled",
-			})
+		assertStatus(t, r, userAcc, "Disabled", "")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -947,16 +863,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		// then
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Disabling",
-				Message: "deleting user and identity resources",
-			})
+		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -980,17 +887,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		// then
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "Disabling",
-				Message: "deleting user and identity resources",
-			})
+		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -1014,15 +911,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Disabled",
-			})
+		assertStatus(t, r, userAcc, "Disabled", "")
 
 		// Check that the finalizer is present
 		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
@@ -1052,6 +941,19 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, userAccFinalizerName))
 	})
+}
+
+func assertStatus(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount, status string, msg string) {
+	userAcc := &toolchainv1alpha1.UserAccount{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: "toolchain-member"}, userAcc)
+	require.NoError(t, err)
+	test.AssertConditionsMatch(t, userAcc.Status.Conditions,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  status,
+			Message: msg,
+		})
 }
 
 func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {

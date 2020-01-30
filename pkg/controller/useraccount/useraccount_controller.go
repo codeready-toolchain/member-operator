@@ -148,14 +148,16 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 
 		// Remove finalizer from UserAccount
-		if deleted {
+		if !deleted {
 			util.RemoveFinalizer(userAcc, userAccFinalizerName)
 			if err := r.client.Update(context.Background(), userAcc); err != nil {
 				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
 			}
+
+			return reconcile.Result{}, nil
 		}
 
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "deleting user/identity")
 	} else if userAcc.Spec.Disabled {
 		reqLogger.Info("Deleting user and identity associated with UserAccount")
 		deleted, err := r.deleteUserAndIdentity(userAcc)
@@ -163,7 +165,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
 
-		if deleted {
+		if !deleted {
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
 		return reconcile.Result{}, r.setStatusDisabling(userAcc, "deleting user and identity resources")
@@ -331,14 +333,14 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 
 	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
-		return false, err
+		return deleted, err
 	}
 
 	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
-		return false, err
+		return deleted, err
 	}
 
-	return true, nil
+	return false, nil
 }
 
 // deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,

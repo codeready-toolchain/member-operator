@@ -576,9 +576,9 @@ func TestReconcile(t *testing.T) {
 
 		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
 			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Terminating",
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Terminating",
 				Message: fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name),
 			})
 
@@ -851,9 +851,9 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
 			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Disabling",
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Disabling",
 				Message: "deleting user and identity resources",
 			})
 
@@ -917,9 +917,9 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
 			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Disabling",
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Disabling",
 				Message: "deleting user and identity resources",
 			})
 
@@ -951,9 +951,9 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, userAcc.Status.Conditions,
 			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Disabling",
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "Disabling",
 				Message: "deleting user and identity resources",
 			})
 
@@ -1008,7 +1008,6 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.False(t, util.HasFinalizer(userAcc, userAccFinalizerName))
 	})
 }
-
 
 func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
 	// Check that the associated user has been deleted

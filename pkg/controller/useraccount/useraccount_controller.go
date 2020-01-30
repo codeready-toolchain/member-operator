@@ -502,6 +502,7 @@ func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.U
 			Message: message,
 		})
 }
+
 // updateStatusConditions updates user account status conditions with the new conditions
 func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool

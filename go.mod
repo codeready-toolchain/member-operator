@@ -4,7 +4,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
 	github.com/codeready-toolchain/api v0.0.0-20200131070324-9e7eefd85de5
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20191206153324-4205c5ebe624
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20200131162853-984d8595ee4e
 	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
@@ -59,7 +59,5 @@ replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
 	github.com/coreos/prometheus-operator => github.com/coreos/prometheus-operator v0.29.0
 )
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/xcoulon/toolchain-common v0.0.0-20200131154201-fea8485ab790
 
 go 1.13

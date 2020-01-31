@@ -64,6 +64,8 @@ github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDk
 github.com/codeready-toolchain/api v0.0.0-20191203182149-f994640853b0/go.mod h1:K2iSNSOwpQf+Wo3LdmrGaPlha2BLwuywwWrnbuiy8Pg=
 github.com/codeready-toolchain/api v0.0.0-20200131070324-9e7eefd85de5 h1:3nG4qy4bvIe7ndmfl+WVOprf6hHmjcx6BGlrIrolr1c=
 github.com/codeready-toolchain/api v0.0.0-20200131070324-9e7eefd85de5/go.mod h1:zPbdWiEiv9SpZMvyRkY6E6n7Eynm5Y0uhJhBiGXjkg0=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20200131162853-984d8595ee4e h1:7B8fTyZDzB08nlFeaBZO7/J/rxYPmULqCKO1L01nBcI=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20200131162853-984d8595ee4e/go.mod h1:fQpxuAw8pI0BwVJhgKHN9vbWko/eWsCzsZ+9pknFVLQ=
 github.com/coreos/bbolt v1.3.0/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/bbolt v1.3.3/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/etcd v3.3.9+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
@@ -453,8 +455,6 @@ github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1
 github.com/ugorji/go v1.1.1/go.mod h1:hnLbHMwcvSihnDhEfx2/BzKp2xb0Y+ErdfYcrs9tkJQ=
 github.com/ugorji/go/codec v0.0.0-20181022190402-e5e69e061d4f/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
-github.com/xcoulon/toolchain-common v0.0.0-20200131154201-fea8485ab790 h1:/g9iwZ2yDxmTzKVvyC5CQjQLCB/Q5u+5QUYuWQSQh1g=
-github.com/xcoulon/toolchain-common v0.0.0-20200131154201-fea8485ab790/go.mod h1:fQpxuAw8pI0BwVJhgKHN9vbWko/eWsCzsZ+9pknFVLQ=
 github.com/xiang90/probing v0.0.0-20160813154853-07dd2e8dfe18/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1/go.mod h1:QcJo0QPSfTONNIgpN5RA8prR7fF8nkF6cTWTcNerRO8=

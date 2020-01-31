@@ -60,4 +60,4 @@ replace (
 	github.com/coreos/prometheus-operator => github.com/coreos/prometheus-operator v0.29.0
 )
 
-go 1.13
+it go 1.13

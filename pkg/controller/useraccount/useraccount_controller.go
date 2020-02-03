@@ -146,7 +146,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			reqLogger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
-		deleted, err := r.deleteUserAndIdentity(userAcc)
+		deleted, err := r.deleteIdentityAndUser(userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
 		}
@@ -167,7 +167,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			reqLogger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
-		deleted, err := r.deleteUserAndIdentity(userAcc)
+		deleted, err := r.deleteIdentityAndUser(userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
@@ -334,9 +334,9 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 	return nil
 }
 
-// deleteUserAndIdentity deletes the identity and user. Returns bool and error indicating that
+// deleteIdentityAndUser deletes the identity and user. Returns bool and error indicating that
 // whether the user/identity were deleted.
-func (r *ReconcileUserAccount) deleteUserAndIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *ReconcileUserAccount) deleteIdentityAndUser(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 
 	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
 		return deleted, err

@@ -808,6 +808,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		//then
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
 		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
 
 		res, err = r.Reconcile(req)

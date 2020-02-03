@@ -169,7 +169,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertStatus(t, r, userAcc, "UnableToCreateUser", "unable to create user")
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateUser", "unable to create user")
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -193,7 +193,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update user")
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update user")
 		})
 	})
 
@@ -264,7 +264,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertStatus(t, r, userAcc, "UnableToCreateIdentity", "unable to create identity")
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateIdentity", "unable to create identity")
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -288,7 +288,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update identity")
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update identity")
 		})
 	})
 
@@ -443,7 +443,7 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -456,7 +456,7 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -530,19 +530,19 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
-		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		res, err = r.Reconcile(req)
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
-		assertStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("failed to remove finalizer: unable to remove finalizer for user account %s", userAcc.Name))
 
-		assertStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
+		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -604,7 +604,7 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
+		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
 	})
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
@@ -639,7 +639,7 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to delete user/identity for user account %s", userAcc.Name))
 
-		assertStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name))
+		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -798,7 +798,6 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		//then
 		// Set disabled to true
 		userAcc.Spec.Disabled = true
 		err = r.client.Update(context.TODO(), userAcc)
@@ -808,13 +807,14 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
+		//then
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -838,7 +838,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Disabled", "")
+		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -863,7 +863,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		// then
-		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -887,7 +887,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Disabling", "deleting user and identity resources")
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -911,7 +911,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertStatus(t, r, userAcc, "Disabled", "")
+		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
 
 		// Check that the finalizer is present
 		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
@@ -943,7 +943,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	})
 }
 
-func assertStatus(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount, status string, msg string) {
+func assertNotReadyStatus(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount, status string, msg string) {
 	userAcc := &toolchainv1alpha1.UserAccount{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: "toolchain-member"}, userAcc)
 	require.NoError(t, err)

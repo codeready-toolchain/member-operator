@@ -141,7 +141,11 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			return reconcile.Result{}, err
 		}
 	} else if util.HasFinalizer(userAcc, userAccFinalizerName) && util.IsBeingDeleted(userAcc) {
-		reqLogger.Info("Deleting user and identity associated with UserAccount")
+		reqLogger.Info("Terminating UserAccount")
+		if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
+			reqLogger.Error(err, "error updating status")
+			return reconcile.Result{}, err
+		}
 		deleted, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
@@ -156,10 +160,13 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 			return reconcile.Result{}, nil
 		}
-
 		return reconcile.Result{}, r.setStatusTerminating(userAcc, "deleting user/identity")
 	} else if userAcc.Spec.Disabled {
-		reqLogger.Info("Deleting user and identity associated with UserAccount")
+		reqLogger.Info("Disabling UserAccount")
+		if err := r.setStatusDisabling(userAcc, "deleting user/identity"); err != nil {
+			reqLogger.Error(err, "error updating status")
+			return reconcile.Result{}, err
+		}
 		deleted, err := r.deleteUserAndIdentity(userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
@@ -168,8 +175,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if !deleted {
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
-		return reconcile.Result{}, r.setStatusDisabling(userAcc, "deleting user and identity resources")
-
+		return reconcile.Result{}, r.setStatusDisabling(userAcc, "deleting user/identity")
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }

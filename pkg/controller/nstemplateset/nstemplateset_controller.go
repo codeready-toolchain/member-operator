@@ -106,13 +106,13 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		// since the NSTmplSet resource is being deleted, we must set its status to `ready=false/reason=terminating`
 		err := r.setStatusTerminating(nsTmplSet)
 		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet")
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet")
 		}
 		// now, we can delete all "child" namespaces explicitly
 		username := nsTmplSet.GetName()
 		userNamespaces, err := r.fetchUserNamespaces(username)
 		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to list namespace with label owner '%s'", username)
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list namespace with label owner '%s'", username)
 		}
 		// delete the first namespace which (still) exists and is not in a terminating state
 		reqLogger.Info("checking user namepaces associated with the deleted NSTemplateSet...")
@@ -120,7 +120,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 			if !util.IsBeingDeleted(&userNS) {
 				reqLogger.Info("deleting a user namepace associated with the deleted NSTemplateSet", "namespace", userNS.Name)
 				if err := r.client.Delete(context.TODO(), &userNS); err != nil {
-					return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to delete user namespace '%s'", userNS.Name)
+					return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", userNS.Name)
 				}
 				return reconcile.Result{}, nil
 			}
@@ -129,7 +129,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		reqLogger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
 		nsTmplSet.SetFinalizers([]string{})
 		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusDeletingFailed, err, "failed to remove finalier on NSTemplateSet '%s'", nsTmplSet.Name)
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to remove finalier on NSTemplateSet '%s'", nsTmplSet.Name)
 		}
 		return reconcile.Result{}, nil
 	}
@@ -330,25 +330,13 @@ func (r *NSTemplateSetReconciler) updateStatusConditions(nsTmplSet *toolchainv1a
 	return r.client.Status().Update(context.TODO(), nsTmplSet)
 }
 
-func (r *NSTemplateSetReconciler) setStatusProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *NSTemplateSetReconciler) setStatusReady(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionReason,
-			Message: message,
-		})
-}
-
-func (r *NSTemplateSetReconciler) setStatusDeletingFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
-	return r.updateStatusConditions(
-		nsTmplSet,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionReason,
-			Message: message,
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+			Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
 		})
 }
 
@@ -362,13 +350,25 @@ func (r *NSTemplateSetReconciler) setStatusProvisioning(nsTmplSet *toolchainv1al
 		})
 }
 
-func (r *NSTemplateSetReconciler) setStatusReady(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *NSTemplateSetReconciler) setStatusProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.ConditionReady,
-			Status: corev1.ConditionTrue,
-			Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionReason,
+			Message: message,
+		})
+}
+
+func (r *NSTemplateSetReconciler) setStatusNamespaceProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+	return r.updateStatusConditions(
+		nsTmplSet,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
+			Message: message,
 		})
 }
 
@@ -382,13 +382,13 @@ func (r *NSTemplateSetReconciler) setStatusTerminating(nsTmplSet *toolchainv1alp
 		})
 }
 
-func (r *NSTemplateSetReconciler) setStatusNamespaceProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *NSTemplateSetReconciler) setStatusTerminatingFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
+			Reason:  toolchainv1alpha1.NSTemplateSetTerminatingReason,
 			Message: message,
 		})
 }

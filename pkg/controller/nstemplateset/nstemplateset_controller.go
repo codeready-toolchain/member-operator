@@ -144,7 +144,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
 }
 
-func (r *NSTemplateSetReconciler) fetchUserNamespaces(username string) ([]corev1.Namespace, error) {
+func (r *NSTemplateSetReconciler) fetchUserNamespaces(nsTemplateSetName string) ([]corev1.Namespace, error) {
 	// fetch all namespace with owner=username label
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 	opts := client.MatchingLabels(labels)

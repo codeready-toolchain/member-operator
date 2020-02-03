@@ -614,6 +614,21 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 				}, &secondNS)
 				require.NoError(t, err)
 				assert.NotNil(t, secondNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", secondtNSName)
+				// get the NSTemplateSet resource again and check its finalizers and status
+				updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+				err = r.client.Get(context.TODO(), types.NamespacedName{
+					Namespace: nsTmplSet.Namespace,
+					Name:      nsTmplSet.Name,
+				}, &updateNSTemplateSet)
+				// then
+				require.NoError(t, err)
+				require.Len(t, updateNSTemplateSet.Finalizers, 1)
+				assert.Equal(t, toolchainv1alpha1.FinalizerName, updateNSTemplateSet.Finalizers[0])
+				test.AssertConditionsMatch(t, updateNSTemplateSet.Status.Conditions, toolchainv1alpha1.Condition{
+					Type:   toolchainv1alpha1.ConditionReady,
+					Status: corev1.ConditionFalse,
+					Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+				})
 
 				t.Run("reconcile after second user namespace deletion", func(t *testing.T) {
 					// given a second reconcile loop was triggered (because a user namespace was deleted)
@@ -622,7 +637,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 					_, err := r.Reconcile(req)
 					// then
 					require.NoError(t, err)
-					// get the NSTemplateSet resource again and check its finalizers
+					// get the NSTemplateSet resource again and check its finalizers and status
 					updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
 					err = r.client.Get(context.TODO(), types.NamespacedName{
 						Namespace: nsTmplSet.Namespace,
@@ -631,7 +646,11 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 					// then
 					require.NoError(t, err)
 					assert.Empty(t, updateNSTemplateSet.Finalizers)
-
+					test.AssertConditionsMatch(t, updateNSTemplateSet.Status.Conditions, toolchainv1alpha1.Condition{
+						Type:   toolchainv1alpha1.ConditionReady,
+						Status: corev1.ConditionFalse,
+						Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+					})
 				})
 			})
 		})

@@ -65,29 +65,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// // NamespacetoNSTemplateSetMapper a mapper that will convert events on a namespace to requests on
-// // its associated ("owner") NSTemplateSet resource, if the aforementioned namespace belongs to a
-// // CodeReady Toolchain user.
-// type NamespacetoNSTemplateSetMapper struct{}
-
-// var _ handler.Mapper = NamespacetoNSTemplateSetMapper{}
-
-// // Map maps the namespace to a request on the "owner" (or "associated") NSTemplateSet
-// func (m NamespacetoNSTemplateSetMapper) Map(obj handler.MapObject) []reconcile.Request {
-// 	if ns, ok := obj.Object.(*corev1.Namespace); ok {
-// 		// look-up the "owner" NSTemplateSet using on the namespace's "toolchain.dev.openshift.com/owner" label (if applicable)
-// 		if ownerLbl, exists := ns.Labels[toolchainv1alpha1.LabelKeyPrefix+"owner"]; exists {
-// 			return []reconcile.Request{
-// 				{
-// 					NamespacedName: types.NamespacedName{Namespace: "toolchain-member-operator", Name: ownerLbl},
-// 				},
-// 			}
-// 		}
-// 	}
-// 	// the obj was not a namespace or it did not have the required label.
-// 	return []reconcile.Request{}
-// }
-
 var _ reconcile.Reconciler = &NSTemplateSetReconciler{}
 
 // NSTemplateSetReconciler the NSTemplateSet reconciler

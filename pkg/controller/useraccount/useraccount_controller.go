@@ -483,9 +483,8 @@ func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *use
 func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1.NSTemplateSet {
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       userAcc.Name,
-			Namespace:  userAcc.Namespace,
-			Finalizers: []string{toolchainv1alpha1.FinalizerName},
+			Name:      userAcc.Name,
+			Namespace: userAcc.Namespace,
 		},
 		Spec: userAcc.Spec.NSTemplateSet,
 	}

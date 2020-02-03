@@ -54,9 +54,8 @@ func TestReconcile(t *testing.T) {
 	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       userAcc.Name,
-			Namespace:  "toolchain-member",
-			Finalizers: []string{toolchainv1alpha1.FinalizerName},
+			Name:      userAcc.Name,
+			Namespace: "toolchain-member",
 		},
 		Spec: newNSTmplSetSpec(),
 		Status: toolchainv1alpha1.NSTemplateSetStatus{
@@ -841,9 +840,8 @@ func newNSTmplSetSpec() toolchainv1alpha1.NSTemplateSetSpec {
 func newNSTmplSetWithStatus(username, reason, meessage string) *toolchainv1alpha1.NSTemplateSet {
 	return &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       username,
-			Namespace:  "toolchain-member",
-			Finalizers: []string{toolchainv1alpha1.FinalizerName},
+			Name:      username,
+			Namespace: "toolchain-member",
 		},
 		Spec: newNSTmplSetSpec(),
 		Status: toolchainv1alpha1.NSTemplateSetStatus{
@@ -901,7 +899,6 @@ func checkNSTmplSet(t *testing.T, client client.Client, username string) {
 	assert.Equal(t, 2, len(nsTmplSet.Spec.Namespaces))
 	assert.Equal(t, nsTmplSet.Spec.Namespaces[0].Type, "dev")
 	assert.Equal(t, nsTmplSet.Spec.Namespaces[1].Type, "code")
-	assert.Equal(t, nsTmplSet.Finalizers, []string{toolchainv1alpha1.FinalizerName})
 }
 
 func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {

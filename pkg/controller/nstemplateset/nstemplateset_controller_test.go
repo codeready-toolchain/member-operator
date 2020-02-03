@@ -213,6 +213,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Provisioning")
 		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
 	})
 
 	t.Run("new_namespace_created_with_existing_namespace_ok", func(t *testing.T) {
@@ -749,6 +750,16 @@ func checkStatus(t *testing.T, client *test.FakeClient, namespaceName, name, wan
 	assert.True(t, found)
 	assert.Equal(t, corev1.ConditionFalse, readyCond.Status)
 	assert.Equal(t, wantReason, readyCond.Reason)
+}
+
+func checkFinalizers(t *testing.T, client *test.FakeClient, namespaceName, name string) {
+	t.Helper()
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespaceName}, nsTmplSet)
+	require.NoError(t, err)
+	require.Len(t, nsTmplSet.Finalizers, 1)
+	assert.Equal(t, toolchainv1alpha1.FinalizerName, nsTmplSet.Finalizers[0])
+
 }
 
 func newNSTmplSet(namespaceName, name string) *toolchainv1alpha1.NSTemplateSet {

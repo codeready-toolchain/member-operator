@@ -133,6 +133,10 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		}
 		return reconcile.Result{}, nil
 	}
+	// make sure there's a finalizer
+	if err := r.addFinalizer(nsTmplSet); err != nil {
+		return reconcile.Result{}, err
+	}
 
 	done, err := r.ensureUserNamespaces(reqLogger, nsTmplSet)
 	if !done || err != nil {
@@ -142,6 +146,19 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
+}
+
+// setFinalizers sets the finalizers for NSTemplateSet
+func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	// Add the finalizer if it is not present
+	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
+		util.AddFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
+		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *NSTemplateSetReconciler) fetchUserNamespaces(nsTemplateSetName string) ([]corev1.Namespace, error) {

@@ -793,17 +793,12 @@ func TestDisabledUserAccount(t *testing.T) {
 		// given
 		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
-		//when
-		res, err := r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// Set disabled to true
+		// when
 		userAcc.Spec.Disabled = true
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
-		res, err = r.Reconcile(req)
+		res, err := r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 

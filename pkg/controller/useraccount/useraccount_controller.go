@@ -160,7 +160,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 			return reconcile.Result{}, nil
 		}
-		return reconcile.Result{}, r.setStatusTerminating(userAcc, "deleting user/identity")
+		return reconcile.Result{}, nil
 	} else if userAcc.Spec.Disabled {
 		reqLogger.Info("Disabling UserAccount")
 		if err := r.setStatusDisabling(userAcc, "deleting user/identity"); err != nil {
@@ -175,7 +175,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if !deleted {
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
-		return reconcile.Result{}, r.setStatusDisabling(userAcc, "deleting user/identity")
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }

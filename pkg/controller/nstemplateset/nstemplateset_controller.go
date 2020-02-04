@@ -98,40 +98,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 	if util.IsBeingDeleted(nsTmplSet) {
-		// if the NSTemplateSet has no finalizer, then we don't have anything to do
-		if len(nsTmplSet.Finalizers) == 0 {
-			reqLogger.Info("NSTemplateSet resource is terminated")
-			return reconcile.Result{}, nil
-		}
-		// since the NSTmplSet resource is being deleted, we must set its status to `ready=false/reason=terminating`
-		err := r.setStatusTerminating(nsTmplSet)
-		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet")
-		}
-		// now, we can delete all "child" namespaces explicitly
-		username := nsTmplSet.GetName()
-		userNamespaces, err := r.fetchUserNamespaces(username)
-		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list namespace with label owner '%s'", username)
-		}
-		// delete the first namespace which (still) exists and is not in a terminating state
-		reqLogger.Info("checking user namepaces associated with the deleted NSTemplateSet...")
-		for _, userNS := range userNamespaces {
-			if !util.IsBeingDeleted(&userNS) {
-				reqLogger.Info("deleting a user namepace associated with the deleted NSTemplateSet", "namespace", userNS.Name)
-				if err := r.client.Delete(context.TODO(), &userNS); err != nil {
-					return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", userNS.Name)
-				}
-				return reconcile.Result{}, nil
-			}
-		}
-		// if no namespace was to be deleted, then we can remove the finalizer and we're done
-		reqLogger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
-		nsTmplSet.SetFinalizers([]string{})
-		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to remove finalier on NSTemplateSet '%s'", nsTmplSet.Name)
-		}
-		return reconcile.Result{}, nil
+		return r.deleteNSTemplateSet(reqLogger, nsTmplSet)
 	}
 	// make sure there's a finalizer
 	if err := r.addFinalizer(nsTmplSet); err != nil {
@@ -159,6 +126,43 @@ func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTe
 	}
 
 	return nil
+}
+
+func (r *NSTemplateSetReconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
+	// if the NSTemplateSet has no finalizer, then we don't have anything to do
+	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
+		logger.Info("NSTemplateSet resource is terminated")
+		return reconcile.Result{}, nil
+	}
+	// since the NSTmplSet resource is being deleted, we must set its status to `ready=false/reason=terminating`
+	err := r.setStatusTerminating(nsTmplSet)
+	if err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet")
+	}
+	// now, we can delete all "child" namespaces explicitly
+	username := nsTmplSet.GetName()
+	userNamespaces, err := r.fetchUserNamespaces(username)
+	if err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list namespace with label owner '%s'", username)
+	}
+	// delete the first namespace which (still) exists and is not in a terminating state
+	logger.Info("checking user namepaces associated with the deleted NSTemplateSet...")
+	for _, userNS := range userNamespaces {
+		if !util.IsBeingDeleted(&userNS) {
+			logger.Info("deleting a user namepace associated with the deleted NSTemplateSet", "namespace", userNS.Name)
+			if err := r.client.Delete(context.TODO(), &userNS); err != nil {
+				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", userNS.Name)
+			}
+			return reconcile.Result{}, nil
+		}
+	}
+	// if no namespace was to be deleted, then we can remove the finalizer and we're done
+	logger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
+	util.RemoveFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
+	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to remove finalier on NSTemplateSet '%s'", nsTmplSet.Name)
+	}
+	return reconcile.Result{}, nil
 }
 
 func (r *NSTemplateSetReconciler) fetchUserNamespaces(nsTemplateSetName string) ([]corev1.Namespace, error) {

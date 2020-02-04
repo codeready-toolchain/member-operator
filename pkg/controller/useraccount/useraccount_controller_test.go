@@ -169,16 +169,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateUser",
-					Message: "unable to create user",
-				})
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateUser", "unable to create user")
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -202,16 +193,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateMapping",
-					Message: "unable to update user",
-				})
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update user")
 		})
 	})
 
@@ -282,16 +264,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateIdentity",
-					Message: "unable to create identity",
-				})
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateIdentity", "unable to create identity")
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -315,16 +288,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-			require.NoError(t, err)
-			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-				toolchainv1alpha1.Condition{
-					Type:    toolchainv1alpha1.ConditionReady,
-					Status:  corev1.ConditionFalse,
-					Reason:  "UnableToCreateMapping",
-					Message: "unable to update identity",
-				})
+			assertNotReadyStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update identity")
 		})
 	})
 
@@ -479,6 +443,8 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
@@ -489,6 +455,8 @@ func TestReconcile(t *testing.T) {
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
+
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
 
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -550,9 +518,31 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
+		// Mock finalizer removal failure
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+			finalizers := []string{toolchainv1alpha1.FinalizerName}
+			userAcc := obj.(*toolchainv1alpha1.UserAccount)
+			userAcc.Finalizers = finalizers
+			return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
+		}
+
+		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+
+		res, err = r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
+		require.EqualError(t, err, fmt.Sprintf("failed to remove finalizer: unable to remove finalizer for user account %s", userAcc.Name))
+
+		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -561,25 +551,12 @@ func TestReconcile(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		user := &userv1.User{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
-
-		// Mock finalizer removal failure
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-			return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
-		}
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.EqualError(t, err, fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
 
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp
@@ -619,16 +596,18 @@ func TestReconcile(t *testing.T) {
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.EqualError(t, err, fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
+		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to delete identity for user account %s", userAcc.Name))
 
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 		require.NoError(t, err)
+
+		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
 	})
 	// delete user fails
-	t.Run("delete user fails", func(t *testing.T) {
+	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
@@ -651,25 +630,22 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
+		// Mock deleting user failure
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("unable to delete user/identity for user account %s", userAcc.Name)
+		}
+
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
+		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to delete user/identity for user account %s", userAcc.Name))
+
+		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
-		// Mock deleting user failure
-		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-			return fmt.Errorf("unable to delete user for user account %s", userAcc.Name)
-		}
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.EqualError(t, err, fmt.Sprintf("unable to delete user for user account %s", userAcc.Name))
+		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -776,6 +752,231 @@ func TestUpdateStatus(t *testing.T) {
 	})
 }
 
+func TestDisabledUserAccount(t *testing.T) {
+	logf.SetLogger(logf.ZapLogger(true))
+	username := "johndoe"
+	userID := uuid.NewV4().String()
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
+	userAcc := newUserAccount(username, userID)
+	userUID := types.UID(username + "user")
+	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
+		Name:      ToIdentityName(userAcc.Spec.UserID),
+		Namespace: "toolchain-member",
+		UID:       types.UID(username + "identity"),
+	}, User: corev1.ObjectReference{
+		Name: username,
+		UID:  userUID,
+	}}
+	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
+		Name:            username,
+		Namespace:       "toolchain-member",
+		UID:             userUID,
+		OwnerReferences: []metav1.OwnerReference{},
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
+	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userAcc.Name,
+			Namespace: "toolchain-member",
+		},
+		Spec: newNSTmplSetSpec(),
+		Status: toolchainv1alpha1.NSTemplateSetStatus{
+			Conditions: []toolchainv1alpha1.Condition{
+				{Type: toolchainv1alpha1.ConditionReady, Status: corev1.ConditionTrue},
+			},
+		},
+	}
+
+	t.Run("disabling useraccount", func(t *testing.T) {
+		// given
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+		// when
+		userAcc.Spec.Disabled = true
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		//then
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		assertUserNotFound(t, r, userAcc)
+
+		// Check NSTemplate
+		assertNSTemplateFound(t, r, userAcc)
+	})
+
+	t.Run("disabled useraccount", func(t *testing.T) {
+		userAcc := newDisabledUserAccount(username, userID)
+
+		// given
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		assertUserNotFound(t, r, userAcc)
+
+		// Check NSTemplate
+		assertNSTemplateFound(t, r, userAcc)
+	})
+
+	t.Run("disabling useraccount without user", func(t *testing.T) {
+		// given
+		userAcc := newDisabledUserAccount(username, userID)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
+
+		// when
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// then
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		assertUserNotFound(t, r, userAcc)
+
+		// Check NSTemplate
+		assertNSTemplateFound(t, r, userAcc)
+	})
+
+	t.Run("disabling useraccount without identity", func(t *testing.T) {
+		// given
+		userAcc := newDisabledUserAccount(username, userID)
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
+
+		// when
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		assertUserNotFound(t, r, userAcc)
+
+		// Check NSTemplate
+		assertNSTemplateFound(t, r, userAcc)
+	})
+
+	t.Run("deleting disabled useraccount", func(t *testing.T) {
+
+		userAcc := newDisabledUserAccountWithFinalizer(username, userID)
+
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+
+		res, err := r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+
+		// Check that the associated identity has been deleted
+		// since disabled has been set to true
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+
+		// Check that the associated user has been deleted
+		// since disabled has been set to true
+		assertUserNotFound(t, r, userAcc)
+
+		// Check NSTemplate
+		assertNSTemplateFound(t, r, userAcc)
+
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		require.NoError(t, err)
+		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+	})
+}
+
+func assertNotReadyStatus(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount, status string, msg string) {
+	userAcc := &toolchainv1alpha1.UserAccount{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: "toolchain-member"}, userAcc)
+	require.NoError(t, err)
+	test.AssertConditionsMatch(t, userAcc.Status.Conditions,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  status,
+			Message: msg,
+		})
+}
+
+func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
+	// Check that the associated user has been deleted
+	// since disabled has been set to true
+	user := &userv1.User{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name}, user)
+	require.Error(t, err)
+	assert.True(t, apierros.IsNotFound(err))
+}
+
+func assertIdentityNotFound(t *testing.T, r *ReconcileUserAccount, identityName string) {
+	// Check that the associated identity has been deleted
+	// since disabled has been set to true
+	identity := &userv1.Identity{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+	require.Error(t, err)
+	assert.True(t, apierros.IsNotFound(err))
+}
+
+func assertNSTemplateFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
+	// Get NSTemplate
+	tmplTier := &toolchainv1alpha1.NSTemplateSet{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name}, tmplTier)
+	require.NoError(t, err)
+}
+
 func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
@@ -786,6 +987,23 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID:        userID,
 			NSTemplateSet: newNSTmplSetSpec(),
+			Disabled:      false,
+		},
+	}
+	return userAcc
+}
+
+func newDisabledUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
+	userAcc := &toolchainv1alpha1.UserAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      userName,
+			Namespace: "toolchain-member",
+			UID:       types.UID(uuid.NewV4().String()),
+		},
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			UserID:        userID,
+			NSTemplateSet: newNSTmplSetSpec(),
+			Disabled:      true,
 		},
 	}
 	return userAcc
@@ -801,7 +1019,25 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 			Finalizers: finalizers,
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID: userID,
+			UserID:   userID,
+			Disabled: false,
+		},
+	}
+	return userAcc
+}
+
+func newDisabledUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
+	finalizers := []string{toolchainv1alpha1.FinalizerName}
+	userAcc := &toolchainv1alpha1.UserAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       userName,
+			Namespace:  "toolchain-member",
+			UID:        types.UID(uuid.NewV4().String()),
+			Finalizers: finalizers,
+		},
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			UserID:   userID,
+			Disabled: true,
 		},
 	}
 	return userAcc

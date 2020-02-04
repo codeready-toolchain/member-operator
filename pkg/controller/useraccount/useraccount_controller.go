@@ -116,28 +116,61 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
 	if !util.IsBeingDeleted(userAcc) {
+		reqLogger.Info("Adding finalizer on UserAccount")
 		// Add the finalizer if it is not present
 		if err := r.addFinalizer(userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
-
+	}
+	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
+		reqLogger.Info("Ensuring user and identity associated with UserAccount")
 		var createdOrUpdated bool
 		var user *userv1.User
 		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-
 		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
-		if err = r.manageCleanUp(userAcc); err != nil {
+	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) && util.IsBeingDeleted(userAcc) {
+		reqLogger.Info("Terminating UserAccount")
+		if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
+			reqLogger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
+		deleted, err := r.deleteIdentityAndUser(userAcc)
+		if err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
+		}
+
+		// Remove finalizer from UserAccount
+		if !deleted {
+			util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+			if err := r.client.Update(context.Background(), userAcc); err != nil {
+				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
+			}
+
+			return reconcile.Result{}, nil
+		}
+		return reconcile.Result{}, nil
+	} else if userAcc.Spec.Disabled {
+		reqLogger.Info("Disabling UserAccount")
+		if err := r.setStatusDisabling(userAcc, "deleting user/identity"); err != nil {
+			reqLogger.Error(err, "error updating status")
+			return reconcile.Result{}, err
+		}
+		deleted, err := r.deleteIdentityAndUser(userAcc)
+		if err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
+		}
+
+		if !deleted {
+			return reconcile.Result{}, r.setStatusDisabled(userAcc)
+		}
+		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
@@ -296,21 +329,19 @@ func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccou
 	return nil
 }
 
-// manageCleanUp deletes the identity, user and finalizer when the UserAccount is being deleted
-func (r *ReconcileUserAccount) manageCleanUp(userAcc *toolchainv1alpha1.UserAccount) error {
+// deleteIdentityAndUser deletes the identity and user. Returns bool and error indicating that
+// whether the user/identity were deleted.
+func (r *ReconcileUserAccount) deleteIdentityAndUser(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+
 	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
-		return err
-	}
-	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
-		return err
-	}
-	// Remove finalizer from UserAccount
-	util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-	if err := r.client.Update(context.Background(), userAcc); err != nil {
-		return err
+		return deleted, err
 	}
 
-	return nil
+	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
+		return deleted, err
+	}
+
+	return false, nil
 }
 
 // deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,
@@ -440,6 +471,38 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.UserAccountProvisionedReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusDisabling(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.UserAccountDisablingReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.UserAccount) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.UserAccountDisabledReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
+			Message: message,
 		})
 }
 

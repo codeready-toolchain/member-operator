@@ -30,11 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const (
-	// Finalizers
-	userAccFinalizerName = "finalizer.toolchain.dev.openshift.com"
-)
-
 var log = logf.Log.WithName("controller_useraccount")
 
 // Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -140,7 +135,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if util.HasFinalizer(userAcc, userAccFinalizerName) && util.IsBeingDeleted(userAcc) {
+	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) && util.IsBeingDeleted(userAcc) {
 		reqLogger.Info("Terminating UserAccount")
 		if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
 			reqLogger.Error(err, "error updating status")
@@ -153,7 +148,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 
 		// Remove finalizer from UserAccount
 		if !deleted {
-			util.RemoveFinalizer(userAcc, userAccFinalizerName)
+			util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 			if err := r.client.Update(context.Background(), userAcc); err != nil {
 				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
 			}
@@ -324,8 +319,8 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 // setFinalizers sets the finalizers for UserAccount
 func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
-	if !util.HasFinalizer(userAcc, userAccFinalizerName) {
-		util.AddFinalizer(userAcc, userAccFinalizerName)
+	if !util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
+		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err
 		}

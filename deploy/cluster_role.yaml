@@ -26,6 +26,7 @@ rules:
   - update
   - list
   - watch
+  - delete
 - apiGroups:
   - user.openshift.io
   resources:

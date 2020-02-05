@@ -286,33 +286,6 @@ data:
             [
               {
                 "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
-                "kind": "NSTemplateSet",
-                "metadata": {
-                  "labels": {
-                    "username": "johnsmith"
-                  },
-                  "name": "johnsmith"
-                },
-                "spec": {
-                  "namespaces": [
-                    {
-                      "revision": "ab12ef",
-                      "type": "ide"
-                    },
-                    {
-                      "revision": "34efcd",
-                      "type": "cicd"
-                    },
-                    {
-                      "revision": "cdef56",
-                      "type": "stage"
-                    }
-                  ],
-                  "tierName": "basic"
-                }
-              },
-              {
-                "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
                 "kind": "UserAccount",
                 "metadata": {
                   "name": "johnsmith",
@@ -338,6 +311,33 @@ data:
                     "tierName": "basic"
                   },
                   "userID": "1a03ecac-7c0b-44fc-b66d-12dd7fb21c40"
+                }
+              },
+              {
+                "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
+                "kind": "NSTemplateSet",
+                "metadata": {
+                  "labels": {
+                    "username": "johnsmith"
+                  },
+                  "name": "johnsmith"
+                },
+                "spec": {
+                  "namespaces": [
+                    {
+                      "revision": "ab12ef",
+                      "type": "ide"
+                    },
+                    {
+                      "revision": "34efcd",
+                      "type": "cicd"
+                    },
+                    {
+                      "revision": "cdef56",
+                      "type": "stage"
+                    }
+                  ],
+                  "tierName": "basic"
                 }
               }
             ]
@@ -389,6 +389,7 @@ data:
                 - update
                 - list
                 - watch
+                - delete
               - apiGroups:
                 - user.openshift.io
                 resources:

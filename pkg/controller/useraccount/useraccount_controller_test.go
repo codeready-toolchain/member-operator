@@ -432,7 +432,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -474,7 +474,7 @@ func TestReconcile(t *testing.T) {
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
-		require.False(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
 	// Add finalizer fails
 	t.Run("add finalizer fails", func(t *testing.T) {
@@ -511,7 +511,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -520,7 +520,7 @@ func TestReconcile(t *testing.T) {
 
 		// Mock finalizer removal failure
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-			finalizers := []string{userAccFinalizerName}
+			finalizers := []string{toolchainv1alpha1.FinalizerName}
 			userAcc := obj.(*toolchainv1alpha1.UserAccount)
 			userAcc.Finalizers = finalizers
 			return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
@@ -563,7 +563,7 @@ func TestReconcile(t *testing.T) {
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
-		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
 	// delete identity fails
 	t.Run("delete identity fails", func(t *testing.T) {
@@ -582,7 +582,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -623,7 +623,7 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -910,7 +910,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
 
 		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
@@ -935,7 +935,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
-		require.False(t, util.HasFinalizer(userAcc, userAccFinalizerName))
+		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
 }
 
@@ -1010,7 +1010,7 @@ func newDisabledUserAccount(userName, userID string) *toolchainv1alpha1.UserAcco
 }
 
 func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
-	finalizers := []string{userAccFinalizerName}
+	finalizers := []string{toolchainv1alpha1.FinalizerName}
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       userName,
@@ -1027,7 +1027,7 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 }
 
 func newDisabledUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.UserAccount {
-	finalizers := []string{userAccFinalizerName}
+	finalizers := []string{toolchainv1alpha1.FinalizerName}
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       userName,

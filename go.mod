@@ -3,15 +3,16 @@ module github.com/codeready-toolchain/member-operator
 require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20200129153131-c56e252b6d74
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20191206153324-4205c5ebe624
-	github.com/emicklei/go-restful v2.10.0+incompatible // indirect
+	github.com/codeready-toolchain/api v0.0.0-20200131070324-9e7eefd85de5
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20200131162853-984d8595ee4e
+	github.com/emicklei/go-restful v2.11.1+incompatible // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
-	github.com/go-openapi/spec v0.19.3 // indirect
-	github.com/gogo/protobuf v1.3.0 // indirect
-	github.com/json-iterator/go v1.1.7 // indirect
-	github.com/magiconair/properties v1.8.1 // indirect
+	github.com/go-openapi/spec v0.19.5 // indirect
+	github.com/go-openapi/swag v0.19.7 // indirect
+	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/onsi/ginkgo v1.10.1 // indirect
 	github.com/onsi/gomega v1.7.0 // indirect
@@ -22,21 +23,16 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
-	go.uber.org/atomic v1.4.0 // indirect
-	golang.org/x/crypto v0.0.0-20190926114937-fa1a29108794 // indirect
-	golang.org/x/net v0.0.0-20190926025831-c00fd9afed17 // indirect
-	golang.org/x/sys v0.0.0-20190924154521-2837fb4f24fe // indirect
-	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0 // indirect
-	google.golang.org/appengine v1.6.3 // indirect
-	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	gopkg.in/yaml.v2 v2.2.4 // indirect
-	k8s.io/api v0.0.0
-	k8s.io/apiextensions-apiserver v0.0.0
-	k8s.io/apimachinery v0.0.0
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550 // indirect
+	golang.org/x/net v0.0.0-20200114155413-6afb5195e5aa // indirect
+	golang.org/x/sys v0.0.0-20200124204421-9fbb57f87de9 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
+	k8s.io/api v0.17.2
+	k8s.io/apiextensions-apiserver v0.17.2
+	k8s.io/apimachinery v0.17.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
 	k8s.io/klog v1.0.0
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d // indirect
-	k8s.io/utils v0.0.0-20190809000727-6c36bc71fc4a // indirect
+	k8s.io/kube-openapi v0.0.0-20200130172213-cdac1c71ff9f // indirect
 	sigs.k8s.io/controller-runtime v0.2.2
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20191023070212-24d45e9f4f15
 )

@@ -8,12 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,11 +31,6 @@ import (
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-)
-
-const (
-	username      = "johnsmith"
-	namespaceName = "toolchain-member"
 )
 
 func TestFindNamespace(t *testing.T) {
@@ -130,6 +126,10 @@ func TestNextMissingNamespace(t *testing.T) {
 }
 
 func TestGetNamespaceName(t *testing.T) {
+
+	// given
+	namespaceName := "toolchain-member"
+
 	t.Run("request_namespace", func(t *testing.T) {
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
@@ -192,67 +192,71 @@ func TestGetNamespaceName(t *testing.T) {
 }
 
 func TestReconcileProvisionOK(t *testing.T) {
+
 	logf.SetLogger(logf.ZapLogger(true))
+	// given
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+	nsTmplSet := newNSTmplSet(namespaceName, username)
 
-	nsTmplSet := newNSTmplSet()
-
-	reconcile := func(r *ReconcileNSTemplateSet, req reconcile.Request) {
+	reconcile := func(r *NSTemplateSetReconciler, req reconcile.Request) {
 		res, err := r.Reconcile(req)
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 	}
 
 	t.Run("new_namespace_created_ok", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// test
 		reconcile(r, req)
 
-		checkReadyCond(t, fakeClient, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Provisioning")
 		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
 	})
 
 	t.Run("new_namespace_created_with_existing_namespace_ok", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// create dev
-		createNamespace(t, fakeClient, "abcde11", "dev")
+		createNamespace(t, fakeClient, "abcde11", username, "dev")
 
 		// test
 		reconcile(r, req)
 
-		checkReadyCond(t, fakeClient, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Provisioning")
 		checkNamespace(t, r.client, username, "code")
 	})
 
 	t.Run("inner_resources_created_for_existing_namespace_ok", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// create dev
-		namespace := createNamespace(t, fakeClient, "", "dev")
+		namespace := createNamespace(t, fakeClient, "", username, "dev")
 
 		// test
 		reconcile(r, req)
 
-		checkReadyCond(t, fakeClient, corev1.ConditionFalse, "Provisioning")
+		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Provisioning")
 		checkInnerResources(t, fakeClient, namespace.GetName())
 	})
 
 	t.Run("status_provisioned_ok", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// create namesapces
-		createNamespace(t, fakeClient, "abcde11", "dev")
-		createNamespace(t, fakeClient, "abcde21", "code")
+		createNamespace(t, fakeClient, "abcde11", username, "dev")
+		createNamespace(t, fakeClient, "abcde21", username, "code")
 
 		// test
 		reconcile(r, req)
 
-		checkReadyCond(t, fakeClient, corev1.ConditionTrue, "Provisioned")
+		checkReadyCond(t, fakeClient, corev1.ConditionTrue, namespaceName, username, "Provisioned")
 	})
 
 	t.Run("nstmplset_not_found", func(t *testing.T) {
-		r, req, _ := prepareReconcile(t)
+		r, req, _ := prepareReconcile(t, namespaceName, username)
 
 		// test
 		reconcile(r, req)
@@ -262,9 +266,12 @@ func TestReconcileProvisionOK(t *testing.T) {
 func TestReconcileProvisionFail(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 
-	nsTmplSet := newNSTmplSet()
+	// given
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+	nsTmplSet := newNSTmplSet(namespaceName, username)
 
-	reconcile := func(r *ReconcileNSTemplateSet, req reconcile.Request, errMsg string) {
+	reconcile := func(r *NSTemplateSetReconciler, req reconcile.Request, errMsg string) {
 		res, err := r.Reconcile(req)
 		require.Error(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
@@ -272,7 +279,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	}
 
 	t.Run("fail_create_namespace", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create namespace")
 		}
@@ -280,13 +287,13 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to create namespace")
 
-		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, namespaceName, username, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_create_inner_resources", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
-		createNamespace(t, fakeClient, "", "dev")
+		createNamespace(t, fakeClient, "", username, "dev")
 
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create some object")
@@ -295,13 +302,13 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to create some object")
 
-		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, namespaceName, username, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_update_status_for_inner_resources", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
-		createNamespace(t, fakeClient, "", "dev")
+		createNamespace(t, fakeClient, "", username, "dev")
 
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update NSTmlpSet")
@@ -310,11 +317,11 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to update NSTmlpSet")
 
-		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, namespaceName, username, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_list_namespace", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 			return errors.New("unable to list namespace")
 		}
@@ -322,11 +329,11 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// test
 		reconcile(r, req, "unable to list namespace")
 
-		checkStatus(t, fakeClient, "UnableToProvision")
+		checkStatus(t, fakeClient, namespaceName, username, "UnableToProvision")
 	})
 
 	t.Run("fail_get_nstmplset", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username)
 		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 			return errors.New("unable to get NSTemplate")
 		}
@@ -336,7 +343,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	})
 
 	t.Run("fail_status_provisioning", func(t *testing.T) {
-		r, req, fakeClient := prepareReconcile(t, nsTmplSet)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update status")
 		}
@@ -358,12 +365,12 @@ func TestReconcileProvisionFail(t *testing.T) {
 				},
 			},
 		}
-		r, req, fakeClient := prepareReconcile(t, nsTmplSetObj)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSetObj)
 
 		// test
 		reconcile(r, req, "failed to to retrieve template for namespace")
 
-		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, namespaceName, username, "UnableToProvisionNamespace")
 	})
 
 	t.Run("fail_get_template_for_inner_resource", func(t *testing.T) {
@@ -379,14 +386,14 @@ func TestReconcileProvisionFail(t *testing.T) {
 				},
 			},
 		}
-		r, req, fakeClient := prepareReconcile(t, nsTmplSetObj)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSetObj)
 
-		createNamespace(t, fakeClient, "", "stage")
+		createNamespace(t, fakeClient, "", username, "stage")
 
 		// test
 		reconcile(r, req, "failed to to retrieve template for namespace")
 
-		checkStatus(t, fakeClient, "UnableToProvisionNamespace")
+		checkStatus(t, fakeClient, namespaceName, username, "UnableToProvisionNamespace")
 	})
 
 	t.Run("no_namespace", func(t *testing.T) {
@@ -403,9 +410,12 @@ func TestUpdateStatus(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
+	// given
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
 
 	t.Run("status_updated", func(t *testing.T) {
-		nsTmplSet := newNSTmplSet()
+		nsTmplSet := newNSTmplSet(namespaceName, username)
 		reconciler, _ := prepareController(t, nsTmplSet)
 		condition := toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -423,7 +433,8 @@ func TestUpdateStatus(t *testing.T) {
 	})
 
 	t.Run("status_not_updated_because_not_changed", func(t *testing.T) {
-		nsTmplSet := newNSTmplSet()
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username)
 		reconciler, _ := prepareController(t, nsTmplSet)
 		conditions := []toolchainv1alpha1.Condition{{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -442,7 +453,8 @@ func TestUpdateStatus(t *testing.T) {
 	})
 
 	t.Run("status_error_wrapped", func(t *testing.T) {
-		nsTmplSet := newNSTmplSet()
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username)
 		reconciler, _ := prepareController(t, nsTmplSet)
 		log := logf.Log.WithName("test")
 
@@ -481,18 +493,20 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	failedCond := toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
-		Reason:  unableToProvisionNamespaceReason,
+		Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
 		Message: "Operation cannot be fulfilled on namespaces bla bla bla",
 	}
 	provisionedCond := toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
-		Reason: provisionedReason,
+		Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
 	}
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
 
 	t.Run("when status is set to false with message, then next update to true should remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet()
+		nsTmplSet := newNSTmplSet(namespaceName, username)
 		nsTmplSet.Status.Conditions = []toolchainv1alpha1.Condition{failedCond}
 		reconciler, _ := prepareController(t, nsTmplSet)
 
@@ -509,11 +523,11 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet()
+		nsTmplSet := newNSTmplSet(namespaceName, username)
 		nsTmplSet.Status.Conditions = []toolchainv1alpha1.Condition{failedCond}
-		r, req, _ := prepareReconcile(t, nsTmplSet)
-		createNamespace(t, r.client, "abcde11", "dev")
-		createNamespace(t, r.client, "abcde21", "code")
+		r, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
+		createNamespace(t, r.client, "abcde11", username, "dev")
+		createNamespace(t, r.client, "abcde21", username, "code")
 
 		// when
 		_, err := r.Reconcile(req)
@@ -527,7 +541,159 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	})
 }
 
-func createNamespace(t *testing.T, client client.Client, revision, typeName string) *corev1.Namespace {
+func TestDeleteNSTemplateSet(t *testing.T) {
+
+	logf.SetLogger(logf.ZapLogger(true))
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+
+	t.Run("with 2 user namespaces to delete", func(t *testing.T) {
+		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
+		nsTmplSet := newNSTmplSet(namespaceName, username)
+		deletionTS := metav1.NewTime(time.Now())
+		nsTmplSet.SetDeletionTimestamp(&deletionTS) // mark resource as deleted
+		r, req, c := prepareReconcile(t, namespaceName, username, nsTmplSet)
+		for _, ns := range nsTmplSet.Spec.Namespaces {
+			createNamespace(t, r.client, ns.Revision, username, ns.Type)
+		}
+		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				// mark namespaces as deleted...
+				deletionTS := metav1.NewTime(time.Now())
+				obj.SetDeletionTimestamp(&deletionTS)
+				// ... but replace them in the fake client cache yet instead of deleting them
+				return c.Client.Update(ctx, obj)
+			}
+			return c.Client.Delete(ctx, obj, opts...)
+		}
+
+		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
+			// when a first reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
+			_, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			// get the first namespace and check its deletion timestamp
+			firstNS := corev1.Namespace{}
+			firstNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[0].Type)
+			err = r.client.Get(context.TODO(), types.NamespacedName{
+				Name: firstNSName,
+			}, &firstNS)
+			require.NoError(t, err)
+			assert.NotNil(t, firstNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", firstNSName)
+			// get the NSTemplateSet resource again and check its status
+			updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: nsTmplSet.Namespace,
+				Name:      nsTmplSet.Name,
+			}, &updateNSTemplateSet)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, updateNSTemplateSet.Status.Conditions, toolchainv1alpha1.Condition{
+				Type:   toolchainv1alpha1.ConditionReady,
+				Status: corev1.ConditionFalse,
+				Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+			})
+			// and the finalizer should NOt have been removed yet
+			assert.Equal(t, []string{toolchainv1alpha1.FinalizerName}, updateNSTemplateSet.Finalizers)
+
+			t.Run("reconcile after first user namespace deletion", func(t *testing.T) {
+				// given a second reconcile loop was triggered (because a user namespace was deleted)
+				_, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
+				// when
+				_, err := r.Reconcile(req)
+				// then
+				require.NoError(t, err)
+				// get the second namespace and check its deletion timestamp
+				secondNS := corev1.Namespace{}
+				secondtNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[1].Type)
+				err = r.client.Get(context.TODO(), types.NamespacedName{
+					Name: secondtNSName,
+				}, &secondNS)
+				require.NoError(t, err)
+				assert.NotNil(t, secondNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", secondtNSName)
+				// get the NSTemplateSet resource again and check its finalizers and status
+				updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+				err = r.client.Get(context.TODO(), types.NamespacedName{
+					Namespace: nsTmplSet.Namespace,
+					Name:      nsTmplSet.Name,
+				}, &updateNSTemplateSet)
+				// then
+				require.NoError(t, err)
+				require.Len(t, updateNSTemplateSet.Finalizers, 1)
+				assert.Equal(t, toolchainv1alpha1.FinalizerName, updateNSTemplateSet.Finalizers[0])
+				test.AssertConditionsMatch(t, updateNSTemplateSet.Status.Conditions, toolchainv1alpha1.Condition{
+					Type:   toolchainv1alpha1.ConditionReady,
+					Status: corev1.ConditionFalse,
+					Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+				})
+
+				t.Run("reconcile after second user namespace deletion", func(t *testing.T) {
+					// given a second reconcile loop was triggered (because a user namespace was deleted)
+					_, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
+					// when
+					_, err := r.Reconcile(req)
+					// then
+					require.NoError(t, err)
+					// get the NSTemplateSet resource again and check its finalizers and status
+					updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+					err = r.client.Get(context.TODO(), types.NamespacedName{
+						Namespace: nsTmplSet.Namespace,
+						Name:      nsTmplSet.Name,
+					}, &updateNSTemplateSet)
+					// then
+					require.NoError(t, err)
+					assert.Empty(t, updateNSTemplateSet.Finalizers)
+					test.AssertConditionsMatch(t, updateNSTemplateSet.Status.Conditions, toolchainv1alpha1.Condition{
+						Type:   toolchainv1alpha1.ConditionReady,
+						Status: corev1.ConditionFalse,
+						Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+					})
+				})
+			})
+		})
+	})
+
+	t.Run("without any user namespace to delete", func(t *testing.T) {
+		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
+		nsTmplSet := newNSTmplSet(namespaceName, username)
+		deletionTS := metav1.NewTime(time.Now())
+		nsTmplSet.SetDeletionTimestamp(&deletionTS) // mark resource as deleted
+		r, req, c := prepareReconcile(t, namespaceName, username, nsTmplSet)
+		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				// mark namespaces as deleted...
+				deletionTS := metav1.NewTime(time.Now())
+				obj.SetDeletionTimestamp(&deletionTS)
+				// ... but replace them in the fake client cache yet instead of deleting them
+				return c.Client.Update(ctx, obj)
+			}
+			return c.Client.Delete(ctx, obj, opts...)
+		}
+		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
+			// when a first reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
+			_, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+
+			// get the NSTemplateSet resource again and check its finalizers
+			updateNSTemplateSet := toolchainv1alpha1.NSTemplateSet{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{
+				Namespace: nsTmplSet.Namespace,
+				Name:      nsTmplSet.Name,
+			}, &updateNSTemplateSet)
+			// then
+			require.NoError(t, err)
+			assert.Empty(t, updateNSTemplateSet.Finalizers)
+		})
+	})
+
+}
+
+func createNamespace(t *testing.T, client client.Client, revision, username, typeName string) *corev1.Namespace {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -545,7 +711,7 @@ func createNamespace(t *testing.T, client client.Client, revision, typeName stri
 	return ns
 }
 
-func checkReadyCond(t *testing.T, client *test.FakeClient, wantStatus corev1.ConditionStatus, wantReason string) {
+func checkReadyCond(t *testing.T, client *test.FakeClient, wantStatus corev1.ConditionStatus, namespaceName, username, wantReason string) {
 	t.Helper()
 
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
@@ -580,8 +746,9 @@ func checkNamespace(t *testing.T, cl client.Client, username, typeName string) {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	err := cl.Get(context.TODO(), types.NamespacedName{Name: nsName}, namespace)
 	require.NoError(t, err)
-	require.Equal(t, username, namespace.Labels["toolchain.dev.openshift.com/owner"])
-	require.Equal(t, typeName, namespace.Labels["toolchain.dev.openshift.com/type"])
+	assert.Equal(t, username, namespace.Labels["toolchain.dev.openshift.com/owner"])
+	assert.Equal(t, typeName, namespace.Labels["toolchain.dev.openshift.com/type"])
+	assert.Empty(t, namespace.OwnerReferences) // namespace has not explicit owner reference.
 }
 
 func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {
@@ -592,11 +759,11 @@ func checkInnerResources(t *testing.T, client *test.FakeClient, nsName string) {
 	require.NoError(t, err)
 }
 
-func checkStatus(t *testing.T, client *test.FakeClient, wantReason string) {
+func checkStatus(t *testing.T, client *test.FakeClient, namespaceName, name, wantReason string) {
 	t.Helper()
 
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: namespaceName}, nsTmplSet)
+	err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespaceName}, nsTmplSet)
 	require.NoError(t, err)
 	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
 	assert.True(t, found)
@@ -604,11 +771,22 @@ func checkStatus(t *testing.T, client *test.FakeClient, wantReason string) {
 	assert.Equal(t, wantReason, readyCond.Reason)
 }
 
-func newNSTmplSet() *toolchainv1alpha1.NSTemplateSet {
+func checkFinalizers(t *testing.T, client *test.FakeClient, namespaceName, name string) {
+	t.Helper()
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespaceName}, nsTmplSet)
+	require.NoError(t, err)
+	require.Len(t, nsTmplSet.Finalizers, 1)
+	assert.Equal(t, toolchainv1alpha1.FinalizerName, nsTmplSet.Finalizers[0])
+
+}
+
+func newNSTmplSet(namespaceName, name string) *toolchainv1alpha1.NSTemplateSet {
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      username,
-			Namespace: namespaceName,
+			Namespace:  namespaceName,
+			Name:       name,
+			Finalizers: []string{toolchainv1alpha1.FinalizerName},
 		},
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
 			TierName: "basic",
@@ -621,12 +799,12 @@ func newNSTmplSet() *toolchainv1alpha1.NSTemplateSet {
 	return nsTmplSet
 }
 
-func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTemplateSet, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*NSTemplateSetReconciler, reconcile.Request, *test.FakeClient) {
 	r, fakeClient := prepareController(t, initObjs...)
-	return r, newReconcileRequest(username), fakeClient
+	return r, newReconcileRequest(namespaceName, name), fakeClient
 }
 
-func prepareController(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTemplateSet, *test.FakeClient) {
+func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSetReconciler, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -634,7 +812,7 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTe
 	decoder := codecFactory.UniversalDeserializer()
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	r := &ReconcileNSTemplateSet{
+	r := &NSTemplateSetReconciler{
 		client:             fakeClient,
 		scheme:             s,
 		getTemplateContent: wrapTetTemplateContent(decoder),
@@ -642,11 +820,11 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*ReconcileNSTe
 	return r, fakeClient
 }
 
-func newReconcileRequest(name string) reconcile.Request {
+func newReconcileRequest(namespaceName, name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
-			Name:      name,
 			Namespace: namespaceName,
+			Name:      name,
 		},
 	}
 }

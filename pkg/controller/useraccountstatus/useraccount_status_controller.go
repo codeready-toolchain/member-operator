@@ -114,6 +114,7 @@ func (r *ReconcileUserAccountStatus) updateMasterUserRecord(userAcc *toolchainv1
 	for i, account := range mur.Spec.UserAccounts {
 		if account.TargetCluster == fedCluster.OwnerClusterName {
 			mur.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
+			mur.Spec.UserAccounts[i].Spec.Disabled = userAcc.Spec.Disabled
 			return fedCluster.Client.Update(context.TODO(), mur), mur
 		}
 	}

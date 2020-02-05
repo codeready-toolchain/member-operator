@@ -48,6 +48,23 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 		require.NoError(t, err)
 		assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
+		require.False(t, currentMur.Spec.UserAccounts[0].Spec.Disabled)
+	})
+
+	t.Run("successful - should change the spec.disabled to true", func(t *testing.T) {
+		userAcc.Spec.Disabled = true
+		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))
+
+		// when
+		_, err := cntrl.Reconcile(newUaRequest(userAcc))
+
+		// then
+		require.NoError(t, err)
+		currentMur := &toolchainv1alpha1.MasterUserRecord{}
+		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
+		require.NoError(t, err)
+		assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
+		require.True(t, currentMur.Spec.UserAccounts[0].Spec.Disabled)
 	})
 
 	t.Run("failed - host not available", func(t *testing.T) {
@@ -64,6 +81,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 		require.NoError(t, err)
 		assert.Equal(t, "111111", currentMur.Spec.UserAccounts[0].SyncIndex)
+		require.False(t, currentMur.Spec.UserAccounts[0].Spec.Disabled)
 	})
 
 	t.Run("failed - host not ready", func(t *testing.T) {
@@ -80,6 +98,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 		require.NoError(t, err)
 		assert.Equal(t, "111111", currentMur.Spec.UserAccounts[0].SyncIndex)
+		require.False(t, currentMur.Spec.UserAccounts[0].Spec.Disabled)
 	})
 }
 
@@ -91,6 +110,9 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	mur.Spec.UserAccounts = append(mur.Spec.UserAccounts, toolchainv1alpha1.UserAccountEmbedded{
 		TargetCluster: "second-member-cluster",
 		SyncIndex:     "aaaaaa",
+		Spec:toolchainv1alpha1.UserAccountSpec{
+			Disabled:      true,
+		},
 	})
 	cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))
 
@@ -103,9 +125,11 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 	require.NoError(t, err)
 	assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
+	require.False(t, currentMur.Spec.UserAccounts[0].Spec.Disabled)
 	assert.Equal(t, memberClusterName, currentMur.Spec.UserAccounts[0].TargetCluster)
 
 	assert.Equal(t, "aaaaaa", currentMur.Spec.UserAccounts[1].SyncIndex)
+	require.True(t, currentMur.Spec.UserAccounts[1].Spec.Disabled)
 	assert.Equal(t, "second-member-cluster", currentMur.Spec.UserAccounts[1].TargetCluster)
 }
 

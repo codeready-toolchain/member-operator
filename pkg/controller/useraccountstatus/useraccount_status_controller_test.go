@@ -110,8 +110,8 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	mur.Spec.UserAccounts = append(mur.Spec.UserAccounts, toolchainv1alpha1.UserAccountEmbedded{
 		TargetCluster: "second-member-cluster",
 		SyncIndex:     "aaaaaa",
-		Spec:toolchainv1alpha1.UserAccountSpec{
-			Disabled:      true,
+		Spec: toolchainv1alpha1.UserAccountSpec{
+			Disabled: true,
 		},
 	})
 	cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))

@@ -7,19 +7,19 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
+
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -54,18 +54,20 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource
+	// Watch for changes to secondary resources
 	enqueueRequestForOwner := &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &toolchainv1alpha1.UserAccount{},
 	}
-	if err := c.Watch(&source.Kind{Type: &userv1.User{}}, enqueueRequestForOwner); err != nil {
-		return err
-	}
-	if err := c.Watch(&source.Kind{Type: &userv1.Identity{}}, enqueueRequestForOwner); err != nil {
-		return err
-	}
 	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, enqueueRequestForOwner); err != nil {
+		return err
+	}
+	// Watch for changes to secondary resources: Users and Identities associated with a UserAccount.
+	// We can't use owner references because namespaced resources (UserAccount) can't own cluster scoped resources (User & Identity)
+	if err := c.Watch(&source.Kind{Type: &userv1.User{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+		return err
+	}
+	if err := c.Watch(&source.Kind{Type: &userv1.Identity{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
 		return err
 	}
 
@@ -184,9 +186,7 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 				return nil, false, err
 			}
 			user = newUser(userAcc)
-			if err := controllerutil.SetControllerReference(userAcc, user, r.scheme); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to set controller reference for user '%s'", userAcc.Name)
-			}
+			setOwnerLabel(user, userAcc.Name)
 			if err := r.client.Create(context.TODO(), user); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to create user '%s'", userAcc.Name)
 			}
@@ -229,9 +229,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 				return nil, false, err
 			}
 			identity = newIdentity(userAcc, user)
-			if err := controllerutil.SetControllerReference(userAcc, identity, r.scheme); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to set controller reference for identity '%s'", name)
-			}
+			setOwnerLabel(identity, userAcc.Name)
 			if err := r.client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", name)
 			}
@@ -266,6 +264,15 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 	}
 
 	return identity, false, nil
+}
+
+func setOwnerLabel(object metav1.Object, owner string) {
+	labels := object.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[toolchainv1alpha1.OwnerLabelKey] = owner
+	object.SetLabels(labels)
 }
 
 func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.NSTemplateSet, bool, error) {

@@ -36,7 +36,7 @@ func TestReconcile(t *testing.T) {
 	userID := uuid.NewV4().String()
 
 	// given
-	userAcc := newUserAccount(username, userID)
+	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 		Name:      ToIdentityName(userAcc.Spec.UserID),
@@ -418,7 +418,7 @@ func TestReconcile(t *testing.T) {
 	// Delete useraccount and ensure related resources are also removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
@@ -479,7 +479,7 @@ func TestReconcile(t *testing.T) {
 	// Add finalizer fails
 	t.Run("add finalizer fails", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		// Mock setting finalizer failure
@@ -497,7 +497,7 @@ func TestReconcile(t *testing.T) {
 	// Remove finalizer fails
 	t.Run("remove finalizer fails", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
@@ -568,7 +568,7 @@ func TestReconcile(t *testing.T) {
 	// delete identity fails
 	t.Run("delete identity fails", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
@@ -609,7 +609,7 @@ func TestReconcile(t *testing.T) {
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
@@ -665,7 +665,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status updated", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
 			client: fakeClient,
@@ -689,7 +689,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status not updated because not changed", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
 			client: fakeClient,
@@ -715,7 +715,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status error wrapped", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &ReconcileUserAccount{
 			client: fakeClient,
@@ -760,7 +760,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	userAcc := newUserAccount(username, userID)
+	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 		Name:      ToIdentityName(userAcc.Spec.UserID),
@@ -825,7 +825,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	})
 
 	t.Run("disabled useraccount", func(t *testing.T) {
-		userAcc := newDisabledUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, true)
 
 		// given
 		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
@@ -850,7 +850,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("disabling useraccount without user", func(t *testing.T) {
 		// given
-		userAcc := newDisabledUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, true)
 		r, req, _ := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
 
 		// when
@@ -875,7 +875,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("disabling useraccount without identity", func(t *testing.T) {
 		// given
-		userAcc := newDisabledUserAccount(username, userID)
+		userAcc := newUserAccount(username, userID, true)
 		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
 
 		// when
@@ -977,7 +977,7 @@ func assertNSTemplateFound(t *testing.T, r *ReconcileUserAccount, account *toolc
 	require.NoError(t, err)
 }
 
-func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
+func newUserAccount(userName, userID string, disabled bool) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
@@ -985,25 +985,11 @@ func newUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
 			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID:        userID,
-			NSTemplateSet: newNSTmplSetSpec(),
-			Disabled:      false,
-		},
-	}
-	return userAcc
-}
-
-func newDisabledUserAccount(userName, userID string) *toolchainv1alpha1.UserAccount {
-	userAcc := &toolchainv1alpha1.UserAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      userName,
-			Namespace: "toolchain-member",
-			UID:       types.UID(uuid.NewV4().String()),
-		},
-		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID:        userID,
-			NSTemplateSet: newNSTmplSetSpec(),
-			Disabled:      true,
+			UserID: userID,
+			UserAccountSpecBase: toolchainv1alpha1.UserAccountSpecBase{
+				NSTemplateSet: newNSTmplSetSpec(),
+			},
+			Disabled: disabled,
 		},
 	}
 	return userAcc
@@ -1051,8 +1037,10 @@ func newUserAccountWithStatus(userName, userID string) *toolchainv1alpha1.UserAc
 			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID:        userID,
-			NSTemplateSet: newNSTmplSetSpec(),
+			UserID: userID,
+			UserAccountSpecBase: toolchainv1alpha1.UserAccountSpecBase{
+				NSTemplateSet: newNSTmplSetSpec(),
+			},
 		},
 		Status: toolchainv1alpha1.UserAccountStatus{
 			Conditions: []toolchainv1alpha1.Condition{

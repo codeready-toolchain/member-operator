@@ -11,19 +11,18 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -47,10 +46,10 @@ func TestReconcile(t *testing.T) {
 		UID:  userUID,
 	}}
 	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-		Name:            username,
-		Namespace:       "toolchain-member",
-		UID:             userUID,
-		OwnerReferences: []metav1.OwnerReference{},
+		Name:      username,
+		Namespace: "toolchain-member",
+		UID:       userUID,
+		Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
 	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -118,8 +117,8 @@ func TestReconcile(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 			require.NoError(t, err)
 			assert.Equal(t, userAcc.Name, user.Name)
-			require.Len(t, user.GetOwnerReferences(), 1)
-			assert.Equal(t, updatedAcc.UID, user.GetOwnerReferences()[0].UID)
+			require.Equal(t, userAcc.Name, user.Labels["toolchain.dev.openshift.com/owner"])
+			assert.Empty(t, user.OwnerReferences) // User has no explicit owner reference.
 
 			// Check the user identity mapping
 			user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
@@ -143,10 +142,10 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-				Name:            username,
-				Namespace:       "toolchain-member",
-				UID:             userUID,
-				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+				Name:      username,
+				Namespace: "toolchain-member",
+				UID:       userUID,
+				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
 			}}
 			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			reconcile(r, req)
@@ -175,10 +174,10 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-				Name:            username,
-				Namespace:       "toolchain-member",
-				UID:             userUID,
-				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+				Name:      username,
+				Namespace: "toolchain-member",
+				UID:       userUID,
+				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
 			}}
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
@@ -223,8 +222,8 @@ func TestReconcile(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
 			require.NoError(t, err)
 			assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
-			require.Len(t, identity.GetOwnerReferences(), 1)
-			assert.Equal(t, updatedAcc.UID, identity.GetOwnerReferences()[0].UID)
+			require.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])
+			assert.Empty(t, identity.OwnerReferences) // Identity has no explicit owner reference.
 
 			// Check the user identity mapping
 			checkMapping(t, preexistingUser, identity)
@@ -237,10 +236,10 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:            ToIdentityName(userAcc.Spec.UserID),
-				Namespace:       "toolchain-member",
-				UID:             types.UID(uuid.NewV4().String()),
-				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+				Name:      ToIdentityName(userAcc.Spec.UserID),
+				Namespace: "toolchain-member",
+				UID:       types.UID(uuid.NewV4().String()),
+				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
 			}}
 
 			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
@@ -270,10 +269,10 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:            ToIdentityName(userAcc.Spec.UserID),
-				Namespace:       "toolchain-member",
-				UID:             types.UID(uuid.NewV4().String()),
-				OwnerReferences: []metav1.OwnerReference{{UID: userAcc.UID}},
+				Name:      ToIdentityName(userAcc.Spec.UserID),
+				Namespace: "toolchain-member",
+				UID:       types.UID(uuid.NewV4().String()),
+				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
 			}}
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
@@ -771,10 +770,10 @@ func TestDisabledUserAccount(t *testing.T) {
 		UID:  userUID,
 	}}
 	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-		Name:            username,
-		Namespace:       "toolchain-member",
-		UID:             userUID,
-		OwnerReferences: []metav1.OwnerReference{},
+		Name:      username,
+		Namespace: "toolchain-member",
+		UID:       userUID,
+		Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
 	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{

@@ -70,18 +70,18 @@ spec:
     owned:
     - description: NSTemplateSet defines user environment via templates that are used
         for namespace provisioning
-      displayName: NSTemplateSet
+      displayName: Namespace Template Set
       kind: NSTemplateSet
       name: nstemplatesets.toolchain.dev.openshift.com
       version: v1alpha1
     - description: UserAccount keeps all information about user provisioned in the
         cluster
-      displayName: UserAccount
+      displayName: User Account
       kind: UserAccount
       name: useraccounts.toolchain.dev.openshift.com
       version: v1alpha1
   description: Placeholder description
-  displayName: Member Operator
+  displayName: Toolchain Member Operator
   install:
     spec:
       clusterPermissions:

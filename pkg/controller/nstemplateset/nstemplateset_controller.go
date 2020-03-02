@@ -287,7 +287,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		if err := r.setStatusUpdating(nsTmplSet); err != nil {
 			return err
 		}
-		if err := r.deleteRedundantObjects(logger, tcNamespace.Type, params, namespace, objs); err != nil {
+		if err := r.deleteRedundantObjects(tcNamespace.Type, params, namespace, objs); err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
 		}
 	}
@@ -312,7 +312,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	return nil
 }
 
-func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, nsType string, params map[string]string, namespace *corev1.Namespace, newObjects []runtime.RawExtension) error {
+func (r *NSTemplateSetReconciler) deleteRedundantObjects(nsType string, params map[string]string, namespace *corev1.Namespace, newObjects []runtime.RawExtension) error {
 	currentTier := namespace.Labels[toolchainv1alpha1.TierLabelKey]
 	currentTmpl, err := r.getTemplateContent(currentTier, nsType)
 	if err != nil {

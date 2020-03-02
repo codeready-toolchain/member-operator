@@ -428,6 +428,7 @@ func TestReconcile(t *testing.T) {
 
 		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
+		require.NoError(t, err)
 		assert.Equal(t, "advanced", updatedNSTmplSet.Spec.TierName)
 		assert.Len(t, updatedNSTmplSet.Spec.Namespaces, 1)
 
@@ -456,6 +457,7 @@ func TestReconcile(t *testing.T) {
 
 		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
+		require.NoError(t, err)
 		assert.Equal(t, "09876", updatedNSTmplSet.Spec.Namespaces[0].Revision)
 
 		// Check that the user account status is now "provisioned"

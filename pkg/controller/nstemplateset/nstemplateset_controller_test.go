@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
+	"k8s.io/api/rbac/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,12 +58,13 @@ func TestFindNamespace(t *testing.T) {
 	})
 }
 
-func TestNextMissingNamespace(t *testing.T) {
+func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
+	// given
 	userNamespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev", Labels: map[string]string{
-					"toolchain.dev.openshift.com/owner":    "johnsmith",
+					"toolchain.dev.openshift.com/tier":     "basic",
 					"toolchain.dev.openshift.com/revision": "abcde11",
 					"toolchain.dev.openshift.com/type":     "dev",
 				},
@@ -73,55 +74,144 @@ func TestNextMissingNamespace(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-code", Labels: map[string]string{
-					"toolchain.dev.openshift.com/owner": "johnsmith",
-					"toolchain.dev.openshift.com/type":  "code",
+					"toolchain.dev.openshift.com/type": "code",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		},
 	}
-	tcNamespaces := []toolchainv1alpha1.NSTemplateSetNamespace{
-		{Type: "dev", Revision: "abcde11"},
-		{Type: "code", Revision: "abcde21"},
-		{Type: "stage", Revision: "abcde31"},
+	nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{
+		Spec: toolchainv1alpha1.NSTemplateSetSpec{
+			TierName: "basic",
+			Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
+				{Type: "dev", Revision: "abcde11"},
+				{Type: "code", Revision: "abcde21"},
+				{Type: "stage", Revision: "abcde31"},
+			},
+		},
 	}
 
-	t.Run("revision_not_set", func(t *testing.T) {
-		// test
-		tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
+	t.Run("return namespace whose revision is not set", func(t *testing.T) {
+		// when
+		tcNS, userNS, found := nextNamespaceToProvisionOrUpdate(nsTemplateSet, userNamespaces)
 
+		// then
 		assert.True(t, found)
 		assert.Equal(t, "code", tcNS.Type)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
 	})
 
-	t.Run("missing_namespace", func(t *testing.T) {
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde11"
+	t.Run("return namespace whose revision is different than in tier", func(t *testing.T) {
+		// given
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "123"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/tier"] = "basic"
 
-		// test
-		tcNS, userNS, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
+		// when
+		tcNS, userNS, found := nextNamespaceToProvisionOrUpdate(nsTemplateSet, userNamespaces)
 
+		// then
+		assert.True(t, found)
+		assert.Equal(t, "code", tcNS.Type)
+		assert.Equal(t, "johnsmith-code", userNS.GetName())
+	})
+
+	t.Run("return namespace whose tier is different", func(t *testing.T) {
+		// given
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde21"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/tier"] = "advanced"
+
+		// when
+		tcNS, userNS, found := nextNamespaceToProvisionOrUpdate(nsTemplateSet, userNamespaces)
+
+		// then
+		assert.True(t, found)
+		assert.Equal(t, "code", tcNS.Type)
+		assert.Equal(t, "johnsmith-code", userNS.GetName())
+	})
+
+	t.Run("return namespace that is not part of user namespaces", func(t *testing.T) {
+		// given
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde21"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/tier"] = "basic"
+
+		// when
+		tcNS, userNS, found := nextNamespaceToProvisionOrUpdate(nsTemplateSet, userNamespaces)
+
+		// then
 		assert.True(t, found)
 		assert.Equal(t, "stage", tcNS.Type)
 		assert.Nil(t, userNS)
 	})
 
 	t.Run("namespace_not_found", func(t *testing.T) {
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde11"
+		// given
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde21"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/tier"] = "basic"
 		userNamespaces = append(userNamespaces, corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-stage", Labels: map[string]string{
-					"toolchain.dev.openshift.com/revision": "abcde11",
+					"toolchain.dev.openshift.com/tier":     "basic",
+					"toolchain.dev.openshift.com/revision": "abcde31",
 					"toolchain.dev.openshift.com/type":     "stage",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		})
 
-		// test
-		_, _, found := nextNamespaceToProvision(tcNamespaces, userNamespaces)
+		// when
+		_, _, found := nextNamespaceToProvisionOrUpdate(nsTemplateSet, userNamespaces)
 
+		// then
 		assert.False(t, found)
+	})
+}
+
+func TestNextNamespaceToDeprovision(t *testing.T) {
+	// given
+	userNamespaces := []corev1.Namespace{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "johnsmith-dev", Labels: map[string]string{
+					"toolchain.dev.openshift.com/type": "dev",
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "johnsmith-code", Labels: map[string]string{
+					"toolchain.dev.openshift.com/type": "code",
+				},
+			},
+		},
+	}
+
+	t.Run("return namespace that is not part of the tier", func(t *testing.T) {
+		// given
+		tcNamespaces := []toolchainv1alpha1.NSTemplateSetNamespace{
+			{Type: "dev", Revision: "abcde11"},
+		}
+
+		// when
+		namespace, found := nextNamespaceToDeprovision(tcNamespaces, userNamespaces)
+
+		// then
+		assert.True(t, found)
+		assert.Equal(t, "johnsmith-code", namespace.Name)
+	})
+
+	t.Run("should no return any namespace", func(t *testing.T) {
+		// given
+		tcNamespaces := []toolchainv1alpha1.NSTemplateSetNamespace{
+			{Type: "dev", Revision: "abcde11"},
+			{Type: "code", Revision: "abcde11"},
+		}
+
+		// when
+		namespace, found := nextNamespaceToDeprovision(tcNamespaces, userNamespaces)
+
+		// then
+		assert.False(t, found)
+		assert.Nil(t, namespace)
 	})
 }
 
@@ -197,7 +287,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	nsTmplSet := newNSTmplSet(namespaceName, username)
+	nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 
 	reconcile := func(r *NSTemplateSetReconciler, req reconcile.Request) {
 		res, err := r.Reconcile(req)
@@ -220,7 +310,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// create dev
-		createNamespace(t, fakeClient, "abcde11", username, "dev")
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "dev")
 
 		// test
 		reconcile(r, req)
@@ -233,7 +323,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// create dev
-		namespace := createNamespace(t, fakeClient, "", username, "dev")
+		namespace := createNamespace(t, fakeClient, "", "basic", username, "dev")
 
 		// test
 		reconcile(r, req)
@@ -246,8 +336,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// create namesapces
-		createNamespace(t, fakeClient, "abcde11", username, "dev")
-		createNamespace(t, fakeClient, "abcde21", username, "code")
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "dev")
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "code")
 
 		// test
 		reconcile(r, req)
@@ -263,13 +353,118 @@ func TestReconcileProvisionOK(t *testing.T) {
 	})
 }
 
+func TestReconcileUpdate(t *testing.T) {
+
+	logf.SetLogger(logf.ZapLogger(true))
+	// given
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+
+	t.Run("update dev to advanced tier", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
+		nsTmplSet.Spec.TierName = "advanced"
+		rb := newRoleBinding(username+"-dev", "user-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, rb)
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "dev")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Updating")
+		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
+
+		role := &v1.Role{}
+		err = fakeClient.Get(context.TODO(), test.NamespacedName(username+"-dev", "toolchain-dev-edit"), role)
+		require.NoError(t, err)
+
+		binding := &v1.RoleBinding{}
+		err = fakeClient.Get(context.TODO(), test.NamespacedName(username+"-dev", "user-edit"), binding)
+		require.NoError(t, err)
+	})
+
+	t.Run("downgrade dev to basic tier", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
+		rb := newRoleBinding(username+"-dev", "user-edit")
+		ro := newRole(username+"-dev", "toolchain-dev-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, rb, ro)
+		createNamespace(t, fakeClient, "abcde11", "advanced", username, "dev")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Updating")
+		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
+
+		role := &v1.Role{}
+		err = fakeClient.Get(context.TODO(), test.NamespacedName(username+"-dev", "toolchain-dev-edit"), role)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+
+		binding := &v1.RoleBinding{}
+		err = fakeClient.Get(context.TODO(), test.NamespacedName(username+"-dev", "user-edit"), binding)
+		require.NoError(t, err)
+	})
+
+	t.Run("delete redundant namespace", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
+		nsTmplSet.Spec.TierName = "advanced"
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "dev")
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "code")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		checkReadyCond(t, fakeClient, corev1.ConditionFalse, namespaceName, username, "Updating")
+		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
+
+		ns := &corev1.Namespace{}
+		err = fakeClient.Get(context.TODO(), test.NamespacedName("", username+"-code"), ns)
+		require.Error(t, err)
+		assert.True(t, apierros.IsNotFound(err))
+	})
+
+	t.Run("delete redundant namespace fails", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
+		nsTmplSet.Spec.TierName = "advanced"
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("error")
+		}
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "dev")
+		createNamespace(t, fakeClient, "abcde11", "basic", username, "code")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.Error(t, err)
+		checkStatus(t, fakeClient, namespaceName, username, "UpdateFailed")
+		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
+	})
+}
+
 func TestReconcileProvisionFail(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	nsTmplSet := newNSTmplSet(namespaceName, username)
+	nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 
 	reconcile := func(r *NSTemplateSetReconciler, req reconcile.Request, errMsg string) {
 		res, err := r.Reconcile(req)
@@ -293,7 +488,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	t.Run("fail_create_inner_resources", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
-		createNamespace(t, fakeClient, "", username, "dev")
+		createNamespace(t, fakeClient, "", "basic", username, "dev")
 
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create some object")
@@ -308,7 +503,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	t.Run("fail_update_status_for_inner_resources", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
-		createNamespace(t, fakeClient, "", username, "dev")
+		createNamespace(t, fakeClient, "", "basic", username, "dev")
 
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update NSTmlpSet")
@@ -361,7 +556,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 			Spec: toolchainv1alpha1.NSTemplateSetSpec{
 				TierName: "basic",
 				Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
-					{Type: "stage", Revision: "abcde31", Template: ""},
+					{Type: "fail", Revision: "abcde31", Template: ""},
 				},
 			},
 		}
@@ -382,13 +577,13 @@ func TestReconcileProvisionFail(t *testing.T) {
 			Spec: toolchainv1alpha1.NSTemplateSetSpec{
 				TierName: "basic",
 				Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
-					{Type: "stage", Revision: "abcde31", Template: ""},
+					{Type: "fail", Revision: "abcde31", Template: ""},
 				},
 			},
 		}
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSetObj)
 
-		createNamespace(t, fakeClient, "", username, "stage")
+		createNamespace(t, fakeClient, "", "basic", username, "fail")
 
 		// test
 		reconcile(r, req, "failed to to retrieve template for namespace")
@@ -415,7 +610,7 @@ func TestUpdateStatus(t *testing.T) {
 	namespaceName := "toolchain-member"
 
 	t.Run("status_updated", func(t *testing.T) {
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		reconciler, _ := prepareController(t, nsTmplSet)
 		condition := toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -434,7 +629,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status_not_updated_because_not_changed", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		reconciler, _ := prepareController(t, nsTmplSet)
 		conditions := []toolchainv1alpha1.Condition{{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -454,7 +649,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status_error_wrapped", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		reconciler, _ := prepareController(t, nsTmplSet)
 		log := logf.Log.WithName("test")
 
@@ -506,7 +701,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 	t.Run("when status is set to false with message, then next update to true should remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		nsTmplSet.Status.Conditions = []toolchainv1alpha1.Condition{failedCond}
 		reconciler, _ := prepareController(t, nsTmplSet)
 
@@ -523,11 +718,11 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		nsTmplSet.Status.Conditions = []toolchainv1alpha1.Condition{failedCond}
 		r, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
-		createNamespace(t, r.client, "abcde11", username, "dev")
-		createNamespace(t, r.client, "abcde21", username, "code")
+		createNamespace(t, r.client, "abcde11", "basic", username, "dev")
+		createNamespace(t, r.client, "abcde11", "basic", username, "code")
 
 		// when
 		_, err := r.Reconcile(req)
@@ -552,12 +747,12 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 	t.Run("with 2 user namespaces to delete", func(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		deletionTS := metav1.NewTime(time.Now())
 		nsTmplSet.SetDeletionTimestamp(&deletionTS) // mark resource as deleted
 		r, req, c := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		for _, ns := range nsTmplSet.Spec.Namespaces {
-			createNamespace(t, r.client, ns.Revision, username, ns.Type)
+			createNamespace(t, r.client, ns.Revision, "basic", username, ns.Type)
 		}
 		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 			if obj, ok := obj.(*corev1.Namespace); ok {
@@ -658,7 +853,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 	t.Run("without any user namespace to delete", func(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
-		nsTmplSet := newNSTmplSet(namespaceName, username)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev", "code")
 		deletionTS := metav1.NewTime(time.Now())
 		nsTmplSet.SetDeletionTimestamp(&deletionTS) // mark resource as deleted
 		r, req, c := prepareReconcile(t, namespaceName, username, nsTmplSet)
@@ -693,12 +888,13 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 }
 
-func createNamespace(t *testing.T, client client.Client, revision, username, typeName string) *corev1.Namespace {
+func createNamespace(t *testing.T, client client.Client, revision, tier, username, typeName string) *corev1.Namespace {
 	nsName := fmt.Sprintf("%s-%s", username, typeName)
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nsName,
 			Labels: map[string]string{
+				"toolchain.dev.openshift.com/tier":     tier,
 				"toolchain.dev.openshift.com/owner":    username,
 				"toolchain.dev.openshift.com/revision": revision,
 				"toolchain.dev.openshift.com/type":     typeName,
@@ -781,7 +977,11 @@ func checkFinalizers(t *testing.T, client *test.FakeClient, namespaceName, name 
 
 }
 
-func newNSTmplSet(namespaceName, name string) *toolchainv1alpha1.NSTemplateSet {
+func newNSTmplSet(namespaceName, name string, nsTypes ...string) *toolchainv1alpha1.NSTemplateSet {
+	nss := make([]toolchainv1alpha1.NSTemplateSetNamespace, len(nsTypes))
+	for index, nsType := range nsTypes {
+		nss[index] = toolchainv1alpha1.NSTemplateSetNamespace{Type: nsType, Revision: "abcde11", Template: ""}
+	}
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  namespaceName,
@@ -789,11 +989,8 @@ func newNSTmplSet(namespaceName, name string) *toolchainv1alpha1.NSTemplateSet {
 			Finalizers: []string{toolchainv1alpha1.FinalizerName},
 		},
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
-			TierName: "basic",
-			Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
-				{Type: "dev", Revision: "abcde11", Template: ""},
-				{Type: "code", Revision: "abcde21", Template: ""},
-			},
+			TierName:   "basic",
+			Namespaces: nss,
 		},
 	}
 	return nsTmplSet
@@ -815,7 +1012,7 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSet
 	r := &NSTemplateSetReconciler{
 		client:             fakeClient,
 		scheme:             s,
-		getTemplateContent: wrapTetTemplateContent(decoder),
+		getTemplateContent: getTemplateContent(decoder),
 	}
 	return r, fakeClient
 }
@@ -838,22 +1035,91 @@ func newReconcileRequestWithNamespace(name, namespace string) reconcile.Request 
 	}
 }
 
-func wrapTetTemplateContent(decoder runtime.Decoder) func(tierName, typeName string) (*templatev1.Template, error) {
-	return func(tierName, typeName string) (*templatev1.Template, error) {
-		tmplFile, err := filepath.Abs(filepath.Join("test-files", fmt.Sprintf("%s-%s.yaml", tierName, typeName)))
-		if err != nil {
-			return nil, err
-		}
-		tmplContent, err := ioutil.ReadFile(tmplFile)
-		if err != nil {
-			return nil, err
-		}
+func newRoleBinding(namespace, name string) *v1.RoleBinding {
+	return &v1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+}
 
+func newRole(namespace, name string) *v1.Role {
+	return &v1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+}
+
+func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string) (*templatev1.Template, error) {
+	return func(tierName, typeName string) (*templatev1.Template, error) {
+		if typeName == "fail" {
+			return nil, fmt.Errorf("failed to to retrieve template for namespace")
+		}
+		var tmplContent string
+		if tierName == "basic" {
+			tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
+		} else {
+			tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
+		}
+		tmplContent = strings.ReplaceAll(tmplContent, "nsType", typeName)
 		tmpl := &templatev1.Template{}
-		_, _, err = decoder.Decode(tmplContent, nil, tmpl)
+		_, _, err := decoder.Decode([]byte(tmplContent), nil, tmpl)
 		if err != nil {
 			return nil, err
 		}
 		return tmpl, err
 	}
 }
+
+var (
+	ns test.TemplateObject = `
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    labels:
+      provider: codeready-toolchain
+      project: codeready-toolchain
+    name: ${USERNAME}-nsType
+`
+	rb test.TemplateObject = `
+- apiVersion: authorization.openshift.io/v1
+  kind: RoleBinding
+  metadata:
+    labels:
+      provider: codeready-toolchain
+      app: codeready-toolchain
+    name: user-edit
+    namespace: ${USERNAME}-nsType
+  roleRef:
+    name: edit
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+  userNames:
+    - ${USERNAME}`
+
+	role test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    labels:
+      provider: codeready-toolchain
+    name: toolchain-dev-edit
+    namespace: ${USERNAME}-nsType
+  rules:
+  - apiGroups:
+    - authorization.openshift.io
+    - rbac.authorization.k8s.io
+    resources:
+    - roles
+    - rolebindings
+    verbs:
+    - '*'`
+
+	username test.TemplateParam = `
+- name: USERNAME
+  value: johnsmith`
+)

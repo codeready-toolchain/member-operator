@@ -414,6 +414,92 @@ func TestReconcile(t *testing.T) {
 			})
 	})
 
+	t.Run("update when tierName and set of namespaces in NSTemplateSet are different", func(t *testing.T) {
+		// given
+		userAcc.Spec.NSTemplateSet.TierName = "advanced"
+		userAcc.Spec.NSTemplateSet.Namespaces = userAcc.Spec.NSTemplateSet.Namespaces[1:2]
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.NoError(t, err)
+
+		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
+		assert.Equal(t, "advanced", updatedNSTmplSet.Spec.TierName)
+		assert.Len(t, updatedNSTmplSet.Spec.Namespaces, 1)
+
+		// Check that the user account status is now "provisioned"
+		updatedAcc := &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+		require.NoError(t, err)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+			toolchainv1alpha1.Condition{
+				Type:   toolchainv1alpha1.ConditionReady,
+				Status: corev1.ConditionFalse,
+				Reason: "Updating",
+			})
+	})
+
+	t.Run("update when revision in NSTemplateSet is different", func(t *testing.T) {
+		// given
+		userAcc.Spec.NSTemplateSet.Namespaces[0].Revision = "09876"
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.NoError(t, err)
+
+		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
+		assert.Equal(t, "09876", updatedNSTmplSet.Spec.Namespaces[0].Revision)
+
+		// Check that the user account status is now "provisioned"
+		updatedAcc := &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+		require.NoError(t, err)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+			toolchainv1alpha1.Condition{
+				Type:   toolchainv1alpha1.ConditionReady,
+				Status: corev1.ConditionFalse,
+				Reason: "Updating",
+			})
+	})
+
+	t.Run("set failed reason when update of NSTemplateSet fails", func(t *testing.T) {
+		// given
+		userAcc.Spec.NSTemplateSet.TierName = "advanced"
+		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+			if obj.GetObjectKind().GroupVersionKind().Kind == "NSTemplateSet" {
+				return fmt.Errorf("some error")
+			}
+			return nil
+		}
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.Error(t, err)
+
+		// Check that the user account status is now "provisioned"
+		updatedAcc := &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+		require.NoError(t, err)
+		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+			toolchainv1alpha1.Condition{
+				Type:    toolchainv1alpha1.ConditionReady,
+				Status:  corev1.ConditionFalse,
+				Reason:  "NSTemplateSetUpdateFailed",
+				Message: "some error",
+			})
+	})
+
 	// Delete useraccount and ensure related resources are also removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
 		// given

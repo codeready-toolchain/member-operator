@@ -413,6 +413,44 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("promotion to another tier fails because it cannot load current template", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
+		nsTmplSet.Spec.TierName = "advanced"
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+		createNamespace(t, fakeClient, "abcde11", "fail", username, "dev")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.Error(t, err)
+		checkStatus(t, fakeClient, namespaceName, username, "UpdateFailed")
+		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
+	})
+
+	t.Run("downgrade dev to basic tier", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
+		rb := newRoleBinding(username+"-dev", "user-edit")
+		ro := newRole(username+"-dev", "toolchain-dev-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, rb, ro)
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("error")
+		}
+		createNamespace(t, fakeClient, "abcde11", "advanced", username, "dev")
+
+		// when
+		_, err := r.Reconcile(req)
+
+		// then
+		require.Error(t, err)
+		checkStatus(t, fakeClient, namespaceName, username, "UpdateFailed")
+		checkNamespace(t, r.client, username, "dev")
+		checkFinalizers(t, fakeClient, nsTmplSet.Namespace, nsTmplSet.Name)
+	})
+
 	t.Run("delete redundant namespace", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "dev")
@@ -1055,7 +1093,7 @@ func newRole(namespace, name string) *v1.Role {
 
 func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string) (*templatev1.Template, error) {
 	return func(tierName, typeName string) (*templatev1.Template, error) {
-		if typeName == "fail" {
+		if typeName == "fail" || tierName == "fail" {
 			return nil, fmt.Errorf("failed to to retrieve template for namespace")
 		}
 		var tmplContent string

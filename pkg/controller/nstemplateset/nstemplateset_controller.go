@@ -312,6 +312,8 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	return nil
 }
 
+// deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
+// compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 func (r *NSTemplateSetReconciler) deleteRedundantObjects(nsType string, params map[string]string, namespace *corev1.Namespace, newObjects []runtime.RawExtension) error {
 	currentTier := namespace.Labels[toolchainv1alpha1.TierLabelKey]
 	currentTmpl, err := r.getTemplateContent(currentTier, nsType)
@@ -370,6 +372,8 @@ func nextNamespaceToProvisionOrUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet
 	return nil, nil, false
 }
 
+// nextNamespaceToDeprovision returns namespace (and information of it was found) that should be deprovisioned
+// because its type wasn't found in the set of namespace types in NSTemplateSet
 func nextNamespaceToDeprovision(tcNamespaces []toolchainv1alpha1.NSTemplateSetNamespace, namespaces []corev1.Namespace) (*corev1.Namespace, bool) {
 Namespaces:
 	for _, ns := range namespaces {

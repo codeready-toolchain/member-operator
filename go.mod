@@ -3,7 +3,7 @@ module github.com/codeready-toolchain/member-operator
 require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20200226022556-bb2d9dd17828
+	github.com/codeready-toolchain/api v0.0.0-20200303120400-af291e9ae8b7
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20200226024011-b46a241eee88
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/spec v0.19.5 // indirect
@@ -28,8 +28,6 @@ require (
 	sigs.k8s.io/controller-runtime v0.5.0
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20200224204536-6207193c49f7
 )
-
-replace github.com/codeready-toolchain/api => github.com/MatousJobanek/api v0.0.0-20200302133147-9f81d9ad1330
 
 // Pinned to kubernetes-1.16.2
 replace (

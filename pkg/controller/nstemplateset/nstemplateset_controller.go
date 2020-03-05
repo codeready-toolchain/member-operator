@@ -183,8 +183,21 @@ func (r *NSTemplateSetReconciler) ensureUserNamespaces(logger logr.Logger, nsTmp
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
+
+	toDeprovision, found := nextNamespaceToDeprovision(nsTmplSet.Spec.Namespaces, userNamespaces)
+	if found {
+		if err := r.setStatusUpdating(nsTmplSet); err != nil {
+			return false, err
+		}
+		if err := r.client.Delete(context.TODO(), toDeprovision); err != nil {
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete namespace %s", toDeprovision.Name)
+		}
+		log.Info("deleted namespace as part of NSTemplateSet update", "namespace", toDeprovision.Name)
+		return false, nil
+	}
+
 	// find next namespace for provisioning namespace resource
-	tcNamespace, userNamespace, found := nextNamespaceToProvision(nsTmplSet.Spec.Namespaces, userNamespaces)
+	tcNamespace, userNamespace, found := nextNamespaceToProvisionOrUpdate(nsTmplSet, userNamespaces)
 	if !found {
 		return true, nil
 	}
@@ -267,6 +280,18 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
+
+	if namespace.Labels[toolchainv1alpha1.TierLabelKey] != "" &&
+		namespace.Labels[toolchainv1alpha1.TierLabelKey] != nsTmplSet.Spec.TierName {
+
+		if err := r.setStatusUpdating(nsTmplSet); err != nil {
+			return err
+		}
+		if err := r.deleteRedundantObjects(tcNamespace.Type, params, namespace, objs); err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
+		}
+	}
+
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
@@ -276,6 +301,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		namespace.Labels = make(map[string]string)
 	}
 	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
+	namespace.Labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
@@ -286,21 +312,79 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	return nil
 }
 
-// nextNamespaceToProvision returns first namespace (from given namespaces) with
-// namespace status is active and revision not set
-// or namespace present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvision(tcNamespaces []toolchainv1alpha1.NSTemplateSetNamespace, namespaces []corev1.Namespace) (*toolchainv1alpha1.NSTemplateSetNamespace, *corev1.Namespace, bool) {
-	for _, tcNamespace := range tcNamespaces {
+// deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
+// compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
+func (r *NSTemplateSetReconciler) deleteRedundantObjects(nsType string, params map[string]string, namespace *corev1.Namespace, newObjects []runtime.RawExtension) error {
+	currentTier := namespace.Labels[toolchainv1alpha1.TierLabelKey]
+	currentTmpl, err := r.getTemplateContent(currentTier, nsType)
+	if err != nil {
+		return errs.Wrapf(err, "failed to to retrieve template of the current tier '%s' for namespace '%s'", currentTier, namespace.Name)
+	}
+
+	tmplProcessor := template.NewProcessor(r.client, r.scheme)
+	currentObjs, err := tmplProcessor.Process(currentTmpl, params, template.RetainAllButNamespaces)
+	if err != nil {
+		return errs.Wrapf(err, "failed to process the current template for namespace '%s'", namespace.Name)
+	}
+
+Current:
+	for _, currentObj := range currentObjs {
+		current, err := meta.Accessor(currentObj.Object)
+		if err != nil {
+			return err
+		}
+		for _, newObj := range newObjects {
+			newOb, err := meta.Accessor(newObj.Object)
+			if err != nil {
+				return err
+			}
+			if current.GetName() == newOb.GetName() &&
+				currentObj.Object.GetObjectKind().GroupVersionKind() == newObj.Object.GetObjectKind().GroupVersionKind() {
+				continue Current
+			}
+		}
+		if err := r.client.Delete(context.TODO(), currentObj.Object); err != nil {
+			return errs.Wrapf(err, "failed to delete object '%s' in namespace '%s'", current.GetName(), namespace.Name)
+		}
+		log.Info("deleted redundant object", "objectName", current.GetName(), "namespace", namespace.Name)
+	}
+	return nil
+}
+
+// nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
+// either revision is not set or revision or tier doesn't equal to the current one.
+// It also returns namespace present in tcNamespaces but not found in given namespaces
+func nextNamespaceToProvisionOrUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet, namespaces []corev1.Namespace) (*toolchainv1alpha1.NSTemplateSetNamespace, *corev1.Namespace, bool) {
+	for _, tcNamespace := range nsTmplSet.Spec.Namespaces {
 		namespace, found := findNamespace(namespaces, tcNamespace.Type)
 		if found {
-			if namespace.Status.Phase == corev1.NamespaceActive && namespace.Labels[toolchainv1alpha1.RevisionLabelKey] == "" {
-				return &tcNamespace, &namespace, true
+			if namespace.Status.Phase == corev1.NamespaceActive {
+				if namespace.Labels[toolchainv1alpha1.RevisionLabelKey] == "" ||
+					namespace.Labels[toolchainv1alpha1.RevisionLabelKey] != tcNamespace.Revision ||
+					namespace.Labels[toolchainv1alpha1.TierLabelKey] != nsTmplSet.Spec.TierName {
+					return &tcNamespace, &namespace, true
+				}
 			}
 		} else {
 			return &tcNamespace, nil, true
 		}
 	}
 	return nil, nil, false
+}
+
+// nextNamespaceToDeprovision returns namespace (and information of it was found) that should be deprovisioned
+// because its type wasn't found in the set of namespace types in NSTemplateSet
+func nextNamespaceToDeprovision(tcNamespaces []toolchainv1alpha1.NSTemplateSetNamespace, namespaces []corev1.Namespace) (*corev1.Namespace, bool) {
+Namespaces:
+	for _, ns := range namespaces {
+		for _, tcNs := range tcNamespaces {
+			if tcNs.Type == ns.Labels[toolchainv1alpha1.TypeLabelKey] {
+				continue Namespaces
+			}
+		}
+		return &ns, true
+	}
+	return nil, false
 }
 
 func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Namespace, bool) {
@@ -400,6 +484,27 @@ func (r *NSTemplateSetReconciler) setStatusTerminating(nsTmplSet *toolchainv1alp
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
 			Reason: toolchainv1alpha1.NSTemplateSetTerminatingReason,
+		})
+}
+
+func (r *NSTemplateSetReconciler) setStatusUpdating(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	return r.updateStatusConditions(
+		nsTmplSet,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.NSTemplateSetUpdatingReason,
+		})
+}
+
+func (r *NSTemplateSetReconciler) setStatusUpdateFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+	return r.updateStatusConditions(
+		nsTmplSet,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.NSTemplateSetUpdateFailedReason,
+			Message: message,
 		})
 }
 

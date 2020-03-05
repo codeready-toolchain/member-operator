@@ -305,7 +305,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 	// update if not same
 	equal := nsTmplSet.Spec.CompareTo(userAcc.Spec.NSTemplateSet)
 	if !equal {
-		return nil, false, fmt.Errorf("update of NSTemplateSet is not supported")
+		return r.updateNSTemplateSet(logger, userAcc, nsTmplSet)
 	}
 
 	// update status if ready=false
@@ -321,6 +321,21 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 	}
 
 	return nsTmplSet, false, nil
+}
+
+func (r *ReconcileUserAccount) updateNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
+	if err := r.setStatusUpdating(userAcc); err != nil {
+		return nil, false, err
+	}
+
+	nsTmplSet.Spec = userAcc.Spec.NSTemplateSet
+
+	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUpdateFailed, err,
+			"failed to update NSTemplateSet '%s'", nsTmplSet.Name)
+	}
+	logger.Info("NSTemplateSet updated successfully", "name", nsTmplSet.Name)
+	return nsTmplSet, true, nil
 }
 
 // setFinalizers sets the finalizers for UserAccount
@@ -499,6 +514,27 @@ func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.User
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
 			Reason: toolchainv1alpha1.UserAccountDisabledReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusUpdating(userAcc *toolchainv1alpha1.UserAccount) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.UserAccountUpdatingReason,
+		})
+}
+
+func (r *ReconcileUserAccount) setStatusUpdateFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.UserAccountNSTemplateSetUpdateFailedReason,
+			Message: message,
 		})
 }
 

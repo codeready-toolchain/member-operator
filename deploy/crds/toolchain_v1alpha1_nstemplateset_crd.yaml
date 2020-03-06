@@ -58,7 +58,6 @@ spec:
                   type: string
               required:
               - revision
-              - template
               type: object
             namespaces:
               description: The namespace templates

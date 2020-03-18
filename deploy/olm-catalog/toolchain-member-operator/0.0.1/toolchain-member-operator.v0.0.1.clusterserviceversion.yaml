@@ -103,6 +103,7 @@ spec:
           - ""
           resources:
           - namespaces
+          - limitranges
           verbs:
           - get
           - create

@@ -408,6 +408,7 @@ data:
                 - ""
                 resources:
                 - namespaces
+                - limitranges
                 verbs:
                 - get
                 - create

@@ -155,6 +155,12 @@ spec:
           verbs:
           - get
           - list
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - '*'
         serviceAccountName: member-operator
       deployments:
       - name: member-operator

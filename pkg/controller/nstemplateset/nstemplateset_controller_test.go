@@ -304,6 +304,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", r.client).
 				HasNoOwnerReference().
@@ -325,6 +326,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-code", r.client).
 				HasNoOwnerReference().
@@ -346,6 +348,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", fakeClient).
 				HasResource("user-edit", &authv1.RoleBinding{})
@@ -366,6 +369,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasNamespaces("dev", "code").
 				HasConditions(Provisioned())
 		})
 
@@ -1036,15 +1040,6 @@ func withNamespaces(types ...string) nsTmplSetOption {
 			nss[index] = toolchainv1alpha1.NSTemplateSetNamespace{Type: nsType, Revision: "abcde11", Template: ""}
 		}
 		nsTmplSet.Spec.Namespaces = nss
-	}
-}
-
-func withClusterResources() nsTmplSetOption {
-	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
-		nsTmplSet.Spec.ClusterResources = &toolchainv1alpha1.NSTemplateSetClusterResources{
-			Revision: "abcede22",
-			Template: "",
-		}
 	}
 }
 

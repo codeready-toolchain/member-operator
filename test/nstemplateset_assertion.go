@@ -49,6 +49,16 @@ func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Con
 	return a
 }
 
+func (a *NSTemplateSetAssertion) HasNamespaces(types ...string) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	require.Len(a.t, a.nsTmplSet.Spec.Namespaces, len(types))
+	for i, nstype := range types {
+		assert.Equal(a.t, nstype, a.nsTmplSet.Spec.Namespaces[i].Type)
+	}
+	return a
+}
+
 func Provisioned() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,

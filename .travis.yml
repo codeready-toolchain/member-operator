@@ -20,7 +20,7 @@ go:
 
 before_install:
 - pyenv shell 3.6.3
-- OPERATOR_SDK_VERSION=v0.11.0
+- OPERATOR_SDK_VERSION=v0.15.2
 - SKIP_TOOLS=true
 
 install:

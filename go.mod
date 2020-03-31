@@ -4,7 +4,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
 	github.com/codeready-toolchain/api v0.0.0-20200323155710-2cad93f41d50
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20200330115326-55526af245bd
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20200331061426-711ab83ff9b7
 	github.com/go-logr/logr v0.1.0
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
 	github.com/operator-framework/operator-sdk v0.15.2
@@ -13,14 +13,11 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
-	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
-	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
-	k8s.io/api v0.18.0
-	k8s.io/apiextensions-apiserver v0.18.0
-	k8s.io/apimachinery v0.18.0
+	k8s.io/api v0.17.4
+	k8s.io/apiextensions-apiserver v0.17.4
+	k8s.io/apimachinery v0.17.4
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
-	k8s.io/utils v0.0.0-20200327001022-6496210b90e8 // indirect
 	sigs.k8s.io/controller-runtime v0.5.0
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20200224204536-6207193c49f7
 )

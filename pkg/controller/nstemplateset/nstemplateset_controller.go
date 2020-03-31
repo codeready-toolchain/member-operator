@@ -181,7 +181,7 @@ func (r *NSTemplateSetReconciler) ensureUserNamespaces(logger logr.Logger, nsTmp
 	username := nsTmplSet.GetName()
 	userNamespaces, err := r.fetchUserNamespaces(username)
 	if err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", username)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespaces with label owner '%s'", username)
 	}
 
 	toDeprovision, found := nextNamespaceToDeprovision(nsTmplSet.Spec.Namespaces, userNamespaces)

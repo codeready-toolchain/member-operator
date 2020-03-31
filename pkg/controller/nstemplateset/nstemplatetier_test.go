@@ -117,12 +117,12 @@ func TestGetNSTemplateTier(t *testing.T) {
 			Status: apiv1.ConditionTrue,
 		})
 		// when
-		tmpls, err := getNSTemplates(hostCluster, "basic")
+		tmpls, err := getTemplatesFromHost(hostCluster, "basic")
 
 		// then
 		require.NoError(t, err)
 		require.Len(t, tmpls, 3)
-		assert.Equal(t, revisionedTemplate{
+		assert.Equal(t, versionedTemplate{
 			Revision: "abcdef",
 			Template: templatev1.Template{
 				ObjectMeta: metav1.ObjectMeta{
@@ -130,7 +130,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				},
 			},
 		}, tmpls["code"])
-		assert.Equal(t, revisionedTemplate{
+		assert.Equal(t, versionedTemplate{
 			Revision: "123456",
 			Template: templatev1.Template{
 				ObjectMeta: metav1.ObjectMeta{
@@ -138,7 +138,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				},
 			},
 		}, tmpls["dev"])
-		assert.Equal(t, revisionedTemplate{
+		assert.Equal(t, versionedTemplate{
 			Revision: "1a2b3c",
 			Template: templatev1.Template{
 				ObjectMeta: metav1.ObjectMeta{
@@ -156,7 +156,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				return nil, false
 			}
 			// when
-			_, err := getNSTemplates(hostCluster, "unknown")
+			_, err := getTemplatesFromHost(hostCluster, "unknown")
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to connect to the host cluster: unknown cluster")
@@ -169,7 +169,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				Status: apiv1.ConditionFalse,
 			})
 			// when
-			_, err := getNSTemplates(hostCluster, "unknown")
+			_, err := getTemplatesFromHost(hostCluster, "unknown")
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "the host cluster is not ready")
@@ -182,7 +182,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				Status: apiv1.ConditionTrue,
 			})
 			// when
-			_, err := getNSTemplates(hostCluster, "unknown")
+			_, err := getTemplatesFromHost(hostCluster, "unknown")
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to retrieve the NSTemplateTier 'unknown' from 'Host' cluster")
@@ -195,7 +195,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				Status: apiv1.ConditionTrue,
 			})
 			// when
-			_, err := getNSTemplates(hostCluster, "other")
+			_, err := getTemplatesFromHost(hostCluster, "other")
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to retrieve the NSTemplateTier 'other' from 'Host' cluster")

@@ -11,15 +11,21 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
 	github.com/satori/go.uuid v1.2.0
+	github.com/spf13/cobra v0.0.6 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.4.0
+	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.17.4
 	k8s.io/apiextensions-apiserver v0.17.4
 	k8s.io/apimachinery v0.17.4
 	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/code-generator v0.18.0 // indirect
+	k8s.io/gengo v0.0.0-20200205140755-e0e292d8aa12 // indirect
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/controller-runtime v0.5.0
+	sigs.k8s.io/controller-tools v0.2.8 // indirect
 	sigs.k8s.io/kubefed v0.1.0-rc6.0.20200224204536-6207193c49f7
+	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
 // Pinned to kubernetes-1.16.2
@@ -52,5 +58,7 @@ replace (
 	github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm (inderectly by operator-sdk)
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20190927182313-d4a64ec2cbd8 // Using openshift/api 4.3
 )
+
+replace github.com/codeready-toolchain/toolchain-common => ../toolchain-common
 
 go 1.13

@@ -13,18 +13,35 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-// nsTemplates the templates along with their revision number for a given tier
-type nsTemplates map[string]revisionedTemplate
+const (
+	// ClusterResources the key to retrieve the cluster resources template
+	ClusterResources string = "clusterResources"
+)
 
-// revisionedTemplate a template along with its revision number
-type revisionedTemplate struct {
+// getTemplateFromHost retrieves the NSTemplateTier resource on the host cluster
+// and returns the templatev1.Template for the given typeName.
+// The typeName can be a namespace type (`code`, `dev`, etc.) or `clusterResources` for
+// the (optional) cluster resources
+func getTemplateFromHost(tierName, typeName string) (*templatev1.Template, error) {
+	templates, err := getTemplatesFromHost(cluster.GetHostCluster, tierName)
+	if err != nil {
+		return nil, err
+	}
+	tmpl := templates[typeName].Template
+	return &tmpl, nil
+}
+
+// templates the templates along with their revision number for a given tier
+type templates map[string]versionedTemplate
+
+// versionedTemplate a template along with its revision number
+type versionedTemplate struct {
 	Revision string
 	Template templatev1.Template
 }
 
-// getNSTemplates gets the templates configured in the NSTemplateTier resource
-// which is fetched from the host cluster.
-func getNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string) (nsTemplates, error) {
+// getTemplatesFromHost gets the templates configured in the NSTemplateTier resource on the host cluster.
+func getTemplatesFromHost(hostClusterFunc cluster.GetHostClusterFunc, tierName string) (templates, error) {
 	// retrieve the FedCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {
@@ -42,11 +59,17 @@ func getNSTemplates(hostClusterFunc cluster.GetHostClusterFunc, tierName string)
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to retrieve the NSTemplateTier '%s' from 'Host' cluster", tierName)
 	}
-	result := nsTemplates{}
+	result := templates{}
 	for _, ns := range tier.Spec.Namespaces {
-		result[ns.Type] = revisionedTemplate{
+		result[ns.Type] = versionedTemplate{
 			Revision: ns.Revision,
 			Template: ns.Template,
+		}
+	}
+	if tier.Spec.ClusterResources != nil {
+		result[ClusterResources] = versionedTemplate{
+			Revision: tier.Spec.ClusterResources.Revision,
+			Template: tier.Spec.ClusterResources.Template,
 		}
 	}
 	return result, nil

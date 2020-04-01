@@ -333,7 +333,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "code").
-				HasNoLabel("toolchain.dev.openshift.com/revision")
+				HasNoLabel("toolchain.dev.openshift.com/revision").
+				HasNoLabel("toolchain.dev.openshift.com/tier")
 		})
 
 		t.Run("inner resources created for existing namespace", func(t *testing.T) {

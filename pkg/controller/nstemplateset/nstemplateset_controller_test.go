@@ -220,6 +220,7 @@ func TestGetNamespaceName(t *testing.T) {
 	namespaceName := "toolchain-member"
 
 	t.Run("request namespace", func(t *testing.T) {
+		// given
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      "any-name",
@@ -227,16 +228,17 @@ func TestGetNamespaceName(t *testing.T) {
 			},
 		}
 
-		// test
+		// when
 		nsName, err := getNamespaceName(req)
 
+		// then
 		require.NoError(t, err)
 		assert.Equal(t, namespaceName, nsName)
 	})
 
 	t.Run("watch namespace", func(t *testing.T) {
+		// given
 		currWatchNs := os.Getenv(k8sutil.WatchNamespaceEnvVar)
-
 		err := os.Setenv(k8sutil.WatchNamespaceEnvVar, namespaceName)
 		require.NoError(t, err)
 		defer func() {
@@ -248,7 +250,6 @@ func TestGetNamespaceName(t *testing.T) {
 			err := os.Setenv(k8sutil.WatchNamespaceEnvVar, currWatchNs)
 			require.NoError(t, err)
 		}()
-
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      "any-name",
@@ -256,14 +257,16 @@ func TestGetNamespaceName(t *testing.T) {
 			},
 		}
 
-		// test
+		// when
 		nsName, err := getNamespaceName(req)
 
+		// then
 		require.NoError(t, err)
 		assert.Equal(t, namespaceName, nsName)
 	})
 
 	t.Run("no namespace", func(t *testing.T) {
+		// given
 		req := reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Name:      "any-name",
@@ -271,9 +274,10 @@ func TestGetNamespaceName(t *testing.T) {
 			},
 		}
 
-		// test
+		// when
 		nsName, err := getNamespaceName(req)
 
+		// then
 		require.Error(t, err)
 		assert.Equal(t, "", nsName)
 	})
@@ -289,11 +293,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 	t.Run("without cluster resources", func(t *testing.T) {
 
-		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
-
 		t.Run("new namespace created", func(t *testing.T) {
 			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 			// when
@@ -304,7 +306,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
-				HasNamespaces("dev", "code").
+				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", r.client).
 				HasNoOwnerReference().
@@ -316,6 +318,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		t.Run("new namespace created with existing namespace", func(t *testing.T) {
 			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 			devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS)
 
@@ -327,7 +330,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
-				HasNamespaces("dev", "code").
+				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-code", r.client).
 				HasNoOwnerReference().
@@ -339,6 +342,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 		t.Run("inner resources created for existing namespace", func(t *testing.T) {
 			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 			devNS := newNamespace("basic", username, "dev") // NS exist but it is not complete yet
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS)
 
@@ -350,14 +354,19 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
-				HasNamespaces("dev", "code").
+				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", fakeClient).
+				HasLabel("toolchain.dev.openshift.com/owner", username).
+				HasLabel("toolchain.dev.openshift.com/type", "dev").
+				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+				HasLabel("toolchain.dev.openshift.com/tier", "basic").
 				HasResource("user-edit", &authv1.RoleBinding{})
 		})
 
 		t.Run("status provisioned", func(t *testing.T) {
 			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 			// create namespaces (and assume they are complete since they have the expected revision number)
 			devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 			codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
@@ -371,8 +380,18 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
-				HasNamespaces("dev", "code").
+				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioned())
+			AssertThatNamespace(t, username+"-dev", fakeClient).
+				HasLabel("toolchain.dev.openshift.com/owner", username).
+				HasLabel("toolchain.dev.openshift.com/type", "dev").
+				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+			AssertThatNamespace(t, username+"-code", fakeClient).
+				HasLabel("toolchain.dev.openshift.com/owner", username).
+				HasLabel("toolchain.dev.openshift.com/type", "code").
+				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 		})
 
 		t.Run("no nstmplset available", func(t *testing.T) {
@@ -399,8 +418,7 @@ func TestReconcileUpdate(t *testing.T) {
 
 	t.Run("update dev to advanced tier", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
-		nsTmplSet.Spec.TierName = "advanced"
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"))
 		// create namespace (and assume it is complete since it has the expected revision number)
 		devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "user-edit")
@@ -417,7 +435,9 @@ func TestReconcileUpdate(t *testing.T) {
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
-			HasLabel("toolchain.dev.openshift.com/type", "dev")
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "advanced") // "upgraded"
 
 		role := &v1.Role{}
 		err = fakeClient.Get(context.TODO(), test.NamespacedName(username+"-dev", "toolchain-dev-edit"), role)
@@ -448,15 +468,16 @@ func TestReconcileUpdate(t *testing.T) {
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
 			HasResource("user-edit", &v1.RoleBinding{}).
 			HasNoResource("toolchain-dev-edit", &v1.Role{}) // role does not exist
 	})
 
 	t.Run("promotion to another tier fails because it cannot load current template", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
-		nsTmplSet.Spec.TierName = "advanced"
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"))
 		// create namespace but with an unknown tier
 		devNS := newNamespace("fail", username, "dev", withRevision("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS)
@@ -472,7 +493,9 @@ func TestReconcileUpdate(t *testing.T) {
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
-			HasLabel("toolchain.dev.openshift.com/type", "dev")
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "fail") // the unknown tier that caused the error
 	})
 
 	t.Run("fail to downgrade dev to basic tier", func(t *testing.T) {
@@ -498,13 +521,14 @@ func TestReconcileUpdate(t *testing.T) {
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
-			HasLabel("toolchain.dev.openshift.com/type", "dev")
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "advanced") // unchanged
 	})
 
 	t.Run("delete redundant namespace", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
-		nsTmplSet.Spec.TierName = "advanced"
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"))
 		devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
@@ -516,19 +540,47 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(Updating())
+			HasConditions(Updating()) // still in progress
+		AssertThatNamespace(t, codeNS.Name, r.client).
+			DoesNotExist() // namespace was deleted
 		AssertThatNamespace(t, devNS.Name, r.client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
-			HasLabel("toolchain.dev.openshift.com/type", "dev")
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic") // not "upgraded" yet
+
+		// when reconciling again
+		_, err = r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasConditions(Updating()) // still in progress
 		AssertThatNamespace(t, codeNS.Name, r.client).
-			DoesNotExist()
+			DoesNotExist() // namespace was deleted
+		AssertThatNamespace(t, devNS.Name, r.client).
+			HasNoOwnerReference().
+			HasLabel("toolchain.dev.openshift.com/owner", username).
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "advanced") // "upgraded"
+
+		// when reconciling again
+		_, err = r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasConditions(Provisioned()) // done with updating
 
 	})
 
 	t.Run("delete redundant namespace fails", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withTierName("advanced"), withNamespaces("dev"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"))
 		devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
@@ -544,11 +596,18 @@ func TestReconcileUpdate(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UpdateFailed("mock error"))
-
+		AssertThatNamespace(t, username+"-code", r.client).
+			HasNoOwnerReference().
+			HasLabel("toolchain.dev.openshift.com/owner", username).
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "code").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic") // unchanged, namespace was not deleted
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
-			HasLabel("toolchain.dev.openshift.com/type", "dev")
+			HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded
 	})
 }
 
@@ -558,10 +617,10 @@ func TestReconcileProvisionFail(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 
 	t.Run("fail to create namespace", func(t *testing.T) {
 		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create namespace")
@@ -577,10 +636,13 @@ func TestReconcileProvisionFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: Namespace, version: v1: unable to create resource of kind: Namespace, version: v1: unable to create namespace"))
+		AssertThatNamespace(t, username+"-dev", r.client).DoesNotExist()
+		AssertThatNamespace(t, username+"-code", r.client).DoesNotExist()
 	})
 
 	t.Run("fail to create inner resources", func(t *testing.T) {
 		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		devNS := newNamespace("basic", username, "dev") // NS exists but is missing its inner resources (since its revision is not set yet)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS)
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
@@ -597,10 +659,13 @@ func TestReconcileProvisionFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: RoleBinding, version: v1: unable to create resource of kind: RoleBinding, version: v1: unable to create some object"))
+		AssertThatNamespace(t, username+"-dev", r.client).
+			HasNoResource("user-edit", &authv1.RoleBinding{})
 	})
 
 	t.Run("fail to update status for inner resources", func(t *testing.T) {
 		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		devNS := newNamespace("basic", username, "dev") // NS exists but is missing its inner resources (since its revision is not set yet)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS)
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
@@ -621,6 +686,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 
 	t.Run("fail to list namespaces", func(t *testing.T) {
 		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 			return errors.New("unable to list namespaces")
@@ -639,6 +705,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	})
 
 	t.Run("fail to get nstmplset", func(t *testing.T) {
+		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username)
 		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 			return errors.New("unable to get NSTemplate")
@@ -654,6 +721,8 @@ func TestReconcileProvisionFail(t *testing.T) {
 	})
 
 	t.Run("fail to update status", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update status")
@@ -707,6 +776,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	})
 
 	t.Run("no namespace", func(t *testing.T) {
+		// given
 		r, _ := prepareController(t)
 		req := newReconcileRequest("", username)
 
@@ -1014,12 +1084,6 @@ func newNSTmplSet(namespaceName, name, tier string, options ...nsTmplSetOption) 
 }
 
 type nsTmplSetOption func(*toolchainv1alpha1.NSTemplateSet)
-
-func withTierName(name string) nsTmplSetOption {
-	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
-		nsTmplSet.Spec.TierName = name
-	}
-}
 
 func withDeletionTs() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {

@@ -54,7 +54,7 @@ func (a *NamespaceAssertion) HasLabel(key, value string) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	require.Contains(a.t, a.namespace.Labels, key)
-	assert.Equal(a.t, a.namespace.Labels[key], value)
+	assert.Equal(a.t, value, a.namespace.Labels[key])
 	return a
 }
 

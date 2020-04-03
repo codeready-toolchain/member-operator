@@ -591,6 +591,9 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
 			Namespace: userAcc.Namespace,
+			Labels: map[string]string{
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+			},
 		},
 		Spec: userAcc.Spec.NSTemplateSet,
 	}

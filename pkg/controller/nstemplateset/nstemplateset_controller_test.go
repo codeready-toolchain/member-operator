@@ -334,6 +334,23 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/type", "code")
 		})
 
+		t.Run("set_label_for_nstemplateset", func(t *testing.T) {
+			// given
+			nsTmplSet.Labels = nil
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+			createNamespace(t, fakeClient, "", "basic", username, "dev")
+
+			// when
+			res, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+				HasFinalizer().
+				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain")
+		})
+
 		t.Run("inner resources created for existing namespace", func(t *testing.T) {
 			// given
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)

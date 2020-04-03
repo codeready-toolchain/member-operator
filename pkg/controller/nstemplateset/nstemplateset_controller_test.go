@@ -50,7 +50,7 @@ func TestFindNamespace(t *testing.T) {
 		assert.Equal(t, typeName, namespace.GetLabels()["toolchain.dev.openshift.com/type"])
 	})
 
-	t.Run("not_found", func(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
 		typeName := "stage"
 		_, found := findNamespace(namespaces, typeName)
 		assert.False(t, found)
@@ -142,7 +142,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		assert.Nil(t, userNS)
 	})
 
-	t.Run("namespace_not_found", func(t *testing.T) {
+	t.Run("namespace not found", func(t *testing.T) {
 		// given
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/revision"] = "abcde21"
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/tier"] = "basic"
@@ -334,7 +334,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/type", "code")
 		})
 
-		t.Run("set_label_for_nstemplateset", func(t *testing.T) {
+		t.Run("set label for nstemplateset", func(t *testing.T) {
 			// given
 			nsTmplSet.Labels = nil
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
@@ -580,7 +580,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, username, withNamespaces("dev", "code"))
 
-	t.Run("fail_create_namespace", func(t *testing.T) {
+	t.Run("fail create namespace", func(t *testing.T) {
 		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
@@ -599,7 +599,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: Namespace, version: v1: unable to create resource of kind: Namespace, version: v1: unable to create namespace"))
 	})
 
-	t.Run("fail_create_inner_resources", func(t *testing.T) {
+	t.Run("fail create inner resources", func(t *testing.T) {
 		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		createNamespace(t, fakeClient, "", "basic", username, "dev")
@@ -619,7 +619,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: RoleBinding, version: v1: unable to create resource of kind: RoleBinding, version: v1: unable to create some object"))
 	})
 
-	t.Run("fail_update_status_for_inner_resources", func(t *testing.T) {
+	t.Run("fail update status for inner resources", func(t *testing.T) {
 		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		createNamespace(t, fakeClient, "", "basic", username, "dev")
@@ -639,7 +639,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 			HasConditions(UnableToProvisionNamespace("unable to update NSTmlpSet"))
 	})
 
-	t.Run("fail_list_namespace", func(t *testing.T) {
+	t.Run("fail list namespace", func(t *testing.T) {
 		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
@@ -658,7 +658,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 			HasConditions(UnableToProvision("unable to list namespaces"))
 	})
 
-	t.Run("fail_get_nstmplset", func(t *testing.T) {
+	t.Run("fail get nstmplset", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username)
 		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 			return errors.New("unable to get NSTemplate")
@@ -673,7 +673,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 	})
 
-	t.Run("fail_status_provisioning", func(t *testing.T) {
+	t.Run("fail status provisioning", func(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 		fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update status")
@@ -726,7 +726,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 			HasConditions(UnableToProvisionNamespace("failed to to retrieve template for namespace"))
 	})
 
-	t.Run("no_namespace", func(t *testing.T) {
+	t.Run("no namespace", func(t *testing.T) {
 		r, _ := prepareController(t)
 		req := newReconcileRequestWithNamespace(username, "")
 

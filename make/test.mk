@@ -83,7 +83,7 @@ test-e2e: get-e2e-repo
 ifeq ($(OPENSHIFT_BUILD_NAMESPACE),)
 	$(MAKE) -C ${E2E_REPO_PATH} test-e2e MEMBER_REPO_PATH=${PWD}
 else
-	$(MAKE) -C ${E2E_REPO_PATH} test-e2e MEMBER_REPO_PATH=${PWD} MEMBER_IMAGE_NAME=default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com/${OPENSHIFT_BUILD_NAMESPACE}/stable:member-operator
+	$(MAKE) -C ${E2E_REPO_PATH} test-e2e MEMBER_REPO_PATH=${PWD} MEMBER_IMAGE_NAME=${IMAGE_FORMAT}member-operator
 endif
 
 .PHONY: get-e2e-repo

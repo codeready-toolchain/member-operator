@@ -1006,6 +1006,9 @@ func newNSTmplSet(namespaceName, name string, options ...nsTmplSetOption) *toolc
 			Namespace:  namespaceName,
 			Name:       name,
 			Finalizers: []string{toolchainv1alpha1.FinalizerName},
+			Labels: map[string]string{
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+			},
 		},
 		Spec: toolchainv1alpha1.NSTemplateSetSpec{
 			TierName:   "basic",

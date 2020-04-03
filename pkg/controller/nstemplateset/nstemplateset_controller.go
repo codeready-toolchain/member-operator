@@ -104,6 +104,10 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 	if err := r.addFinalizer(nsTmplSet); err != nil {
 		return reconcile.Result{}, err
 	}
+	// make sure the labels are added
+	if err := r.addLabels(nsTmplSet); err != nil {
+		return reconcile.Result{}, err
+	}
 
 	done, err := r.ensureUserNamespaces(reqLogger, nsTmplSet)
 	if !done || err != nil {
@@ -115,11 +119,29 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
 }
 
-// setFinalizers sets the finalizers for NSTemplateSet
+// addFinalizer sets the finalizers for NSTemplateSet
 func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		util.AddFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
+		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// addLabels sets the labels for NSTemplateSet
+func (r *NSTemplateSetReconciler) addLabels(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	labels := nsTmplSet.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	if _, exists := labels[toolchainv1alpha1.ProviderLabelKey]; !exists {
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+		nsTmplSet.Labels = labels
 		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
 			return err
 		}
@@ -249,6 +271,8 @@ func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, ns
 		}
 		labels[toolchainv1alpha1.OwnerLabelKey] = username
 		labels[toolchainv1alpha1.TypeLabelKey] = tcNamespace.Type
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+
 		acc.SetLabels(labels)
 
 		// Note: we don't see an owner reference between the NSTemplateSet (namespaced resource) and the namespace (cluster-wide resource)
@@ -302,6 +326,8 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	}
 	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
+	namespace.Labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}

@@ -49,7 +49,7 @@ func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Con
 	return a
 }
 
-func (a *NSTemplateSetAssertion) HasNamespaces(types ...string) *NSTemplateSetAssertion {
+func (a *NSTemplateSetAssertion) HasSpecNamespaces(types ...string) *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
 	require.Len(a.t, a.nsTmplSet.Spec.Namespaces, len(types))

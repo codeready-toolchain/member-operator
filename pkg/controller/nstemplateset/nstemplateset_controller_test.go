@@ -306,6 +306,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", r.client).
@@ -330,6 +331,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-code", r.client).
@@ -354,6 +356,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", fakeClient).
@@ -380,6 +383,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasSpecNamespaces("dev", "code").
 				HasConditions(Provisioned())
 			AssertThatNamespace(t, username+"-dev", fakeClient).
@@ -431,6 +435,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Updating())
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
@@ -464,6 +469,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Updating())
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
@@ -489,6 +495,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.Error(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UpdateFailed("failed to to retrieve template of the current tier 'fail' for namespace 'johnsmith-dev': failed to to retrieve template for namespace"))
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
@@ -517,6 +524,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.Error(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UpdateFailed("failed to delete object 'toolchain-dev-edit' in namespace 'johnsmith-dev': mock error"))
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoOwnerReference().
@@ -540,6 +548,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Updating()) // still in progress
 		AssertThatNamespace(t, codeNS.Name, r.client).
 			DoesNotExist() // namespace was deleted
@@ -557,6 +566,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Updating()) // still in progress
 		AssertThatNamespace(t, codeNS.Name, r.client).
 			DoesNotExist() // namespace was deleted
@@ -574,6 +584,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Provisioned()) // done with updating
 
 	})
@@ -595,6 +606,7 @@ func TestReconcileUpdate(t *testing.T) {
 		require.Error(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UpdateFailed("mock error"))
 		AssertThatNamespace(t, username+"-code", r.client).
 			HasNoOwnerReference().
@@ -635,6 +647,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: Namespace, version: v1: unable to create resource of kind: Namespace, version: v1: unable to create namespace"))
 		AssertThatNamespace(t, username+"-dev", r.client).DoesNotExist()
 		AssertThatNamespace(t, username+"-code", r.client).DoesNotExist()
@@ -658,6 +671,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: RoleBinding, version: v1: unable to create resource of kind: RoleBinding, version: v1: unable to create some object"))
 		AssertThatNamespace(t, username+"-dev", r.client).
 			HasNoResource("user-edit", &authv1.RoleBinding{})
@@ -681,6 +695,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UnableToProvisionNamespace("unable to update NSTmlpSet"))
 	})
 
@@ -701,6 +716,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UnableToProvision("unable to list namespaces"))
 	})
 
@@ -737,6 +753,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasNoConditions() // since we're unable to update the status
 	})
 
@@ -754,6 +771,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UnableToProvisionNamespace("failed to to retrieve template for namespace"))
 	})
 
@@ -772,6 +790,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(UnableToProvisionNamespace("failed to to retrieve template for namespace"))
 	})
 
@@ -815,6 +834,7 @@ func TestUpdateStatus(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(condition)
 	})
 
@@ -834,6 +854,7 @@ func TestUpdateStatus(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(conditions...)
 	})
 
@@ -899,6 +920,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Provisioned())
 	})
 
@@ -916,6 +938,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
+			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasConditions(Provisioned())
 	})
 }
@@ -963,6 +986,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			// get the NSTemplateSet resource again and check its status
 			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
 				HasFinalizer(). // the finalizer should NOt have been removed yet
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasConditions(Terminating())
 
 			t.Run("reconcile after first user namespace deletion", func(t *testing.T) {
@@ -983,6 +1007,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 				// get the NSTemplateSet resource again and check its finalizers and status
 				AssertThatNSTemplateSet(t, namespaceName, username, r.client).
 					HasFinalizer(). // the finalizer should not have been removed either
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 					HasConditions(Terminating())
 
 				t.Run("reconcile after second user namespace deletion", func(t *testing.T) {
@@ -995,6 +1020,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 					// get the NSTemplateSet resource again and check its finalizers and status
 					AssertThatNSTemplateSet(t, namespaceName, username, r.client).
 						DoesNotHaveFinalizer(). // the finalizer should have been removed now
+						HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 						HasConditions(Terminating())
 				})
 			})

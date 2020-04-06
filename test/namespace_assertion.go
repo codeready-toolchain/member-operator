@@ -72,10 +72,7 @@ func InnerResourceHasLabels(key, value string) ResourceCriterion {
 	return func(obj runtime.Object) bool {
 		metaObj, _ := meta.Accessor(obj)
 		labels := metaObj.GetLabels()
-		if labels[key] == value {
-			return true
-		}
-		return false
+		return labels[key] == value
 	}
 }
 func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object, criteria ...ResourceCriterion) *NamespaceAssertion {

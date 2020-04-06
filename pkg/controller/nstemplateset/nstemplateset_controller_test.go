@@ -618,7 +618,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
-	t.Run("fail create namespace", func(t *testing.T) {
+	t.Run("fail to create namespace", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)

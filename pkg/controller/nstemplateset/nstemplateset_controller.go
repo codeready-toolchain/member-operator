@@ -216,6 +216,7 @@ func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet 
 
 	params := map[string]string{"USERNAME": username}
 
+	// create namespace before created inner resources because creating the namespace may take some time
 	if userNamespace == nil {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tcNamespace, params)
 	}

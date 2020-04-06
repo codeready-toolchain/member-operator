@@ -22,5 +22,5 @@ func AddToScheme(s *runtime.Scheme) error {
 	addToSchemes = append(addToSchemes, quotav1.Install)
 	addToSchemes = append(addToSchemes, extensionsv1.AddToScheme)
 
-	return addToSchemes.AddToScheme(s)
+	return addToSchemes.AddToScheme(s) 
 }

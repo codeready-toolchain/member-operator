@@ -292,7 +292,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
 		}
 	}
-
+	// iterate and add providertype label on objs
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
@@ -457,12 +457,13 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 }
 
 // error handling methods
+type statusUpdater func(*toolchainv1alpha1.NSTemplateSet, string) error
 
-func (r *NSTemplateSetReconciler) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, statusUpdater func(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error, err error, format string, args ...interface{}) error {
+func (r *NSTemplateSetReconciler) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, updateStatus statusUpdater, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
-	if err := statusUpdater(nsTmplSet, err.Error()); err != nil {
+	if err := updateStatus(nsTmplSet, err.Error()); err != nil {
 		logger.Error(err, "status update failed")
 	}
 	return errs.Wrapf(err, format, args...)
@@ -477,8 +478,6 @@ func (r *NSTemplateSetReconciler) updateStatusConditions(nsTmplSet *toolchainv1a
 	}
 	return r.client.Status().Update(context.TODO(), nsTmplSet)
 }
-
-type statusUpdater func(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error
 
 func (r *NSTemplateSetReconciler) setStatusReady(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	return r.updateStatusConditions(

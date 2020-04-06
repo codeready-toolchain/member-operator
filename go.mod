@@ -6,6 +6,7 @@ require (
 	github.com/codeready-toolchain/api v0.0.0-20200403111848-efd1f59b2e49
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20200406125155-1de162f75d61
 	github.com/go-logr/logr v0.1.0
+	github.com/golangci/golangci-lint v1.24.0 // indirect
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
 	github.com/operator-framework/operator-sdk v0.16.0
 	github.com/pkg/errors v0.9.1

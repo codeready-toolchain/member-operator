@@ -4,15 +4,18 @@ import (
 	"context"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type ResourceCriterion func(obj runtime.Object) bool
 
 type NamespaceAssertion struct {
 	namespace      *corev1.Namespace
@@ -65,11 +68,28 @@ func (a *NamespaceAssertion) HasNoLabel(key string) *NamespaceAssertion {
 	return a
 }
 
-func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object) *NamespaceAssertion {
+func InnerResourceHasLabels(key, value string) ResourceCriterion {
+	return func(obj runtime.Object) bool {
+		// TODO: check the obj labels using the accessor
+		metaObj, _ := meta.Accessor(obj)
+
+		labels := metaObj.GetLabels()
+		v := labels[key]
+		if v == value {
+			return true
+		}
+		return false
+	}
+}
+func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object, criteria ...ResourceCriterion) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
 	require.NoError(a.t, err)
+	// check that the object matches the criteria
+	for _, match := range criteria {
+		assert.True(a.t, match(obj))
+	}
 	return a
 }
 

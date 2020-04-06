@@ -361,7 +361,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 				HasLabel("toolchain.dev.openshift.com/tier", "basic").
-				HasResource("user-edit", &authv1.RoleBinding{})
+				HasResource("user-edit", &authv1.RoleBinding{}, InnerResourceHasLabels(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue))
 		})
 
 		t.Run("status provisioned", func(t *testing.T) {

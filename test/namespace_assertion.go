@@ -70,12 +70,9 @@ func (a *NamespaceAssertion) HasNoLabel(key string) *NamespaceAssertion {
 
 func InnerResourceHasLabels(key, value string) ResourceCriterion {
 	return func(obj runtime.Object) bool {
-		// TODO: check the obj labels using the accessor
 		metaObj, _ := meta.Accessor(obj)
-
 		labels := metaObj.GetLabels()
-		v := labels[key]
-		if v == value {
+		if labels[key] == value {
 			return true
 		}
 		return false

@@ -104,10 +104,6 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 	if err := r.addFinalizer(nsTmplSet); err != nil {
 		return reconcile.Result{}, err
 	}
-	// make sure the labels are added
-	if err := r.addLabels(nsTmplSet); err != nil {
-		return reconcile.Result{}, err
-	}
 
 	done, err := r.ensureUserNamespaces(reqLogger, nsTmplSet)
 	if !done || err != nil {
@@ -124,24 +120,6 @@ func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTe
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		util.AddFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
-		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// addLabels sets the labels for NSTemplateSet
-func (r *NSTemplateSetReconciler) addLabels(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	labels := nsTmplSet.Labels
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-
-	if _, exists := labels[toolchainv1alpha1.ProviderLabelKey]; !exists {
-		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
-		nsTmplSet.Labels = labels
 		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
 			return err
 		}
@@ -316,6 +294,22 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		}
 	}
 
+	for _, rawObj := range objs {
+		acc, err := meta.Accessor(rawObj.Object)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "invalid element in template for namespace type '%s'", tcNamespace.Type)
+		}
+
+		// set labels
+		labels := acc.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+
+		acc.SetLabels(labels)
+	}
+
 	err = tmplProcessor.Apply(objs)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
@@ -324,10 +318,10 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
 	}
+
+	// Adding labels indicating that the namespace is up-to-date with revision/tier
 	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
-	namespace.Labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
-
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}

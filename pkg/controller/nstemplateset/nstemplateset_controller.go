@@ -9,6 +9,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
 	"github.com/go-logr/logr"
+	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
@@ -60,6 +61,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
 		return err
 	}
+	// also, watch for secondary resources: cluster resources quotas associated with an NSTemplateSet, too
+	if err := c.Watch(&source.Kind{Type: &quotav1.ClusterResourceQuota{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -104,17 +109,21 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
+	// we proceed with the cluster-scoped resources template before all namespaces
+	// as we want ot be sure that cluster scoped resources such as quotas are set
+	// even before the namespaces exist
+	if createdOrUpdated, err := r.ensureClusterResources(reqLogger, nsTmplSet); err != nil {
+		return reconcile.Result{}, r.setStatusProvisionFailed(nsTmplSet, err.Error())
+	} else if createdOrUpdated {
+		return reconcile.Result{}, nil // wait for cluster resource quotas to be created
+	}
+
 	done, err := r.ensureNamespaces(reqLogger, nsTmplSet)
 	if err != nil {
 		reqLogger.Error(err, "failed to provision user namespaces")
 		return reconcile.Result{}, err
 	} else if !done {
 		return reconcile.Result{}, nil // just wait until namespaces change to "active" phase
-	}
-
-	// once all namespaces are done, we can proceed with the cluster-scoped resources template
-	if err := r.ensureClusterResources(reqLogger, nsTmplSet); err != nil {
-		return reconcile.Result{}, r.setStatusProvisionFailed(nsTmplSet, err.Error())
 	}
 
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
@@ -312,17 +321,20 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	return nil
 }
 
-func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+// ensureClusterResources ensures that the cluster resources exists.
+// Returns `true, nil` if something was created or updated, `false, nil` if nothing changed, `false, err` if an
+// error occurred
+func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
 	clusterResources := nsTmplSet.Spec.ClusterResources
 	// cluster-wide resources are optional. Skip if none was specified in the given NSTemplateSet
 	if clusterResources == nil {
-		return nil
+		return false, nil
 	}
 
 	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, ClusterResources)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
 	}
 
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)
@@ -330,13 +342,13 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 	objs, err := tmplProcessor.Process(tmpl, params)
 	logger.Info("cluster resources template", "objects", objs)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
 	}
 
 	for _, rawObj := range objs {
 		acc, err := meta.Accessor(rawObj.Object)
 		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "invalid element in template for the cluster resources")
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "invalid element in template for the cluster resources")
 		}
 
 		// set labels
@@ -356,8 +368,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 
 	}
 
-	err = tmplProcessor.Apply(objs)
-	if err != nil {
+	if createdOrUpdated, err := tmplProcessor.Apply(objs); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to create cluster resources")
 	}
 	return nil

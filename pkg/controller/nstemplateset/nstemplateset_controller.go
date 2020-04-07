@@ -350,7 +350,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
 		acc.SetLabels(labels)
 
-		// Note: we don't see an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
+		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
 		// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
 		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
 		// see https://issues.redhat.com/browse/CRT-429

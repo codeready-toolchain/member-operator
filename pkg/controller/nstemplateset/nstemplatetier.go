@@ -27,8 +27,10 @@ func getTemplateFromHost(tierName, typeName string) (*templatev1.Template, error
 	if err != nil {
 		return nil, err
 	}
-	tmpl := templates[typeName].Template
-	return &tmpl, nil
+	if tmpl, exists := templates[typeName]; exists {
+		return &(tmpl.Template), nil
+	}
+	return nil, nil
 }
 
 // templates the templates along with their revision number for a given tier

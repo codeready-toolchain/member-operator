@@ -3,6 +3,8 @@ package test
 import (
 	"context"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/stretchr/testify/assert"
@@ -68,22 +70,17 @@ func (a *NamespaceAssertion) HasNoLabel(key string) *NamespaceAssertion {
 	return a
 }
 
-func InnerResourceHasLabels(key, value string) ResourceCriterion {
-	return func(obj runtime.Object) bool {
-		metaObj, _ := meta.Accessor(obj)
-		labels := metaObj.GetLabels()
-		return labels[key] == value
-	}
-}
-func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object, criteria ...ResourceCriterion) *NamespaceAssertion {
+func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
 	require.NoError(a.t, err)
-	// check that the object matches the criteria
-	for _, match := range criteria {
-		assert.True(a.t, match(obj))
-	}
+
+	// check for toolchain.dev.openshift.com/provider label
+	metaObj, _ := meta.Accessor(obj)
+	labels := metaObj.GetLabels()
+	assert.Equal(a.t, labels[toolchainv1alpha1.ProviderLabelKey], toolchainv1alpha1.ProviderLabelValue)
+
 	return a
 }
 

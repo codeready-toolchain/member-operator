@@ -126,14 +126,6 @@ func (a *NSTemplateSetAssertion) HasFinalizer() *NSTemplateSetAssertion {
 	return a
 }
 
-func (a *NSTemplateSetAssertion) HasLabel(key, value string) *NSTemplateSetAssertion {
-	err := a.loadNSTemplateSet()
-	require.NoError(a.t, err)
-	require.Contains(a.t, a.nsTmplSet.Labels, key)
-	assert.Equal(a.t, a.nsTmplSet.Labels[key], value)
-	return a
-}
-
 func (a *NSTemplateSetAssertion) DoesNotHaveFinalizer() *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)

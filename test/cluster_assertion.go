@@ -4,9 +4,10 @@ import (
 	"context"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +32,13 @@ func (a *ClusterAssertion) HasResource(name string, obj runtime.Object, options 
 	for _, check := range options {
 		check(a.t, obj)
 	}
+	return a
+}
+
+func (a *ClusterAssertion) HasNoResource(name string, obj runtime.Object) *ClusterAssertion {
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: name}, obj)
+	require.Error(a.t, err, "did not expect resource '%s/%s' to exist", obj.GetObjectKind().GroupVersionKind().Kind, name)
+	assert.True(a.t, errors.IsNotFound(err))
 	return a
 }
 

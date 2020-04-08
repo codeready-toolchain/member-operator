@@ -171,7 +171,27 @@ func (r *NSTemplateSetReconciler) deleteNSTemplateSet(logger logr.Logger, nsTmpl
 			return reconcile.Result{}, nil
 		}
 	}
-	// if no namespace was to be deleted, then we can remove the finalizer and we're done
+	// if no namespace was to be deleted, then we can proceed with the cluster resource quotas associated with the user
+	quotas := quotav1.ClusterResourceQuotaList{}
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: nsTmplSet.Name} // filter on the user's resources only
+	if err = r.client.List(context.TODO(), &quotas, client.MatchingLabels(labels)); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list cluster resource quotas for user '%s'", nsTmplSet.Name)
+	}
+	log.Info("listed cluster resource quotas to delete", "count", len(quotas.Items))
+	for _, quota := range quotas.Items {
+		// ignore cluster resource quota that are already flagged for deletion
+		if quota.DeletionTimestamp != nil {
+			continue
+		}
+		log.Info("deleting cluster resource quota", "name", quota.Name)
+		if err := r.client.Delete(context.TODO(), &quota); err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete cluster resource quota '%s'", quota.Name)
+		}
+		// stop there for now. Will reconcile again for the next cluster resource quota (if any exists)
+		return reconcile.Result{}, nil
+	}
+
+	// if nothing was to be deleted, then we can remove the finalizer and we're done
 	logger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
 	util.RemoveFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
 	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {

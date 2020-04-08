@@ -1004,7 +1004,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withDeletionTs())
 		devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
-		r, req, c := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
+		r, c := prepareController(t, nsTmplSet, devNS, codeNS)
 		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 			if obj, ok := obj.(*corev1.Namespace); ok {
 				// mark namespaces as deleted...
@@ -1017,55 +1017,134 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		}
 
 		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
+			// given
+			req := newReconcileRequest(namespaceName, username)
+
 			// when a first reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
 			_, err := r.Reconcile(req)
 
 			// then
 			require.NoError(t, err)
 			// get the first namespace and check its deletion timestamp
-			firstNS := corev1.Namespace{}
 			firstNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[0].Type)
-			err = r.client.Get(context.TODO(), types.NamespacedName{
-				Name: firstNSName,
-			}, &firstNS)
-			require.NoError(t, err)
-			assert.NotNil(t, firstNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", firstNSName)
+			AssertThatNamespace(t, firstNSName, r.client).HasDeletionTimestamp()
 			// get the NSTemplateSet resource again and check its status
 			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
-				HasFinalizer(). // the finalizer should NOt have been removed yet
+				HasFinalizer(). // the finalizer should NOT have been removed yet
 				HasConditions(Terminating())
 
 			t.Run("reconcile after first user namespace deletion", func(t *testing.T) {
-				// given a second reconcile loop was triggered (because a user namespace was deleted)
-				_, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
-				// when
+				// given
+				req := newReconcileRequest(namespaceName, username)
+
+				// when a second reconcile loop was triggered (because a user namespace was deleted)
 				_, err := r.Reconcile(req)
+
 				// then
 				require.NoError(t, err)
 				// get the second namespace and check its deletion timestamp
-				secondNS := corev1.Namespace{}
 				secondtNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[1].Type)
-				err = r.client.Get(context.TODO(), types.NamespacedName{
-					Name: secondtNSName,
-				}, &secondNS)
-				require.NoError(t, err)
-				assert.NotNil(t, secondNS.GetDeletionTimestamp(), "expected a deletion timestamp on '%s' namespace", secondtNSName)
+				AssertThatNamespace(t, secondtNSName, r.client).HasDeletionTimestamp()
 				// get the NSTemplateSet resource again and check its finalizers and status
 				AssertThatNSTemplateSet(t, namespaceName, username, r.client).
 					HasFinalizer(). // the finalizer should not have been removed either
 					HasConditions(Terminating())
 
 				t.Run("reconcile after second user namespace deletion", func(t *testing.T) {
-					// given a second reconcile loop was triggered (because a user namespace was deleted)
-					_, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
+					// given
+					req := newReconcileRequest(namespaceName, username)
+
 					// when
 					_, err := r.Reconcile(req)
+
 					// then
 					require.NoError(t, err)
 					// get the NSTemplateSet resource again and check its finalizers and status
 					AssertThatNSTemplateSet(t, namespaceName, username, r.client).
 						DoesNotHaveFinalizer(). // the finalizer should have been removed now
 						HasConditions(Terminating())
+				})
+			})
+		})
+	})
+
+	t.Run("with cluster resources and 2 user namespaces to delete", func(t *testing.T) {
+		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withDeletionTs())
+		crq := newClusterResourceQuota(username, "basic")
+		devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
+		codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
+		r, c := prepareController(t, nsTmplSet, crq, devNS, codeNS)
+		c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				// mark namespaces as deleted...
+				deletionTS := metav1.NewTime(time.Now())
+				obj.SetDeletionTimestamp(&deletionTS)
+				// ... but replace them in the fake client cache yet instead of deleting them
+				return c.Client.Update(ctx, obj)
+			}
+			return c.Client.Delete(ctx, obj, opts...)
+		}
+
+		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
+			// given
+			req := newReconcileRequest(namespaceName, username)
+
+			// when a first reconcile loop was triggered (because a cluster resource quota was deleted)
+			_, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			// get the first namespace and check its deletion timestamp
+			firstNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[0].Type)
+			AssertThatNamespace(t, firstNSName, r.client).HasDeletionTimestamp()
+			// get the NSTemplateSet resource again and check its status
+			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+				HasFinalizer(). // the finalizer should NOT have been removed yet
+				HasConditions(Terminating())
+
+			t.Run("reconcile after first user namespace deletion", func(t *testing.T) {
+				// given
+				req := newReconcileRequest(namespaceName, username)
+
+				// when a second reconcile loop was triggered (because a user namespace was deleted)
+				_, err := r.Reconcile(req)
+
+				// then
+				require.NoError(t, err)
+				// get the second namespace and check its deletion timestamp
+				secondtNSName := fmt.Sprintf("%s-%s", username, nsTmplSet.Spec.Namespaces[1].Type)
+				AssertThatNamespace(t, secondtNSName, r.client).HasDeletionTimestamp()
+				// get the NSTemplateSet resource again and check its finalizers and status
+				AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+					HasFinalizer(). // the finalizer should not have been removed either
+					HasConditions(Terminating())
+
+				t.Run("reconcile after second user namespace deletion", func(t *testing.T) {
+					// given a third reconcile loop was triggered (because a user namespace was deleted)
+					req := newReconcileRequest(namespaceName, username)
+
+					// when
+					_, err := r.Reconcile(req)
+
+					// then
+					require.NoError(t, err)
+					AssertThatCluster(t, r.client).HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
+
+					t.Run("reconcile after cluster resource quota deletion", func(t *testing.T) {
+						// given
+						req := newReconcileRequest(namespaceName, username)
+
+						// when a first reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
+						_, err := r.Reconcile(req)
+
+						// then
+						require.NoError(t, err)
+						// get the NSTemplateSet resource again and check its finalizers and status
+						AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+							DoesNotHaveFinalizer(). // the finalizer should have been removed now
+							HasConditions(Terminating())
+					})
 				})
 			})
 		})
@@ -1237,6 +1316,7 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 				"toolchain.dev.openshift.com/tier":     tier,
+				"toolchain.dev.openshift.com/owner":    username,
 			},
 			Annotations: map[string]string{},
 			Name:        "for-" + username,
@@ -1297,8 +1377,9 @@ var (
   kind: Namespace
   metadata:
     labels:
-      provider: codeready-toolchain
-      project: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
+      toolchain.dev.openshift.com/project: codeready-toolchain
+      toolchain.dev.openshift.com/owner: ${USERNAME}
     name: ${USERNAME}-nsType
 `
 	rb test.TemplateObject = `
@@ -1306,8 +1387,9 @@ var (
   kind: RoleBinding
   metadata:
     labels:
-      provider: codeready-toolchain
-      app: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
+      toolchain.dev.openshift.com/app: codeready-toolchain
+      toolchain.dev.openshift.com/owner: ${USERNAME}
     name: user-edit
     namespace: ${USERNAME}-nsType
   roleRef:
@@ -1323,7 +1405,8 @@ var (
   kind: Role
   metadata:
     labels:
-      provider: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
+      toolchain.dev.openshift.com/owner: ${USERNAME}
     name: toolchain-dev-edit
     namespace: ${USERNAME}-nsType
   rules:
@@ -1347,6 +1430,7 @@ var (
     labels:
       toolchain.dev.openshift.com/provider: codeready-toolchain
       toolchain.dev.openshift.com/tier: advanced
+      toolchain.dev.openshift.com/owner: ${USERNAME}
     name: for-${USERNAME}
   spec:
     quota:
@@ -1365,6 +1449,7 @@ var (
     labels:
       toolchain.dev.openshift.com/provider: codeready-toolchain
       toolchain.dev.openshift.com/tier: basic
+      toolchain.dev.openshift.com/owner: ${USERNAME}
     name: for-${USERNAME}
   spec:
     quota:

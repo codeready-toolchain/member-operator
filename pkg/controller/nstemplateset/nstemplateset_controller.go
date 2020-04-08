@@ -261,7 +261,7 @@ func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, ns
 
 	}
 
-	err = tmplProcessor.Apply(objs)
+	_, err = tmplProcessor.Apply(objs)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tcNamespace.Type)
 	}
@@ -311,7 +311,8 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		acc.SetLabels(labels)
 	}
 
-	err = tmplProcessor.Apply(objs)
+	_, err = tmplProcessor.Apply(objs)
+
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}

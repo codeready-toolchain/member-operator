@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/rbac/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -308,7 +309,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning())
+				HasConditions(Provisioning("provisioning the '-dev' namespace"))
 			AssertThatNamespace(t, username+"-dev", r.client).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -332,7 +333,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning())
+				HasConditions(Provisioning("provisioning the '-code' namespace"))
 			AssertThatNamespace(t, username+"-code", r.client).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -356,7 +357,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning())
+				HasConditions(Provisioning("provisioning the '-dev' namespace"))
 			AssertThatNamespace(t, username+"-dev", fakeClient).
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
@@ -413,12 +414,31 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withClusterResources())
 
-		t.Run("status provisioned after creating cluster resources", func(t *testing.T) {
+		t.Run("status provisioning after creating cluster resources", func(t *testing.T) {
 			// given
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+
+			// when
+			res, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+				HasFinalizer().
+				HasConditions(Provisioning("provisioning cluster resources"))
+			AssertThatCluster(t, fakeClient).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+		})
+
+		t.Run("status provisioned after all resources", func(t *testing.T) {
+			// given
+			// create cluster resource quotas
+			crq := newClusterResourceQuota(username, "basic")
 			// create namespaces (and assume they are complete since they have the expected revision number)
 			devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 			codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
-			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS)
 
 			// when
 			res, err := r.Reconcile(req)
@@ -1222,7 +1242,12 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 			Name:        "for-" + username,
 		},
 		Spec: quotav1.ClusterResourceQuotaSpec{
-			Quota: corev1.ResourceQuotaSpec{},
+			Quota: corev1.ResourceQuotaSpec{
+				Hard: corev1.ResourceList{
+					"limits.cpu":    resource.MustParse("1750m"),
+					"limits.memory": resource.MustParse("7Gi"),
+				},
+			},
 			Selector: quotav1.ClusterResourceQuotaSelector{
 				AnnotationSelector: map[string]string{
 					"openshift.io/requester": username,
@@ -1323,7 +1348,7 @@ var (
       toolchain.dev.openshift.com/provider: codeready-toolchain
       toolchain.dev.openshift.com/tier: advanced
     name: for-${USERNAME}
-    spec:
+  spec:
     quota:
       hard:
         limits.cpu: 1750m
@@ -1341,7 +1366,7 @@ var (
       toolchain.dev.openshift.com/provider: codeready-toolchain
       toolchain.dev.openshift.com/tier: basic
     name: for-${USERNAME}
-    spec:
+  spec:
     quota:
       hard:
         limits.cpu: 1750m

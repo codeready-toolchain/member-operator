@@ -3,12 +3,15 @@ package test
 import (
 	"context"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,6 +73,12 @@ func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object) *Names
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
 	require.NoError(a.t, err)
+
+	// check for toolchain.dev.openshift.com/provider label
+	metaObj, _ := meta.Accessor(obj)
+	labels := metaObj.GetLabels()
+	assert.Equal(a.t, labels[toolchainv1alpha1.ProviderLabelKey], toolchainv1alpha1.ProviderLabelValue)
+
 	return a
 }
 

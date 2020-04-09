@@ -560,7 +560,7 @@ func (r *NSTemplateSetReconciler) setStatusNamespaceProvisionFailed(nsTmplSet *t
 		})
 }
 
-func (r *NSTemplateSetReconciler) setStatusClusteResourcesProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *NSTemplateSetReconciler) setStatusClusterResourcesProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{

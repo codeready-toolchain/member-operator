@@ -251,6 +251,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		}
 		labels[toolchainv1alpha1.OwnerLabelKey] = nsTmplSet.GetName()
 		labels[toolchainv1alpha1.TypeLabelKey] = ClusterResources
+		labels[toolchainv1alpha1.RevisionLabelKey] = clusterResources.Revision
 		labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
 		acc.SetLabels(labels)
 

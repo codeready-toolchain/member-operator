@@ -396,7 +396,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
 
-	log.Info("namespace provisioned with required resources", "tier", nsTmplSet.Spec.TierName, "namespace", tcNamespace)
+	logger.Info("namespace provisioned with required resources", "tier", nsTmplSet.Spec.TierName, "namespace", tcNamespace)
 
 	// TODO add validation for other objects
 	return nil

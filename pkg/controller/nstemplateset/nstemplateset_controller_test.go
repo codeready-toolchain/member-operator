@@ -1435,8 +1435,8 @@ var (
   spec:
     quota:
       hard:
-        limits.cpu: 1750m
-        limits.memory: 7Gi
+        limits.cpu: 2000m
+        limits.memory: 10Gi
     selector:
       annotations:
         openshift.io/requester: ${USERNAME}

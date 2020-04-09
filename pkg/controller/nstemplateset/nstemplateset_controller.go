@@ -228,7 +228,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
 	}
 	if tmpl == nil {
-		log.Info("no cluster resources template to apply")
+		logger.Info("no cluster resources template to apply")
 		return false, nil
 	}
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)

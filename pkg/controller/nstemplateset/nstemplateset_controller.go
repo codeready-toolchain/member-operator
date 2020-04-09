@@ -235,7 +235,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 	params := map[string]string{"USERNAME": nsTmplSet.GetName()}
 	objs, err := tmplProcessor.Process(tmpl, params)
 	if err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to process template with cluster resources")
 	}
 
 	for _, rawObj := range objs {

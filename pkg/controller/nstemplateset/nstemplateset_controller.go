@@ -253,6 +253,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		labels[toolchainv1alpha1.TypeLabelKey] = ClusterResources
 		labels[toolchainv1alpha1.RevisionLabelKey] = clusterResources.Revision
 		labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 		acc.SetLabels(labels)
 
 		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources

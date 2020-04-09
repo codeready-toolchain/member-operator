@@ -225,7 +225,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 
 	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, ClusterResources)
 	if err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to to retrieve template for the cluster resources")
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusteResourcesProvisionFailed, err, "failed to retrieve template with cluster resources")
 	}
 	if tmpl == nil {
 		logger.Info("no cluster resources template to apply")

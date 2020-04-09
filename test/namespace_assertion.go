@@ -17,8 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type ResourceCriterion func(obj runtime.Object) bool
-
 type NamespaceAssertion struct {
 	namespace      *corev1.Namespace
 	client         client.Client

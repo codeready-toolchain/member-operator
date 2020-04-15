@@ -646,7 +646,7 @@ func (r *NSTemplateSetReconciler) setStatusTerminatingFailed(nsTmplSet *toolchai
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.NSTemplateSetTerminatingReason,
+			Reason:  toolchainv1alpha1.NSTemplateSetTerminatingFailedReason,
 			Message: message,
 		})
 }

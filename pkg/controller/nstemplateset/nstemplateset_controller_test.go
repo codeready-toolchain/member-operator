@@ -287,6 +287,51 @@ func TestGetNamespaceName(t *testing.T) {
 
 }
 
+func TestReconcileAddFinalizer(t *testing.T) {
+
+	logf.SetLogger(logf.ZapLogger(true))
+	// given
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+
+	t.Run("add a finalizer when missing", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer())
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+
+			// when
+			res, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+				HasFinalizer()
+		})
+
+		t.Run("failure", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer())
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+				fmt.Printf("updating object of type '%T'\n", obj)
+				return fmt.Errorf("mock error")
+			}
+
+			// when
+			res, err := r.Reconcile(req)
+
+			// then
+			require.Error(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+				DoesNotHaveFinalizer()
+		})
+	})
+
+}
+
 func TestReconcileProvisionOK(t *testing.T) {
 
 	logf.SetLogger(logf.ZapLogger(true))
@@ -1202,6 +1247,26 @@ func TestUpdateStatus(t *testing.T) {
 			assert.Equal(t, "failed to create namespace: oopsy woopsy", err.Error())
 		})
 	})
+
+	t.Run("status update failures", func(t *testing.T) {
+
+		t.Run("failed to update status during deletion", func(t *testing.T) {
+			// given an NSTemplateSet resource which is being deleted and whose finalizer was already removed
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer(), withDeletionTs(), withClusterResources(), withNamespaces("dev", "code"))
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+				return fmt.Errorf("status update error")
+			}
+			// when a reconcile loop is triggered
+			_, err := r.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+				DoesNotHaveFinalizer(). // finalizer was not added and nothing else was done
+				HasConditions(Provisioned())
+		})
+	})
 }
 func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
@@ -1437,6 +1502,20 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			assert.Empty(t, updateNSTemplateSet.Finalizers)
 		})
 	})
+
+	t.Run("delete when there is no finalizer", func(t *testing.T) {
+		// given an NSTemplateSet resource which is being deleted and whose finalizer was already removed
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer(), withDeletionTs(), withClusterResources(), withNamespaces("dev", "code"))
+		r, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
+
+		// when a reconcile loop is triggered
+		_, err := r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
+	})
 }
 
 func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*NSTemplateSetReconciler, reconcile.Request, *test.FakeClient) {
@@ -1522,6 +1601,12 @@ func newNSTmplSet(namespaceName, name, tier string, options ...nsTmplSetOption) 
 }
 
 type nsTmplSetOption func(*toolchainv1alpha1.NSTemplateSet)
+
+func withoutFinalizer() nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Finalizers = []string{}
+	}
+}
 
 func withDeletionTs() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {

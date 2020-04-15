@@ -53,7 +53,7 @@ func TestFindNamespace(t *testing.T) {
 		assert.Equal(t, typeName, namespace.GetLabels()["toolchain.dev.openshift.com/type"])
 	})
 
-	t.Run("not_found", func(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
 		typeName := "stage"
 		_, found := findNamespace(namespaces, typeName)
 		assert.False(t, found)
@@ -315,6 +315,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasNoLabel("toolchain.dev.openshift.com/revision").
 				HasNoLabel("toolchain.dev.openshift.com/tier")
 		})
@@ -339,8 +340,10 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "code").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasNoLabel("toolchain.dev.openshift.com/revision").
 				HasNoLabel("toolchain.dev.openshift.com/tier")
+
 		})
 
 		t.Run("inner resources created for existing namespace", func(t *testing.T) {
@@ -363,6 +366,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 				HasLabel("toolchain.dev.openshift.com/tier", "basic").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("user-edit", &authv1.RoleBinding{})
 		})
 
@@ -388,12 +392,14 @@ func TestReconcileProvisionOK(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel("toolchain.dev.openshift.com/tier", "basic").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 			AssertThatNamespace(t, username+"-code", fakeClient).
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "code").
 				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel("toolchain.dev.openshift.com/tier", "basic").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 		})
 
 		t.Run("no NSTemplateSet available", func(t *testing.T) {
@@ -493,6 +499,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // not upgraded yet
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}) // role has been removed
 
 				// when
@@ -509,6 +516,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // upgraded
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{})
 
 					// when
@@ -545,6 +553,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
 					HasNoResource("toolchain-dev-edit", &rbacv1.Role{}) // role does not exist
 
@@ -595,6 +604,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // upgraded
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("toolchain-dev-edit", &rbacv1.Role{}).
 					HasResource("user-edit", &authv1.RoleBinding{})
 
@@ -616,6 +626,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}) // role has been removed
 			})
 
@@ -645,6 +656,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
 					HasNoResource("toolchain-dev-edit", &rbacv1.Role{}) // role does not exist
 
@@ -666,6 +678,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
 					HasNoResource("toolchain-dev-edit", &rbacv1.Role{}) // role does not exist
 
@@ -695,6 +708,7 @@ func TestReconcileUpdate(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
+				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 				HasLabel("toolchain.dev.openshift.com/tier", "fail") // the unknown tier that caused the error
 		})
 
@@ -741,6 +755,7 @@ func TestReconcileUpdate(t *testing.T) {
 						HasLabel("toolchain.dev.openshift.com/owner", username).
 						HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 						HasLabel("toolchain.dev.openshift.com/type", "dev").
+						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 						HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded yet
 
 					// when reconciling again
@@ -757,6 +772,7 @@ func TestReconcileUpdate(t *testing.T) {
 						HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 						HasLabel("toolchain.dev.openshift.com/type", "dev").
 						HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // upgraded
+						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 						HasResource("user-edit", &authv1.RoleBinding{}).
 						HasResource("toolchain-dev-edit", &rbacv1.Role{})
 
@@ -815,36 +831,6 @@ func TestReconcileUpdate(t *testing.T) {
 					nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
 					advancedCRQ := newClusterResourceQuota(username, "advanced")
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ)
-					// fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-					// 	fmt.Printf("updating object of type '%T'\n", obj)
-					// 	if obj, ok := obj.(*unstructured.Unstructured); ok && obj.GetName() == "for-"+username {
-					// 		// make sure the object has the same generation as the existing one, ie, it was not updated
-					// 		obj.SetGeneration(1)
-					// 	}
-					// 	return fakeClient.Client.Update(ctx, obj, opts...)
-					// }
-					// fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-					// 	if obj, ok := obj.(*unstructured.Unstructured); ok && obj.GetName() == "redundant-"+username {
-					// 		// make sure the object is marked as deleted so it won't be listed again (see below)
-					// 		redundantBasicCRQ.DeletionTimestamp = &metav1.Time{}
-					// 	}
-					// 	return fakeClient.Client.Delete(ctx, obj, opts...)
-					// }
-					// fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
-					// 	// because the fake client does not support such a type of list :(
-					// 	if list, ok := list.(*unstructured.UnstructuredList); ok {
-					// 		if redundantBasicCRQ.DeletionTimestamp == nil {
-					// 			basicCRQObj, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(redundantBasicCRQ)
-					// 			list.Items = []unstructured.Unstructured{
-					// 				{
-					// 					Object: basicCRQObj,
-					// 				},
-					// 			}
-					// 		}
-					// 		return nil
-					// 	}
-					// 	return fakeClient.Client.List(ctx, list, opts...)
-					// }
 
 					// when
 					_, err := r.Reconcile(req)
@@ -898,12 +884,14 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 					HasLabel("toolchain.dev.openshift.com/type", "code").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasLabel("toolchain.dev.openshift.com/tier", "basic") // unchanged, namespace was not deleted
 				AssertThatNamespace(t, username+"-dev", r.client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded
 			})
 
@@ -939,6 +927,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced") // unchanged
 			})
 
@@ -1346,16 +1335,6 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withRevision("abcde11"))
 		r, _ := prepareController(t, nsTmplSet, crq, devNS, codeNS)
-		// c.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-		// 	if obj, ok := obj.(*corev1.Namespace); ok {
-		// 		// mark namespaces as deleted...
-		// 		deletionTS := metav1.NewTime(time.Now())
-		// 		obj.SetDeletionTimestamp(&deletionTS)
-		// 		// ... but replace them in the fake client cache yet instead of deleting them
-		// 		return c.Client.Update(ctx, obj)
-		// 	}
-		// 	return c.Client.Delete(ctx, obj, opts...)
-		// }
 
 		t.Run("reconcile after nstemplateset deletion", func(t *testing.T) {
 			// given
@@ -1581,9 +1560,10 @@ func newNamespace(tier, username, typeName string, options ...namespaceOption) *
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s-%s", username, typeName),
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/tier":  tier,
-				"toolchain.dev.openshift.com/owner": username,
-				"toolchain.dev.openshift.com/type":  typeName,
+				"toolchain.dev.openshift.com/tier":     tier,
+				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/type":     typeName,
+				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 			},
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -1607,6 +1587,9 @@ func newRoleBinding(namespace, name string) *authv1.RoleBinding { //nolint: unpa
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+			},
 		},
 	}
 }
@@ -1616,6 +1599,9 @@ func newRole(namespace, name string) *rbacv1.Role {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
+			Labels: map[string]string{
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+			},
 		},
 	}
 }
@@ -1686,16 +1672,12 @@ var (
 - apiVersion: v1
   kind: Namespace
   metadata:
-    labels:
-      toolchain.dev.openshift.com/provider: codeready-toolchain
-    name: ${USERNAME}-nsType`
-
+    name: ${USERNAME}-nsType
+`
 	rb test.TemplateObject = `
 - apiVersion: authorization.openshift.io/v1
   kind: RoleBinding
   metadata:
-    labels:
-      toolchain.dev.openshift.com/provider: codeready-toolchain
     name: user-edit
     namespace: ${USERNAME}-nsType
   roleRef:
@@ -1710,8 +1692,6 @@ var (
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: Role
   metadata:
-    labels:
-      toolchain.dev.openshift.com/provider: codeready-toolchain
     name: toolchain-dev-edit
     namespace: ${USERNAME}-nsType
   rules:
@@ -1732,8 +1712,6 @@ var (
 - apiVersion: quota.openshift.io/v1
   kind: ClusterResourceQuota
   metadata:
-    labels:
-    toolchain.dev.openshift.com/provider: codeready-toolchain
     name: for-${USERNAME}
   spec:
     quota:

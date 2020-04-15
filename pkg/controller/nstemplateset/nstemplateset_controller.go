@@ -133,7 +133,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 	return reconcile.Result{}, r.setStatusReady(nsTmplSet)
 }
 
-// setFinalizers sets the finalizers for NSTemplateSet
+// addFinalizer sets the finalizers for NSTemplateSet
 func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
@@ -325,6 +325,7 @@ func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet 
 	if err := r.setStatusProvisioning(nsTmplSet, fmt.Sprintf("provisioning the '-%s' namespace", tcNamespace.Type)); err != nil {
 		return err
 	}
+	// create namespace before created inner resources because creating the namespace may take some time
 	if userNamespace == nil {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tcNamespace)
 	}
@@ -357,6 +358,8 @@ func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, ns
 		}
 		labels[toolchainv1alpha1.OwnerLabelKey] = nsTmplSet.GetName()
 		labels[toolchainv1alpha1.TypeLabelKey] = tcNamespace.Type
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+
 		acc.SetLabels(labels)
 
 		// Note: we don't see an owner reference between the NSTemplateSet (namespaced resource) and the namespace (cluster-wide resource)
@@ -393,7 +396,22 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		}
 	}
 
-	_, err = template.NewProcessor(r.client, r.scheme).Apply(newObjs)
+	tmplProcessor := template.NewProcessor(r.client, r.scheme)
+	for _, rawObj := range newObjs {
+		acc, err := meta.Accessor(rawObj.Object)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "unable to get meta.Interface of the object '%s' in the namespace '%s'", rawObj.Raw, nsName)
+		}
+		// add the "toolchain.dev.openshift.com/provider: codeready-toolchain" label on all objects
+		labels := acc.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+		acc.SetLabels(labels)
+	}
+	_, err = tmplProcessor.Apply(newObjs)
+
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
@@ -401,6 +419,8 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
 	}
+
+	// Adding labels indicating that the namespace is up-to-date with revision/tier
 	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
 	if err := r.client.Update(context.TODO(), namespace); err != nil {

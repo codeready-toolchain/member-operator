@@ -23,6 +23,9 @@ const (
 // The typeName can be a namespace type (`code`, `dev`, etc.) or `clusterResources` for
 // the (optional) cluster resources
 func getTemplateFromHost(tierName, typeName string) (*templatev1.Template, error) {
+	if tierName == "" {
+		return nil, nil
+	}
 	templates, err := getTemplatesFromHost(cluster.GetHostCluster, tierName)
 	if err != nil {
 		return nil, err

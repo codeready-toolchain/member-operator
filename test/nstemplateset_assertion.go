@@ -111,11 +111,11 @@ func UnableToProvisionNamespace(msg string) toolchainv1alpha1.Condition {
 	}
 }
 
-func UnableToProvisionNamespace(msg string) toolchainv1alpha1.Condition {
+func UnableToTerminate(msg string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
-		Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
+		Reason:  toolchainv1alpha1.NSTemplateSetTerminatingFailedReason,
 		Message: msg,
 	}
 }

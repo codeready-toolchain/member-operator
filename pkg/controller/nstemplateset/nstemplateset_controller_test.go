@@ -1251,20 +1251,21 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("status update failures", func(t *testing.T) {
 
 		t.Run("failed to update status during deletion", func(t *testing.T) {
-			// given an NSTemplateSet resource which is being deleted and whose finalizer was already removed
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer(), withDeletionTs(), withClusterResources(), withNamespaces("dev", "code"))
+			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withClusterResources(), withNamespaces("dev", "code"))
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-				return fmt.Errorf("status update error")
+				return fmt.Errorf("status update mock error")
 			}
 			// when a reconcile loop is triggered
 			_, err := r.Reconcile(req)
 
 			// then
-			require.NoError(t, err)
+			require.Error(t, err)
+			assert.Equal(t, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet: status update mock error", err.Error())
 			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
-				DoesNotHaveFinalizer(). // finalizer was not added and nothing else was done
-				HasConditions(Provisioned())
+				HasFinalizer(). // finalizer was not added and nothing else was done
+				HasConditions() // no condition was set to status update error
 		})
 	})
 }
@@ -1515,6 +1516,32 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, r.client).
 			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
+	})
+
+	t.Run("failures", func(t *testing.T) {
+
+		t.Run("failed to fetch namespaces", func(t *testing.T) {
+			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withNamespaces("dev", "code"))
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+				if _, ok := list.(*corev1.NamespaceList); ok {
+					return fmt.Errorf("mock error")
+				}
+				return fakeClient.Client.List(ctx, list, opts...)
+			}
+
+			// when a reconcile loop is triggered
+			_, err := r.Reconcile(req)
+
+			// then
+			require.Error(t, err)
+			assert.Equal(t, "failed to list namespace with label owner 'johnsmith': mock error", err.Error())
+			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+				HasFinalizer(). // finalizer was not added and nothing else was done
+				HasConditions(UnableToTerminate("mock error"))
+		})
+
 	})
 }
 

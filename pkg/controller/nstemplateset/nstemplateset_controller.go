@@ -233,22 +233,22 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to retrieve template for the cluster resources")
 	}
-	if err := r.setStatusUpdating(nsTmplSet); err != nil {
-		return false, err
-	}
 
 	// let's look for existing cluster resource quotas to determine the current tier
 	crqs := quotav1.ClusterResourceQuotaList{}
 	if err := r.client.List(context.TODO(), &crqs); err != nil {
 		logger.Error(err, "failed to list existing cluster resource quotas")
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to list existing cluster resource quotas")
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to list existing cluster resource quotas")
 	} else if len(crqs.Items) > 0 {
 		// only if necessary
 		crqMeta, err := meta.Accessor(&(crqs.Items[0]))
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant cluster resources")
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to delete redundant cluster resources")
 		}
-		if currentTier, exists := crqMeta.GetLabels()[toolchainv1alpha1.TierLabelKey]; exists {
+		if currentTier, exists := crqMeta.GetLabels()[toolchainv1alpha1.TierLabelKey]; exists && currentTier != nsTmplSet.Spec.TierName {
+			if err := r.setStatusUpdating(nsTmplSet); err != nil {
+				return false, err
+			}
 			if err := r.deleteRedundantObjects(logger, currentTier, ClusterResources, username, newObjs); err != nil {
 				logger.Error(err, "failed to delete redundant cluster resources")
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant cluster resources")

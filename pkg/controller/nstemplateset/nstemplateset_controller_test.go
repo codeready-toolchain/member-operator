@@ -1076,7 +1076,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(UpdateFailed("unable to list cluster resources"))
+			HasConditions(UnableToProvisionClusterResources("unable to list cluster resources"))
 	})
 
 	t.Run("fail to get nstmplset", func(t *testing.T) {

@@ -236,6 +236,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 	if err := r.setStatusUpdating(nsTmplSet); err != nil {
 		return false, err
 	}
+
 	// let's look for existing cluster resource quotas to determine the current tier
 	crqs := quotav1.ClusterResourceQuotaList{}
 	if err := r.client.List(context.TODO(), &crqs); err != nil {
@@ -260,6 +261,10 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "invalid element in template for the cluster resources")
 		}
+		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
+		// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
+		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
+		// see https://issues.redhat.com/browse/CRT-429
 
 		// set labels
 		labels := acc.GetLabels()
@@ -273,10 +278,6 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 		acc.SetLabels(labels)
 
-		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
-		// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
-		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
-		// see https://issues.redhat.com/browse/CRT-429
 	}
 
 	if createdOrUpdated, err := template.NewProcessor(r.client, r.scheme).Apply(newObjs); err != nil {

@@ -9,6 +9,7 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/swag v0.19.9 // indirect
 	github.com/gobuffalo/flect v0.2.1 // indirect
+	github.com/golangci/golangci-lint v1.24.0 // indirect
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
 	github.com/operator-framework/operator-sdk v0.16.0

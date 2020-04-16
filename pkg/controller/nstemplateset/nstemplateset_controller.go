@@ -122,11 +122,11 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, nil // wait for cluster resources to be created
 	}
 
-	done, err := r.ensureNamespaces(logger, nsTmplSet)
+	createdOrUpdated, err := r.ensureNamespaces(logger, nsTmplSet)
 	if err != nil {
 		logger.Error(err, "failed to provision user namespaces")
 		return reconcile.Result{}, err
-	} else if !done {
+	} else if createdOrUpdated {
 		return reconcile.Result{}, nil // just wait until namespaces change to "active" phase
 	}
 
@@ -224,8 +224,7 @@ func (r *NSTemplateSetReconciler) fetchNamespaces(username string) ([]corev1.Nam
 }
 
 // ensureClusterResources ensures that the cluster resources exists.
-// Returns `true, nil` if something was created or updated, `false, nil` if nothing changed, `true|false, err` if an
-// error occurred
+// Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
 func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
 	username := nsTmplSet.GetName()
@@ -249,13 +248,18 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 			if err := r.setStatusUpdating(nsTmplSet); err != nil {
 				return false, err
 			}
-			if err := r.deleteRedundantObjects(logger, currentTier, ClusterResources, username, newObjs); err != nil {
+			if deleted, err := r.deleteRedundantObjects(logger, currentTier, ClusterResources, username, newObjs); err != nil {
 				logger.Error(err, "failed to delete redundant cluster resources")
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant cluster resources")
+			} else if deleted {
+				return true, nil // something changed
 			}
 		}
 	}
-
+	if len(newObjs) == 0 {
+		logger.Info("no cluster resources to create or update")
+		return false, nil
+	}
 	for _, rawObj := range newObjs {
 		acc, err := meta.Accessor(rawObj.Object)
 		if err != nil {
@@ -277,9 +281,8 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
 		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 		acc.SetLabels(labels)
-
 	}
-
+	logger.Info("applying cluster resources template", "obj_count", len(newObjs))
 	if createdOrUpdated, err := template.NewProcessor(r.client, r.scheme).Apply(newObjs); err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to create cluster resources")
 	} else if createdOrUpdated {
@@ -290,7 +293,9 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 	return false, nil
 }
 
-func (r *NSTemplateSetReconciler) ensureNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+// ensureNamespaces ensures that all expected namespaces exists and they contain all the expected resources
+// return `true, nil` when something changed, `false, nil` or `false, err` otherwise
+func (r *NSTemplateSetReconciler) ensureNamespaces(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (createdOrUpdated bool, err error) {
 	username := nsTmplSet.GetName()
 	userNamespaces, err := r.fetchNamespaces(username)
 	if err != nil {
@@ -306,24 +311,27 @@ func (r *NSTemplateSetReconciler) ensureNamespaces(logger logr.Logger, nsTmplSet
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete namespace %s", toDeprovision.Name)
 		}
 		logger.Info("deleted namespace as part of NSTemplateSet update", "namespace", toDeprovision.Name)
-		return false, nil
+		return true, nil // something changed
 	}
 
 	// find next namespace for provisioning namespace resource
 	tcNamespace, userNamespace, found := nextNamespaceToProvisionOrUpdate(nsTmplSet, userNamespaces)
 	if !found {
 		logger.Info("no more namespaces to create", "username", nsTmplSet.GetName())
-		return true, nil
+		return false, nil
 	}
 
 	// create namespace resource
-	return false, r.ensureNamespace(logger, nsTmplSet, tcNamespace, userNamespace)
+	return r.ensureNamespace(logger, nsTmplSet, tcNamespace, userNamespace)
 }
 
-func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) error {
-	logger.Info("provisioning namespace", "namespace", tcNamespace.Type, "tier", nsTmplSet.Spec.TierName)
+// ensureNamespace ensures that the namespace exists and that it contains all the expected resources
+// return `true, nil` after the namespace was created, or each time a redundant resource was deleted, or when all resources were created/updated
+// returns `false, nil` or `false, err` otherwise
+func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) (createdOrUpdated bool, err error) {
+	logger.Info("ensuring namespace", "namespace", tcNamespace.Type, "tier", nsTmplSet.Spec.TierName)
 	if err := r.setStatusProvisioning(nsTmplSet, fmt.Sprintf("provisioning the '-%s' namespace", tcNamespace.Type)); err != nil {
-		return err
+		return false, err
 	}
 	// create namespace before created inner resources because creating the namespace may take some time
 	if userNamespace == nil {
@@ -332,23 +340,25 @@ func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet 
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tcNamespace, userNamespace)
 }
 
-func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace) error {
+// ensureNamespaceResource ensures that the namespace exists.
+// Returns `true, nil` something changed, `false, err` if an error occurred
+func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace) (createdOrUpdated bool, err error) {
 	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tcNamespace.Type)
 	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to retrieve template for namespace type '%s'", tcNamespace.Type)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to retrieve template for namespace type '%s'", tcNamespace.Type)
 	}
 	tmplProcessor := template.NewProcessor(r.client, r.scheme)
 	params := map[string]string{"USERNAME": nsTmplSet.GetName()}
 	objs, err := tmplProcessor.Process(tmpl, params, template.RetainNamespaces)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tcNamespace.Type)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tcNamespace.Type)
 	}
 
 	for _, rawObj := range objs {
 		acc, err := meta.Accessor(rawObj.Object)
 		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "invalid element in template for namespace type '%s'", tcNamespace.Type)
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "invalid element in template for namespace type '%s'", tcNamespace.Type)
 		}
 
 		// set labels
@@ -366,33 +376,38 @@ func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, ns
 		// because a namespaced resource cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
 		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
 		// see https://issues.redhat.com/browse/CRT-429
-
 	}
 
-	_, err = tmplProcessor.Apply(objs)
+	createdOrUpdated, err = tmplProcessor.Apply(objs)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tcNamespace.Type)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tcNamespace.Type)
+	} else if createdOrUpdated {
+		logger.Info("namespace provisioned", "namespace", tcNamespace)
+		return true, nil
 	}
-
-	logger.Info("namespace provisioned", "namespace", tcNamespace)
-	return nil
+	return false, nil
 }
 
-func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, namespace *corev1.Namespace) error {
-	logger.Info("creating namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tcNamespace.Type)
+// ensureInnerNamespaceResources ensure that the namespace has the expected resources.
+// returns `true, nil` as soon as a redundant resource was deleted or when expected resources were created/updated
+// returns `false, nil` if nothing changed or `false, err` if an error occurred
+func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, namespace *corev1.Namespace) (createdOrUpdated bool, err error) {
+	logger.Info("ensuring namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tcNamespace.Type)
 	nsName := namespace.GetName()
 	username := nsTmplSet.GetName()
 	newObjs, err := r.getTemplateObjects(nsTmplSet.Spec.TierName, tcNamespace.Type, username, template.RetainAllButNamespaces)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
 
 	if currentTier, exists := namespace.Labels[toolchainv1alpha1.TierLabelKey]; !exists || currentTier != nsTmplSet.Spec.TierName {
 		if err := r.setStatusUpdating(nsTmplSet); err != nil {
-			return err
+			return false, err
 		}
-		if err := r.deleteRedundantObjects(logger, currentTier, tcNamespace.Type, username, newObjs); err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
+		if deleted, err := r.deleteRedundantObjects(logger, currentTier, tcNamespace.Type, username, newObjs); err != nil {
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
+		} else if deleted {
+			return true, nil
 		}
 	}
 
@@ -400,7 +415,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	for _, rawObj := range newObjs {
 		acc, err := meta.Accessor(rawObj.Object)
 		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "unable to get meta.Interface of the object '%s' in the namespace '%s'", rawObj.Raw, nsName)
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "unable to get meta.Interface of the object '%s' in the namespace '%s'", rawObj.Raw, nsName)
 		}
 		// add the "toolchain.dev.openshift.com/provider: codeready-toolchain" label on all objects
 		labels := acc.GetLabels()
@@ -410,10 +425,10 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 		acc.SetLabels(labels)
 	}
-	_, err = tmplProcessor.Apply(newObjs)
-
-	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
+	if createdOrUpdated, err = tmplProcessor.Apply(newObjs); err != nil {
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
+	} else if createdOrUpdated {
+		return true, nil
 	}
 
 	if namespace.Labels == nil {
@@ -424,46 +439,50 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
 
-	logger.Info("namespace provisioned with required resources", "tier", nsTmplSet.Spec.TierName, "namespace", tcNamespace)
+	logger.Info("namespace provisioned with all required resources", "tier", nsTmplSet.Spec.TierName, "namespace", tcNamespace)
 
 	// TODO add validation for other objects
-	return nil
+	return false, nil // nothing changed, no error occurred
 }
 
 // deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
-func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, currentTier, typeName, username string, newObjects []runtime.RawExtension) error {
+// return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
+func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, currentTier, typeName, username string, newObjects []runtime.RawExtension) (bool, error) {
 	currentObjs, err := r.getTemplateObjects(currentTier, typeName, username, template.RetainAllButNamespaces)
 	if err != nil {
-		return errs.Wrapf(err, "failed to retrieve template for tier/type '%s/%s'", currentTier, typeName)
+		return false, errs.Wrapf(err, "failed to retrieve template for tier/type '%s/%s'", currentTier, typeName)
 	}
 	logger.Info("checking redundant objects", "tier", currentTier, "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
 		current, err := meta.Accessor(currentObj.Object)
 		if err != nil {
-			return err
+			return false, err
 		}
 		logger.Info("checking redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
 		for _, newObj := range newObjects {
 			newOb, err := meta.Accessor(newObj.Object)
 			if err != nil {
-				return err
+				return false, err
 			}
 			if current.GetName() == newOb.GetName() &&
 				currentObj.Object.GetObjectKind().GroupVersionKind() == newObj.Object.GetObjectKind().GroupVersionKind() {
 				continue Current
 			}
 		}
-		if err := r.client.Delete(context.TODO(), currentObj.Object); err != nil {
-			return errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", current.GetName(), currentObj.Object.GetObjectKind().GroupVersionKind().Kind, current.GetNamespace())
+		if err := r.client.Delete(context.TODO(), currentObj.Object); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
+			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", current.GetName(), currentObj.Object.GetObjectKind().GroupVersionKind().Kind, current.GetNamespace())
+		} else if errors.IsNotFound(err) {
+			continue // continue to the next object since this one was already deleted
 		}
 		logger.Info("deleted redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and

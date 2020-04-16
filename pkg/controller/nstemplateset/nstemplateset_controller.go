@@ -341,17 +341,13 @@ func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet 
 // ensureNamespaceResource ensures that the namespace exists.
 func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace) error {
 	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tcNamespace.Type)
-	tmpl, err := r.getTemplateContent(nsTmplSet.Spec.TierName, tcNamespace.Type)
-	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to retrieve template for namespace type '%s'", tcNamespace.Type)
-	}
-	tmplProcessor := template.NewProcessor(r.client, r.scheme)
-	params := map[string]string{"USERNAME": nsTmplSet.GetName()}
-	objs, err := tmplProcessor.Process(tmpl, params, template.RetainNamespaces)
+
+	objs, err := r.getTemplateObjects(nsTmplSet.Spec.TierName, tcNamespace.Type, nsTmplSet.GetName(), template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tcNamespace.Type)
 	}
 
+	tmplProcessor := template.NewProcessor(r.client, r.scheme)
 	for _, rawObj := range objs {
 		acc, err := meta.Accessor(rawObj.Object)
 		if err != nil {

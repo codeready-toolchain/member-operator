@@ -220,7 +220,6 @@ func (r *NSTemplateSetReconciler) fetchNamespaces(username string) ([]corev1.Nam
 	if err := r.client.List(context.TODO(), userNamespaceList, client.MatchingLabels(labels)); err != nil {
 		return nil, err
 	}
-	fmt.Printf("listed namespaces: count=%d\n", len(userNamespaceList.Items))
 	return userNamespaceList.Items, nil
 }
 

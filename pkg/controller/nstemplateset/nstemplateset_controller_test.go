@@ -1765,7 +1765,7 @@ func newRoleBinding(tier, namespace, name string) *authv1.RoleBinding { //nolint
 	}
 }
 
-func newRole(tier, namespace, name string) *rbacv1.Role { //notlint: unparam
+func newRole(tier, namespace, name string) *rbacv1.Role { //nolint: unparam
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,

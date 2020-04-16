@@ -242,7 +242,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		// only if necessary
 		crqMeta, err := meta.Accessor(&(crqs.Items[0]))
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to delete redundant cluster resources")
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to get meta info from object %v", crqs.Items[0])
 		}
 		if currentTier, exists := crqMeta.GetLabels()[toolchainv1alpha1.TierLabelKey]; exists && currentTier != nsTmplSet.Spec.TierName {
 			if err := r.setStatusUpdating(nsTmplSet); err != nil {

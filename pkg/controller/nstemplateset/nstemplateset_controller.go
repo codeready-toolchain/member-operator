@@ -393,7 +393,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
 
-	if currentTier, exists := namespace.Labels[toolchainv1alpha1.TierLabelKey]; !exists || currentTier != nsTmplSet.Spec.TierName {
+	if currentTier, exists := namespace.Labels[toolchainv1alpha1.TierLabelKey]; exists && currentTier != nsTmplSet.Spec.TierName {
 		if err := r.setStatusUpdating(nsTmplSet); err != nil {
 			return err
 		}

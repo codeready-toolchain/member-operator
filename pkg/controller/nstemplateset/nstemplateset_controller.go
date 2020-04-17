@@ -467,7 +467,7 @@ Current:
 		}
 		logger.Info("deleted redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
 		if returnWhenDeleted {
-		return true, nil
+			return true, nil
 		}
 		deleted = true
 	}

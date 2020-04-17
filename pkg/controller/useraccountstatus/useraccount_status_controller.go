@@ -73,7 +73,7 @@ type ReconcileUserAccountStatus struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling UserAccountStatus")
+	reqLogger.Info("reconciling UserAccountStatus")
 
 	// Fetch the UserAccount object
 	userAcc := &toolchainv1alpha1.UserAccount{}

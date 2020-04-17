@@ -440,7 +440,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 // deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, returnWhenDeleted bool, currentTier, typeName, username string, newObjects []runtime.RawExtension) (bool, error) {
+func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, deleteOnlyOne bool, currentTier, typeName, username string, newObjects []runtime.RawExtension) (bool, error) {
 	deleted := false
 	currentObjs, err := r.getTemplateObjects(currentTier, typeName, username, template.RetainAllButNamespaces)
 	if err != nil {
@@ -470,7 +470,7 @@ Current:
 			continue // continue to the next object since this one was already deleted
 		}
 		logger.Info("deleted redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
-		if returnWhenDeleted {
+		if deleteOnlyOne {
 			return true, nil
 		}
 		deleted = true

@@ -525,7 +525,7 @@ func TestReconcileUpdate(t *testing.T) {
 				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
 				// create namespace (and assume it is complete since it has the expected revision number)
 				devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
-				ro := newRole(devNS.Name, "toolchain-dev-edit")
+				ro := newRole(devNS.Name, "rbac-edit")
 				rb := newRoleBinding(devNS.Name, "user-edit")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, ro, rb)
 				err := fakeClient.Update(context.TODO(), nsTmplSet)
@@ -546,7 +546,8 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // not upgraded yet
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasResource("user-edit", &authv1.RoleBinding{}) // role has been removed
+					HasResource("user-edit", &authv1.RoleBinding{}).
+					HasNoResource("user-rbac-edit", &authv1.RoleBinding{})
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{}, WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 
@@ -565,7 +566,8 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // upgraded
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasResource("user-edit", &authv1.RoleBinding{})
+					HasResource("user-edit", &authv1.RoleBinding{}).
+					HasResource("user-rbac-edit", &authv1.RoleBinding{})
 
 					// when - should check if everything is OK and set status to provisioned
 				_, err = r.Reconcile(req)
@@ -583,9 +585,10 @@ func TestReconcileUpdate(t *testing.T) {
 				// create namespace (and assume it is complete since it has the expected revision number)
 				devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 				rb := newRoleBinding(devNS.Name, "user-edit")
-				ro := newRole(devNS.Name, "toolchain-dev-edit")
+				rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
+				ro := newRole(devNS.Name, "rbac-edit")
 				crq := newClusterResourceQuota(username, "advanced")
-				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, rb, ro, crq)
+				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, rb, rbacRb, ro, crq)
 
 				// when - should remove ClusterResourceQuota that is missing in basic tier
 				_, err := r.Reconcile(req)
@@ -614,7 +617,8 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
-					HasNoResource("toolchain-dev-edit", &rbacv1.Role{}) // role does not exist
+					HasNoResource("rbac-edit", &rbacv1.Role{}). // role does not exist
+					HasNoResource("user-rbac-edit", &authv1.RoleBinding{})
 
 				// when - should check if everything is OK and set status to provisioned
 				_, err = r.Reconcile(req)
@@ -636,7 +640,7 @@ func TestReconcileUpdate(t *testing.T) {
 				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
 				// create namespace (and assume it is complete since it has the expected revision number)
 				devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
-				ro := newRole(devNS.Name, "toolchain-dev-edit")
+				ro := newRole(devNS.Name, "rbac-edit")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, ro)
 
 				err := fakeClient.Update(context.TODO(), nsTmplSet)
@@ -660,7 +664,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // not upgraded yet
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasResource("toolchain-dev-edit", &rbacv1.Role{})
+					HasResource("rbac-edit", &rbacv1.Role{})
 
 				// when - should upgrade the namespace
 				_, err = r.Reconcile(req)
@@ -709,7 +713,7 @@ func TestReconcileUpdate(t *testing.T) {
 				// create namespace (and assume it is complete since it has the expected revision number)
 				devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 				rb := newRoleBinding(devNS.Name, "user-edit")
-				ro := newRole(devNS.Name, "toolchain-dev-edit")
+				ro := newRole(devNS.Name, "rbac-edit")
 				crq := newClusterResourceQuota(username, "advanced")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, rb, ro, crq)
 
@@ -731,7 +735,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // not "downgraded" yet
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
-					HasResource("toolchain-dev-edit", &rbacv1.Role{}) // role still exists
+					HasResource("rbac-edit", &rbacv1.Role{}) // role still exists
 
 				// when - should downgrade the namespace
 				_, err = r.Reconcile(req)
@@ -749,7 +753,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
-					HasNoResource("toolchain-dev-edit", &rbacv1.Role{}) // role does not exist
+					HasNoResource("rbac-edit", &rbacv1.Role{}) // role does not exist
 
 				// when - should check if everything is OK and set status to provisioned
 				_, err = r.Reconcile(req)
@@ -769,7 +773,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/tier", "basic"). // "downgraded"
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
-					HasNoResource("toolchain-dev-edit", &rbacv1.Role{}) // role does not exist
+					HasNoResource("rbac-edit", &rbacv1.Role{}) // role does not exist
 
 			})
 		})
@@ -851,7 +855,7 @@ func TestReconcileUpdate(t *testing.T) {
 						HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // upgraded
 						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 						HasResource("user-edit", &authv1.RoleBinding{}).
-						HasResource("toolchain-dev-edit", &rbacv1.Role{})
+						HasResource("rbac-edit", &rbacv1.Role{})
 
 					// when - should check if everything is OK and set status to provisioned
 					_, err = r.Reconcile(req)
@@ -936,6 +940,35 @@ func TestReconcileUpdate(t *testing.T) {
 						HasConditions(Provisioned()) // done
 				})
 
+				t.Run("delete only one redundant cluster resource during single reconcile", func(t *testing.T) {
+					// given 'advanced' NSTemplate only has a cluster resource
+					nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
+					advancedCRQ := newClusterResourceQuota(username, "withemptycrq")
+					antherCRQ := newClusterResourceQuota("empty", "withemptycrq")
+					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ, antherCRQ)
+
+					// when - should delete the first ClusterResourceQuota
+					_, err := r.Reconcile(req)
+
+					// then
+					require.NoError(t, err)
+					AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+						HasFinalizer().
+						HasConditions(Updating()) //
+					quotas := &quotav1.ClusterResourceQuotaList{}
+					err = fakeClient.List(context.TODO(), quotas, &client.ListOptions{})
+					require.NoError(t, err)
+					assert.Len(t, quotas.Items, 1)
+
+					// when - should delete the second ClusterResourceQuota
+					_, err = r.Reconcile(req)
+
+					// then
+					err = fakeClient.List(context.TODO(), quotas, &client.ListOptions{})
+					require.NoError(t, err)
+					assert.Len(t, quotas.Items, 0)
+				})
+
 				t.Run("delete redundant cluster resource quota while updating tmpl", func(t *testing.T) {
 					// we need to compare the new template vs previous one, which we can't do for now.
 					// See https://issues.redhat.com/browse/CRT-498
@@ -1000,7 +1033,7 @@ func TestReconcileUpdate(t *testing.T) {
 				devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 				crq := newClusterResourceQuota(username, "advanced")
 				rb := newRoleBinding(devNS.Name, "user-edit")
-				ro := newRole(devNS.Name, "toolchain-dev-edit")
+				ro := newRole(devNS.Name, "rbac-edit")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, crq, rb, ro)
 				fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 					return fmt.Errorf("mock error: '%T'", obj)
@@ -1804,7 +1837,7 @@ func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string)
 			case ClusterResources:
 				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
 			default:
-				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
 		case "basic":
 			switch typeName {
@@ -1812,6 +1845,13 @@ func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string)
 				return nil, nil
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
+			}
+		case "withemptycrq":
+			switch typeName {
+			case ClusterResources:
+				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq), test.WithParams(username))
+			default:
+				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
 			}
 		default:
 			return nil, fmt.Errorf("no template for tier '%s'", tierName)
@@ -1847,11 +1887,25 @@ var (
   userNames:
     - ${USERNAME}`
 
+	rbacRb test.TemplateObject = `
+- apiVersion: authorization.openshift.io/v1
+  kind: RoleBinding
+  metadata:
+    name: user-rbac-edit
+    namespace: ${USERNAME}-nsType
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: rbac-edit
+  subjects:
+    - kind: User
+      name: ${USERNAME}}`
+
 	role test.TemplateObject = `
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: Role
   metadata:
-    name: toolchain-dev-edit
+    name: rbac-edit
     namespace: ${USERNAME}-nsType
   rules:
   - apiGroups:
@@ -1893,4 +1947,12 @@ var (
       openshift.io/requester: ${USERNAME}
     labels: null
   `
+
+	emptyCrq test.TemplateObject = `
+- apiVersion: quota.openshift.io/v1
+  kind: ClusterResourceQuota
+  metadata:
+    name: for-empty
+  spec:
+`
 )

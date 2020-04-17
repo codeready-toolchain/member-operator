@@ -248,7 +248,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 			if err := r.setStatusUpdating(nsTmplSet); err != nil {
 				return false, err
 			}
-			if deleted, err := r.deleteRedundantObjects(logger, currentTier, ClusterResources, username, newObjs); err != nil {
+			if deleted, err := r.deleteRedundantObjects(logger, true, currentTier, ClusterResources, username, newObjs); err != nil {
 				logger.Error(err, "failed to delete redundant cluster resources")
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant cluster resources")
 			} else if deleted {
@@ -393,7 +393,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		if err := r.setStatusUpdating(nsTmplSet); err != nil {
 			return err
 		}
-		if _, err := r.deleteRedundantObjects(logger, currentTier, tcNamespace.Type, username, newObjs); err != nil {
+		if _, err := r.deleteRedundantObjects(logger, false, currentTier, tcNamespace.Type, username, newObjs); err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
 		}
 	}
@@ -436,7 +436,8 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 // deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, currentTier, typeName, username string, newObjects []runtime.RawExtension) (bool, error) {
+func (r *NSTemplateSetReconciler) deleteRedundantObjects(logger logr.Logger, returnWhenDeleted bool, currentTier, typeName, username string, newObjects []runtime.RawExtension) (bool, error) {
+	deleted := false
 	currentObjs, err := r.getTemplateObjects(currentTier, typeName, username, template.RetainAllButNamespaces)
 	if err != nil {
 		return false, errs.Wrapf(err, "failed to retrieve template for tier/type '%s/%s'", currentTier, typeName)
@@ -465,9 +466,12 @@ Current:
 			continue // continue to the next object since this one was already deleted
 		}
 		logger.Info("deleted redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
+		if returnWhenDeleted {
 		return true, nil
+		}
+		deleted = true
 	}
-	return false, nil
+	return deleted, nil
 }
 
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and

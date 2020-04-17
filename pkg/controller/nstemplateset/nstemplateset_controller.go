@@ -124,7 +124,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 
 	createdOrUpdated, err := r.ensureNamespaces(logger, nsTmplSet)
 	if err != nil {
-		logger.Error(err, "failed to provision user namespaces")
+		logger.Error(err, "failed to either provision or update user namespaces")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
 		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
@@ -228,9 +228,13 @@ func (r *NSTemplateSetReconciler) fetchNamespaces(username string) ([]corev1.Nam
 func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
 	username := nsTmplSet.GetName()
-	newObjs, err := r.getTemplateObjects(nsTmplSet.Spec.TierName, ClusterResources, username)
-	if err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to retrieve template for the cluster resources")
+	newObjs := make([]runtime.RawExtension, 0)
+	var err error
+	if nsTmplSet.Spec.ClusterResources != nil {
+		newObjs, err = r.getTemplateObjects(nsTmplSet.Spec.TierName, ClusterResources, username)
+		if err != nil {
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to retrieve template for the cluster resources")
+		}
 	}
 
 	// let's look for existing cluster resource quotas to determine the current tier

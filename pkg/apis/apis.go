@@ -5,6 +5,7 @@ import (
 
 	authv1 "github.com/openshift/api/authorization/v1"
 	projectv1 "github.com/openshift/api/project/v1"
+	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 	userv1 "github.com/openshift/api/user/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -18,6 +19,7 @@ func AddToScheme(s *runtime.Scheme) error {
 	addToSchemes = append(addToSchemes, templatev1.Install)
 	addToSchemes = append(addToSchemes, projectv1.Install)
 	addToSchemes = append(addToSchemes, authv1.Install)
+	addToSchemes = append(addToSchemes, quotav1.Install)
 	addToSchemes = append(addToSchemes, extensionsv1.AddToScheme)
 
 	return addToSchemes.AddToScheme(s)

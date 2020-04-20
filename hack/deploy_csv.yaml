@@ -469,6 +469,12 @@ data:
                 - networkpolicies
                 verbs:
                 - '*'
+              - apiGroups:
+                - quota.openshift.io
+                resources:
+                - clusterresourcequotas
+                verbs:
+                - '*'
               serviceAccountName: member-operator
             deployments:
             - name: member-operator

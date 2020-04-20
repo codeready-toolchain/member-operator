@@ -90,8 +90,8 @@ type ReconcileUserAccount struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling UserAccount")
+	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	logger.Info("reconciling UserAccount")
 	var err error
 
 	namespace := request.Namespace
@@ -118,55 +118,54 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	// If the UserAccount has not been deleted, create or update user and identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
 	if !util.IsBeingDeleted(userAcc) {
-		reqLogger.Info("Adding finalizer on UserAccount")
 		// Add the finalizer if it is not present
-		if err := r.addFinalizer(userAcc); err != nil {
+		if err := r.addFinalizer(logger, userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
 	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
-		reqLogger.Info("Ensuring user and identity associated with UserAccount")
+		logger.Info("ensuring user and identity associated with UserAccount")
 		var createdOrUpdated bool
 		var user *userv1.User
-		if user, createdOrUpdated, err = r.ensureUser(reqLogger, userAcc); err != nil || createdOrUpdated {
+		if user, createdOrUpdated, err = r.ensureUser(logger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-		if _, createdOrUpdated, err = r.ensureIdentity(reqLogger, userAcc, user); err != nil || createdOrUpdated {
+		if _, createdOrUpdated, err = r.ensureIdentity(logger, userAcc, user); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-		if _, createdOrUpdated, err = r.ensureNSTemplateSet(reqLogger, userAcc); err != nil || createdOrUpdated {
+		if _, createdOrUpdated, err = r.ensureNSTemplateSet(logger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
 	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) && util.IsBeingDeleted(userAcc) {
-		reqLogger.Info("Terminating UserAccount")
+		logger.Info("terminating UserAccount")
 		if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
-			reqLogger.Error(err, "error updating status")
+			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
 		deleted, err := r.deleteIdentityAndUser(userAcc)
 		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
 		}
 
 		// Remove finalizer from UserAccount
 		if !deleted {
 			util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 			if err := r.client.Update(context.Background(), userAcc); err != nil {
-				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
+				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
 			}
 
 			return reconcile.Result{}, nil
 		}
 		return reconcile.Result{}, nil
 	} else if userAcc.Spec.Disabled {
-		reqLogger.Info("Disabling UserAccount")
+		logger.Info("Disabling UserAccount")
 		if err := r.setStatusDisabling(userAcc, "deleting user/identity"); err != nil {
-			reqLogger.Error(err, "error updating status")
+			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
 		deleted, err := r.deleteIdentityAndUser(userAcc)
 		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(reqLogger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
 
 		if !deleted {
@@ -339,9 +338,10 @@ func (r *ReconcileUserAccount) updateNSTemplateSet(logger logr.Logger, userAcc *
 }
 
 // setFinalizers sets the finalizers for UserAccount
-func (r *ReconcileUserAccount) addFinalizer(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *ReconcileUserAccount) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
+		logger.Info("adding finalizer on UserAccount")
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 		if err := r.client.Update(context.TODO(), userAcc); err != nil {
 			return err

@@ -593,7 +593,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasResource("user-edit", &authv1.RoleBinding{}).
 					HasResource("user-rbac-edit", &authv1.RoleBinding{})
 
-					// when - should check if everything is OK and set status to provisioned
+				// when - should check if everything is OK and set status to provisioned
 				_, err = r.Reconcile(req)
 
 				// then
@@ -937,6 +937,24 @@ func TestReconcileUpdate(t *testing.T) {
 						HasResource("for-"+username, &quotav1.ClusterResourceQuota{}, WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // upgraded
 				})
 
+				t.Run("no redundant cluster resource quota to be deleted for the given user", func(t *testing.T) {
+					// given 'advanced' NSTemplate only has a cluster resource
+					nsTmplSet := newNSTmplSet(namespaceName, username, "advanced") // no cluster resources, so the "advancedCRQ" should be deleted
+					anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
+					advancedCRQ := newClusterResourceQuota(username, "advanced")
+					anotherCRQ := newClusterResourceQuota("another-user", "basic")
+					r, req, fakeClient := prepareReconcile(t, namespaceName, username, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
+
+					// when
+					_, err := r.Reconcile(req)
+
+					// then
+					require.NoError(t, err)
+					AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+						HasFinalizer().
+						HasConditions(Provisioned()) // done
+				})
+
 				t.Run("delete redundant cluster resource quota while downgrading tier", func(t *testing.T) {
 					// given 'advanced' NSTemplate only has a cluster resource
 					nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
@@ -954,7 +972,7 @@ func TestReconcileUpdate(t *testing.T) {
 					AssertThatCluster(t, r.client).
 						HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}) // resource was deleted
 
-						// when reconcile again
+					// when reconcile again
 					_, err = r.Reconcile(req)
 
 					// then
@@ -995,8 +1013,9 @@ func TestReconcileUpdate(t *testing.T) {
 					// given 'advanced' NSTemplate only has a cluster resource
 					nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
 					advancedCRQ := newClusterResourceQuota(username, "withemptycrq")
-					antherCRQ := newClusterResourceQuota("empty", "withemptycrq")
-					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ, antherCRQ)
+					anotherCRQ := newClusterResourceQuota(username, "withemptycrq")
+					anotherCRQ.Name = "for-empty"
+					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ, anotherCRQ)
 
 					// when - should delete the first ClusterResourceQuota
 					_, err := r.Reconcile(req)

@@ -216,8 +216,7 @@ func (r *NSTemplateSetReconciler) deleteNSTemplateSet(logger logr.Logger, nsTmpl
 func (r *NSTemplateSetReconciler) fetchNamespaces(username string) ([]corev1.Namespace, error) {
 	// fetch all namespace with owner=username label
 	userNamespaceList := &corev1.NamespaceList{}
-	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
-	if err := r.client.List(context.TODO(), userNamespaceList, client.MatchingLabels(labels)); err != nil {
+	if err := r.client.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
 		return nil, err
 	}
 	return userNamespaceList.Items, nil
@@ -239,7 +238,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 
 	// let's look for existing cluster resource quotas to determine the current tier
 	crqs := quotav1.ClusterResourceQuotaList{}
-	if err := r.client.List(context.TODO(), &crqs); err != nil {
+	if err := r.client.List(context.TODO(), &crqs, listByOwnerLabel(username)); err != nil {
 		logger.Error(err, "failed to list existing cluster resource quotas")
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to list existing cluster resource quotas")
 	} else if len(crqs.Items) > 0 {
@@ -476,6 +475,12 @@ Current:
 		deleted = true
 	}
 	return deleted, nil
+}
+
+// listByOwnerLabel returns client.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
+func listByOwnerLabel(username string) client.ListOption {
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
+	return client.MatchingLabels(labels)
 }
 
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and

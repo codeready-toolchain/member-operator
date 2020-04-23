@@ -77,6 +77,11 @@ spec:
                       description: Template contains an OpenShift Template to be used
                         for provisioning of cluster-scoped resources
                       type: string
+                    templateRef:
+                      description: TemplateRef The name of the TierTemplate resource
+                        which exists in the host cluster and which contains the template
+                        to use
+                      type: string
                   required:
                   - revision
                   type: object
@@ -91,6 +96,11 @@ spec:
                         type: string
                       template:
                         description: Optional field. Used to specify a custom template
+                        type: string
+                      templateRef:
+                        description: TemplateRef The name of the TierTemplate resource
+                          which exists in the host cluster and which contains the
+                          template to use
                         type: string
                       type:
                         description: 'The type of the namespace. For example: ide|cicd|stage|default'

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
@@ -263,30 +264,21 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 		logger.Info("no cluster resources to create or update")
 		return false, nil
 	}
-	for _, rawObj := range newObjs {
-		acc, err := meta.Accessor(rawObj.Object)
-		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "invalid element in template for the cluster resources")
-		}
-		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
-		// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
-		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
-		// see https://issues.redhat.com/browse/CRT-429
 
-		// set labels
-		labels := acc.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		labels[toolchainv1alpha1.OwnerLabelKey] = nsTmplSet.GetName()
-		labels[toolchainv1alpha1.TypeLabelKey] = ClusterResources
-		labels[toolchainv1alpha1.RevisionLabelKey] = nsTmplSet.Spec.ClusterResources.Revision
-		labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
-		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
-		acc.SetLabels(labels)
+	var labels = map[string]string{
+		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
+		toolchainv1alpha1.TypeLabelKey:     ClusterResources,
+		toolchainv1alpha1.RevisionLabelKey: nsTmplSet.Spec.ClusterResources.Revision,
+		toolchainv1alpha1.TierLabelKey:     nsTmplSet.Spec.TierName,
+		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
+	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
+	// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
+	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
+	// see https://issues.redhat.com/browse/CRT-429
+
 	logger.Info("applying cluster resources template", "obj_count", len(newObjs))
-	if createdOrUpdated, err := template.NewProcessor(r.client, r.scheme).Apply(newObjs); err != nil {
+	if createdOrUpdated, err := applycl.NewApplyClient(r.client, r.scheme).Apply(newObjs, labels); err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to create cluster resources")
 	} else if createdOrUpdated {
 		logger.Info("provisioned cluster resources")
@@ -350,31 +342,18 @@ func (r *NSTemplateSetReconciler) ensureNamespaceResource(logger logr.Logger, ns
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tcNamespace.Type)
 	}
 
-	tmplProcessor := template.NewProcessor(r.client, r.scheme)
-	for _, rawObj := range objs {
-		acc, err := meta.Accessor(rawObj.Object)
-		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "invalid element in template for namespace type '%s'", tcNamespace.Type)
-		}
-
-		// set labels
-		labels := acc.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		labels[toolchainv1alpha1.OwnerLabelKey] = nsTmplSet.GetName()
-		labels[toolchainv1alpha1.TypeLabelKey] = tcNamespace.Type
-		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
-
-		acc.SetLabels(labels)
-
-		// Note: we don't see an owner reference between the NSTemplateSet (namespaced resource) and the namespace (cluster-wide resource)
-		// because a namespaced resource cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
-		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
-		// see https://issues.redhat.com/browse/CRT-429
+	labels := map[string]string{
+		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
+		toolchainv1alpha1.TypeLabelKey:     tcNamespace.Type,
+		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
 
-	_, err = tmplProcessor.Apply(objs)
+	// Note: we don't see an owner reference between the NSTemplateSet (namespaced resource) and the namespace (cluster-wide resource)
+	// because a namespaced resource cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
+	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
+	// see https://issues.redhat.com/browse/CRT-429
+
+	_, err = applycl.NewApplyClient(r.client, r.scheme).Apply(objs, labels)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tcNamespace.Type)
 	}
@@ -401,21 +380,10 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 		}
 	}
 
-	tmplProcessor := template.NewProcessor(r.client, r.scheme)
-	for _, rawObj := range newObjs {
-		acc, err := meta.Accessor(rawObj.Object)
-		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "unable to get meta.Interface of the object '%s' in the namespace '%s'", rawObj.Raw, nsName)
-		}
-		// add the "toolchain.dev.openshift.com/provider: codeready-toolchain" label on all objects
-		labels := acc.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
-		acc.SetLabels(labels)
+	var labels = map[string]string{
+		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
-	if _, err = tmplProcessor.Apply(newObjs); err != nil {
+	if _, err = applycl.NewApplyClient(r.client, r.scheme).Apply(newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 
@@ -544,7 +512,7 @@ func (r *NSTemplateSetReconciler) getTemplateObjects(tierName, typeName, usernam
 	if tmplContent == nil {
 		return nil, nil
 	}
-	tmplProcessor := template.NewProcessor(r.client, r.scheme)
+	tmplProcessor := template.NewProcessor(r.scheme)
 	params := map[string]string{"USERNAME": username}
 	return tmplProcessor.Process(tmplContent, params, filters...)
 }

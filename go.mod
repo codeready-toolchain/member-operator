@@ -4,7 +4,7 @@ require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
 	github.com/codeready-toolchain/api v0.0.0-20200416071738-c52e81ffb85d
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20200421212303-44e8b3b7bdf6
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20200427080755-4d31a88fd82c
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/swag v0.19.9 // indirect
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible

@@ -9,7 +9,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	userv1 "github.com/openshift/api/user/v1"
@@ -33,12 +33,14 @@ func TestReconcile(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
+	config, err := configuration.New("")
+	require.NoError(t, err)
 
 	// given
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      ToIdentityName(userAcc.Spec.UserID),
+		Name:      ToIdentityName(userAcc.Spec.UserID, config),
 		Namespace: "toolchain-member",
 		UID:       types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
@@ -50,7 +52,7 @@ func TestReconcile(t *testing.T) {
 		Namespace: "toolchain-member",
 		UID:       userUID,
 		Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
-	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
@@ -81,7 +83,7 @@ func TestReconcile(t *testing.T) {
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -125,7 +127,7 @@ func TestReconcile(t *testing.T) {
 			checkMapping(t, user, preexistingIdentity)
 
 			// Check the identity is not created yet
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, &userv1.Identity{})
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
 			require.Error(t, err)
 			assert.True(t, apierros.IsNotFound(err))
 
@@ -219,9 +221,9 @@ func TestReconcile(t *testing.T) {
 
 			// Check the created/updated identity
 			identity := &userv1.Identity{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 			require.NoError(t, err)
-			assert.Equal(t, fmt.Sprintf("%s:%s", config.GetIdP(), userAcc.Spec.UserID), identity.Name)
+			assert.Equal(t, fmt.Sprintf("%s:%s", r.config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 			require.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])
 			assert.Empty(t, identity.OwnerReferences) // Identity has no explicit owner reference.
 
@@ -236,7 +238,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:      ToIdentityName(userAcc.Spec.UserID),
+				Name:      ToIdentityName(userAcc.Spec.UserID, config),
 				Namespace: "toolchain-member",
 				UID:       types.UID(uuid.NewV4().String()),
 				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
@@ -259,7 +261,7 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(req)
 
 			//then
-			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID)))
+			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID, config)))
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
@@ -269,7 +271,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:      ToIdentityName(userAcc.Spec.UserID),
+				Name:      ToIdentityName(userAcc.Spec.UserID, config),
 				Namespace: "toolchain-member",
 				UID:       types.UID(uuid.NewV4().String()),
 				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
@@ -535,7 +537,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -634,7 +636,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -688,7 +690,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.NoError(t, err)
 
 		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
@@ -731,7 +733,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID)}, identity)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
@@ -846,11 +848,13 @@ func TestDisabledUserAccount(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
+	config, err := configuration.New("")
+	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      ToIdentityName(userAcc.Spec.UserID),
+		Name:      ToIdentityName(userAcc.Spec.UserID, config),
 		Namespace: "toolchain-member",
 		UID:       types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
@@ -862,7 +866,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		Namespace: "toolchain-member",
 		UID:       userUID,
 		Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
-	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID)}}
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
@@ -890,7 +894,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		//then
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
 
 		res, err = r.Reconcile(req)
@@ -901,7 +905,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -925,7 +929,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -950,7 +954,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -974,7 +978,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -1010,7 +1014,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -1217,10 +1221,13 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
+	config, err := configuration.New("")
+	require.NoError(t, err)
 
 	r := &ReconcileUserAccount{
 		client: fakeClient,
 		scheme: s,
+		config: config,
 	}
 	return r, newReconcileRequest(username), fakeClient
 }

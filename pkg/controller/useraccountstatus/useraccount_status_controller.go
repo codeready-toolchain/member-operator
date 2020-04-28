@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,7 +26,7 @@ var log = logf.Log.WithName("controller_useraccount_status")
 
 // Add creates a new UserAccountStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, _ *configuration.Registry) error {
 	return add(mgr, newReconciler(mgr))
 }
 

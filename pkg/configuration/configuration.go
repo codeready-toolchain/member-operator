@@ -21,10 +21,10 @@ const (
 	// ToolchainConfigMapName specifies a name of a ConfigMap that keeps toolchain configuration
 	ToolchainConfigMapName = "toolchain-saas-config"
 
-	// IdentityProvider
+	// IdentityProvider specifies an identity provider (IdP) for newly created users
 	IdentityProvider = "identity.provider"
 
-	// IdentityProvider specifies a
+	// DefaultIdentityProvider the default value used for the identity provider (IdP) for newly created users
 	DefaultIdentityProvider = "rhd"
 )
 
@@ -65,6 +65,10 @@ func New(configFilePath string) (*Registry, error) {
 func (c *Registry) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
 	c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
+	c.member.SetDefault(ClusterHealthCheckPeriod, DefaultClusterHealthCheckPeriod)
+	c.member.SetDefault(ClusterHealthCheckTimeout, DefaultClusterHealthCheckTimeout)
+	c.member.SetDefault(ClusterHealthCheckFailureThreshold, DefaultClusterHealthCheckFailureThreshold)
+	c.member.SetDefault(ClusterHealthCheckSuccessThreshold, DefaultClusterHealthCheckSuccessThreshold)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix

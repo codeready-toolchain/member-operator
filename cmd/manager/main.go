@@ -63,7 +63,7 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.Parse()
-	operatorConfig, err := loadConfig()
+	crtConfig, err := loadConfig()
 	if err != nil {
 		log.Error(err, "cannot load the operator configuration")
 		os.Exit(1)
@@ -80,7 +80,7 @@ func main() {
 	logf.SetLogger(zap.Logger())
 
 	printVersion()
-	printConfig(operatorConfig)
+	printConfig(crtConfig)
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
@@ -129,7 +129,7 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := controller.AddToManager(mgr, operatorConfig); err != nil {
+	if err := controller.AddToManager(mgr, crtConfig); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -165,7 +165,7 @@ func main() {
 	stopChannel := signals.SetupSignalHandler()
 
 	log.Info("Starting KubeFedCluster controllers.")
-	if err = controller.StartKubeFedClusterControllers(mgr, stopChannel); err != nil {
+	if err = controller.StartKubeFedClusterControllers(mgr, crtConfig, stopChannel); err != nil {
 		log.Error(err, "Unable to start the KubeFedCluster controllers")
 		os.Exit(1)
 	}

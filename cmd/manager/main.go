@@ -63,7 +63,7 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.Parse()
-	crtConfig, err := loadConfig()
+	crtConfig, err := configuration.LoadConfig()
 	if err != nil {
 		log.Error(err, "cannot load the operator configuration")
 		os.Exit(1)
@@ -177,27 +177,6 @@ func main() {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
-}
-
-func loadConfig() (*configuration.Registry, error) {
-	var configFilePath string
-	flag.StringVar(&configFilePath, "config", "", "path to the config file to read (if none is given, defaults will be used)")
-
-	// Override default -config switch with environment variable only if -config
-	// switch was not explicitly given via the command line.
-	configSwitchIsSet := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "config" {
-			configSwitchIsSet = true
-		}
-	})
-	if !configSwitchIsSet {
-		if envConfigPath, ok := os.LookupEnv(configuration.MemberEnvPrefix + "_CONFIG_FILE_PATH"); ok {
-			configFilePath = envConfigPath
-		}
-	}
-
-	return configuration.New(configFilePath)
 }
 
 func printConfig(cfg *configuration.Registry) {

@@ -9,7 +9,7 @@ import (
 )
 
 // addToManagerFuncs is a list of functions to add all Controllers to the Manager
-var addToManagerFuncs []func(manager.Manager, *configuration.Registry) error
+var addToManagerFuncs []func(manager.Manager, *configuration.Config) error
 
 func init() {
 	addToManagerFuncs = append(addToManagerFuncs, useraccount.Add)
@@ -18,7 +18,7 @@ func init() {
 }
 
 // AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, config *configuration.Registry) error {
+func AddToManager(m manager.Manager, config *configuration.Config) error {
 	for _, f := range addToManagerFuncs {
 		if err := f(m, config); err != nil {
 			return err

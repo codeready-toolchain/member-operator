@@ -52,15 +52,15 @@ const (
 	DefaultClusterUnavailableDelay = defaults.DefaultClusterUnavailableDelay
 )
 
-// Registry encapsulates the Viper configuration registry which stores the
+// Config encapsulates the Viper configuration registry which stores the
 // configuration data in-memory.
-type Registry struct {
+type Config struct {
 	member *viper.Viper
 }
 
-// createEmptyRegistry creates an initial, empty registry.
-func createEmptyRegistry() *Registry {
-	c := Registry{
+// createEmptyConfig creates an initial, empty registry.
+func createEmptyConfig() *Config {
+	c := Config{
 		member: viper.New(),
 	}
 	c.member.SetEnvPrefix(MemberEnvPrefix)
@@ -70,7 +70,7 @@ func createEmptyRegistry() *Registry {
 	return &c
 }
 
-func LoadConfig() (*Registry, error) {
+func LoadConfig() (*Config, error) {
 	var configFilePath string
 	flag.StringVar(&configFilePath, "config", "", "path to the config file to read (if none is given, defaults will be used)")
 
@@ -94,8 +94,8 @@ func LoadConfig() (*Registry, error) {
 // New creates a configuration reader object using a configurable configuration
 // file path. If the provided config file path is empty, a default configuration
 // will be created.
-func New(configFilePath string) (*Registry, error) {
-	c := createEmptyRegistry()
+func New(configFilePath string) (*Config, error) {
+	c := createEmptyConfig()
 	if configFilePath != "" {
 		c.member.SetConfigType("yaml")
 		c.member.SetConfigFile(configFilePath)
@@ -107,7 +107,7 @@ func New(configFilePath string) (*Registry, error) {
 	return c, nil
 }
 
-func (c *Registry) setConfigDefaults() {
+func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
 	c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
 	c.member.SetDefault(ClusterHealthCheckPeriod, DefaultClusterHealthCheckPeriod)
@@ -117,7 +117,7 @@ func (c *Registry) setConfigDefaults() {
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
-func (c *Registry) GetAllMemberParameters() map[string]string {
+func (c *Config) GetAllMemberParameters() map[string]string {
 	vars := map[string]string{}
 
 	for _, env := range os.Environ() {
@@ -134,36 +134,36 @@ func (c *Registry) GetAllMemberParameters() map[string]string {
 
 // GetIdP returns the configured Identity Provider (IdP) for the member operator
 // Openshift clusters can be configured with multiple IdPs. This config option allows admins to specify which IdP should be used by the toolchain operator.
-func (c *Registry) GetIdP() string {
+func (c *Config) GetIdP() string {
 	return c.member.GetString(IdentityProvider)
 }
 
 // GetClusterHealthCheckPeriod returns the configured member cluster health check period
-func (c *Registry) GetClusterHealthCheckPeriod() time.Duration {
+func (c *Config) GetClusterHealthCheckPeriod() time.Duration {
 	return c.member.GetDuration(ClusterHealthCheckPeriod)
 }
 
 // GetClusterHealthCheckTimeout returns the configured member cluster health check timeout
-func (c *Registry) GetClusterHealthCheckTimeout() time.Duration {
+func (c *Config) GetClusterHealthCheckTimeout() time.Duration {
 	return c.member.GetDuration(ClusterHealthCheckTimeout)
 }
 
 // GetClusterHealthCheckFailureThreshold returns the configured member cluster health check failure threshold
-func (c *Registry) GetClusterHealthCheckFailureThreshold() int64 {
+func (c *Config) GetClusterHealthCheckFailureThreshold() int64 {
 	return c.member.GetInt64(ClusterHealthCheckFailureThreshold)
 }
 
 // GetClusterHealthCheckSuccessThreshold returns the configured member cluster health check failure threshold
-func (c *Registry) GetClusterHealthCheckSuccessThreshold() int64 {
+func (c *Config) GetClusterHealthCheckSuccessThreshold() int64 {
 	return c.member.GetInt64(ClusterHealthCheckSuccessThreshold)
 }
 
 // GetClusterAvailableDelay returns the configured member cluster available delay
-func (c *Registry) GetClusterAvailableDelay() time.Duration {
+func (c *Config) GetClusterAvailableDelay() time.Duration {
 	return c.member.GetDuration(ClusterAvailableDelay)
 }
 
 // GetClusterUnavailableDelay returns the configured member cluster unavailable delay
-func (c *Registry) GetClusterUnavailableDelay() time.Duration {
+func (c *Config) GetClusterUnavailableDelay() time.Duration {
 	return c.member.GetDuration(ClusterUnavailableDelay)
 }

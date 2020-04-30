@@ -179,7 +179,7 @@ func main() {
 	}
 }
 
-func printConfig(cfg *configuration.Registry) {
+func printConfig(cfg *configuration.Config) {
 	logWithValuesMemberOperator := log
 	for key, value := range cfg.GetAllMemberParameters() {
 		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues("key", key, "value", value)

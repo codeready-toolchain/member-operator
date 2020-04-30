@@ -34,11 +34,11 @@ var log = logf.Log.WithName("controller_useraccount")
 
 // Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, config *configuration.Registry) error {
+func Add(mgr manager.Manager, config *configuration.Config) error {
 	return add(mgr, newReconciler(mgr, config))
 }
 
-func newReconciler(mgr manager.Manager, config *configuration.Registry) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
 	return &ReconcileUserAccount{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config}
 }
 
@@ -82,7 +82,7 @@ type ReconcileUserAccount struct {
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
-	config *configuration.Registry
+	config *configuration.Config
 }
 
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
@@ -561,7 +561,7 @@ func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1
 	return r.client.Status().Update(context.TODO(), userAcc)
 }
 
-func newUser(userAcc *toolchainv1alpha1.UserAccount, config *configuration.Registry) *userv1.User {
+func newUser(userAcc *toolchainv1alpha1.UserAccount, config *configuration.Config) *userv1.User {
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
@@ -571,7 +571,7 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config *configuration.Regis
 	return user
 }
 
-func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config *configuration.Registry) *userv1.Identity {
+func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config *configuration.Config) *userv1.Identity {
 	name := ToIdentityName(userAcc.Spec.UserID, config)
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
@@ -599,6 +599,6 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 }
 
 // ToIdentityName converts the given `userID` into an identity
-func ToIdentityName(userID string, config *configuration.Registry) string {
+func ToIdentityName(userID string, config *configuration.Config) string {
 	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
 }

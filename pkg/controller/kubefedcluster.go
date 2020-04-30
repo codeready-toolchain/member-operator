@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-func StartKubeFedClusterControllers(mgr manager.Manager, crtConfig *configuration.Registry, stopChan <-chan struct{}) error {
+func StartKubeFedClusterControllers(mgr manager.Manager, crtConfig *configuration.Config, stopChan <-chan struct{}) error {
 	if err := startHealthCheckController(mgr, crtConfig, stopChan); err != nil {
 		return err
 	}
@@ -25,7 +25,7 @@ func StartKubeFedClusterControllers(mgr manager.Manager, crtConfig *configuratio
 	return nil
 }
 
-func startHealthCheckController(mgr manager.Manager, crtConfig *configuration.Registry, stopChan <-chan struct{}) error {
+func startHealthCheckController(mgr manager.Manager, crtConfig *configuration.Config, stopChan <-chan struct{}) error {
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
 		return err

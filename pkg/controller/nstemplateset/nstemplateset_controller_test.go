@@ -355,7 +355,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning("provisioning the '-dev' namespace"))
+				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", r.client).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -380,7 +380,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning("provisioning the '-code' namespace"))
+				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-code", r.client).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -406,7 +406,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning("provisioning the '-dev' namespace"))
+				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", fakeClient).
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
@@ -474,7 +474,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev", "code").
-				HasConditions(Provisioning("provisioning the '-dev' namespace"))
+				HasConditions(Provisioning())
 			AssertThatNamespace(t, username+"-dev", r.client).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -502,7 +502,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				HasFinalizer().
-				HasConditions(Provisioning("provisioning cluster resources"))
+				HasConditions(Provisioning())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
 		})
@@ -562,7 +562,7 @@ func TestReconcileUpdate(t *testing.T) {
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 					HasFinalizer().
-					HasConditions(Provisioning("provisioning cluster resources"))
+					HasConditions(Updating())
 				AssertThatNamespace(t, username+"-dev", r.client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
@@ -677,7 +677,7 @@ func TestReconcileUpdate(t *testing.T) {
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 					HasFinalizer().
-					HasConditions(Provisioning("provisioning cluster resources"))
+					HasConditions(Updating())
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // upgraded
@@ -1418,6 +1418,46 @@ func TestUpdateStatus(t *testing.T) {
 				HasFinalizer(). // finalizer was not added and nothing else was done
 				HasConditions() // no condition was set to status update error
 		})
+	})
+
+	t.Run("don't set to provisioning if is set to updating", func(t *testing.T) {
+		// given
+		conditions := []toolchainv1alpha1.Condition{{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.NSTemplateSetUpdatingReason,
+		}}
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(conditions...))
+		reconciler, fakeClient := prepareController(t, nsTmplSet)
+
+		// when
+		err := reconciler.setStatusProvisioningIfNotUpdating(nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasConditions(conditions...)
+	})
+
+	t.Run("don't set to updating if is set to provisioning", func(t *testing.T) {
+		// given
+		conditions := []toolchainv1alpha1.Condition{{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.NSTemplateSetProvisioningReason,
+		}}
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(conditions...))
+		reconciler, fakeClient := prepareController(t, nsTmplSet)
+
+		// when
+		err := reconciler.setStatusUpdatingIfNotProvisioning(nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasConditions(conditions...)
 	})
 }
 func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {

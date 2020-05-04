@@ -1722,9 +1722,7 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSet
 		if err != nil {
 			return err
 		}
-		innerFakeClient := test.NewFakeClient(t)
-		innerFakeClient.Client = fakeClient.Client
-		if err := innerFakeClient.Create(ctx, o, opts...); err != nil {
+		if err := test.Create(fakeClient, ctx, o, opts...); err != nil {
 			return err
 		}
 		return passGeneration(o, obj)
@@ -1734,9 +1732,7 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSet
 		if err != nil {
 			return err
 		}
-		innerFakeClient := test.NewFakeClient(t)
-		innerFakeClient.Client = fakeClient.Client
-		if err := innerFakeClient.Update(ctx, o, opts...); err != nil {
+		if err := test.Update(fakeClient, ctx, o, opts...); err != nil {
 			return err
 		}
 		return passGeneration(o, obj)

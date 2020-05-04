@@ -13,18 +13,17 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
-	"gopkg.in/yaml.v2"
-	"k8s.io/apimachinery/pkg/api/meta"
-
 	authv1 "github.com/openshift/api/authorization/v1"
 	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1894,16 +1893,6 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 }
 
 func newClusterResourceQuota(t *testing.T, username, tier string) *quotav1.ClusterResourceQuota {
-	quota := corev1.ResourceQuotaSpec{}
-	quotaContent := `
-quota:
-  hard:
-    limits.cpu: 1750m
-    limits.memory: 7Gi`
-
-	err := yaml.Unmarshal([]byte(quotaContent), &quota)
-	require.NoError(t, err)
-
 	return &quotav1.ClusterResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -1916,7 +1905,12 @@ quota:
 			Generation:  int64(1),
 		},
 		Spec: quotav1.ClusterResourceQuotaSpec{
-			Quota: quota,
+			Quota: corev1.ResourceQuotaSpec{
+				Hard: map[corev1.ResourceName]resource.Quantity{
+					"limits.cpu":    resource.MustParse("2000m"),
+					"limits.memory": resource.MustParse("10Gi"),
+				},
+			},
 			Selector: quotav1.ClusterResourceQuotaSelector{
 				AnnotationSelector: map[string]string{
 					"openshift.io/requester": username,

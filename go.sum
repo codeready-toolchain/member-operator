@@ -115,8 +115,8 @@ github.com/codegangsta/negroni v1.0.0/go.mod h1:v0y3T5G7Y1UlFfyxFn/QLRU4a2EuNau2
 github.com/codeready-toolchain/api v0.0.0-20200402215020-c7a5434db5fb/go.mod h1:w07CIyd2cCp1i38hdPrG4aZPbwISzMkxOmtCWE4EtdY=
 github.com/codeready-toolchain/api v0.0.0-20200416071738-c52e81ffb85d h1:aG2EGkdf/mGlnNCsOjkxF0nz3Xi0aNrXKRdF+rWhAlY=
 github.com/codeready-toolchain/api v0.0.0-20200416071738-c52e81ffb85d/go.mod h1:w07CIyd2cCp1i38hdPrG4aZPbwISzMkxOmtCWE4EtdY=
-github.com/codeready-toolchain/toolchain-common v0.0.0-20200430074824-fb63cc12194b h1:vAZSE+r/zgczbIAiA430uTzhmbu/p5awokEP8xlKfo8=
-github.com/codeready-toolchain/toolchain-common v0.0.0-20200430074824-fb63cc12194b/go.mod h1:OhMfZoXLHTu4b6pXxWd6MAuCoT0OcKYiDZdEn3oCPGI=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20200504150510-6252228f3527 h1:sdODhNlkdU9TXR7JrV3T81E1JB3EUXIcapH2IBVzaLg=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20200504150510-6252228f3527/go.mod h1:OhMfZoXLHTu4b6pXxWd6MAuCoT0OcKYiDZdEn3oCPGI=
 github.com/container-storage-interface/spec v1.1.0/go.mod h1:6URME8mwIBbpVyZV93Ce5St17xBiQJQY67NDsuohiy4=
 github.com/containerd/console v0.0.0-20170925154832-84eeaae905fa/go.mod h1:Tj/on1eG8kiEhd0+fhSDzsPAFESxzBBvdyEgyryXffw=
 github.com/containerd/containerd v1.0.2/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
@@ -470,8 +470,6 @@ github.com/maorfr/helm-plugin-utils v0.0.0-20181205064038-588190cb5e3b/go.mod h1
 github.com/markbates/inflect v1.0.4/go.mod h1:1fR9+pO2KHEO9ZRtto13gDwwZaAKstQzferVeWqbgNs=
 github.com/marten-seemann/qtls v0.2.3/go.mod h1:xzjG7avBwGGbdZ8dTGxlBnLArsVKLvwmjgmPuiQEcYk=
 github.com/martinlindhe/base36 v1.0.0/go.mod h1:+AtEs8xrBpCeYgSLoY/aJ6Wf37jtBuR0s35750M27+8=
-github.com/matousjobanek/toolchain-common v0.0.0-20200504102205-05095b3cf41b h1:3zvUvhm8DO9DoT2k/M+3PnZUIlGDpicTyUFrpZSbHjU=
-github.com/matousjobanek/toolchain-common v0.0.0-20200504102205-05095b3cf41b/go.mod h1:OhMfZoXLHTu4b6pXxWd6MAuCoT0OcKYiDZdEn3oCPGI=
 github.com/mattbaird/jsonpatch v0.0.0-20171005235357-81af80346b1a/go.mod h1:M1qoD/MqPgTZIk0EWKB38wE28ACRfVcn+cU08jyArI0=
 github.com/mattn/go-colorable v0.0.9/go.mod h1:9vuHe8Xs5qXnSaW/c/ABM9alt+Vo+STaOChaDxuIBZU=
 github.com/mattn/go-colorable v0.1.2 h1:/bC9yWikZXAL9uJdulbSfyVNIR3n3trXl+v8+1sx8mU=

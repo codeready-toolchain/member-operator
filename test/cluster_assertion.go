@@ -2,9 +2,9 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -51,5 +51,21 @@ func WithLabel(key, value string) ResourceOption {
 		v, exists := acc.GetLabels()[key]
 		require.True(t, exists)
 		assert.Equal(t, value, v)
+	}
+}
+
+func Containing(value string) ResourceOption {
+	return func(t test.T, obj runtime.Object) {
+		content, err := json.Marshal(obj)
+		require.NoError(t, err)
+		assert.Contains(t, string(content), value)
+	}
+}
+
+func HasDeletionTimestamp() ResourceOption {
+	return func(t test.T, obj runtime.Object) {
+		acc, err := meta.Accessor(obj)
+		require.NoError(t, err)
+		assert.NotNil(t, acc.GetDeletionTimestamp())
 	}
 }

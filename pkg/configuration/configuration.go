@@ -3,7 +3,6 @@
 package configuration
 
 import (
-	"flag"
 	"os"
 	"strings"
 	"time"
@@ -72,22 +71,9 @@ func createEmptyConfig() *Config {
 
 func LoadConfig() (*Config, error) {
 	var configFilePath string
-	flag.StringVar(&configFilePath, "config", "", "path to the config file to read (if none is given, defaults will be used)")
-
-	// Override default -config switch with environment variable only if -config
-	// switch was not explicitly given via the command line.
-	configSwitchIsSet := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "config" {
-			configSwitchIsSet = true
-		}
-	})
-	if !configSwitchIsSet {
-		if envConfigPath, ok := os.LookupEnv(MemberEnvPrefix + "_CONFIG_FILE_PATH"); ok {
-			configFilePath = envConfigPath
-		}
+	if envConfigPath, ok := os.LookupEnv(MemberEnvPrefix + "_CONFIG_FILE_PATH"); ok {
+		configFilePath = envConfigPath
 	}
-
 	return New(configFilePath)
 }
 

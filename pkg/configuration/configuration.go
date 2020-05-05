@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	errs "github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1/defaults"
 )
@@ -38,10 +37,10 @@ const (
 	ClusterHealthCheckTimeout        = "cluster.healthcheck.timeout"
 	DefaultClusterHealthCheckTimeout = defaults.DefaultClusterHealthCheckTimeout
 
-	ClusterHealthCheckFailureThreshold        = "cluster.healthcheck.failurethreshold"
+	ClusterHealthCheckFailureThreshold        = "cluster.healthcheck.failure.threshold"
 	DefaultClusterHealthCheckFailureThreshold = defaults.DefaultClusterHealthCheckFailureThreshold
 
-	ClusterHealthCheckSuccessThreshold        = "cluster.healthcheck.successthreshold"
+	ClusterHealthCheckSuccessThreshold        = "cluster.healthcheck.success.threshold"
 	DefaultClusterHealthCheckSuccessThreshold = defaults.DefaultClusterHealthCheckSuccessThreshold
 
 	ClusterAvailableDelay        = "cluster.available.delay"
@@ -57,8 +56,8 @@ type Config struct {
 	member *viper.Viper
 }
 
-// createEmptyConfig creates an initial, empty registry.
-func createEmptyConfig() *Config {
+// initConfig creates an initial, empty registry.
+func initConfig() *Config {
 	c := Config{
 		member: viper.New(),
 	}
@@ -69,28 +68,8 @@ func createEmptyConfig() *Config {
 	return &c
 }
 
-func LoadConfig() (*Config, error) {
-	var configFilePath string
-	if envConfigPath, ok := os.LookupEnv(MemberEnvPrefix + "_CONFIG_FILE_PATH"); ok {
-		configFilePath = envConfigPath
-	}
-	return New(configFilePath)
-}
-
-// New creates a configuration reader object using a configurable configuration
-// file path. If the provided config file path is empty, a default configuration
-// will be created.
-func New(configFilePath string) (*Config, error) {
-	c := createEmptyConfig()
-	if configFilePath != "" {
-		c.member.SetConfigType("yaml")
-		c.member.SetConfigFile(configFilePath)
-		err := c.member.ReadInConfig() // Find and read the config file
-		if err != nil {                // Handle errors reading the config file.
-			return nil, errs.Wrap(err, "failed to read config file")
-		}
-	}
-	return c, nil
+func LoadConfig() *Config {
+	return initConfig()
 }
 
 func (c *Config) setConfigDefaults() {
@@ -100,6 +79,8 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(ClusterHealthCheckTimeout, DefaultClusterHealthCheckTimeout)
 	c.member.SetDefault(ClusterHealthCheckFailureThreshold, DefaultClusterHealthCheckFailureThreshold)
 	c.member.SetDefault(ClusterHealthCheckSuccessThreshold, DefaultClusterHealthCheckSuccessThreshold)
+	c.member.SetDefault(ClusterAvailableDelay, DefaultClusterAvailableDelay)
+	c.member.SetDefault(ClusterUnavailableDelay, DefaultClusterUnavailableDelay)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix

@@ -33,8 +33,7 @@ func TestReconcile(t *testing.T) {
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
-	config, err := configuration.New("")
-	require.NoError(t, err)
+	config := configuration.LoadConfig()
 
 	// given
 	userAcc := newUserAccount(username, userID, false)
@@ -848,7 +847,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	config, err := configuration.New("")
+	config := configuration.LoadConfig()
 	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
@@ -1221,7 +1220,7 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := configuration.New("")
+	config := configuration.LoadConfig()
 	require.NoError(t, err)
 
 	r := &ReconcileUserAccount{

@@ -63,11 +63,7 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.Parse()
-	crtConfig, err := configuration.LoadConfig()
-	if err != nil {
-		log.Error(err, "cannot load the operator configuration")
-		os.Exit(1)
-	}
+	crtConfig := configuration.LoadConfig()
 
 	// Use a zap logr.Logger implementation. If none of the zap
 	// flags are configured (or if the zap flag set is not being

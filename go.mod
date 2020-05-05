@@ -7,16 +7,19 @@ require (
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20200504150510-6252228f3527
 	github.com/go-logr/logr v0.1.0
 	github.com/go-openapi/swag v0.19.9 // indirect
+	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
 	github.com/operator-framework/operator-sdk v0.16.0
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v0.0.0-20190827162636-51e6b0c32776
 	github.com/satori/go.uuid v1.2.0
+	github.com/spf13/cast v1.3.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/sys v0.0.0-20200413165638-669c56c373c4 // indirect
+	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.1
 	k8s.io/apiextensions-apiserver v0.18.1
 	k8s.io/apimachinery v0.18.1

@@ -13,16 +13,16 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
-
 	authv1 "github.com/openshift/api/authorization/v1"
 	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -510,7 +510,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		t.Run("status provisioned after all resources exist", func(t *testing.T) {
 			// given
 			// create cluster resource quotas
-			crq := newClusterResourceQuota(username, "advanced")
+			crq := newClusterResourceQuota(t, username, "advanced")
 			// create namespaces (and assume they are complete since they have the expected revision number)
 			devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 			codeNS := newNamespace("advanced", username, "code", withRevision("abcde11"))
@@ -611,7 +611,7 @@ func TestReconcileUpdate(t *testing.T) {
 				rb := newRoleBinding(devNS.Name, "user-edit")
 				rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
 				ro := newRole(devNS.Name, "rbac-edit")
-				crq := newClusterResourceQuota(username, "advanced")
+				crq := newClusterResourceQuota(t, username, "advanced")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, rb, rbacRb, ro, crq)
 
 				// when - should remove ClusterResourceQuota that is missing in basic tier
@@ -738,7 +738,7 @@ func TestReconcileUpdate(t *testing.T) {
 				devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 				rb := newRoleBinding(devNS.Name, "user-edit")
 				ro := newRole(devNS.Name, "rbac-edit")
-				crq := newClusterResourceQuota(username, "advanced")
+				crq := newClusterResourceQuota(t, username, "advanced")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, rb, ro, crq)
 
 				// when - should remove ClusterResourceQuota
@@ -842,7 +842,7 @@ func TestReconcileUpdate(t *testing.T) {
 					nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
 					devNS := newNamespace("basic", username, "dev", withRevision("abcde11"))
 					codeNS := newNamespace("basic", username, "code", withRevision("abcde11"))
-					crq := newClusterResourceQuota(username, "advanced")
+					crq := newClusterResourceQuota(t, username, "advanced")
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, crq) // current user has also a 'code' NS
 
 					// when - should delete the -code namespace
@@ -910,7 +910,7 @@ func TestReconcileUpdate(t *testing.T) {
 				t.Run("no redundant cluster resource to delete while upgrading tier", func(t *testing.T) {
 					// given same as above, but not upgrading tier and no cluster resource quota to delete
 					nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources())
-					basicCRQ := newClusterResourceQuota(username, "basic")                                  // resource has same name in both tiers
+					basicCRQ := newClusterResourceQuota(t, username, "basic")                               // resource has same name in both tiers
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, basicCRQ) // current bnasic NSTemplateSet also has a cluster resource quota
 					fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 						// because the fake client does not support such a type of list :(
@@ -941,8 +941,8 @@ func TestReconcileUpdate(t *testing.T) {
 					// given 'advanced' NSTemplate only has a cluster resource
 					nsTmplSet := newNSTmplSet(namespaceName, username, "advanced") // no cluster resources, so the "advancedCRQ" should be deleted
 					anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
-					advancedCRQ := newClusterResourceQuota(username, "advanced")
-					anotherCRQ := newClusterResourceQuota("another-user", "basic")
+					advancedCRQ := newClusterResourceQuota(t, username, "advanced")
+					anotherCRQ := newClusterResourceQuota(t, "another-user", "basic")
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
 
 					// when
@@ -958,7 +958,7 @@ func TestReconcileUpdate(t *testing.T) {
 				t.Run("delete redundant cluster resource quota while downgrading tier", func(t *testing.T) {
 					// given 'advanced' NSTemplate only has a cluster resource
 					nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
-					advancedCRQ := newClusterResourceQuota(username, "advanced")
+					advancedCRQ := newClusterResourceQuota(t, username, "advanced")
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ)
 
 					// when
@@ -985,7 +985,7 @@ func TestReconcileUpdate(t *testing.T) {
 				t.Run("delete redundant cluster resources when ClusterResources field is nil in NSTemplateSet", func(t *testing.T) {
 					// given 'advanced' NSTemplate only has a cluster resource
 					nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq") // no cluster resources, so the "advancedCRQ" should be deleted even if the tier contains the "advancedCRQ"
-					advancedCRQ := newClusterResourceQuota(username, "advanced")
+					advancedCRQ := newClusterResourceQuota(t, username, "advanced")
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ)
 
 					// when
@@ -1012,8 +1012,8 @@ func TestReconcileUpdate(t *testing.T) {
 				t.Run("delete only one redundant cluster resource during single reconcile", func(t *testing.T) {
 					// given 'advanced' NSTemplate only has a cluster resource
 					nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
-					advancedCRQ := newClusterResourceQuota(username, "withemptycrq")
-					anotherCRQ := newClusterResourceQuota(username, "withemptycrq")
+					advancedCRQ := newClusterResourceQuota(t, username, "withemptycrq")
+					anotherCRQ := newClusterResourceQuota(t, username, "withemptycrq")
 					anotherCRQ.Name = "for-empty"
 					r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, advancedCRQ, anotherCRQ)
 
@@ -1102,7 +1102,7 @@ func TestReconcileUpdate(t *testing.T) {
 				nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
 				// create namespace (and assume it is complete since it has the expected revision number)
 				devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
-				crq := newClusterResourceQuota(username, "advanced")
+				crq := newClusterResourceQuota(t, username, "advanced")
 				rb := newRoleBinding(devNS.Name, "user-edit")
 				ro := newRole(devNS.Name, "rbac-edit")
 				r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, crq, rb, ro)
@@ -1548,7 +1548,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	t.Run("with cluster resources and 2 user namespaces to delete", func(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
-		crq := newClusterResourceQuota(username, "advanced")
+		crq := newClusterResourceQuota(t, username, "advanced")
 		devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withRevision("abcde11"))
 		r, _ := prepareController(t, nsTmplSet, crq, devNS, codeNS)
@@ -1722,17 +1722,36 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSet
 		if err != nil {
 			return err
 		}
-		return fakeClient.Client.Create(ctx, o, opts...)
+		if err := test.Create(fakeClient, ctx, o, opts...); err != nil {
+			return err
+		}
+		return passGeneration(o, obj)
 	}
 	fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 		o, err := toStructured(obj, decoder)
 		if err != nil {
 			return err
 		}
-		return fakeClient.Client.Update(ctx, o, opts...)
+		if err := test.Update(fakeClient, ctx, o, opts...); err != nil {
+			return err
+		}
+		return passGeneration(o, obj)
 	}
 
 	return r, fakeClient
+}
+
+func passGeneration(from, to runtime.Object) error {
+	fromMeta, err := meta.Accessor(from)
+	if err != nil {
+		return err
+	}
+	toMeta, err := meta.Accessor(to)
+	if err != nil {
+		return err
+	}
+	toMeta.SetGeneration(fromMeta.GetGeneration())
+	return nil
 }
 
 func toStructured(obj runtime.Object, decoder runtime.Decoder) (runtime.Object, error) {
@@ -1869,7 +1888,7 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 	}
 }
 
-func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuota {
+func newClusterResourceQuota(t *testing.T, username, tier string) *quotav1.ClusterResourceQuota {
 	return &quotav1.ClusterResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -1879,12 +1898,13 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 			},
 			Annotations: map[string]string{},
 			Name:        "for-" + username,
+			Generation:  int64(1),
 		},
 		Spec: quotav1.ClusterResourceQuotaSpec{
 			Quota: corev1.ResourceQuotaSpec{
-				Hard: corev1.ResourceList{
-					"limits.cpu":    resource.MustParse("1750m"),
-					"limits.memory": resource.MustParse("7Gi"),
+				Hard: map[corev1.ResourceName]resource.Quantity{
+					"limits.cpu":    resource.MustParse("2000m"),
+					"limits.memory": resource.MustParse("10Gi"),
 				},
 			},
 			Selector: quotav1.ClusterResourceQuotaSelector{
@@ -1999,23 +2019,12 @@ var (
     name: for-${USERNAME}
   spec:
     quota:
-    hard:
-      limits.cpu: 1750m
-      limits.memory: 7Gi
-      limits.ephemeral-storage: 5Gi
-      requests.cpu: 1750m
-      requests.memory: 7Gi
-      requests.storage: 5Gi
-      requests.ephemeral-storage: 5Gi
-      persistentvolumeclaims: "2"
-      pods: "100"
-      replicationcontrollers: "100"
-      services: "100"
-      secrets: "100"
-      configmaps: "100"
+      hard:
+        limits.cpu: 2000m
+        limits.memory: 10Gi
     selector:
-    annotations:
-      openshift.io/requester: ${USERNAME}
+      annotations:
+        openshift.io/requester: ${USERNAME}
     labels: null
   `
 

@@ -32,6 +32,10 @@ import (
 
 var log = logf.Log.WithName("controller_useraccount")
 
+type IdentityProvider interface {
+	GetIdP() string
+}
+
 // Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, config *configuration.Config) error {
@@ -599,6 +603,6 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 }
 
 // ToIdentityName converts the given `userID` into an identity
-func ToIdentityName(userID string, config *configuration.Config) string {
-	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
+func ToIdentityName(userID string, identityProvider IdentityProvider) string {
+	return fmt.Sprintf("%s:%s", identityProvider.GetIdP(), userID)
 }

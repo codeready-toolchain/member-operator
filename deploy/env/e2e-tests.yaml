@@ -1,2 +1,3 @@
 member-operator:
   identity-provider: 'testIdP'
+  cluster-healthcheck-period: '5s'

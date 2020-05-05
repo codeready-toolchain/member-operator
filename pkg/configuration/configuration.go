@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
-	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1/defaults"
 )
 
 // prefixes
@@ -32,22 +31,22 @@ const (
 // Kubefed configuration constants
 const (
 	ClusterHealthCheckPeriod        = "cluster.healthcheck.period"
-	DefaultClusterHealthCheckPeriod = defaults.DefaultClusterHealthCheckPeriod
+	DefaultClusterHealthCheckPeriod = "10s"
 
 	ClusterHealthCheckTimeout        = "cluster.healthcheck.timeout"
-	DefaultClusterHealthCheckTimeout = defaults.DefaultClusterHealthCheckTimeout
+	DefaultClusterHealthCheckTimeout = "3s"
 
 	ClusterHealthCheckFailureThreshold        = "cluster.healthcheck.failure.threshold"
-	DefaultClusterHealthCheckFailureThreshold = defaults.DefaultClusterHealthCheckFailureThreshold
+	DefaultClusterHealthCheckFailureThreshold = 3
 
 	ClusterHealthCheckSuccessThreshold        = "cluster.healthcheck.success.threshold"
-	DefaultClusterHealthCheckSuccessThreshold = defaults.DefaultClusterHealthCheckSuccessThreshold
+	DefaultClusterHealthCheckSuccessThreshold = 1
 
 	ClusterAvailableDelay        = "cluster.available.delay"
-	DefaultClusterAvailableDelay = defaults.DefaultClusterAvailableDelay
+	DefaultClusterAvailableDelay = "20s"
 
 	ClusterUnavailableDelay        = "cluster.unavailable.delay"
-	DefaultClusterUnavailableDelay = defaults.DefaultClusterUnavailableDelay
+	DefaultClusterUnavailableDelay = "60s"
 )
 
 // Config encapsulates the Viper configuration registry which stores the

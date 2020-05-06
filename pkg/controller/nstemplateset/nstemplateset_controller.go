@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -249,7 +248,7 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to get meta info from object %v", crqs.Items[0])
 		}
 		if currentTier, exists := crqMeta.GetLabels()[toolchainv1alpha1.TierLabelKey]; exists && currentTier != nsTmplSet.Spec.TierName {
-			if err := r.setStatusUpdating(nsTmplSet); err != nil {
+			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 				return false, err
 			}
 			if deleted, err := r.deleteRedundantObjects(logger, true, currentTier, ClusterResources, username, newObjs); err != nil {
@@ -281,8 +280,16 @@ func (r *NSTemplateSetReconciler) ensureClusterResources(logger logr.Logger, nsT
 	if createdOrUpdated, err := applycl.NewApplyClient(r.client, r.scheme).Apply(newObjs, labels); err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to create cluster resources")
 	} else if createdOrUpdated {
-		logger.Info("provisioned cluster resources")
-		return true, r.setStatusProvisioning(nsTmplSet, "provisioning cluster resources")
+		namespaces, err := r.fetchNamespaces(username)
+		if err != nil {
+			return true, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespace with label owner '%s'", username)
+		}
+		if len(namespaces) == 0 {
+			logger.Info("provisioned cluster resource")
+			return true, r.setStatusProvisioningIfNotUpdating(nsTmplSet)
+		}
+		logger.Info("updated cluster resource")
+		return true, r.setStatusUpdatingIfNotProvisioning(nsTmplSet)
 	}
 	logger.Info("cluster resources already provisioned")
 	return false, nil
@@ -299,7 +306,7 @@ func (r *NSTemplateSetReconciler) ensureNamespaces(logger logr.Logger, nsTmplSet
 
 	toDeprovision, found := nextNamespaceToDeprovision(nsTmplSet.Spec.Namespaces, userNamespaces)
 	if found {
-		if err := r.setStatusUpdating(nsTmplSet); err != nil {
+		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return false, err
 		}
 		if err := r.client.Delete(context.TODO(), toDeprovision); err != nil {
@@ -323,7 +330,7 @@ func (r *NSTemplateSetReconciler) ensureNamespaces(logger logr.Logger, nsTmplSet
 // ensureNamespace ensures that the namespace exists and that it contains all the expected resources
 func (r *NSTemplateSetReconciler) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) error {
 	logger.Info("ensuring namespace", "namespace", tcNamespace.Type, "tier", nsTmplSet.Spec.TierName)
-	if err := r.setStatusProvisioning(nsTmplSet, fmt.Sprintf("provisioning the '-%s' namespace", tcNamespace.Type)); err != nil {
+	if err := r.setStatusProvisioningIfNotUpdating(nsTmplSet); err != nil {
 		return err
 	}
 	// create namespace before created inner resources because creating the namespace may take some time
@@ -372,7 +379,7 @@ func (r *NSTemplateSetReconciler) ensureInnerNamespaceResources(logger logr.Logg
 	}
 
 	if currentTier, exists := namespace.Labels[toolchainv1alpha1.TierLabelKey]; exists && currentTier != nsTmplSet.Spec.TierName {
-		if err := r.setStatusUpdating(nsTmplSet); err != nil {
+		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return err
 		}
 		if _, err := r.deleteRedundantObjects(logger, false, currentTier, tcNamespace.Type, username, newObjs); err != nil {
@@ -550,14 +557,17 @@ func (r *NSTemplateSetReconciler) setStatusReady(nsTmplSet *toolchainv1alpha1.NS
 		})
 }
 
-func (r *NSTemplateSetReconciler) setStatusProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet, msg string) error {
+func (r *NSTemplateSetReconciler) setStatusProvisioningIfNotUpdating(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	readyCondition, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	if found && readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdatingReason {
+		return nil
+	}
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.NSTemplateSetProvisioningReason,
-			Message: msg,
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionFalse,
+			Reason: toolchainv1alpha1.NSTemplateSetProvisioningReason,
 		})
 }
 
@@ -604,7 +614,11 @@ func (r *NSTemplateSetReconciler) setStatusTerminating(nsTmplSet *toolchainv1alp
 		})
 }
 
-func (r *NSTemplateSetReconciler) setStatusUpdating(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *NSTemplateSetReconciler) setStatusUpdatingIfNotProvisioning(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	readyCondition, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	if found && readyCondition.Reason == toolchainv1alpha1.NSTemplateSetProvisioningReason {
+		return nil
+	}
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{

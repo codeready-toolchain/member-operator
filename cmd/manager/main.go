@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
@@ -181,11 +180,6 @@ func printConfig(cfg *configuration.Config) {
 		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues("key", key, "value", value)
 	}
 	logWithValuesMemberOperator.Info("Member operator configuration variables:")
-}
-
-func getMemberEnvVarKey(key string) string {
-	envKey := strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
-	return configuration.MemberEnvPrefix + "_" + envKey
 }
 
 // ensureKubeFedClusterCRD ensure that KubeFedCluster CRD exists in the cluster.

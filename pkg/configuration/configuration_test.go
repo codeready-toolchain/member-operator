@@ -62,10 +62,9 @@ func TestGetIdP(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "testingIdP")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20s")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "testingIdP"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, "testingIdP", config.GetIdP())
@@ -85,10 +84,9 @@ func TestGetClusterHealthCheckPeriod(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "30s")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20s")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "30s"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterHealthCheckPeriod())
@@ -108,10 +106,9 @@ func TestGetClusterHealthCheckTimeout(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "30s")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20s")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "30s"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterHealthCheckTimeout())
@@ -131,10 +128,9 @@ func TestGetClusterHealthCheckFailureThreshold(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "5")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "5"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, int64(5), config.GetClusterHealthCheckFailureThreshold())
@@ -154,10 +150,9 @@ func TestGetClusterHealthCheckSuccessThreshold(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "3")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "3"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, int64(3), config.GetClusterHealthCheckSuccessThreshold())
@@ -177,10 +172,9 @@ func TestGetClusterAvailableDelay(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "30s")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "40s")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "30s"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "40s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterAvailableDelay())
@@ -200,10 +194,9 @@ func TestGetClusterUnavailableDelay(t *testing.T) {
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarAndRestore(t, key, "30s")
-		defer restore()
-
-		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20s")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "30s"),
+			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterUnavailableDelay())

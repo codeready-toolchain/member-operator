@@ -1,7 +1,6 @@
 package configuration
 
 import (
-	"os"
 	"testing"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -35,12 +34,11 @@ func TestGetAllMemberParameters(t *testing.T) {
 		require.Empty(t, params)
 	})
 	t.Run("IdP environment variable", func(t *testing.T) {
-		key := "MEMBER_OPERATOR_IDENTITY_PROVIDER"
-		resetFunc := test.UnsetEnvVarAndRestore(t, key)
-		defer resetFunc()
+		key := MemberEnvPrefix + "_IDENTITY_PROVIDER"
 		u, err := uuid.NewV4()
 		require.NoError(t, err)
-		os.Setenv(key, u.String())
+		restore := test.SetEnvVarAndRestore(t, key, u.String())
+		defer restore()
 		config := getDefaultConfiguration(t)
 		params := config.GetAllMemberParameters()
 		expected := make(map[string]string, 1)

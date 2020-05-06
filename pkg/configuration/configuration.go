@@ -18,9 +18,6 @@ const (
 
 // Configuration constants
 const (
-	// ToolchainConfigMapName specifies a name of a ConfigMap that keeps toolchain configuration
-	ToolchainConfigMapName = "toolchain-saas-config"
-
 	// IdentityProvider specifies an identity provider (IdP) for newly created users
 	IdentityProvider = "identity.provider"
 
@@ -104,32 +101,32 @@ func (c *Config) GetIdP() string {
 	return c.member.GetString(IdentityProvider)
 }
 
-// GetClusterHealthCheckPeriod returns the configured member cluster health check period
+// GetClusterHealthCheckPeriod returns the configured cluster health check period
 func (c *Config) GetClusterHealthCheckPeriod() time.Duration {
 	return c.member.GetDuration(ClusterHealthCheckPeriod)
 }
 
-// GetClusterHealthCheckTimeout returns the configured member cluster health check timeout
+// GetClusterHealthCheckTimeout returns the configured cluster health check timeout
 func (c *Config) GetClusterHealthCheckTimeout() time.Duration {
 	return c.member.GetDuration(ClusterHealthCheckTimeout)
 }
 
-// GetClusterHealthCheckFailureThreshold returns the configured member cluster health check failure threshold
+// GetClusterHealthCheckFailureThreshold returns the configured cluster health check failure threshold
 func (c *Config) GetClusterHealthCheckFailureThreshold() int64 {
 	return c.member.GetInt64(ClusterHealthCheckFailureThreshold)
 }
 
-// GetClusterHealthCheckSuccessThreshold returns the configured member cluster health check failure threshold
+// GetClusterHealthCheckSuccessThreshold returns the configured cluster health check failure threshold
 func (c *Config) GetClusterHealthCheckSuccessThreshold() int64 {
 	return c.member.GetInt64(ClusterHealthCheckSuccessThreshold)
 }
 
-// GetClusterAvailableDelay returns the configured member cluster available delay
+// GetClusterAvailableDelay returns the configured cluster available delay
 func (c *Config) GetClusterAvailableDelay() time.Duration {
 	return c.member.GetDuration(ClusterAvailableDelay)
 }
 
-// GetClusterUnavailableDelay returns the configured member cluster unavailable delay
+// GetClusterUnavailableDelay returns the configured cluster unavailable delay
 func (c *Config) GetClusterUnavailableDelay() time.Duration {
 	return c.member.GetDuration(ClusterUnavailableDelay)
 }

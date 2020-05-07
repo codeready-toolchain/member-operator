@@ -9,6 +9,7 @@ import (
 
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -61,6 +62,7 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 
 	pflag.Parse()
+	crtConfig := configuration.LoadConfig()
 
 	// Use a zap logr.Logger implementation. If none of the zap
 	// flags are configured (or if the zap flag set is not being
@@ -73,6 +75,7 @@ func main() {
 	logf.SetLogger(zap.Logger())
 
 	printVersion()
+	printConfig(crtConfig)
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
@@ -81,7 +84,7 @@ func main() {
 	}
 
 	// Get a config to talk to the apiserver
-	cfg, err := config.GetConfig()
+	clientConfig, err := config.GetConfig()
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -96,13 +99,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := ensureKubeFedClusterCRD(cfg); err != nil {
+	if err := ensureKubeFedClusterCRD(clientConfig); err != nil {
 		log.Error(err, "Unable to ensure the existence of the KubeFedCluster CRD")
 		os.Exit(1)
 	}
 
 	// Create a new Cmd to provide shared dependencies and start components
-	mgr, err := manager.New(cfg, manager.Options{
+	mgr, err := manager.New(clientConfig, manager.Options{
 		Namespace:          namespace,
 		MapperProvider:     restmapper.NewDynamicRESTMapper,
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
@@ -121,12 +124,12 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := controller.AddToManager(mgr); err != nil {
+	if err := controller.AddToManager(mgr, crtConfig); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
 
-	if err = serveCRMetrics(cfg); err != nil {
+	if err = serveCRMetrics(clientConfig); err != nil {
 		log.Info("Could not generate and serve custom resource metrics", "error", err.Error())
 	}
 
@@ -136,7 +139,7 @@ func main() {
 		{Port: operatorMetricsPort, Name: metrics.CRPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: operatorMetricsPort}},
 	}
 	// Create Service object to expose the metrics port(s).
-	service, err := metrics.CreateMetricsService(ctx, cfg, servicePorts)
+	service, err := metrics.CreateMetricsService(ctx, clientConfig, servicePorts)
 	if err != nil {
 		log.Info("Could not create metrics Service", "error", err.Error())
 	}
@@ -144,7 +147,7 @@ func main() {
 	// CreateServiceMonitors will automatically create the prometheus-operator ServiceMonitor resources
 	// necessary to configure Prometheus to scrape metrics from this operator.
 	services := []*v1.Service{service}
-	_, err = metrics.CreateServiceMonitors(cfg, namespace, services)
+	_, err = metrics.CreateServiceMonitors(clientConfig, namespace, services)
 	if err != nil {
 		log.Info("Could not create ServiceMonitor object", "error", err.Error())
 		// If this operator is deployed to a cluster without the prometheus-operator running, it will return
@@ -157,7 +160,7 @@ func main() {
 	stopChannel := signals.SetupSignalHandler()
 
 	log.Info("Starting KubeFedCluster controllers.")
-	if err = controller.StartKubeFedClusterControllers(mgr, stopChannel); err != nil {
+	if err = controller.StartKubeFedClusterControllers(mgr, crtConfig, stopChannel); err != nil {
 		log.Error(err, "Unable to start the KubeFedCluster controllers")
 		os.Exit(1)
 	}
@@ -169,6 +172,14 @@ func main() {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
+}
+
+func printConfig(cfg *configuration.Config) {
+	logWithValuesMemberOperator := log
+	for key, value := range cfg.GetAllMemberParameters() {
+		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues("key", key, "value", value)
+	}
+	logWithValuesMemberOperator.Info("Member operator configuration variables:")
 }
 
 // ensureKubeFedClusterCRD ensure that KubeFedCluster CRD exists in the cluster.

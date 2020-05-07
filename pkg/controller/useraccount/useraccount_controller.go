@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/config"
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 
@@ -32,14 +32,18 @@ import (
 
 var log = logf.Log.WithName("controller_useraccount")
 
-// Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+type IdentityProvider interface {
+	GetIdP() string
 }
 
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileUserAccount{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+// Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
+// and Start it when the Manager is Started.
+func Add(mgr manager.Manager, config *configuration.Config) error {
+	return add(mgr, newReconciler(mgr, config))
+}
+
+func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
+	return &ReconcileUserAccount{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -82,6 +86,7 @@ type ReconcileUserAccount struct {
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
+	config *configuration.Config
 }
 
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
@@ -184,7 +189,7 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
-			user = newUser(userAcc)
+			user = newUser(userAcc, r.config)
 			setOwnerLabel(user, userAcc.Name)
 			if err := r.client.Create(context.TODO(), user); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to create user '%s'", userAcc.Name)
@@ -200,12 +205,12 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 	logger.Info("user already exists", "name", userAcc.Name)
 
 	// ensure mapping
-	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID) {
+	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID, r.config) {
 		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
 		if err := r.setStatusProvisioning(userAcc); err != nil {
 			return nil, false, err
 		}
-		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID)}
+		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID, r.config)}
 		if err := r.client.Update(context.TODO(), user); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update user '%s'", userAcc.Name)
 		}
@@ -219,7 +224,7 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 }
 
 func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	name := ToIdentityName(userAcc.Spec.UserID)
+	name := ToIdentityName(userAcc.Spec.UserID, r.config)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
@@ -227,7 +232,7 @@ func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolc
 			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(userAcc, user)
+			identity = newIdentity(userAcc, user, r.config)
 			setOwnerLabel(identity, userAcc.Name)
 			if err := r.client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", name)
@@ -393,7 +398,7 @@ func (r *ReconcileUserAccount) deleteUser(userAcc *toolchainv1alpha1.UserAccount
 func (r *ReconcileUserAccount) deleteIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
-	identityName := ToIdentityName(userAcc.Spec.UserID)
+	identityName := ToIdentityName(userAcc.Spec.UserID, r.config)
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -560,18 +565,18 @@ func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1
 	return r.client.Status().Update(context.TODO(), userAcc)
 }
 
-func newUser(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
+func newUser(userAcc *toolchainv1alpha1.UserAccount, config *configuration.Config) *userv1.User {
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{ToIdentityName(userAcc.Spec.UserID)},
+		Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)},
 	}
 	return user
 }
 
-func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) *userv1.Identity {
-	name := ToIdentityName(userAcc.Spec.UserID)
+func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config *configuration.Config) *userv1.Identity {
+	name := ToIdentityName(userAcc.Spec.UserID, config)
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -598,6 +603,6 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 }
 
 // ToIdentityName converts the given `userID` into an identity
-func ToIdentityName(userID string) string {
-	return fmt.Sprintf("%s:%s", config.GetIdP(), userID)
+func ToIdentityName(userID string, identityProvider IdentityProvider) string {
+	return fmt.Sprintf("%s:%s", identityProvider.GetIdP(), userID)
 }

@@ -96,6 +96,11 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	return false, nil
 }
 
+// delete deletes cluster scoped resources taken the ClusterResources template. The method deletes only one resource in one call
+// and returns information if any resource was deleted or not. The cases are described below:
+//
+// If some resource that should be deleted is found, then it deletes it and returns 'true,nil'. If there is no resource to be deleted
+// which means that everything was deleted previously, then it returns 'false,nil'. In case of any error it returns 'false,error'.
 func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	username := nsTmplSet.Name
 	objs, err := process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, username)

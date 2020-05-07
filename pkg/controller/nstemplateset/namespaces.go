@@ -148,6 +148,11 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	return nil // nothing changed, no error occurred
 }
 
+// delete deletes namespaces that are owned by the user (based on the label). The method deletes only one namespace in one call
+// and returns information if any namespace was deleted or not. The cases are described below:
+//
+// If there is still some namespace owned by the user, then it deletes it and returns 'true,nil'. If there is no namespace found
+// which means that everything was deleted previously, then it returns 'false,nil'. In case of any error it returns 'false,error'.
 func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// now, we can delete all "child" namespaces explicitly
 	username := nsTmplSet.Name

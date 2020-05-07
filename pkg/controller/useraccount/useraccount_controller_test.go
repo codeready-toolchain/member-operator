@@ -848,7 +848,6 @@ func TestDisabledUserAccount(t *testing.T) {
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	config := configuration.LoadConfig()
-	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
@@ -1221,7 +1220,6 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
 	config := configuration.LoadConfig()
-	require.NoError(t, err)
 
 	r := &ReconcileUserAccount{
 		client: fakeClient,

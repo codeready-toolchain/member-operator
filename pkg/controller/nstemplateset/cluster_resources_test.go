@@ -98,7 +98,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 	t.Run("should not do anything when the CRQ is already created", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources(), withConditions(Provisioned()))
-		crq := newClusterResourceQuota(t, username, "advanced")
+		crq := newClusterResourceQuota(username, "advanced")
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 		// when
@@ -181,7 +181,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	crq := newClusterResourceQuota(t, username, "advanced")
+	crq := newClusterResourceQuota(username, "advanced")
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
 
 	t.Run("delete ClusterResourceQuota", func(t *testing.T) {
@@ -201,8 +201,8 @@ func TestDeleteClusterResources(t *testing.T) {
 	t.Run("should delete only one ClusterResourceQuota even when tier contains more of them", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
-		crq := newClusterResourceQuota(t, username, "withemptycrq")
-		emptyCrq := newClusterResourceQuota(t, "empty", "withemptycrq")
+		crq := newClusterResourceQuota(username, "withemptycrq")
+		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
 
 		// when
@@ -233,10 +233,10 @@ func TestDeleteClusterResources(t *testing.T) {
 	t.Run("delete the second ClusterResourceQuota since the first one has deletion timestamp set", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
-		crq := newClusterResourceQuota(t, username, "withemptycrq")
+		crq := newClusterResourceQuota(username, "withemptycrq")
 		deletionTS := v1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
-		emptyCrq := newClusterResourceQuota(t, "empty", "withemptycrq")
+		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
 
 		// when
@@ -297,7 +297,7 @@ func TestPromoteClusterResources(t *testing.T) {
 		t.Run("upgrade from advanced to team tier by changing the CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "team", withNamespaces("dev"), withClusterResources())
-			crq := newClusterResourceQuota(t, username, "advanced")
+			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
@@ -319,7 +319,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			crq := newClusterResourceQuota(t, username, "advanced")
+			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
@@ -338,7 +338,7 @@ func TestPromoteClusterResources(t *testing.T) {
 		t.Run("delete redundant cluster resources when ClusterResources field is nil in NSTemplateSet", func(t *testing.T) {
 			// given 'advanced' NSTemplate only has a cluster resource
 			nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq") // no cluster resources, so the "advancedCRQ" should be deleted even if the tier contains the "advancedCRQ"
-			crq := newClusterResourceQuota(t, username, "advanced")
+			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
@@ -378,8 +378,8 @@ func TestPromoteClusterResources(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources, so the "advancedCRQ" should be deleted
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
-			advancedCRQ := newClusterResourceQuota(t, username, "advanced")
-			anotherCRQ := newClusterResourceQuota(t, "another-user", "basic")
+			advancedCRQ := newClusterResourceQuota(username, "advanced")
+			anotherCRQ := newClusterResourceQuota("another-user", "basic")
 			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
 
 			// when
@@ -396,8 +396,8 @@ func TestPromoteClusterResources(t *testing.T) {
 		t.Run("delete only one redundant cluster resource during one call", func(t *testing.T) {
 			// given 'advanced' NSTemplate only has a cluster resource
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
-			advancedCRQ := newClusterResourceQuota(t, username, "withemptycrq")
-			anotherCRQ := newClusterResourceQuota(t, username, "withemptycrq")
+			advancedCRQ := newClusterResourceQuota(username, "withemptycrq")
+			anotherCRQ := newClusterResourceQuota(username, "withemptycrq")
 			anotherCRQ.Name = "for-empty"
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, advancedCRQ, anotherCRQ)
 
@@ -434,7 +434,7 @@ func TestPromoteClusterResources(t *testing.T) {
 		t.Run("promotion to another tier fails because it cannot load current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
-			crq := newClusterResourceQuota(t, username, "fail")
+			crq := newClusterResourceQuota(username, "fail")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
@@ -454,7 +454,7 @@ func TestPromoteClusterResources(t *testing.T) {
 		t.Run("fail to downgrade from advanced to basic tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
-			crq := newClusterResourceQuota(t, username, "advanced")
+			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 			cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("some error")

@@ -119,7 +119,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("status provisioned with cluster resources", func(t *testing.T) {
 		// given
 		// create cluster resource quotas
-		crq := newClusterResourceQuota(t, username, "advanced")
+		crq := newClusterResourceQuota(username, "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withRevision("abcde11"))
@@ -230,9 +230,9 @@ func TestReconcileUpdate(t *testing.T) {
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 					HasFinalizer().
-					HasConditions(Updating()) // still in progress
+					HasConditions(Updating())                             // still in progress
 				AssertThatNamespace(t, codeNS.Name, r.client).
-					DoesNotExist() // namespace was deleted
+					DoesNotExist()                                        // namespace was deleted
 				AssertThatNamespace(t, devNS.Name, r.client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -358,7 +358,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	t.Run("with cluster resources and 2 user namespaces to delete", func(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
-		crq := newClusterResourceQuota(t, username, "advanced")
+		crq := newClusterResourceQuota(username, "advanced")
 		devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withRevision("abcde11"))
 		r, _ := prepareController(t, nsTmplSet, crq, devNS, codeNS)
@@ -678,7 +678,7 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 	}
 }
 
-func newClusterResourceQuota(t *testing.T, username, tier string) *quotav1.ClusterResourceQuota {
+func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuota {
 	return &quotav1.ClusterResourceQuota{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{

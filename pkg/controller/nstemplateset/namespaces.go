@@ -6,6 +6,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -166,6 +167,17 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 		}
 	}
 	return false, nil
+}
+
+// fetchNamespaces returns all current namespaces belonging to the given user
+// i.e., labeled with `"toolchain.dev.openshift.com/owner":<username>`
+func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace, error) {
+	// fetch all namespace with owner=username label
+	userNamespaceList := &corev1.NamespaceList{}
+	if err := client.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
+		return nil, err
+	}
+	return userNamespaceList.Items, nil
 }
 
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and

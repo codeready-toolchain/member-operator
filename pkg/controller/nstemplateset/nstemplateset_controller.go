@@ -235,17 +235,6 @@ Current:
 	return deleted, nil
 }
 
-// fetchNamespaces returns all current namespaces belonging to the given user
-// i.e., labeled with `"toolchain.dev.openshift.com/owner":<username>`
-func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace, error) {
-	// fetch all namespace with owner=username label
-	userNamespaceList := &corev1.NamespaceList{}
-	if err := client.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
-		return nil, err
-	}
-	return userNamespaceList.Items, nil
-}
-
 // listByOwnerLabel returns client.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
 func listByOwnerLabel(username string) client.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}

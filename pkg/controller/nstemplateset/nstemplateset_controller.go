@@ -4,6 +4,7 @@ import (
 	"context"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
@@ -30,7 +31,7 @@ import (
 var log = logf.Log.WithName("controller_nstemplateset")
 
 // Add creates a new NSTemplateSetReconciler and starts it (ie, watches resources and reconciles the cluster state)
-func Add(mgr manager.Manager) error {
+func Add(mgr manager.Manager, _ *configuration.Config) error {
 	return add(mgr, newReconciler(&apiClient{
 		client:          mgr.GetClient(),
 		scheme:          mgr.GetScheme(),

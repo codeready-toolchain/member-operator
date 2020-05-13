@@ -7,9 +7,9 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
-	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
@@ -72,9 +72,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
 		return err
 	}
-	// also, watch for secondary resources: cluster resources quotas associated with an NSTemplateSet, too
-	if err := c.Watch(&source.Kind{Type: &quotav1.ClusterResourceQuota{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
-		return err
+	for _, clusterResource := range mainClusterResources {
+		// watch for main cluster resources associated with an NSTemplateSet
+		if err := c.Watch(&source.Kind{Type: clusterResource.object}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -259,4 +261,10 @@ func process(getTemplateContent templateContentFunc, scheme *runtime.Scheme, use
 	tmplProcessor := template.NewProcessor(scheme)
 	params := map[string]string{"USERNAME": username}
 	return tmplProcessor.Process(tmplContent, params, filters...)
+}
+
+func isUpToDateAndProvisioned(obj metav1.Object, revision, tier string) bool {
+	return obj.GetLabels()[toolchainv1alpha1.RevisionLabelKey] != "" &&
+		obj.GetLabels()[toolchainv1alpha1.RevisionLabelKey] == revision &&
+		obj.GetLabels()[toolchainv1alpha1.TierLabelKey] == tier
 }

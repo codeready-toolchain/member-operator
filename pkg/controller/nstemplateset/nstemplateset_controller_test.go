@@ -680,10 +680,15 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 
 func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuota {
 	return &quotav1.ClusterResourceQuota{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "ClusterResourceQuota",
+			APIVersion: quotav1.GroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 				"toolchain.dev.openshift.com/tier":     tier,
+				"toolchain.dev.openshift.com/revision": "12345bb",
 				"toolchain.dev.openshift.com/owner":    username,
 			},
 			Annotations: map[string]string{},
@@ -716,7 +721,7 @@ func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string)
 		case "advanced": // assume that this tier has a "cluster resources" template
 			switch typeName {
 			case ClusterResources:
-				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, clusterTektonRole), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
@@ -730,14 +735,14 @@ func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string)
 		case "team": // assume that this tier has a "cluster resources" template
 			switch typeName {
 			case ClusterResources:
-				tmplContent = test.CreateTemplate(test.WithObjects(teamCrq), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb, clusterTektonRoleTeam), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
 		case "withemptycrq":
 			switch typeName {
 			case ClusterResources:
-				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb, clusterTektonRole), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
 			}
@@ -846,5 +851,49 @@ var (
   metadata:
     name: for-empty
   spec:
+`
+
+	clusterTektonRb test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRoleBinding
+  metadata:
+    name: ${USERNAME}-tekton-view
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: tekton-view-for-${USERNAME}
+  subjects:
+    - kind: User
+      name: ${USERNAME}}
+`
+
+	clusterTektonRole test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: tekton-view-for-${USERNAME}
+  rules:
+  - apiGroups:
+    - tekton.dev/v1alpha1
+    - tekton.dev/v1beta1
+    resources:
+    - 'ClusterTask'
+    verbs:
+    - 'get'
+`
+
+	clusterTektonRoleTeam test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1alpha1
+  kind: ClusterRole
+  metadata:
+    name: tekton-view-for-${USERNAME}
+  rules:
+  - apiGroups:
+    - tekton.dev/v1alpha1
+    - tekton.dev/v1beta1
+    resources:
+    - '*'
+    verbs:
+    - 'get'
 `
 )

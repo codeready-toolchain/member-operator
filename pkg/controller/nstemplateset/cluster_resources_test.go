@@ -7,15 +7,92 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	quotav1 "github.com/openshift/api/quota/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/api/rbac/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
+
+func TestMainClusterResources(t *testing.T) {
+	// given
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
+	for _, mainClusterRes := range mainClusterResources {
+		johnyObject := mainClusterRes.object.DeepCopyObject()
+		objAccessor, err := meta.Accessor(johnyObject)
+		require.NoError(t, err)
+		objAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
+		objAccessor.SetName("johny-object")
+
+		anotherObject := mainClusterRes.object.DeepCopyObject()
+		anotherObjAccessor, err := meta.Accessor(anotherObject)
+		require.NoError(t, err)
+		anotherObjAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
+		anotherObjAccessor.SetName("another-object")
+		namespace := newNamespace("basic", "johny", "code")
+
+		t.Run("listExistingResources should return one resource of gvk "+mainClusterRes.gvk.String(), func(t *testing.T) {
+			// given
+			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, namespace)
+
+			// when
+			existingResources, err := mainClusterRes.listExistingResources(fakeClient, "johny")
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, existingResources, 1)
+			assert.Equal(t, johnyObject, existingResources[0])
+		})
+
+		t.Run("listExistingResources should return not return any resource of gvk "+mainClusterRes.gvk.String(), func(t *testing.T) {
+			// given
+			fakeClient := test.NewFakeClient(t, anotherObject, namespace)
+
+			// when
+			existingResources, err := mainClusterRes.listExistingResources(fakeClient, "johny")
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, existingResources, 0)
+		})
+
+		t.Run("listExistingResources should return an error when listing resources of gvk "+mainClusterRes.gvk.String(), func(t *testing.T) {
+			// given
+			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject)
+			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+				return fmt.Errorf("some error")
+			}
+
+			// when
+			existingResources, err := mainClusterRes.listExistingResources(fakeClient, "johny")
+
+			// then
+			require.Error(t, err)
+			require.Len(t, existingResources, 0)
+		})
+	}
+
+	t.Run("verify ClusteResourceQuota is in mainClusterResources", func(t *testing.T) {
+		// given
+		clusterResource := mainClusterResources[0]
+
+		// then
+		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.object)
+		assert.Equal(t, quotav1.GroupVersion.WithKind("ClusterResourceQuota"), clusterResource.gvk)
+	})
+}
 
 func TestEnsureClusterResourcesOK(t *testing.T) {
 
@@ -40,6 +117,10 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+		AssertThatCluster(t, fakeClient).
+			HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
+		AssertThatCluster(t, fakeClient).
+			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 	})
 
 	t.Run("should not create ClusterResource objects when the field is nil", func(t *testing.T) {
@@ -59,7 +140,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasNoConditions()
 	})
 
-	t.Run("should create only one CRQ when the template contains two of them", func(t *testing.T) {
+	t.Run("should create only one CRQ and not main cluster resources when the template contains two CRQs", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
@@ -76,6 +157,11 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
 		AssertThatCluster(t, fakeClient).
+			HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
+		AssertThatCluster(t, fakeClient).
+			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+
+		AssertThatCluster(t, fakeClient).
 			HasNoResource("for-empty", &quotav1.ClusterResourceQuota{})
 
 		t.Run("should create the second CRQ when the first one is already created", func(t *testing.T) {
@@ -90,6 +176,10 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 				HasConditions(Provisioning())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+			AssertThatCluster(t, fakeClient).
+				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
+			AssertThatCluster(t, fakeClient).
+				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-empty", &quotav1.ClusterResourceQuota{})
 		})
@@ -138,7 +228,8 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		assert.Contains(t, err.Error(), "unable to list cluster resources")
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(UnableToProvisionClusterResources("unable to list cluster resources"))
+			HasConditions(UnableToProvisionClusterResources(
+				"failed to list existing cluster resources of GVK 'quota.openshift.io/v1, Kind=ClusterResourceQuota': unable to list cluster resources"))
 	})
 
 	t.Run("fail to get template containing cluster resources", func(t *testing.T) {
@@ -154,7 +245,8 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to retrieve template")
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(UnableToProvisionClusterResources("failed to retrieve template"))
+			HasConditions(UnableToProvisionClusterResources(
+				"failed to retrieve template for the cluster resources of GVK 'quota.openshift.io/v1, Kind=ClusterResourceQuota': failed to retrieve template"))
 	})
 
 	t.Run("fail to create cluster resources", func(t *testing.T) {
@@ -173,7 +265,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionClusterResources(
-				"unable to create resource of kind: ClusterResourceQuota, version: v1: unable to create resource of kind: ClusterResourceQuota, version: v1: some error"))
+				"unable to create resource of kind: ClusterRoleBinding, version: v1alpha1: unable to create resource of kind: ClusterRoleBinding, version: v1alpha1: some error"))
 	})
 }
 
@@ -196,6 +288,11 @@ func TestDeleteClusterResources(t *testing.T) {
 		assert.True(t, deleted)
 		AssertThatCluster(t, cl).
 			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
+
+		//AssertThatCluster(t, cl).
+		//	HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
+		//AssertThatCluster(t, cl).
+		//	HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 	})
 
 	t.Run("should delete only one ClusterResourceQuota even when tier contains more of them", func(t *testing.T) {
@@ -278,7 +375,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		// then
 		require.Error(t, err)
 		assert.False(t, deleted)
-		assert.Equal(t, "failed to delete cluster resource 'for-johnsmith': mock error", err.Error())
+		assert.Equal(t, "failed to delete cluster resource 'johnsmith-tekton-view': mock error", err.Error())
 		AssertThatNSTemplateSet(t, namespaceName, username, cl).
 			HasFinalizer(). // finalizer was not added and nothing else was done
 			HasConditions(UnableToTerminate("mock error"))
@@ -376,7 +473,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 		t.Run("no redundant cluster resource quota to be deleted for the given user", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources, so the "advancedCRQ" should be deleted
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources())
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
 			advancedCRQ := newClusterResourceQuota(username, "advanced")
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
@@ -391,6 +488,31 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
 				HasConditions(Provisioned())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+			AssertThatCluster(t, cl).
+				HasResource("for-another-user", &quotav1.ClusterResourceQuota{})
+		})
+
+		t.Run("cluster resource quota should be deleted since it doesn't contain clusterResources template", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources, so the "advancedCRQ" should be deleted
+			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
+			advancedCRQ := newClusterResourceQuota(username, "advanced")
+			anotherCRQ := newClusterResourceQuota("another-user", "basic")
+			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasNoResource("another-user", &quotav1.ClusterResourceQuota{})
 		})
 
 		t.Run("delete only one redundant cluster resource during one call", func(t *testing.T) {
@@ -442,13 +564,13 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			// then
 			require.Error(t, err)
-			assert.False(t, updated)
+			assert.True(t, updated)
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
-				HasConditions(UpdateFailed("failed to retrieve template"))
+				HasConditions(UpdateFailed(
+					"failed to get current cluster resources from template of a tier fail: failed to retrieve template"))
 			AssertThatCluster(t, cl).
-				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/tier", "fail"))
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
 		})
 
 		t.Run("fail to downgrade from advanced to basic tier", func(t *testing.T) {
@@ -468,10 +590,110 @@ func TestPromoteClusterResources(t *testing.T) {
 			assert.False(t, updated)
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
-				HasConditions(UpdateFailed("failed to delete object 'for-johnsmith' of kind 'ClusterResourceQuota' in namespace '': some error"))
+				HasConditions(UpdateFailed(
+					"failed to delete an existing redundant cluster resource of name 'for-johnsmith' and gvk 'quota.openshift.io/v1, Kind=ClusterResourceQuota': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+		})
+	})
+}
+
+func TestRetainFunctions(t *testing.T) {
+	// given
+	clusterRole := runtime.RawExtension{Object: &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"kind":       "ClusterRole",
+			"apiVersion": "rbac.authorization.k8s.io/v1alpha1",
+		}}}
+
+	namespace := runtime.RawExtension{Object: &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"kind":       "Namespace",
+			"apiVersion": "v1",
+		}}}
+	clusterResQuota := runtime.RawExtension{Object: &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"kind":       "ClusterResourceQuota",
+			"apiVersion": "quota.openshift.io/v1",
+		}}}
+	clusterRoleBinding := runtime.RawExtension{Object: &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"kind":       "ClusterRoleBinding",
+			"apiVersion": "rbac.authorization.k8s.io/v1alpha1",
+		}}}
+
+	t.Run("verify retainObjectsOfSameGVK function for ClusterRole", func(t *testing.T) {
+		// given
+		retain := retainObjectsOfSameGVK(v1alpha1.SchemeGroupVersion.WithKind("ClusterRole"))
+
+		t.Run("should return false since the GVK doesn't match", func(t *testing.T) {
+			for _, obj := range []runtime.RawExtension{namespace, clusterResQuota, clusterRoleBinding} {
+
+				// when
+				ok := retain(obj)
+
+				// then
+				assert.False(t, ok)
+
+			}
+		})
+
+		t.Run("should return true since the GVK matches", func(t *testing.T) {
+
+			// when
+			ok := retain(clusterRole)
+
+			// then
+			assert.True(t, ok)
+		})
+	})
+
+	t.Run("verify retainAllObjectsButMainClusterResources function", func(t *testing.T) {
+
+		t.Run("should return true since the resources are not one of the main-cluster-resources", func(t *testing.T) {
+			for _, obj := range []runtime.RawExtension{namespace, clusterRole, clusterRoleBinding} {
+
+				// when
+				ok := retainAllObjectsButMainClusterResources(obj)
+
+				// then
+				assert.True(t, ok)
+
+			}
+		})
+
+		t.Run("should return false since the resource is one of the main-cluster-resources", func(t *testing.T) {
+
+			// when
+			ok := retainAllObjectsButMainClusterResources(clusterResQuota)
+
+			// then
+			assert.False(t, ok)
+		})
+	})
+
+	t.Run("verify retainAllObjectsButMainClusterResources function", func(t *testing.T) {
+
+		t.Run("should return false since the resources are not one of the main-cluster-resources", func(t *testing.T) {
+			for _, obj := range []runtime.RawExtension{namespace, clusterRole, clusterRoleBinding} {
+
+				// when
+				ok := retainAllMainClusterResourceObjects(obj)
+
+				// then
+				assert.False(t, ok)
+
+			}
+		})
+
+		t.Run("should return true since the resource is one of the main-cluster-resources", func(t *testing.T) {
+
+			// when
+			ok := retainAllMainClusterResourceObjects(clusterResQuota)
+
+			// then
+			assert.True(t, ok)
 		})
 	})
 }

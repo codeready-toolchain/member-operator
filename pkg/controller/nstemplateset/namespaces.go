@@ -193,9 +193,7 @@ func nextNamespaceToProvisionOrUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet
 		namespace, found := findNamespace(namespaces, tcNamespace.Type)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				if namespace.Labels[toolchainv1alpha1.RevisionLabelKey] == "" ||
-					namespace.Labels[toolchainv1alpha1.RevisionLabelKey] != tcNamespace.Revision ||
-					namespace.Labels[toolchainv1alpha1.TierLabelKey] != nsTmplSet.Spec.TierName {
+				if  !isUpToDateAndProvisioned(&namespace, tcNamespace.Revision, nsTmplSet.Spec.TierName){
 					return &tcNamespace, &namespace, true
 				}
 			}

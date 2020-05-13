@@ -82,7 +82,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 			return true, nil
 		}
 
-		labels := clusterResourceLabels(nsTmplSet)
+		labels := clusterResourceLabels(nsTmplSet.GetName(), nsTmplSet.Spec.ClusterResources.Revision, nsTmplSet.Spec.TierName)
 		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
 		// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
 		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
@@ -288,7 +288,7 @@ func (r *clusterResourcesManager) ensureNotMainClusterResources(logger logr.Logg
 		return nil
 	}
 
-	labels := clusterResourceLabels(nsTmplSet)
+	labels := clusterResourceLabels(nsTmplSet.GetName(), nsTmplSet.Spec.ClusterResources.Revision, nsTmplSet.Spec.TierName)
 	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
 	// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
@@ -381,12 +381,12 @@ var retainAllMainClusterResourceObjects template.FilterFunc = func(obj runtime.R
 	return false
 }
 
-func clusterResourceLabels(nsTmplSet *toolchainv1alpha1.NSTemplateSet) map[string]string {
+func clusterResourceLabels(username, revision, tier string) map[string]string {
 	return map[string]string{
-		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
+		toolchainv1alpha1.OwnerLabelKey:    username,
 		toolchainv1alpha1.TypeLabelKey:     ClusterResources,
-		toolchainv1alpha1.RevisionLabelKey: nsTmplSet.Spec.ClusterResources.Revision,
-		toolchainv1alpha1.TierLabelKey:     nsTmplSet.Spec.TierName,
+		toolchainv1alpha1.RevisionLabelKey: revision,
+		toolchainv1alpha1.TierLabelKey:     tier,
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
 }

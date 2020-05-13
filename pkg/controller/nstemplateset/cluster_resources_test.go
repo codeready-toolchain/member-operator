@@ -116,10 +116,8 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasFinalizer().
 			HasConditions(Provisioning())
 		AssertThatCluster(t, fakeClient).
-			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
-		AssertThatCluster(t, fakeClient).
-			HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
-		AssertThatCluster(t, fakeClient).
+			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+			HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
 			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 	})
 
@@ -155,10 +153,8 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasFinalizer().
 			HasConditions(Provisioning())
 		AssertThatCluster(t, fakeClient).
-			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
-		AssertThatCluster(t, fakeClient).
-			HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
-		AssertThatCluster(t, fakeClient).
+			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+			HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
 			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 
 		AssertThatCluster(t, fakeClient).
@@ -175,12 +171,9 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 				HasFinalizer().
 				HasConditions(Provisioning())
 			AssertThatCluster(t, fakeClient).
-				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
-			AssertThatCluster(t, fakeClient).
-				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
-			AssertThatCluster(t, fakeClient).
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
-			AssertThatCluster(t, fakeClient).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{}).
 				HasResource("for-empty", &quotav1.ClusterResourceQuota{})
 		})
 	})
@@ -202,6 +195,11 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasConditions(Provisioned())
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+
+		// since the resources weren't created as part of the test setup, they should not exist:
+		AssertThatCluster(t, fakeClient).
+			HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+			HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 	})
 }
 
@@ -274,11 +272,13 @@ func TestDeleteClusterResources(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	crq := newClusterResourceQuota(username, "advanced")
+	cr := newTektonClusterRole(username, "12345bb", "advanced", "ClusterTask")
+	crb := newTektonClusterRoleBinding(username, "12345bb", "advanced")
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
 
 	t.Run("delete ClusterResourceQuota", func(t *testing.T) {
 		// given
-		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, cr, crb)
 
 		// when
 		deleted, err := manager.delete(log, nsTmplSet)
@@ -287,20 +287,17 @@ func TestDeleteClusterResources(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, deleted)
 		AssertThatCluster(t, cl).
-			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
-
-		//AssertThatCluster(t, cl).
-		//	HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{})
-		//AssertThatCluster(t, cl).
-		//	HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+			HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+			HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 	})
 
-	t.Run("should delete only one ClusterResourceQuota even when tier contains more of them", func(t *testing.T) {
+	t.Run("should delete not-main-cluster resources and only one ClusterResourceQuota even when tier contains more ", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
 		crq := newClusterResourceQuota(username, "withemptycrq")
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
-		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
+		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq, cr, crb)
 
 		// when
 		deleted, err := manager.delete(log, nsTmplSet)
@@ -309,9 +306,10 @@ func TestDeleteClusterResources(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, deleted)
 		AssertThatCluster(t, cl).
-			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
-		AssertThatCluster(t, cl).
-			HasResource("for-empty", &quotav1.ClusterResourceQuota{})
+			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+			HasResource("for-empty", &quotav1.ClusterResourceQuota{}).
+			HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+			HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 
 		t.Run("delete the for-empty CRQ since it's the last one to be deleted", func(t *testing.T) {
 			// when
@@ -321,9 +319,10 @@ func TestDeleteClusterResources(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, deleted)
 			AssertThatCluster(t, cl).
-				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
-			AssertThatCluster(t, cl).
-				HasNoResource("for-empty", &quotav1.ClusterResourceQuota{})
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+				HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
+				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 	})
 
@@ -343,8 +342,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, deleted)
 		AssertThatCluster(t, cl).
-			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}, HasDeletionTimestamp())
-		AssertThatCluster(t, cl).
+			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}, HasDeletionTimestamp()).
 			HasNoResource("for-empty", &quotav1.ClusterResourceQuota{})
 	})
 
@@ -388,6 +386,8 @@ func TestPromoteClusterResources(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
+	cr := newTektonClusterRole(username, "12345bb", "advanced", "ClusterTask")
+	crb := newTektonClusterRoleBinding(username, "12345bb", "advanced")
 
 	t.Run("success", func(t *testing.T) {
 
@@ -395,7 +395,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "team", withNamespaces("dev"), withClusterResources())
 			crq := newClusterResourceQuota(username, "advanced")
-			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, cr, crb)
 
 			// when
 			updated, err := manager.ensure(log, nsTmplSet)
@@ -409,7 +409,12 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/tier", "team"),
-					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`))
+					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`)).
+				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{},
+					WithLabel("toolchain.dev.openshift.com/tier", "team"),
+					Containing(`"resources":["*"]`)).
+				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+					WithLabel("toolchain.dev.openshift.com/tier", "team"))
 		})
 
 		t.Run("downgrade from advanced to basic tier by removing CRQ", func(t *testing.T) {
@@ -417,7 +422,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			crq := newClusterResourceQuota(username, "advanced")
-			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, cr, crb)
 
 			// when
 			updated, err := manager.ensure(log, nsTmplSet)
@@ -429,7 +434,9 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasFinalizer().
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
-				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}) // no cluster resource quota in 'basic` tier
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}). // no cluster resources in 'basic` tier
+				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
 		t.Run("delete redundant cluster resources when ClusterResources field is nil in NSTemplateSet", func(t *testing.T) {
@@ -448,10 +455,12 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasFinalizer().
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
-				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}) // resource was deleted
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}). // resources were deleted
+				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
-		t.Run("upgrade from basic to advanced by creating CRQ", func(t *testing.T) {
+		t.Run("upgrade from basic to advanced by creating CRQ and not-main-cluster resources", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources())
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
@@ -468,16 +477,23 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
-					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)) // upgraded
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{},
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
+					Containing(`"resources":["ClusterTask"]`)).
+				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 		})
 
-		t.Run("no redundant cluster resource quota to be deleted for the given user", func(t *testing.T) {
+		t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources())
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
 			advancedCRQ := newClusterResourceQuota(username, "advanced")
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
-			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
+			anotherCr := newTektonClusterRole("another", "12345bb", "basic", "ClusterTask")
+			anotherCrb := newTektonClusterRoleBinding("another", "12345bb", "basic")
+			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCr, anotherCrb, cr, crb)
 
 			// when
 			updated, err := manager.ensure(log, nsTmplSet)
@@ -489,18 +505,21 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasFinalizer().
 				HasConditions(Provisioned())
 			AssertThatCluster(t, cl).
-				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
-			AssertThatCluster(t, cl).
-				HasResource("for-another-user", &quotav1.ClusterResourceQuota{})
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+				HasResource("for-another-user", &quotav1.ClusterResourceQuota{}).
+				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{}).
+				HasResource("tekton-view-for-another", &v1alpha1.ClusterRole{}).
+				HasResource("another-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
-		t.Run("cluster resource quota should be deleted since it doesn't contain clusterResources template", func(t *testing.T) {
+		t.Run("cluster resources should be deleted since it doesn't contain clusterResources template", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources, so the "advancedCRQ" should be deleted
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources template, so the cluster resources should be deleted
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
 			advancedCRQ := newClusterResourceQuota(username, "advanced")
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
-			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
+			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, cr, crb)
 
 			// when
 			updated, err := manager.ensure(log, nsTmplSet)
@@ -512,16 +531,20 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasFinalizer().
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
-				HasNoResource("another-user", &quotav1.ClusterResourceQuota{})
+				HasNoResource("another-user", &quotav1.ClusterResourceQuota{}).
+				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
-		t.Run("delete only one redundant cluster resource during one call", func(t *testing.T) {
+		t.Run("delete not-main-cluster resources and only one redundant cluster resource during one call", func(t *testing.T) {
 			// given 'advanced' NSTemplate only has a cluster resource
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
 			advancedCRQ := newClusterResourceQuota(username, "withemptycrq")
 			anotherCRQ := newClusterResourceQuota(username, "withemptycrq")
+			cr := newTektonClusterRole(username, "12345bb", "withemptycrq", "ClusterTask")
+			crb := newTektonClusterRoleBinding(username, "12345bb", "withemptycrq")
 			anotherCRQ.Name = "for-empty"
-			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, advancedCRQ, anotherCRQ)
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, advancedCRQ, anotherCRQ, cr, crb)
 
 			// when
 			updated, err := manager.ensure(log, nsTmplSet)
@@ -536,6 +559,9 @@ func TestPromoteClusterResources(t *testing.T) {
 			err = cl.List(context.TODO(), quotas, &client.ListOptions{})
 			require.NoError(t, err)
 			assert.Len(t, quotas.Items, 1)
+			AssertThatCluster(t, cl).
+				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 
 			t.Run("it should delete the second for-empty CRQ since it's the last one", func(t *testing.T) {
 				// when - should delete the second ClusterResourceQuota
@@ -547,6 +573,9 @@ func TestPromoteClusterResources(t *testing.T) {
 				err = cl.List(context.TODO(), quotas, &client.ListOptions{})
 				require.NoError(t, err)
 				assert.Len(t, quotas.Items, 0)
+				AssertThatCluster(t, cl).
+					HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+					HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 			})
 		})
 	})
@@ -570,14 +599,16 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed(
 					"failed to get current cluster resources from template of a tier fail: failed to retrieve template"))
 			AssertThatCluster(t, cl).
-				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
 		t.Run("fail to downgrade from advanced to basic tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
 			crq := newClusterResourceQuota(username, "advanced")
-			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, cr, crb)
 			cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("some error")
 			}
@@ -594,6 +625,10 @@ func TestPromoteClusterResources(t *testing.T) {
 					"failed to delete an existing redundant cluster resource of name 'for-johnsmith' and gvk 'quota.openshift.io/v1, Kind=ClusterResourceQuota': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+				HasResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{},
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 		})
 	})

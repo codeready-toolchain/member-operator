@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/api/rbac/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -230,9 +231,9 @@ func TestReconcileUpdate(t *testing.T) {
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 					HasFinalizer().
-					HasConditions(Updating())                             // still in progress
+					HasConditions(Updating()) // still in progress
 				AssertThatNamespace(t, codeNS.Name, r.client).
-					DoesNotExist()                                        // namespace was deleted
+					DoesNotExist() // namespace was deleted
 				AssertThatNamespace(t, devNS.Name, r.client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -678,10 +679,52 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 	}
 }
 
+func newTektonClusterRole(username, revision, tier, resourcesLine string) *v1alpha1.ClusterRole {
+	return &v1alpha1.ClusterRole{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ClusterRole",
+			APIVersion: v1alpha1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:     clusterResourceLabels(username, revision, tier),
+			Name:       "tekton-view-for-" + username,
+			Generation: int64(1),
+		},
+		Rules: []v1alpha1.PolicyRule{{
+			APIGroups: []string{"tekton.dev/v1alpha1", "tekton.dev/v1beta1"},
+			Resources: []string{resourcesLine},
+			Verbs:     []string{"get"},
+		}},
+	}
+}
+
+func newTektonClusterRoleBinding(username, revision, tier string) *v1alpha1.ClusterRoleBinding {
+	return &v1alpha1.ClusterRoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ClusterRoleBinding",
+			APIVersion: v1alpha1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:     clusterResourceLabels(username, revision, tier),
+			Name:       username + "-tekton-view",
+			Generation: int64(1),
+		},
+		RoleRef: v1alpha1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "tekton-view-for-" + username,
+		},
+		Subjects: []v1alpha1.Subject{{
+			Kind: "User",
+			Name: username,
+		}},
+	}
+}
+
 func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuota {
 	return &quotav1.ClusterResourceQuota{
 		TypeMeta: metav1.TypeMeta{
-			Kind: "ClusterResourceQuota",
+			Kind:       "ClusterResourceQuota",
 			APIVersion: quotav1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{

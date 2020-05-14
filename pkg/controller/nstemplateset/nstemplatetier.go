@@ -6,47 +6,37 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-
+	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	templatev1 "github.com/openshift/api/template/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-const (
-	// ClusterResources the key to retrieve the cluster resources template
-	ClusterResources string = "clusterResources"
-)
-
-// getTemplateFromHost retrieves the NSTemplateTier resource on the host cluster
-// and returns the templatev1.Template for the given typeName.
-// The typeName can be a namespace type (`code`, `dev`, etc.) or `clusterResources` for
-// the (optional) cluster resources
-func getTemplateFromHost(tierName, typeName string) (*templatev1.Template, error) {
-	if tierName == "" {
+// getTemplateFromHost retrieves the TierTemplate resource with the given name from the host cluster
+// and returns an instance of the tierTemplate type for it whose template content can be parsable.
+// The returned tierTemplate contains all data from TierTemplate including its name.
+func getTemplateFromHost(templateRef string) (*tierTemplate, error) {
+	if templateRef == "" {
 		return nil, nil
 	}
-	templates, err := getTemplatesFromHost(cluster.GetHostCluster, tierName)
+	tmpl, err := getTierTemplate(cluster.GetHostCluster, templateRef)
 	if err != nil {
 		return nil, err
 	}
-	if tmpl, exists := templates[typeName]; exists {
-		return &(tmpl.Template), nil
-	}
-	return nil, nil
+	return &tierTemplate{
+		templateRef: templateRef,
+		tierName:    tmpl.Spec.TierName,
+		typeName:    tmpl.Spec.Type,
+		revision:    tmpl.Spec.Revision,
+		template:    tmpl.Spec.Template,
+	}, nil
 }
 
-// templates the templates along with their revision number for a given tier
-type templates map[string]versionedTemplate
-
-// versionedTemplate a template along with its revision number
-type versionedTemplate struct {
-	Revision string
-	Template templatev1.Template
-}
-
-// getTemplatesFromHost gets the templates configured in the NSTemplateTier resource on the host cluster.
-func getTemplatesFromHost(hostClusterFunc cluster.GetHostClusterFunc, tierName string) (templates, error) {
+// getTierTemplate gets the TierTemplate resource from the host cluster.
+func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplate, error) {
 	// retrieve the FedCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {
@@ -56,26 +46,30 @@ func getTemplatesFromHost(hostClusterFunc cluster.GetHostClusterFunc, tierName s
 		return nil, fmt.Errorf("the host cluster is not ready")
 	}
 
-	tier := &toolchainv1alpha1.NSTemplateTier{}
+	tierTemplate := &toolchainv1alpha1.TierTemplate{}
 	err := host.Client.Get(context.TODO(), types.NamespacedName{
 		Namespace: host.OperatorNamespace,
-		Name:      tierName,
-	}, tier)
+		Name:      templateRef,
+	}, tierTemplate)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to retrieve the NSTemplateTier '%s' from 'Host' cluster", tierName)
+		return nil, errors.Wrapf(err, "unable to retrieve the TierTemplate '%s' from 'Host' cluster", templateRef)
 	}
-	result := templates{}
-	for _, ns := range tier.Spec.Namespaces {
-		result[ns.Type] = versionedTemplate{
-			Revision: ns.Revision,
-			Template: ns.Template,
-		}
-	}
-	if tier.Spec.ClusterResources != nil {
-		result[ClusterResources] = versionedTemplate{
-			Revision: tier.Spec.ClusterResources.Revision,
-			Template: tier.Spec.ClusterResources.Template,
-		}
-	}
-	return result, nil
+	return tierTemplate, nil
+}
+
+// tierTemplate contains all data from TierTemplate including its name
+type tierTemplate struct {
+	templateRef string
+	tierName    string
+	typeName    string
+	revision    string
+	template    templatev1.Template
+}
+
+// process processes the template inside of the tierTemplate object and replaces the USERNAME variable with the given username.
+// Optionally, it also filters the result to return a subset of the template objects.
+func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtime.RawExtension, error) {
+	tmplProcessor := template.NewProcessor(scheme)
+	params := map[string]string{"USERNAME": username}
+	return tmplProcessor.Process(&t.template, params, filters...)
 }

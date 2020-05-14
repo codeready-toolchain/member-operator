@@ -311,7 +311,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/tier", "team"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "team-cluster-12345bb"),
 					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`))
 		})
 
@@ -370,13 +370,13 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Provisioning())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
 					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)) // upgraded
 		})
 
 		t.Run("no redundant cluster resource quota to be deleted for the given user", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources, so the "advancedCRQ" should be deleted
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources())
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
 			advancedCRQ := newClusterResourceQuota(username, "advanced")
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
@@ -448,7 +448,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("failed to retrieve template"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/tier", "fail"))
+					WithLabel("toolchain.dev.openshift.com/templateref", "fail-cluster-12345bb"))
 		})
 
 		t.Run("fail to downgrade from advanced to basic tier", func(t *testing.T) {
@@ -471,7 +471,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("failed to delete object 'for-johnsmith' of kind 'ClusterResourceQuota' in namespace '': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"))
 		})
 	})
 }

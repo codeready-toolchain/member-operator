@@ -23,11 +23,18 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
 	username := nsTmplSet.GetName()
 	newObjs := make([]runtime.RawExtension, 0)
+	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		newObjs, err = process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, username)
+		tierTemplate, err = r.getTemplateContent(nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to retrieve template for the cluster resources")
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
+				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
+		}
+		newObjs, err = tierTemplate.process(r.scheme, username)
+		if err != nil {
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
+				"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
 
@@ -42,13 +49,21 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "failed to get meta info from object %v", crqs.Items[0])
 		}
-		if currentTier, exists := crqMeta.GetLabels()[toolchainv1alpha1.TierLabelKey]; exists && currentTier != nsTmplSet.Spec.TierName {
+		if currentTemplateRef, exists := crqMeta.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey]; exists && (nsTmplSet.Spec.ClusterResources == nil || currentTemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef) {
+
 			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 				return false, err
 			}
-			currentObjs, err := process(r.templateContent(currentTier, ClusterResources), r.scheme, username)
+
+			currentTierTemplate, err := r.getTemplateContent(currentTemplateRef)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve cluster resources template for tier '%s'", currentTier)
+				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err,
+					"failed to retrieve TierTemplate for the cluster resources with the name '%s'", currentTemplateRef)
+			}
+			currentObjs, err := currentTierTemplate.process(r.scheme, username)
+			if err != nil {
+				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err,
+					"failed to process template for the cluster resources with the name '%s'", currentTemplateRef)
 			}
 			if deleted, err := deleteRedundantObjects(logger, r.client, true, currentObjs, newObjs); err != nil {
 				logger.Error(err, "failed to delete redundant cluster resources")
@@ -64,11 +79,10 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	}
 
 	var labels = map[string]string{
-		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
-		toolchainv1alpha1.TypeLabelKey:     ClusterResources,
-		toolchainv1alpha1.RevisionLabelKey: nsTmplSet.Spec.ClusterResources.Revision,
-		toolchainv1alpha1.TierLabelKey:     nsTmplSet.Spec.TierName,
-		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
+		toolchainv1alpha1.TypeLabelKey:        "cluster",
+		toolchainv1alpha1.TemplateRefLabelKey: tierTemplate.templateRef,
+		toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
 	}
 	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
 	// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
@@ -102,10 +116,19 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 // If some resource that should be deleted is found, then it deletes it and returns 'true,nil'. If there is no resource to be deleted
 // which means that everything was deleted previously, then it returns 'false,nil'. In case of any error it returns 'false,error'.
 func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+	if nsTmplSet.Spec.ClusterResources == nil {
+		return false, nil
+	}
 	username := nsTmplSet.Name
-	objs, err := process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, username)
+	tierTemplate, err := r.getTemplateContent(nsTmplSet.Spec.ClusterResources.TemplateRef)
 	if err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list cluster resources for user '%s'", username)
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
+			"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
+	}
+	objs, err := tierTemplate.process(r.scheme, username)
+	if err != nil {
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
+			"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 	}
 	logger.Info("listed cluster resources to delete", "count", len(objs))
 	for _, obj := range objs {

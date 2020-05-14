@@ -23,32 +23,32 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-func TestMainClusterResources(t *testing.T) {
+func TestWatchedClusterResources(t *testing.T) {
 	// given
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	for _, mainClusterRes := range mainClusterResources {
-		johnyObject := mainClusterRes.object.DeepCopyObject()
+	for _, watchedClusterRes := range watchedClusterResources {
+		johnyObject := watchedClusterRes.object.DeepCopyObject()
 		objAccessor, err := meta.Accessor(johnyObject)
 		require.NoError(t, err)
 		objAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
 		objAccessor.SetName("johny-object")
 
-		anotherObject := mainClusterRes.object.DeepCopyObject()
+		anotherObject := watchedClusterRes.object.DeepCopyObject()
 		anotherObjAccessor, err := meta.Accessor(anotherObject)
 		require.NoError(t, err)
 		anotherObjAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
 		anotherObjAccessor.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
-		t.Run("listExistingResources should return one resource of gvk "+mainClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return one resource of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, namespace)
 
 			// when
-			existingResources, err := mainClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.NoError(t, err)
@@ -56,19 +56,19 @@ func TestMainClusterResources(t *testing.T) {
 			assert.Equal(t, johnyObject, existingResources[0])
 		})
 
-		t.Run("listExistingResources should return not return any resource of gvk "+mainClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return not return any resource of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, namespace)
 
 			// when
-			existingResources, err := mainClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.NoError(t, err)
 			require.Len(t, existingResources, 0)
 		})
 
-		t.Run("listExistingResources should return an error when listing resources of gvk "+mainClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return an error when listing resources of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject)
 			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
@@ -76,7 +76,7 @@ func TestMainClusterResources(t *testing.T) {
 			}
 
 			// when
-			existingResources, err := mainClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.Error(t, err)
@@ -84,9 +84,9 @@ func TestMainClusterResources(t *testing.T) {
 		})
 	}
 
-	t.Run("verify ClusteResourceQuota is in mainClusterResources", func(t *testing.T) {
+	t.Run("verify ClusteResourceQuota is in watchedClusterResources", func(t *testing.T) {
 		// given
-		clusterResource := mainClusterResources[0]
+		clusterResource := watchedClusterResources[0]
 
 		// then
 		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.object)
@@ -138,7 +138,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasNoConditions()
 	})
 
-	t.Run("should create only one CRQ and not main cluster resources when the template contains two CRQs", func(t *testing.T) {
+	t.Run("should create only one CRQ and not watched cluster resources when the template contains two CRQs", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
@@ -292,7 +292,7 @@ func TestDeleteClusterResources(t *testing.T) {
 			HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 	})
 
-	t.Run("should delete not-main-cluster resources and only one ClusterResourceQuota even when tier contains more ", func(t *testing.T) {
+	t.Run("should delete not-watched-cluster resources and only one ClusterResourceQuota even when tier contains more ", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
 		crq := newClusterResourceQuota(username, "withemptycrq")
@@ -460,7 +460,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
-		t.Run("upgrade from basic to advanced by creating CRQ and not-main-cluster resources", func(t *testing.T) {
+		t.Run("upgrade from basic to advanced by creating CRQ and not-watched-cluster resources", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources())
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
@@ -536,7 +536,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 		})
 
-		t.Run("delete not-main-cluster resources and only one redundant cluster resource during one call", func(t *testing.T) {
+		t.Run("delete not-watched-cluster resources and only one redundant cluster resource during one call", func(t *testing.T) {
 			// given 'advanced' NSTemplate only has a cluster resource
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic") // no cluster resources, so the "advancedCRQ" should be deleted
 			advancedCRQ := newClusterResourceQuota(username, "withemptycrq")
@@ -684,13 +684,13 @@ func TestRetainFunctions(t *testing.T) {
 		})
 	})
 
-	t.Run("verify retainAllObjectsButMainClusterResources function", func(t *testing.T) {
+	t.Run("verify retainAllObjectsButWatchedClusterResources function", func(t *testing.T) {
 
-		t.Run("should return true since the resources are not one of the main-cluster-resources", func(t *testing.T) {
+		t.Run("should return true since the resources are not one of the watched-cluster-resources", func(t *testing.T) {
 			for _, obj := range []runtime.RawExtension{namespace, clusterRole, clusterRoleBinding} {
 
 				// when
-				ok := retainAllObjectsButMainClusterResources(obj)
+				ok := retainAllObjectsButWatchedClusterResources(obj)
 
 				// then
 				assert.True(t, ok)
@@ -698,23 +698,23 @@ func TestRetainFunctions(t *testing.T) {
 			}
 		})
 
-		t.Run("should return false since the resource is one of the main-cluster-resources", func(t *testing.T) {
+		t.Run("should return false since the resource is one of the watched-cluster-resources", func(t *testing.T) {
 
 			// when
-			ok := retainAllObjectsButMainClusterResources(clusterResQuota)
+			ok := retainAllObjectsButWatchedClusterResources(clusterResQuota)
 
 			// then
 			assert.False(t, ok)
 		})
 	})
 
-	t.Run("verify retainAllObjectsButMainClusterResources function", func(t *testing.T) {
+	t.Run("verify retainAllObjectsButWatchedClusterResources function", func(t *testing.T) {
 
-		t.Run("should return false since the resources are not one of the main-cluster-resources", func(t *testing.T) {
+		t.Run("should return false since the resources are not one of the watched-cluster-resources", func(t *testing.T) {
 			for _, obj := range []runtime.RawExtension{namespace, clusterRole, clusterRoleBinding} {
 
 				// when
-				ok := retainAllMainClusterResourceObjects(obj)
+				ok := retainAllWatchedClusterResourceObjects(obj)
 
 				// then
 				assert.False(t, ok)
@@ -722,10 +722,10 @@ func TestRetainFunctions(t *testing.T) {
 			}
 		})
 
-		t.Run("should return true since the resource is one of the main-cluster-resources", func(t *testing.T) {
+		t.Run("should return true since the resource is one of the watched-cluster-resources", func(t *testing.T) {
 
 			// when
-			ok := retainAllMainClusterResourceObjects(clusterResQuota)
+			ok := retainAllWatchedClusterResourceObjects(clusterResQuota)
 
 			// then
 			assert.True(t, ok)

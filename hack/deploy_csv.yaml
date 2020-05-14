@@ -71,7 +71,7 @@ data:
                           use
                         type: string
                     required:
-                    - revision
+                    - templateRef
                     type: object
                   namespaces:
                     description: The namespace templates
@@ -94,8 +94,7 @@ data:
                           description: 'The type of the namespace. For example: ide|cicd|stage|default'
                           type: string
                       required:
-                      - revision
-                      - type
+                      - templateRef
                       type: object
                     type: array
                   tierName:
@@ -234,7 +233,7 @@ data:
                               to use
                             type: string
                         required:
-                        - revision
+                        - templateRef
                         type: object
                       namespaces:
                         description: The namespace templates
@@ -257,8 +256,7 @@ data:
                               description: 'The type of the namespace. For example: ide|cicd|stage|default'
                               type: string
                           required:
-                          - revision
-                          - type
+                          - templateRef
                           type: object
                         type: array
                       tierName:

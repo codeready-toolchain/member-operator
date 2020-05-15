@@ -144,6 +144,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 
 	// Adding label indicating that the namespace is up-to-date with TierTemplate
 	namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] = tierTemplate.templateRef
+	namespace.Labels[toolchainv1alpha1.TierLabelKey] = tierTemplate.tierName
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}

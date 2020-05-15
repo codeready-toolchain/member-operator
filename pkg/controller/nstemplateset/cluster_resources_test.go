@@ -312,6 +312,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "team-cluster-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "team"),
 					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`))
 		})
 
@@ -371,6 +372,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
 					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)) // upgraded
 		})
 
@@ -448,7 +450,8 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("failed to retrieve template"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "fail-cluster-12345bb"))
+					WithLabel("toolchain.dev.openshift.com/templateref", "fail-cluster-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "fail"))
 		})
 
 		t.Run("fail to downgrade from advanced to basic tier", func(t *testing.T) {
@@ -471,7 +474,8 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("failed to delete object 'for-johnsmith' of kind 'ClusterResourceQuota' in namespace '': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"))
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 		})
 	})
 }

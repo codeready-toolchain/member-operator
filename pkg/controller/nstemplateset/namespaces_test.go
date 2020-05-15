@@ -322,7 +322,8 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasNoLabel("toolchain.dev.openshift.com/templateref")
+			HasNoLabel("toolchain.dev.openshift.com/templateref").
+			HasNoLabel("toolchain.dev.openshift.com/tier")
 		AssertThatNamespace(t, username+"-code", manager.client).
 			DoesNotExist()
 	})
@@ -348,7 +349,8 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "code").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasNoLabel("toolchain.dev.openshift.com/templateref")
+			HasNoLabel("toolchain.dev.openshift.com/templateref").
+			HasNoLabel("toolchain.dev.openshift.com/tier")
 
 	})
 
@@ -372,6 +374,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
 			HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasResource("user-edit", &authv1.RoleBinding{})
 		AssertThatNamespace(t, username+"-code", manager.client).
@@ -401,6 +404,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", nsType).
 				HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11").
+				HasLabel("toolchain.dev.openshift.com/tier", "basic").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("user-edit", &authv1.RoleBinding{})
 		}
@@ -665,6 +669,7 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
+				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 				HasResource("user-edit", &authv1.RoleBinding{}).
@@ -695,6 +700,7 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // downgraded
+				HasLabel("toolchain.dev.openshift.com/tier", "basic").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 				HasResource("user-edit", &authv1.RoleBinding{}).
 				HasNoResource("rbac-edit", &rbacv1.Role{}). // role does not exist
@@ -725,7 +731,8 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11") // not upgraded yet
+				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // not upgraded yet
+				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 
 			t.Run("uprade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
 
@@ -743,6 +750,7 @@ func TestPromoteNamespaces(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
+					HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("user-edit", &authv1.RoleBinding{}).
 					HasResource("rbac-edit", &rbacv1.Role{})
@@ -772,7 +780,8 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "fail-dev-abcde11") // the unknown tier that caused the error
+				HasLabel("toolchain.dev.openshift.com/templateref", "fail-dev-abcde11"). // the unknown tier that caused the error
+				HasLabel("toolchain.dev.openshift.com/tier", "fail")
 		})
 
 		t.Run("fail to delete redundant namespace while upgrading tier", func(t *testing.T) {
@@ -798,13 +807,15 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "code").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-code-abcde11") // unchanged, namespace was not deleted
+				HasLabel("toolchain.dev.openshift.com/templateref", "basic-code-abcde11"). // unchanged, namespace was not deleted
+				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 			AssertThatNamespace(t, username+"-dev", cl).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11") // not upgraded
+				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // not upgraded
+				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 		})
 	})
 }

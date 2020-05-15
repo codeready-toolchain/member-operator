@@ -82,6 +82,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:        "cluster",
 		toolchainv1alpha1.TemplateRefLabelKey: tierTemplate.templateRef,
+		toolchainv1alpha1.TierLabelKey:        tierTemplate.tierName,
 		toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
 	}
 	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources

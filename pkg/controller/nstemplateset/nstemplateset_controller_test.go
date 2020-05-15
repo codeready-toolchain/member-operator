@@ -106,11 +106,13 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
 			HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 		AssertThatNamespace(t, username+"-code", fakeClient).
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "code").
 			HasLabel("toolchain.dev.openshift.com/templateref", "basic-code-abcde11").
+			HasLabel("toolchain.dev.openshift.com/tier", "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 	})
 
@@ -158,7 +160,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasNoLabel("toolchain.dev.openshift.com/templateref")
+			HasNoLabel("toolchain.dev.openshift.com/templateref").
+			HasNoLabel("toolchain.dev.openshift.com/tier")
 	})
 
 	t.Run("no NSTemplateSet available", func(t *testing.T) {
@@ -206,12 +209,14 @@ func TestReconcileUpdate(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb")) // upgraded
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // upgraded
 			for _, nsType := range []string{"code", "dev"} {
 				AssertThatNamespace(t, username+"-"+nsType, r.client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11"). // not upgraded yet
+					HasLabel("toolchain.dev.openshift.com/tier", "basic").
 					HasLabel("toolchain.dev.openshift.com/type", nsType).
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 					HasResource("rbac-edit", &rbacv1.Role{})
@@ -234,7 +239,8 @@ func TestReconcileUpdate(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/type", "dev").
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11") // not upgraded yet
+					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // not upgraded yet
+					HasLabel("toolchain.dev.openshift.com/tier", "basic")
 
 				t.Run("upgrade the dev namespace", func(t *testing.T) {
 
@@ -249,13 +255,15 @@ func TestReconcileUpdate(t *testing.T) {
 						HasConditions(Updating())
 					AssertThatCluster(t, fakeClient).
 						HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"))
+							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+							WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 					AssertThatNamespace(t, codeNS.Name, r.client).
 						DoesNotExist()
 					AssertThatNamespace(t, username+"-dev", r.client).
 						HasNoOwnerReference().
 						HasLabel("toolchain.dev.openshift.com/owner", username).
 						HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
+						HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 						HasLabel("toolchain.dev.openshift.com/type", "dev").
 						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain")
 
@@ -272,11 +280,13 @@ func TestReconcileUpdate(t *testing.T) {
 							HasConditions(Provisioned())
 						AssertThatCluster(t, fakeClient).
 							HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"))
+								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+								WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 						AssertThatNamespace(t, username+"-dev", r.client).
 							HasNoOwnerReference().
 							HasLabel("toolchain.dev.openshift.com/owner", username).
 							HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
+							HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 							HasLabel("toolchain.dev.openshift.com/type", "dev").
 							HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 							HasResource("user-edit", &authv1.RoleBinding{}) // role has been removed
@@ -630,6 +640,7 @@ func newNamespace(tier, username, typeName string, options ...namespaceOption) *
 	}
 	if tier != "" {
 		labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, "abcde11")
+		labels["toolchain.dev.openshift.com/tier"] = tier
 	}
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -683,6 +694,7 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
 				"toolchain.dev.openshift.com/owner":       username,
 				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "cluster", "12345bb"),
+				"toolchain.dev.openshift.com/tier":        tier,
 			},
 			Annotations: map[string]string{},
 			Name:        "for-" + username,

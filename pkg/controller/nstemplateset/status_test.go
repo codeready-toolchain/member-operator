@@ -195,8 +195,8 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(failed))
-		devNS := newNamespace("basic", username, "dev", withTemplateRef("abcde11"))
-		codeNS := newNamespace("basic", username, "code", withTemplateRef("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRef())
+		codeNS := newNamespace("basic", username, "code", withTemplateRef())
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
 
 		// when

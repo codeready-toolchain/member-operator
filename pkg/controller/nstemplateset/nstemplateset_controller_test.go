@@ -88,8 +88,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("basic", username, "dev", withTemplateRef("abcde11"))
-		codeNS := newNamespace("basic", username, "code", withTemplateRef("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRef())
+		codeNS := newNamespace("basic", username, "code", withTemplateRef())
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
 
 		// when
@@ -121,8 +121,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// create cluster resource quotas
 		crq := newClusterResourceQuota(username, "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("advanced", username, "dev", withTemplateRef("abcde11"))
-		codeNS := newNamespace("advanced", username, "code", withTemplateRef("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRef())
+		codeNS := newNamespace("advanced", username, "code", withTemplateRef())
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withClusterResources())
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS)
 
@@ -190,8 +190,8 @@ func TestReconcileUpdate(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("basic", username, "dev", withTemplateRef("abcde11"))
-			codeNS := newNamespace("basic", username, "code", withTemplateRef("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRef())
+			codeNS := newNamespace("basic", username, "code", withTemplateRef())
 			devRo := newRole(devNS.Name, "rbac-edit")
 			codeRo := newRole(codeNS.Name, "rbac-edit")
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo)
@@ -363,8 +363,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
 		crq := newClusterResourceQuota(username, "advanced")
-		devNS := newNamespace("advanced", username, "dev", withTemplateRef("abcde11"))
-		codeNS := newNamespace("advanced", username, "code", withTemplateRef("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRef())
+		codeNS := newNamespace("advanced", username, "code", withTemplateRef())
 		r, _ := prepareController(t, nsTmplSet, crq, devNS, codeNS)
 
 		t.Run("reconcile after nstemplateset deletion triggers deletion of the first namespace", func(t *testing.T) {
@@ -657,9 +657,9 @@ func newNamespace(tier, username, typeName string, options ...namespaceOption) *
 
 type namespaceOption func(ns *corev1.Namespace, tier string, typeName string)
 
-func withTemplateRef(revision string) namespaceOption { // nolint: unparam
+func withTemplateRef() namespaceOption { // nolint: unparam
 	return func(ns *corev1.Namespace, tier string, typeName string) {
-		ns.ObjectMeta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, revision)
+		ns.ObjectMeta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, "abcde11")
 	}
 }
 

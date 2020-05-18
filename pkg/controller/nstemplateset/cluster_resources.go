@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -10,6 +11,7 @@ import (
 	quotav1 "github.com/openshift/api/quota/v1"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
+	"k8s.io/api/rbac/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,60 +43,87 @@ var watchedClusterResources = []watchedClusterResource{
 		gvk:    quotav1.GroupVersion.WithKind("ClusterResourceQuota"),
 		object: &quotav1.ClusterResourceQuota{},
 		listExistingResources: func(cl client.Client, username string) ([]runtime.Object, error) {
-			quotaList := &quotav1.ClusterResourceQuotaList{}
-			if err := cl.List(context.TODO(), quotaList, listByOwnerLabel(username)); err != nil {
+			itemList := &quotav1.ClusterResourceQuotaList{}
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
 				return nil, err
 			}
-			list := make([]runtime.Object, len(quotaList.Items))
-			for index, item := range quotaList.Items {
-				list[index] = &item
+			list := make([]runtime.Object, len(itemList.Items))
+			for index := range itemList.Items {
+				list[index] = &itemList.Items[index]
+			}
+			return list, nil
+		},
+	},
+	{
+		gvk:    v1alpha1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
+		object: &v1alpha1.ClusterRoleBinding{},
+		listExistingResources: func(cl client.Client, username string) ([]runtime.Object, error) {
+			itemList := &v1alpha1.ClusterRoleBindingList{}
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
+				return nil, err
+			}
+			list := make([]runtime.Object, len(itemList.Items))
+			for index := range itemList.Items {
+				list[index] = &itemList.Items[index]
 			}
 			return list, nil
 		},
 	},
 }
 
-// watchedClusterResourcesSyncResult is a result of synchronization of existing and required resources that are of the "watched-cluster-resource" types
-type watchedClusterResourcesSyncResult struct {
-	toCreateOrUpdate       *runtime.RawExtension
-	anyDeleted             bool
-	currentTierToBeChanged string
-}
-
-var noResult = watchedClusterResourcesSyncResult{}
-
 // ensure ensures that the cluster resources exists.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
 func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 
-	syncResult, err := r.syncWatchedClusterResources(logger, nsTmplSet)
-	if err != nil {
-		return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err, "unable to provision or update watched cluster resources")
-	}
-	if syncResult.toCreateOrUpdate != nil || syncResult.anyDeleted {
-		if err := r.ensureNotWatchedClusterResources(logger, syncResult.currentTierToBeChanged, nsTmplSet); err != nil {
-			if syncResult.currentTierToBeChanged != "" {
-				return syncResult.anyDeleted, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "unable to update cluster resources")
+	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
+	username := nsTmplSet.GetName()
+
+	// go though all watched cluster resources
+	for _, watchedClusterResource := range watchedClusterResources {
+		newObjs := make([]runtime.RawExtension, 0)
+		var err error
+		// get all objects of the resource type from the template (if the template is specified)
+		if nsTmplSet.Spec.ClusterResources != nil {
+			newObjs, err = process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources),
+				r.scheme, username, retainObjectsOfSameGVK(watchedClusterResource.gvk))
+			if err != nil {
+				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
+					"failed to retrieve template for the cluster resources of GVK '%v'", watchedClusterResource.gvk)
 			}
-			return syncResult.anyDeleted, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, "unable to provision or update cluster resources")
-		}
-		if syncResult.anyDeleted {
-			return true, nil
 		}
 
-		labels := clusterResourceLabels(nsTmplSet.GetName(), nsTmplSet.Spec.ClusterResources.Revision, nsTmplSet.Spec.TierName)
-		// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
-		// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
-		// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
-		// see https://issues.redhat.com/browse/CRT-429
-
-		logger.Info("applying watched cluster resource", "gvk", syncResult.toCreateOrUpdate.Object.GetObjectKind().GroupVersionKind())
-		if _, err := applycl.NewApplyClient(r.client, r.scheme).Apply([]runtime.RawExtension{*syncResult.toCreateOrUpdate}, labels); err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
-				"failed to apply watched cluster resource of type '%v'", syncResult.toCreateOrUpdate.Object.GetObjectKind().GroupVersionKind())
+		// list all existing objects of the watched cluster resource type
+		currentObjects, err := watchedClusterResource.listExistingResources(r.client, username)
+		if err != nil {
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
+				"failed to list existing cluster resources of GVK '%v'", watchedClusterResource.gvk)
 		}
-		return true, nil
+
+		// if there are more than one existing, then check if there is any that should be updated or deleted
+		if len(currentObjects) > 0 {
+			updatedOrDeleted, err := r.updateOrDeleteRedundant(logger, currentObjects, newObjs, nsTmplSet)
+			if err != nil {
+				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed,
+					err, "failed to update/delete existing cluster resources of GVK '%v'", watchedClusterResource.gvk)
+			}
+			if updatedOrDeleted {
+				return true, err
+			}
+		}
+		// if none was found to be either updated or deleted or if there is no existing object available,
+		// then find the first one to be created (if there is any)
+		if len(newObjs) > 0 {
+			anyCreated, err := r.createMissing(logger, currentObjects, newObjs, nsTmplSet)
+			if err != nil {
+				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
+					err, "failed to create missing cluster resource of GVK '%v'", watchedClusterResource.gvk)
+			}
+			if anyCreated {
+				return true, nil
+			}
+		}
 	}
+
 	logger.Info("cluster resources already provisioned")
 	return false, nil
 }
@@ -111,46 +140,25 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 // If there is any resource that is outdated (exists in both cluster and template but its revision or tier is not matching),
 // then it means that there is an ongoing update, so it returns a result where
 // toCreateOrUpdate=<object-from-template-to-be-updated> currentTierToBeChanged=<tier-of-the-outdated-resource>
-func (r *clusterResourcesManager) syncWatchedClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (watchedClusterResourcesSyncResult, error) {
-	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
-	username := nsTmplSet.GetName()
+//func (r *clusterResourcesManager) syncWatchedClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+//
+//}
 
-	// go though all watched cluster resources
-	for _, watchedClusterResource := range watchedClusterResources {
-		newObjs := make([]runtime.RawExtension, 0)
-		var err error
-		// get all objects of the watched cluster resource type from the template (if the template is specified)
-		if nsTmplSet.Spec.ClusterResources != nil {
-			newObjs, err = process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources),
-				r.scheme, username, retainObjectsOfSameGVK(watchedClusterResource.gvk))
-			if err != nil {
-				return noResult, errs.Wrapf(err, "failed to retrieve template for the cluster resources of GVK '%v'", watchedClusterResource.gvk)
-			}
-		}
+func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, toApply runtime.RawExtension) (bool, error) {
+	labels := clusterResourceLabels(nsTmplSet.GetName(), nsTmplSet.Spec.ClusterResources.Revision, nsTmplSet.Spec.TierName)
+	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
+	// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
+	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
+	// see https://issues.redhat.com/browse/CRT-429
 
-		// list all existing objects of the watched cluster resource type
-		currentObjects, err := watchedClusterResource.listExistingResources(r.client, username)
-		if err != nil {
-			return noResult, errs.Wrapf(err, "failed to list existing cluster resources of GVK '%v'", watchedClusterResource.gvk)
-		}
-
-		// if there are more than one existing, then check if there is any that should be updated or deleted
-		if len(currentObjects) > 0 {
-			syncResult, err := r.getWatchedClusterObjectToUpdateOrDeleteRedundant(logger, currentObjects, newObjs, nsTmplSet)
-			if err != nil || syncResult.toCreateOrUpdate != nil || syncResult.anyDeleted {
-				return syncResult, err
-			}
-		}
-		// if none was found to be either updated or deleted or if there is no existing object available,
-		// then find the first one to be created (if there is any)
-		if len(newObjs) > 0 {
-			return r.getWatchedClusterObjectToCreate(logger, currentObjects, newObjs, nsTmplSet)
-		}
+	logger.Info("applying watched cluster resource", "gvk", toApply.Object.GetObjectKind().GroupVersionKind())
+	if _, err := applycl.NewApplyClient(r.client, r.scheme).Apply([]runtime.RawExtension{toApply}, labels); err != nil {
+		return false, fmt.Errorf("failed to apply watched cluster resource of type '%v'", toApply.Object.GetObjectKind().GroupVersionKind())
 	}
-	return noResult, nil
+	return true, nil
 }
 
-// getWatchedClusterObjectToUpdateOrDeleteRedundant takes the given currentObjs and newObjs and compares them.
+// updateOrDeleteRedundant takes the given currentObjs and newObjs and compares them.
 // This method should be used only for cluster resources that are of the "watched-cluster-resource" types.
 //
 // If there is any existing redundant resource (exist in the currentObjs, but not in the newObjs), then it means that there is an ongoing update,
@@ -159,12 +167,12 @@ func (r *clusterResourcesManager) syncWatchedClusterResources(logger logr.Logger
 // If there is any resource that is outdated (exists in both currentObjs and newObjs but its revision or tier is not matching),
 // then it means that there is an ongoing update, so it returns a result where
 // toCreateOrUpdate=<object-from-template-to-be-updated> currentTierToBeChanged=<tier-of-the-outdated-resource>
-func (r *clusterResourcesManager) getWatchedClusterObjectToUpdateOrDeleteRedundant(logger logr.Logger, currentObjs []runtime.Object, newObjs []runtime.RawExtension, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (watchedClusterResourcesSyncResult, error) {
+func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, currentObjs []runtime.Object, newObjs []runtime.RawExtension, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
 	for _, currentObject := range currentObjs {
 		currObjAccessor, err := meta.Accessor(currentObject)
 		if err != nil {
-			return noResult, errs.Wrapf(err, "failed to get accessor of an object '%v'", currentObject)
+			return false, errs.Wrapf(err, "failed to get accessor of an object '%v'", currentObject)
 		}
 
 		// if the template is not specified, then delete all watched cluster resources one by one
@@ -177,59 +185,53 @@ func (r *clusterResourcesManager) getWatchedClusterObjectToUpdateOrDeleteRedunda
 			for _, newObject := range newObjs {
 				newObjAccessor, err := meta.Accessor(newObject.Object)
 				if err != nil {
-					return noResult, errs.Wrapf(err, "failed to get accessor of an object '%v'", newObject.Object)
+					return false, errs.Wrapf(err, "failed to get accessor of an object '%v'", newObject.Object)
 				}
 				if newObjAccessor.GetName() == currObjAccessor.GetName() {
 					// is found then let's just update it
 					if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
-						return noResult, err
+						return false, err
 					}
-					return watchedClusterResourcesSyncResult{
-						toCreateOrUpdate:       &newObject,
-						currentTierToBeChanged: currObjAccessor.GetLabels()[toolchainv1alpha1.TierLabelKey],
-					}, nil
+					return r.apply(logger, nsTmplSet, newObject)
 				}
 			}
 			// is not found then let's delete it
 			return r.deleteWatchedClusterObject(nsTmplSet, currentObject, currObjAccessor)
 		}
 	}
-	return noResult, nil
+	return false, nil
 }
 
 // deleteWatchedClusterObject sets status to updating, deletes the given resource and returns result where anyDeleted=true and currentTierToBeChanged=<tier-of-the-deleted-resource>
-func (r *clusterResourcesManager) deleteWatchedClusterObject(nsTmplSet *toolchainv1alpha1.NSTemplateSet, currentObject runtime.Object, currObjAccessor v1.Object) (watchedClusterResourcesSyncResult, error) {
+func (r *clusterResourcesManager) deleteWatchedClusterObject(nsTmplSet *toolchainv1alpha1.NSTemplateSet, currentObject runtime.Object, currObjAccessor v1.Object) (bool, error) {
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
-		return noResult, err
+		return false, err
 	}
 	if err := r.client.Delete(context.TODO(), currentObject); err != nil {
-		return noResult, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
+		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
 			currObjAccessor.GetName(), currentObject.GetObjectKind().GroupVersionKind())
 	}
-	return watchedClusterResourcesSyncResult{
-		anyDeleted:             true,
-		currentTierToBeChanged: currObjAccessor.GetLabels()[toolchainv1alpha1.TierLabelKey],
-	}, nil
+	return true, nil
 }
 
-// getWatchedClusterObjectToCreate takes the given currentObjs and newObjs and compares them if there is any that should be created.
+// createMissing takes the given currentObjs and newObjs and compares them if there is any that should be created.
 // This method should be used only for cluster resources that are of the "watched-cluster-resource" types.
 //
 // If there is any resource that is missing (does not exist in currentObjs but is in newObjs), then it returns a result
 // where toCreateOrUpdate=<missing-object-from-the-template>
-func (r *clusterResourcesManager) getWatchedClusterObjectToCreate(logger logr.Logger, currentObjs []runtime.Object, newObjs []runtime.RawExtension, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (watchedClusterResourcesSyncResult, error) {
+func (r *clusterResourcesManager) createMissing(logger logr.Logger, currentObjs []runtime.Object, newObjs []runtime.RawExtension, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all new (expected) objects to check if all of them already exist or not
 NewObjects:
 	for _, newObject := range newObjs {
 		newObjAccessor, err := meta.Accessor(newObject.Object)
 		if err != nil {
-			return noResult, errs.Wrapf(err, "failed to get accessor of an object '%v'", newObject.Object)
+			return false, errs.Wrapf(err, "failed to get accessor of an object '%v'", newObject.Object)
 		}
 		// go through current objects to check if is one of the new (expected)
 		for _, currentObject := range currentObjs {
 			currObjAccessor, err := meta.Accessor(currentObject)
 			if err != nil {
-				return noResult, errs.Wrapf(err, "failed to get accessor of an object '%v'", currentObject)
+				return false, errs.Wrapf(err, "failed to get accessor of an object '%v'", currentObject)
 			}
 			// if the name is the same, then it means that it already exist so just continue with the next new object
 			if newObjAccessor.GetName() == currObjAccessor.GetName() {
@@ -239,70 +241,28 @@ NewObjects:
 		// if there was no existing object found that would match with the new one, then set the status appropriately
 		namespaces, err := fetchNamespaces(r.client, nsTmplSet.Name)
 		if err != nil {
-			return noResult, errs.Wrapf(err, "unable to fetch user's namespaces")
+			return false, errs.Wrapf(err, "unable to fetch user's namespaces")
 		}
 		// if there is any existing namespace, then set the status to updating
 		if len(namespaces) == 0 {
 			if err := r.setStatusProvisioningIfNotUpdating(nsTmplSet); err != nil {
-				return noResult, err
+				return false, err
 			}
 		} else {
 			// otherwise, to provisioning
 			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
-				return noResult, err
+				return false, err
 			}
 		}
-		// and return the result containing an object to be created
-		return watchedClusterResourcesSyncResult{
-			toCreateOrUpdate: &newObject,
-		}, nil
+		return r.apply(logger, nsTmplSet, newObject)
 	}
-	return noResult, nil
-}
-
-// ensureNotWatchedClusterResources ensures that all cluster resources that are not of the "watched-cluster-resource" types exist in the cluster
-// If the currentTier is set, then it means that there is an ongoing update so it also checks if there are no redundant existing resources
-// (exist in the cluster, but not in the template).
-func (r *clusterResourcesManager) ensureNotWatchedClusterResources(logger logr.Logger, currentTier string, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	var newObjs []runtime.RawExtension
-	var err error
-	if nsTmplSet.Spec.ClusterResources != nil {
-		newObjs, err = process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, nsTmplSet.Name, retainAllObjectsButWatchedClusterResources)
-		if err != nil {
-			return errs.Wrapf(err, "failed to get new cluster resources from template of a tier %s", nsTmplSet.Spec.TierName)
-		}
-	}
-
-	if currentTier != "" {
-		currentObjs, err := process(r.templateContent(currentTier, ClusterResources), r.scheme, nsTmplSet.Name, retainAllObjectsButWatchedClusterResources)
-		if err != nil {
-			return errs.Wrapf(err, "failed to get current cluster resources from template of a tier %s", currentTier)
-		}
-
-		_, err = deleteRedundantObjects(logger, r.client, false, currentObjs, newObjs)
-		if err != nil {
-			return errs.Wrapf(err, "failed to delete redundant cluster objects")
-		}
-	}
-	if len(newObjs) == 0 {
-		return nil
-	}
-
-	labels := clusterResourceLabels(nsTmplSet.GetName(), nsTmplSet.Spec.ClusterResources.Revision, nsTmplSet.Spec.TierName)
-	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
-	// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
-	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
-	// see https://issues.redhat.com/browse/CRT-429
-
-	logger.Info("applying cluster resources template", "obj_count", len(newObjs))
-	_, err = applycl.NewApplyClient(r.client, r.scheme).Apply(newObjs, labels)
-	return err
+	return false, nil
 }
 
 // delete deletes cluster scoped resources taken the ClusterResources template and returns information if any resource was deleted or not
 func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	username := nsTmplSet.Name
-	watchedClusterObjs, err := process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, username, retainAllWatchedClusterResourceObjects)
+	watchedClusterObjs, err := process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, username)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list watched cluster resources for user '%s'", username)
 	}
@@ -315,7 +275,6 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 // If the given areWatchedClusterResources parameter is equal to true, then it deletes only one resources, triggers deletion of the not-watched ones and returns true,nil.
 // If the given areWatchedClusterResources parameter is equal to false, then it deletes all given resources and returns false,nil.
 func (r *clusterResourcesManager) deleteClusterResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, areWatchedClusterResources bool, toDelete ...runtime.RawExtension) (bool, error) {
-	username := nsTmplSet.Name
 	for _, obj := range toDelete {
 		objectToDelete := obj.Object
 		objMeta, err := meta.Accessor(objectToDelete)
@@ -331,16 +290,6 @@ func (r *clusterResourcesManager) deleteClusterResources(logger logr.Logger, nsT
 			continue
 		}
 
-		if areWatchedClusterResources {
-			normalClusterObjs, err := process(r.templateContent(nsTmplSet.Spec.TierName, ClusterResources), r.scheme, username, retainAllObjectsButWatchedClusterResources)
-			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list normal cluster resources for user '%s'", username)
-			}
-			if _, err = r.deleteClusterResources(logger, nsTmplSet, false, normalClusterObjs...); err != nil {
-				return false, err
-			}
-		}
-
 		logger.Info("deleting cluster resource", "name", objMeta.GetName())
 		if err := r.client.Delete(context.TODO(), objectToDelete); err != nil && errors.IsNotFound(err) {
 			// ignore case where the resource did not exist anymore, move to the next one to delete
@@ -349,10 +298,8 @@ func (r *clusterResourcesManager) deleteClusterResources(logger logr.Logger, nsT
 			// report an error only if the resource could not be deleted (but ignore if the resource did not exist anymore)
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete cluster resource '%s'", objMeta.GetName())
 		}
-		if areWatchedClusterResources {
-			// stop there for now. Will reconcile again for the next watched cluster resource (if any exists)
-			return true, nil
-		}
+		// stop there for now. Will reconcile again for the next watched cluster resource (if any exists)
+		return true, nil
 	}
 	return false, nil
 }
@@ -361,24 +308,6 @@ func retainObjectsOfSameGVK(gvk schema.GroupVersionKind) template.FilterFunc {
 	return func(obj runtime.RawExtension) bool {
 		return obj.Object.GetObjectKind().GroupVersionKind() == gvk
 	}
-}
-
-var retainAllObjectsButWatchedClusterResources template.FilterFunc = func(obj runtime.RawExtension) bool {
-	for _, resource := range watchedClusterResources {
-		if obj.Object.GetObjectKind().GroupVersionKind() == resource.gvk {
-			return false
-		}
-	}
-	return true
-}
-
-var retainAllWatchedClusterResourceObjects template.FilterFunc = func(obj runtime.RawExtension) bool {
-	for _, resource := range watchedClusterResources {
-		if obj.Object.GetObjectKind().GroupVersionKind() == resource.gvk {
-			return true
-		}
-	}
-	return false
 }
 
 func clusterResourceLabels(username, revision, tier string) map[string]string {

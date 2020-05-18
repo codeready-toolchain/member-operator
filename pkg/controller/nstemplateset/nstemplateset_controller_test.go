@@ -119,13 +119,14 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 	t.Run("status provisioned with cluster resources", func(t *testing.T) {
 		// given
-		// create cluster resource quotas
+		// create cluster resources
 		crq := newClusterResourceQuota(username, "advanced")
+		crb := newTektonClusterRoleBinding(username, "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withRevision("abcde11"))
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withClusterResources())
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS, crb)
 
 		// when
 		res, err := r.Reconcile(req)
@@ -210,7 +211,8 @@ func TestReconcileUpdate(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // upgraded
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
+				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 			for _, nsType := range []string{"code", "dev"} {
 				AssertThatNamespace(t, username+"-"+nsType, r.client).
 					HasNoOwnerReference().
@@ -222,52 +224,53 @@ func TestReconcileUpdate(t *testing.T) {
 					HasResource("rbac-edit", &rbacv1.Role{})
 			}
 
-			t.Run("delete redundant namespace", func(t *testing.T) {
-
-				// when - should delete the -code namespace
-				_, err := r.Reconcile(req)
+			t.Run("create ClusterRoleBinding", func(t *testing.T) {
+				// when - should create ClusterResourceQuota
+				_, err = r.Reconcile(req)
 
 				// then
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 					HasFinalizer().
-					HasConditions(Updating()) // still in progress
-				AssertThatNamespace(t, codeNS.Name, r.client).
-					DoesNotExist() // namespace was deleted
-				AssertThatNamespace(t, devNS.Name, r.client).
-					HasNoOwnerReference().
-					HasLabel("toolchain.dev.openshift.com/owner", username).
-					HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
-					HasLabel("toolchain.dev.openshift.com/type", "dev").
-					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded yet
+					HasConditions(Updating())
+				AssertThatCluster(t, fakeClient).
+					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+						WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
+					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				for _, nsType := range []string{"code", "dev"} {
+					AssertThatNamespace(t, username+"-"+nsType, r.client).
+						HasNoOwnerReference().
+						HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+						HasLabel("toolchain.dev.openshift.com/owner", username).
+						HasLabel("toolchain.dev.openshift.com/tier", "basic"). // not upgraded yet
+						HasLabel("toolchain.dev.openshift.com/type", nsType).
+						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+						HasResource("rbac-edit", &rbacv1.Role{})
+				}
 
-				t.Run("upgrade the dev namespace", func(t *testing.T) {
+				t.Run("delete redundant namespace", func(t *testing.T) {
 
-					// when - should upgrade the namespace
-					_, err = r.Reconcile(req)
+					// when - should delete the -code namespace
+					_, err := r.Reconcile(req)
 
 					// then
 					require.NoError(t, err)
-					// NSTemplateSet provisioning is complete
 					AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 						HasFinalizer().
-						HasConditions(Updating())
-					AssertThatCluster(t, fakeClient).
-						HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-							WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+						HasConditions(Updating()) // still in progress
 					AssertThatNamespace(t, codeNS.Name, r.client).
-						DoesNotExist()
-					AssertThatNamespace(t, username+"-dev", r.client).
+						DoesNotExist() // namespace was deleted
+					AssertThatNamespace(t, devNS.Name, r.client).
 						HasNoOwnerReference().
 						HasLabel("toolchain.dev.openshift.com/owner", username).
-						HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+						HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 						HasLabel("toolchain.dev.openshift.com/type", "dev").
-						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain")
+						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+						HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded yet
 
-					t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
+					t.Run("upgrade the dev namespace", func(t *testing.T) {
 
-						// when - should check if everything is OK and set status to provisioned
+						// when - should upgrade the namespace
 						_, err = r.Reconcile(req)
 
 						// then
@@ -275,18 +278,42 @@ func TestReconcileUpdate(t *testing.T) {
 						// NSTemplateSet provisioning is complete
 						AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 							HasFinalizer().
-							HasConditions(Provisioned())
+							HasConditions(Updating())
 						AssertThatCluster(t, fakeClient).
 							HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 								WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+						AssertThatNamespace(t, codeNS.Name, r.client).
+							DoesNotExist()
 						AssertThatNamespace(t, username+"-dev", r.client).
 							HasNoOwnerReference().
-							HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
 							HasLabel("toolchain.dev.openshift.com/owner", username).
-							HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // not updgraded yet
+							HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 							HasLabel("toolchain.dev.openshift.com/type", "dev").
-							HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-							HasResource("user-edit", &authv1.RoleBinding{}) // role has been removed
+							HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain")
+
+						t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
+
+							// when - should check if everything is OK and set status to provisioned
+							_, err = r.Reconcile(req)
+
+							// then
+							require.NoError(t, err)
+							// NSTemplateSet provisioning is complete
+							AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+								HasFinalizer().
+								HasConditions(Provisioned())
+							AssertThatCluster(t, fakeClient).
+								HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+									WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+							AssertThatNamespace(t, username+"-dev", r.client).
+								HasNoOwnerReference().
+								HasLabel("toolchain.dev.openshift.com/revision", "abcde11").
+								HasLabel("toolchain.dev.openshift.com/owner", username).
+								HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // not updgraded yet
+								HasLabel("toolchain.dev.openshift.com/type", "dev").
+								HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+								HasResource("user-edit", &authv1.RoleBinding{}) // role has been removed
+						})
 					})
 				})
 			})
@@ -556,6 +583,10 @@ func toStructured(obj runtime.Object, decoder runtime.Decoder) (runtime.Object, 
 			crq := &quotav1.ClusterResourceQuota{}
 			_, _, err = decoder.Decode(data, nil, crq)
 			return crq, err
+		case "ClusterRoleBinding":
+			crb := &v1alpha1.ClusterRoleBinding{}
+			_, _, err = decoder.Decode(data, nil, crb)
+			return crb, err
 		}
 	}
 	return obj, nil
@@ -679,33 +710,20 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 	}
 }
 
-func newTektonClusterRole(username, revision, tier, resourcesLine string) *v1alpha1.ClusterRole {
-	return &v1alpha1.ClusterRole{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ClusterRole",
-			APIVersion: v1alpha1.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Labels:     clusterResourceLabels(username, revision, tier),
-			Name:       "tekton-view-for-" + username,
-			Generation: int64(1),
-		},
-		Rules: []v1alpha1.PolicyRule{{
-			APIGroups: []string{"tekton.dev/v1alpha1", "tekton.dev/v1beta1"},
-			Resources: []string{resourcesLine},
-			Verbs:     []string{"get"},
-		}},
-	}
-}
-
-func newTektonClusterRoleBinding(username, revision, tier string) *v1alpha1.ClusterRoleBinding {
+func newTektonClusterRoleBinding(username, tier string) *v1alpha1.ClusterRoleBinding {
 	return &v1alpha1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterRoleBinding",
 			APIVersion: v1alpha1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:     clusterResourceLabels(username, revision, tier),
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+				"toolchain.dev.openshift.com/tier":     tier,
+				"toolchain.dev.openshift.com/revision": "12345bb",
+				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/type":     ClusterResources,
+			},
 			Name:       username + "-tekton-view",
 			Generation: int64(1),
 		},
@@ -733,6 +751,7 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 				"toolchain.dev.openshift.com/tier":     tier,
 				"toolchain.dev.openshift.com/revision": "12345bb",
 				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/type":     ClusterResources,
 			},
 			Annotations: map[string]string{},
 			Name:        "for-" + username,
@@ -764,7 +783,7 @@ func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string)
 		case "advanced": // assume that this tier has a "cluster resources" template
 			switch typeName {
 			case ClusterResources:
-				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, clusterTektonRole), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
@@ -778,14 +797,14 @@ func getTemplateContent(decoder runtime.Decoder) func(tierName, typeName string)
 		case "team": // assume that this tier has a "cluster resources" template
 			switch typeName {
 			case ClusterResources:
-				tmplContent = test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb, clusterTektonRoleTeam), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
 		case "withemptycrq":
 			switch typeName {
 			case ClusterResources:
-				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb, clusterTektonRole), test.WithParams(username))
+				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
 			}
@@ -908,35 +927,5 @@ var (
   subjects:
     - kind: User
       name: ${USERNAME}}
-`
-
-	clusterTektonRole test.TemplateObject = `
-- apiVersion: rbac.authorization.k8s.io/v1alpha1
-  kind: ClusterRole
-  metadata:
-    name: tekton-view-for-${USERNAME}
-  rules:
-  - apiGroups:
-    - tekton.dev/v1alpha1
-    - tekton.dev/v1beta1
-    resources:
-    - 'ClusterTask'
-    verbs:
-    - 'get'
-`
-
-	clusterTektonRoleTeam test.TemplateObject = `
-- apiVersion: rbac.authorization.k8s.io/v1alpha1
-  kind: ClusterRole
-  metadata:
-    name: tekton-view-for-${USERNAME}
-  rules:
-  - apiGroups:
-    - tekton.dev/v1alpha1
-    - tekton.dev/v1beta1
-    resources:
-    - '*'
-    verbs:
-    - 'get'
 `
 )

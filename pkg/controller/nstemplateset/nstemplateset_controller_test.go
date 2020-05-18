@@ -209,7 +209,7 @@ func TestReconcileUpdate(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // upgraded
 			for _, nsType := range []string{"code", "dev"} {
 				AssertThatNamespace(t, username+"-"+nsType, r.client).
@@ -255,7 +255,7 @@ func TestReconcileUpdate(t *testing.T) {
 						HasConditions(Updating())
 					AssertThatCluster(t, fakeClient).
 						HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 							WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 					AssertThatNamespace(t, codeNS.Name, r.client).
 						DoesNotExist()
@@ -280,7 +280,7 @@ func TestReconcileUpdate(t *testing.T) {
 							HasConditions(Provisioned())
 						AssertThatCluster(t, fakeClient).
 							HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-cluster-12345bb"),
+								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 								WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 						AssertThatNamespace(t, username+"-dev", r.client).
 							HasNoOwnerReference().
@@ -621,7 +621,7 @@ func withNamespaces(types ...string) nsTmplSetOption {
 func withClusterResources() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		nsTmplSet.Spec.ClusterResources = &toolchainv1alpha1.NSTemplateSetClusterResources{
-			TemplateRef: NewTierTemplateName(nsTmplSet.Spec.TierName, "cluster", "12345bb"),
+			TemplateRef: NewTierTemplateName(nsTmplSet.Spec.TierName, "clusterresources", "12345bb"),
 		}
 	}
 }
@@ -693,7 +693,7 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
 				"toolchain.dev.openshift.com/owner":       username,
-				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "cluster", "12345bb"),
+				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "clusterresources", "12345bb"),
 				"toolchain.dev.openshift.com/tier":        tier,
 			},
 			Annotations: map[string]string{},
@@ -728,28 +728,28 @@ func getTemplateContent(decoder runtime.Decoder) func(templateRef string) (*tier
 		switch tierName {
 		case "advanced": // assume that this tier has a "cluster resources" template
 			switch typeName {
-			case "cluster":
+			case "clusterresources":
 				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
 		case "basic":
 			switch typeName {
-			case "cluster": // assume that this tier has no "cluster resources" template
+			case "clusterresources": // assume that this tier has no "cluster resources" template
 				return nil, nil
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
 			}
 		case "team": // assume that this tier has a "cluster resources" template
 			switch typeName {
-			case "cluster":
+			case "clusterresources":
 				tmplContent = test.CreateTemplate(test.WithObjects(teamCrq), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
 			}
 		case "withemptycrq":
 			switch typeName {
-			case "cluster":
+			case "clusterresources":
 				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq), test.WithParams(username))
 			default:
 				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))

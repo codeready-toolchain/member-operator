@@ -52,7 +52,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 	basicTierCode := newTierTemplate("basic", "code", "abcdef")
 	basicTierDev := newTierTemplate("basic", "dev", "123456")
 	basicTierStage := newTierTemplate("basic", "stage", "1a2b3c")
-	basicTierCluster := newTierTemplate("basic", "cluster", "aa11bb22")
+	basicTierCluster := newTierTemplate("basic", "clusterresources", "aa11bb22")
 
 	advancedTierCode := newTierTemplate("advanced", "code", "ghijkl")
 	advancedTierDev := newTierTemplate("advanced", "dev", "789012")
@@ -98,7 +98,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 			Status: apiv1.ConditionTrue,
 		})
 		// when
-		tierTmpl, err := getTierTemplate(hostCluster, "basic-cluster-aa11bb22")
+		tierTmpl, err := getTierTemplate(hostCluster, "basic-clusterresources-aa11bb22")
 
 		// then
 		require.NoError(t, err)

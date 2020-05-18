@@ -73,19 +73,16 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	tierTemplates := []*tierTemplate{
 		{
 			templateRef: "basic-dev-abcde11",
-			revision:    "abcde11",
 			typeName:    "dev",
 			tierName:    "basic",
 		},
 		{
 			templateRef: "basic-code-abcde21",
-			revision:    "abcde21",
 			typeName:    "code",
 			tierName:    "basic",
 		},
 		{
 			templateRef: "basic-stage-abcde13",
-			revision:    "abcde13",
 			typeName:    "stage",
 			tierName:    "basic",
 		},
@@ -185,7 +182,6 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 		tierTemplates := []*tierTemplate{
 			{
 				templateRef: "basic-dev-abcde11",
-				revision:    "abcde11",
 				typeName:    "dev",
 				tierName:    "basic",
 			},
@@ -204,13 +200,11 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 		tierTemplates := []*tierTemplate{
 			{
 				templateRef: "basic-dev-abcde11",
-				revision:    "abcde11",
 				typeName:    "dev",
 				tierName:    "basic",
 			},
 			{
 				templateRef: "basic-code-abcde21",
-				revision:    "abcde21",
 				typeName:    "code",
 				tierName:    "basic",
 			},

@@ -767,7 +767,6 @@ func getTemplateContent(decoder runtime.Decoder) func(templateRef string) (*tier
 			templateRef: templateRef,
 			tierName:    tierName,
 			typeName:    typeName,
-			revision:    refParts[2],
 			template:    tmpl,
 		}, err
 	}

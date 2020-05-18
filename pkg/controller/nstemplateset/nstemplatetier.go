@@ -30,7 +30,6 @@ func getTemplateFromHost(templateRef string) (*tierTemplate, error) {
 		templateRef: templateRef,
 		tierName:    tmpl.Spec.TierName,
 		typeName:    tmpl.Spec.Type,
-		revision:    tmpl.Spec.Revision,
 		template:    tmpl.Spec.Template,
 	}, nil
 }
@@ -62,7 +61,6 @@ type tierTemplate struct {
 	templateRef string
 	tierName    string
 	typeName    string
-	revision    string
 	template    templatev1.Template
 }
 

@@ -393,6 +393,29 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
 				HasConditions(Provisioned())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+		})
+
+		t.Run("cluster resource quota should be deleted for the given user", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()))
+			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
+			advancedCRQ := newClusterResourceQuota(username, "advanced")
+			anotherCRQ := newClusterResourceQuota("another-user", "basic")
+			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
 		})
 
 		t.Run("delete only one redundant cluster resource during one call", func(t *testing.T) {

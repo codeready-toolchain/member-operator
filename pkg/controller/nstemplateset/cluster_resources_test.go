@@ -311,6 +311,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "team-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "team"),
 					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`))
 		})
@@ -370,13 +371,14 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Provisioning())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
 					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)) // upgraded
 		})
 
 		t.Run("no redundant cluster resource quota to be deleted for the given user", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned())) // no cluster resources, so the "advancedCRQ" should be deleted
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources())
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
 			advancedCRQ := newClusterResourceQuota(username, "advanced")
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
@@ -391,6 +393,29 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
 				HasConditions(Provisioned())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
+		})
+
+		t.Run("cluster resource quota should be deleted for the given user", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()))
+			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
+			advancedCRQ := newClusterResourceQuota(username, "advanced")
+			anotherCRQ := newClusterResourceQuota("another-user", "basic")
+			manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
 		})
 
 		t.Run("delete only one redundant cluster resource during one call", func(t *testing.T) {
@@ -448,6 +473,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("failed to retrieve template"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "fail"))
 		})
 
@@ -471,6 +497,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("failed to delete object 'for-johnsmith' of kind 'ClusterResourceQuota' in namespace '': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 		})
 	})

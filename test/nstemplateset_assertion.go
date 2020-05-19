@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -54,9 +56,15 @@ func (a *NSTemplateSetAssertion) HasSpecNamespaces(types ...string) *NSTemplateS
 	require.NoError(a.t, err)
 	require.Len(a.t, a.nsTmplSet.Spec.Namespaces, len(types))
 	for i, nstype := range types {
-		assert.Equal(a.t, nstype, a.nsTmplSet.Spec.Namespaces[i].Type)
+		assert.Equal(a.t, NewTierTemplateName(a.nsTmplSet.Spec.TierName, nstype, "abcde11"), a.nsTmplSet.Spec.Namespaces[i].TemplateRef)
 	}
 	return a
+}
+
+// NewTierTemplateName: a utility func to generate a TierTemplate name, based on the given tier, type and revision.
+// note: the resource name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character
+func NewTierTemplateName(tier, typeName, revision string) string {
+	return strings.ToLower(fmt.Sprintf("%s-%s-%s", tier, typeName, revision))
 }
 
 func Provisioned() toolchainv1alpha1.Condition {

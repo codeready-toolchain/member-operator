@@ -211,8 +211,8 @@ func TestReconcileUpdate(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-			WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
-				WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
 				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 
 			for _, nsType := range []string{"code", "dev"} {
@@ -237,7 +237,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
 				for _, nsType := range []string{"code", "dev"} {
@@ -250,18 +250,6 @@ func TestReconcileUpdate(t *testing.T) {
 						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
 						HasResource("rbac-edit", &rbacv1.Role{})
 				}
-//=======
-//					HasConditions(Updating()) // still in progress
-//				AssertThatNamespace(t, codeNS.Name, r.client).
-//					DoesNotExist() // namespace was deleted
-//				AssertThatNamespace(t, devNS.Name, r.client).
-//					HasNoOwnerReference().
-//					HasLabel("toolchain.dev.openshift.com/owner", username).
-//					HasLabel("toolchain.dev.openshift.com/type", "dev").
-//					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-//					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // not upgraded yet
-//					HasLabel("toolchain.dev.openshift.com/tier", "basic")
-//>>>>>>> master
 
 				t.Run("delete redundant namespace", func(t *testing.T) {
 
@@ -744,11 +732,11 @@ func newTektonClusterRoleBinding(username, tier string) *v1alpha1.ClusterRoleBin
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":     tier,
+				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
+				"toolchain.dev.openshift.com/tier":        tier,
 				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "clusterresources", "12345bb"),
-				"toolchain.dev.openshift.com/owner":    username,
-				"toolchain.dev.openshift.com/type":     clusterResourcesType,
+				"toolchain.dev.openshift.com/owner":       username,
+				"toolchain.dev.openshift.com/type":        clusterResourcesType,
 			},
 			Name:       username + "-tekton-view",
 			Generation: int64(1),
@@ -773,11 +761,11 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":     tier,
+				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
+				"toolchain.dev.openshift.com/tier":        tier,
 				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "clusterresources", "12345bb"),
-				"toolchain.dev.openshift.com/owner":    username,
-				"toolchain.dev.openshift.com/type":     clusterResourcesType,
+				"toolchain.dev.openshift.com/owner":       username,
+				"toolchain.dev.openshift.com/type":        clusterResourcesType,
 			},
 			Annotations: map[string]string{},
 			Name:        "for-" + username,

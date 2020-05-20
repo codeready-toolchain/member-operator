@@ -23,38 +23,38 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-func TestWatchedClusterResources(t *testing.T) {
+func TestClusterResourceKinds(t *testing.T) {
 	// given
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	for _, watchedClusterRes := range watchedClusterResources {
-		johnyObject := watchedClusterRes.object.DeepCopyObject()
+	for _, clusterResourceKind := range clusterResourceKinds {
+		johnyObject := clusterResourceKind.object.DeepCopyObject()
 		objAccessor, err := meta.Accessor(johnyObject)
 		require.NoError(t, err)
 		objAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
 		objAccessor.SetName("johny-object")
 
-		johnyObject2 := watchedClusterRes.object.DeepCopyObject()
+		johnyObject2 := clusterResourceKind.object.DeepCopyObject()
 		objAccessor2, err := meta.Accessor(johnyObject2)
 		require.NoError(t, err)
 		objAccessor2.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
 		objAccessor2.SetName("johny-object-2")
 
-		anotherObject := watchedClusterRes.object.DeepCopyObject()
+		anotherObject := clusterResourceKind.object.DeepCopyObject()
 		anotherObjAccessor, err := meta.Accessor(anotherObject)
 		require.NoError(t, err)
 		anotherObjAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
 		anotherObjAccessor.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
-		t.Run("listExistingResources should return one resource of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return one resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, namespace)
 
 			// when
-			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.NoError(t, err)
@@ -62,12 +62,12 @@ func TestWatchedClusterResources(t *testing.T) {
 			assert.Equal(t, johnyObject, existingResources[0])
 		})
 
-		t.Run("listExistingResources should return two resources of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return two resources of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
 
 			// when
-			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.NoError(t, err)
@@ -76,19 +76,19 @@ func TestWatchedClusterResources(t *testing.T) {
 			assert.Equal(t, johnyObject2, existingResources[1])
 		})
 
-		t.Run("listExistingResources should return not return any resource of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return not return any resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, namespace)
 
 			// when
-			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.NoError(t, err)
 			require.Len(t, existingResources, 0)
 		})
 
-		t.Run("listExistingResources should return an error when listing resources of gvk "+watchedClusterRes.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should return an error when listing resources of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject)
 			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
@@ -96,7 +96,7 @@ func TestWatchedClusterResources(t *testing.T) {
 			}
 
 			// when
-			existingResources, err := watchedClusterRes.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
 
 			// then
 			require.Error(t, err)
@@ -104,9 +104,9 @@ func TestWatchedClusterResources(t *testing.T) {
 		})
 	}
 
-	t.Run("verify ClusteResourceQuota is in watchedClusterResources", func(t *testing.T) {
+	t.Run("verify ClusteResourceQuota is in clusterResourceKinds", func(t *testing.T) {
 		// given
-		clusterResource := watchedClusterResources[0]
+		clusterResource := clusterResourceKinds[0]
 
 		// then
 		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.object)
@@ -228,7 +228,6 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
-
 	})
 }
 
@@ -290,7 +289,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionClusterResources(
-				"failed to apply watched cluster resource of type 'quota.openshift.io/v1, Kind=ClusterResourceQuota'"))
+				"failed to apply cluster resource of type 'quota.openshift.io/v1, Kind=ClusterResourceQuota'"))
 	})
 }
 
@@ -299,7 +298,6 @@ func TestDeleteClusterResources(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	crq := newClusterResourceQuota(username, "advanced")
-	//cr := newTektonClusterRole(username, "12345bb", "advanced", "ClusterTask")
 	crb := newTektonClusterRoleBinding(username, "advanced")
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
 
@@ -605,7 +603,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				// when - let remove everything
 				var err error
 				updated := true
-				for ;updated; updated, err = manager.ensure(log, nsTmplSet) {
+				for ; updated; updated, err = manager.ensure(log, nsTmplSet) {
 					require.NoError(t, err)
 				}
 
@@ -739,7 +737,7 @@ func TestPromoteClusterResources(t *testing.T) {
 	})
 }
 
-func TestRetainFunctions(t *testing.T) {
+func TestRetainObjectsOfSameGVK(t *testing.T) {
 	// given
 	clusterRole := runtime.RawExtension{Object: &unstructured.Unstructured{
 		Object: map[string]interface{}{

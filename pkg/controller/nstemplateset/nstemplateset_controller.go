@@ -6,11 +6,9 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
-	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
-	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -33,9 +31,9 @@ var log = logf.Log.WithName("controller_nstemplateset")
 // Add creates a new NSTemplateSetReconciler and starts it (ie, watches resources and reconciles the cluster state)
 func Add(mgr manager.Manager, _ *configuration.Config) error {
 	return add(mgr, newReconciler(&apiClient{
-		client:          mgr.GetClient(),
-		scheme:          mgr.GetScheme(),
-		templateContent: newTemplateContentProvider(getTemplateFromHost),
+		client:             mgr.GetClient(),
+		scheme:             mgr.GetScheme(),
+		getTemplateContent: getTemplateFromHost,
 	}))
 }
 
@@ -85,9 +83,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 var _ reconcile.Reconciler = &NSTemplateSetReconciler{}
 
 type apiClient struct {
-	client          client.Client
-	scheme          *runtime.Scheme
-	templateContent templateContentProvider
+	client             client.Client
+	scheme             *runtime.Scheme
+	getTemplateContent getTemplateFromHostFunc
 }
 
 // NSTemplateSetReconciler the NSTemplateSet reconciler
@@ -98,10 +96,8 @@ type NSTemplateSetReconciler struct {
 	status           *statusManager
 }
 
-// templateContentProvider a function that returns a template for a given tier and type
-type templateContentProvider func(tierName, typeName string) templateContentFunc
-type getTemplateFromHostFunc func(tierName, typeName string) (*templatev1.Template, error)
-type templateContentFunc func() (*templatev1.Template, error)
+// getTemplateFromHostFunc is a function that returns a TierTemplate for a given templateRef
+type getTemplateFromHostFunc func(templateRef string) (*tierTemplate, error)
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec
@@ -245,26 +241,7 @@ func listByOwnerLabel(username string) client.ListOption {
 	return client.MatchingLabels(labels)
 }
 
-func newTemplateContentProvider(getTemplateFromHost getTemplateFromHostFunc) templateContentProvider {
-	return func(tierName, typeName string) templateContentFunc {
-		return func() (*templatev1.Template, error) {
-			return getTemplateFromHost(tierName, typeName)
-		}
-	}
-}
-
-func process(getTemplateContent templateContentFunc, scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtime.RawExtension, error) {
-	tmplContent, err := getTemplateContent()
-	if tmplContent == nil || err != nil {
-		return nil, err
-	}
-	tmplProcessor := template.NewProcessor(scheme)
-	params := map[string]string{"USERNAME": username}
-	return tmplProcessor.Process(tmplContent, params, filters...)
-}
-
-func isUpToDateAndProvisioned(obj metav1.Object, revision, tier string) bool {
-	return obj.GetLabels()[toolchainv1alpha1.RevisionLabelKey] != "" &&
-		obj.GetLabels()[toolchainv1alpha1.RevisionLabelKey] == revision &&
-		obj.GetLabels()[toolchainv1alpha1.TierLabelKey] == tier
+func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {
+	return obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
 }

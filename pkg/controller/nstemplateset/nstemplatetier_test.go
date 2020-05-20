@@ -5,7 +5,9 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/operator-framework/operator-sdk/pkg/log/zap"
@@ -15,11 +17,29 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	fedcommon "sigs.k8s.io/kubefed/pkg/apis/core/common"
 	fedv1b1 "sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
 )
+
+func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
+	return &toolchainv1alpha1.TierTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      test.NewTierTemplateName(tier, typeName, revision),
+			Namespace: "toolchain-host-operator",
+		},
+		Spec: toolchainv1alpha1.TierTemplateSpec{
+			TierName: tier,
+			Type:     typeName,
+			Revision: revision,
+			Template: templatev1.Template{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: typeName,
+				},
+			},
+		},
+	}
+}
 
 func TestGetNSTemplateTier(t *testing.T) {
 
@@ -28,124 +48,61 @@ func TestGetNSTemplateTier(t *testing.T) {
 	err := apis.AddToScheme(scheme.Scheme)
 	require.NoError(t, err)
 	logf.SetLogger(zap.Logger())
-	basicTier := &toolchainv1alpha1.NSTemplateTier{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "basic",
-			Namespace: "toolchain-host-operator",
-		},
-		Spec: toolchainv1alpha1.NSTemplateTierSpec{
-			Namespaces: []toolchainv1alpha1.NSTemplateTierNamespace{
-				{
-					Type:     "code",
-					Revision: "abcdef",
-					Template: templatev1.Template{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "code",
-						},
-					},
-				},
-				{
-					Type:     "dev",
-					Revision: "123456",
-					Template: templatev1.Template{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "dev",
-						},
-					},
-				},
-				{
-					Type:     "stage",
-					Revision: "1a2b3c",
-					Template: templatev1.Template{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "stage",
-						},
-					},
-				},
-			},
-		},
-	}
-	advancedTier := &toolchainv1alpha1.NSTemplateTier{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "advanced",
-			Namespace: "toolchain-host-operator",
-		},
-		Spec: toolchainv1alpha1.NSTemplateTierSpec{
-			Namespaces: []toolchainv1alpha1.NSTemplateTierNamespace{
-				{
-					Type:     "code",
-					Revision: "ghijkl",
-					Template: templatev1.Template{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "code",
-						},
-					},
-				},
-				{
-					Type:     "dev",
-					Revision: "789012",
-					Template: templatev1.Template{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "dev",
-						},
-					},
-				},
-				{
-					Type:     "stage",
-					Revision: "4d5e6f",
-					Template: templatev1.Template{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "stage",
-						},
-					},
-				},
-			},
-		},
-	}
-	otherTier := &toolchainv1alpha1.NSTemplateTier{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "other",
-			Namespace: "other_namespace",
-		},
-	}
-	cl := fake.NewFakeClient(basicTier, advancedTier, otherTier)
 
-	t.Run("success", func(t *testing.T) {
+	basicTierCode := newTierTemplate("basic", "code", "abcdef")
+	basicTierDev := newTierTemplate("basic", "dev", "123456")
+	basicTierStage := newTierTemplate("basic", "stage", "1a2b3c")
+	basicTierCluster := newTierTemplate("basic", "clusterresources", "aa11bb22")
+
+	advancedTierCode := newTierTemplate("advanced", "code", "ghijkl")
+	advancedTierDev := newTierTemplate("advanced", "dev", "789012")
+	advancedTierStage := newTierTemplate("advanced", "stage", "4d5e6f")
+
+	other := newTierTemplate("other", "other", "other")
+	other.Namespace = "other"
+
+	cl := testcommon.NewFakeClient(t, basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage, other)
+
+	t.Run("return code for basic tier", func(t *testing.T) {
 		// given
 		hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
 			Type:   fedcommon.ClusterReady,
 			Status: apiv1.ConditionTrue,
 		})
 		// when
-		tmpls, err := getTemplatesFromHost(hostCluster, "basic")
+		tierTmpl, err := getTierTemplate(hostCluster, "basic-code-abcdef")
 
 		// then
 		require.NoError(t, err)
-		require.Len(t, tmpls, 3)
-		assert.Equal(t, versionedTemplate{
-			Revision: "abcdef",
-			Template: templatev1.Template{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "code",
-				},
-			},
-		}, tmpls["code"])
-		assert.Equal(t, versionedTemplate{
-			Revision: "123456",
-			Template: templatev1.Template{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "dev",
-				},
-			},
-		}, tmpls["dev"])
-		assert.Equal(t, versionedTemplate{
-			Revision: "1a2b3c",
-			Template: templatev1.Template{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "stage",
-				},
-			},
-		}, tmpls["stage"])
+		assert.Equal(t, tierTmpl.Spec, basicTierCode.Spec)
+	})
+
+	t.Run("return dev for advanced tier", func(t *testing.T) {
+		// given
+		hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
+			Type:   fedcommon.ClusterReady,
+			Status: apiv1.ConditionTrue,
+		})
+		// when
+		tierTmpl, err := getTierTemplate(hostCluster, "advanced-dev-789012")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, tierTmpl.Spec, advancedTierDev.Spec)
+	})
+
+	t.Run("return cluster type for basic tier", func(t *testing.T) {
+		// given
+		hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
+			Type:   fedcommon.ClusterReady,
+			Status: apiv1.ConditionTrue,
+		})
+		// when
+		tierTmpl, err := getTierTemplate(hostCluster, "basic-clusterresources-aa11bb22")
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, tierTmpl.Spec, basicTierCluster.Spec)
 	})
 
 	t.Run("failures", func(t *testing.T) {
@@ -156,7 +113,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 				return nil, false
 			}
 			// when
-			_, err := getTemplatesFromHost(hostCluster, "unknown")
+			_, err := getTierTemplate(hostCluster, "unknown")
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to connect to the host cluster: unknown cluster")
@@ -169,23 +126,23 @@ func TestGetNSTemplateTier(t *testing.T) {
 				Status: apiv1.ConditionFalse,
 			})
 			// when
-			_, err := getTemplatesFromHost(hostCluster, "unknown")
+			_, err := getTierTemplate(hostCluster, "unknown")
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "the host cluster is not ready")
 		})
 
-		t.Run("unknown tier", func(t *testing.T) {
+		t.Run("unknown templateRef", func(t *testing.T) {
 			// given
 			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
 				Type:   fedcommon.ClusterReady,
 				Status: apiv1.ConditionTrue,
 			})
 			// when
-			_, err := getTemplatesFromHost(hostCluster, "unknown")
+			_, err := getTierTemplate(hostCluster, "unknown")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "unable to retrieve the NSTemplateTier 'unknown' from 'Host' cluster")
+			assert.Contains(t, err.Error(), "unable to retrieve the TierTemplate 'unknown' from 'Host' cluster")
 		})
 
 		t.Run("tier in another namespace", func(t *testing.T) {
@@ -195,10 +152,10 @@ func TestGetNSTemplateTier(t *testing.T) {
 				Status: apiv1.ConditionTrue,
 			})
 			// when
-			_, err := getTemplatesFromHost(hostCluster, "other")
+			_, err := getTierTemplate(hostCluster, "other-other-other")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "unable to retrieve the NSTemplateTier 'other' from 'Host' cluster")
+			assert.Contains(t, err.Error(), "unable to retrieve the TierTemplate 'other-other-other' from 'Host' cluster")
 		})
 	})
 

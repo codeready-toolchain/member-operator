@@ -28,7 +28,12 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespaces with label owner '%s'", username)
 	}
 
-	toDeprovision, found := nextNamespaceToDeprovision(nsTmplSet.Spec.Namespaces, userNamespaces)
+	tierTemplatesByType, err := r.getTierTemplatesForAllNamespaces(nsTmplSet)
+	if err != nil {
+		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err,
+			"failed to get TierTemplates for tier '%s'", nsTmplSet.Spec.TierName)
+	}
+	toDeprovision, found := nextNamespaceToDeprovision(tierTemplatesByType, userNamespaces)
 	if found {
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return false, err
@@ -41,7 +46,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	}
 
 	// find next namespace for provisioning namespace resource
-	tcNamespace, userNamespace, found := nextNamespaceToProvisionOrUpdate(nsTmplSet, userNamespaces)
+	tierTemplate, userNamespace, found := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces)
 	if !found {
 		logger.Info("no more namespaces to create", "username", nsTmplSet.GetName())
 		return false, nil
@@ -56,34 +61,33 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			return false, err
 		}
 	}
-
 	// create namespace resource
-	return true, r.ensureNamespace(logger, nsTmplSet, tcNamespace, userNamespace)
+	return true, r.ensureNamespace(logger, nsTmplSet, tierTemplate, userNamespace)
 }
 
 // ensureNamespace ensures that the namespace exists and that it contains all the expected resources
-func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, userNamespace *corev1.Namespace) error {
-	logger.Info("ensuring namespace", "namespace", tcNamespace.Type, "tier", nsTmplSet.Spec.TierName)
+func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) error {
+	logger.Info("ensuring namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
 
 	// create namespace before created inner resources because creating the namespace may take some time
 	if userNamespace == nil {
-		return r.ensureNamespaceResource(logger, nsTmplSet, tcNamespace)
+		return r.ensureNamespaceResource(logger, nsTmplSet, tierTemplate)
 	}
-	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tcNamespace, userNamespace)
+	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tierTemplate, userNamespace)
 }
 
 // ensureNamespaceResource ensures that the namespace exists.
-func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace) error {
-	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tcNamespace.Type)
+func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate) error {
+	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 
-	objs, err := process(r.templateContent(nsTmplSet.Spec.TierName, tcNamespace.Type), r.scheme, nsTmplSet.GetName(), template.RetainNamespaces)
+	objs, err := tierTemplate.process(r.scheme, nsTmplSet.GetName(), template.RetainNamespaces)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tcNamespace.Type)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tierTemplate.typeName)
 	}
 
 	labels := map[string]string{
 		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
-		toolchainv1alpha1.TypeLabelKey:     tcNamespace.Type,
+		toolchainv1alpha1.TypeLabelKey:     tierTemplate.typeName,
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
 
@@ -94,30 +98,33 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 
 	_, err = applycl.NewApplyClient(r.client, r.scheme).Apply(objs, labels)
 	if err != nil {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tcNamespace.Type)
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tierTemplate.typeName)
 	}
-	logger.Info("namespace provisioned", "namespace", tcNamespace)
+	logger.Info("namespace provisioned", "namespace", tierTemplate)
 	return nil
 }
 
 // ensureInnerNamespaceResources ensure that the namespace has the expected resources.
-func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tcNamespace *toolchainv1alpha1.NSTemplateSetNamespace, namespace *corev1.Namespace) error {
-	logger.Info("ensuring namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tcNamespace.Type)
+func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, namespace *corev1.Namespace) error {
+	logger.Info("ensuring namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 	nsName := namespace.GetName()
 	username := nsTmplSet.GetName()
-	newObjs, err := process(r.templateContent(nsTmplSet.Spec.TierName, tcNamespace.Type), r.scheme, username, template.RetainAllButNamespaces)
+	newObjs, err := tierTemplate.process(r.scheme, username, template.RetainAllButNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
 
-	if currentTier, exists := namespace.Labels[toolchainv1alpha1.TierLabelKey]; exists && currentTier != "" && currentTier != nsTmplSet.Spec.TierName {
+	if currentRef, exists := namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey]; exists && currentRef != "" && currentRef != tierTemplate.templateRef {
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return err
 		}
-
-		currentObjs, err := process(r.templateContent(currentTier, tcNamespace.Type), r.scheme, username, template.RetainAllButNamespaces)
+		currentTierTemplate, err := r.getTemplateContent(currentRef)
 		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve template for tier/type '%s/%s'", currentTier, tcNamespace.Type)
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
+		}
+		currentObjs, err := currentTierTemplate.process(r.scheme, username, template.RetainAllButNamespaces)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to process template for TierTemplate with name '%s'", currentRef)
 		}
 		if _, err := deleteRedundantObjects(logger, r.client, false, currentObjs, newObjs); err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
@@ -135,14 +142,14 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		namespace.Labels = make(map[string]string)
 	}
 
-	// Adding labels indicating that the namespace is up-to-date with revision/tier
-	namespace.Labels[toolchainv1alpha1.RevisionLabelKey] = tcNamespace.Revision
-	namespace.Labels[toolchainv1alpha1.TierLabelKey] = nsTmplSet.Spec.TierName
+	// Adding label indicating that the namespace is up-to-date with TierTemplate
+	namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] = tierTemplate.templateRef
+	namespace.Labels[toolchainv1alpha1.TierLabelKey] = tierTemplate.tierName
 	if err := r.client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
 
-	logger.Info("namespace provisioned with all required resources", "tier", nsTmplSet.Spec.TierName, "namespace", tcNamespace)
+	logger.Info("namespace provisioned with all required resources", "templateRef", tierTemplate.templateRef)
 
 	// TODO add validation for other objects
 	return nil // nothing changed, no error occurred
@@ -174,6 +181,18 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 	return false, nil
 }
 
+func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
+	var tmpls []*tierTemplate
+	for _, ns := range nsTmplSet.Spec.Namespaces {
+		nsTmpl, err := r.getTemplateContent(ns.TemplateRef)
+		if err != nil {
+			return nil, err
+		}
+		tmpls = append(tmpls, nsTmpl)
+	}
+	return tmpls, nil
+}
+
 // fetchNamespaces returns all current namespaces belonging to the given user
 // i.e., labeled with `"toolchain.dev.openshift.com/owner":<username>`
 func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace, error) {
@@ -188,17 +207,17 @@ func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace,
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
 // either revision is not set or revision or tier doesn't equal to the current one.
 // It also returns namespace present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvisionOrUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet, namespaces []corev1.Namespace) (*toolchainv1alpha1.NSTemplateSetNamespace, *corev1.Namespace, bool) {
-	for _, tcNamespace := range nsTmplSet.Spec.Namespaces {
-		namespace, found := findNamespace(namespaces, tcNamespace.Type)
+func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool) {
+	for _, nsTemplate := range tierTemplatesByType {
+		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				if !isUpToDateAndProvisioned(&namespace, tcNamespace.Revision, nsTmplSet.Spec.TierName) {
-					return &tcNamespace, &namespace, true
+				if !isUpToDateAndProvisioned(&namespace, nsTemplate) {
+					return nsTemplate, &namespace, true
 				}
 			}
 		} else {
-			return &tcNamespace, nil, true
+			return nsTemplate, nil, true
 		}
 	}
 	return nil, nil, false
@@ -206,11 +225,11 @@ func nextNamespaceToProvisionOrUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet
 
 // nextNamespaceToDeprovision returns namespace (and information of it was found) that should be deprovisioned
 // because its type wasn't found in the set of namespace types in NSTemplateSet
-func nextNamespaceToDeprovision(tcNamespaces []toolchainv1alpha1.NSTemplateSetNamespace, namespaces []corev1.Namespace) (*corev1.Namespace, bool) {
+func nextNamespaceToDeprovision(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*corev1.Namespace, bool) {
 Namespaces:
 	for _, ns := range namespaces {
-		for _, tcNs := range tcNamespaces {
-			if tcNs.Type == ns.Labels[toolchainv1alpha1.TypeLabelKey] {
+		for _, nsTemplate := range tierTemplatesByType {
+			if nsTemplate.typeName == ns.Labels[toolchainv1alpha1.TypeLabelKey] {
 				continue Namespaces
 			}
 		}

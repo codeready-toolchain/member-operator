@@ -445,9 +445,9 @@ func TestReconcile(t *testing.T) {
 			})
 	})
 
-	t.Run("update when revision in NSTemplateSet is different", func(t *testing.T) {
+	t.Run("update when templateRef in NSTemplateSet is different", func(t *testing.T) {
 		// given
-		userAcc.Spec.NSTemplateSet.Namespaces[0].Revision = "09876"
+		userAcc.Spec.NSTemplateSet.Namespaces[0].TemplateRef = "basic-dev-09876"
 		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
@@ -459,7 +459,7 @@ func TestReconcile(t *testing.T) {
 		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
 		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
 		require.NoError(t, err)
-		assert.Equal(t, "09876", updatedNSTmplSet.Spec.Namespaces[0].Revision)
+		assert.Equal(t, "basic-dev-09876", updatedNSTmplSet.Spec.Namespaces[0].TemplateRef)
 
 		// Check that the user account status is now "provisioned"
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
@@ -1144,8 +1144,8 @@ func newNSTmplSetSpec() toolchainv1alpha1.NSTemplateSetSpec {
 	return toolchainv1alpha1.NSTemplateSetSpec{
 		TierName: "basic",
 		Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
-			{Type: "dev", Revision: "abcde11", Template: ""},
-			{Type: "code", Revision: "abcde21", Template: ""},
+			{TemplateRef: "basic-dev-abcde11"},
+			{TemplateRef: "basic-code-abcde21"},
 		},
 	}
 }
@@ -1210,8 +1210,8 @@ func checkNSTmplSet(t *testing.T, client client.Client, username string) {
 
 	assert.Equal(t, "basic", nsTmplSet.Spec.TierName)
 	assert.Equal(t, 2, len(nsTmplSet.Spec.Namespaces))
-	assert.Equal(t, nsTmplSet.Spec.Namespaces[0].Type, "dev")
-	assert.Equal(t, nsTmplSet.Spec.Namespaces[1].Type, "code")
+	assert.Equal(t, nsTmplSet.Spec.Namespaces[0].TemplateRef, "basic-dev-abcde11")
+	assert.Equal(t, nsTmplSet.Spec.Namespaces[1].TemplateRef, "basic-code-abcde21")
 }
 
 func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {

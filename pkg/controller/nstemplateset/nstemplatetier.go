@@ -15,8 +15,6 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-const clusterResourcesType = "clusterresources"
-
 // getTemplateFromHost retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.

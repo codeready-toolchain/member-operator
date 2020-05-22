@@ -80,7 +80,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 
 	var labels = map[string]string{
 		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
-		toolchainv1alpha1.TypeLabelKey:        clusterResourcesType,
+		toolchainv1alpha1.TypeLabelKey:        toolchainv1alpha1.ClusterResourcesTemplateType,
 		toolchainv1alpha1.TemplateRefLabelKey: tierTemplate.templateRef,
 		toolchainv1alpha1.TierLabelKey:        tierTemplate.tierName,
 		toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,

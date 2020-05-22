@@ -142,6 +142,7 @@ spec:
           - rolebindings
           - roles
           - clusterroles
+          - clusterrolebindings
           verbs:
           - '*'
         - apiGroups:

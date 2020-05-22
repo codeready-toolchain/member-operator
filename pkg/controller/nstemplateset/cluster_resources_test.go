@@ -13,7 +13,7 @@ import (
 	quotav1 "github.com/openshift/api/quota/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/rbac/v1alpha1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -137,7 +137,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-			HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+			HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 	})
 
 	t.Run("should not create ClusterResource objects when the field is nil", func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 			HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
-			HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+			HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 		t.Run("should create the second CRQ when the first one is already created but still not ClusterRoleBinding", func(t *testing.T) {
 			// when
@@ -189,7 +189,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 				HasResource("for-empty", &quotav1.ClusterResourceQuota{}).
-				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			t.Run("should create ClusterRoleBinding when both CRQs are created", func(t *testing.T) {
 				// when
@@ -204,7 +204,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 					HasResource("for-empty", &quotav1.ClusterResourceQuota{}).
-					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 			})
 		})
 	})
@@ -227,7 +227,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasConditions(Provisioned())
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 	})
 }
 
@@ -313,7 +313,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		assert.True(t, deleted)
 		AssertThatCluster(t, cl).
 			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 		t.Run("delete ClusterRoleBinding since CRQ is already deleted", func(t *testing.T) {
 			// when
@@ -324,7 +324,7 @@ func TestDeleteClusterResources(t *testing.T) {
 			assert.True(t, deleted)
 			AssertThatCluster(t, cl).
 				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 		})
 	})
 
@@ -345,7 +345,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		AssertThatCluster(t, cl).
 			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 			HasResource("for-empty", &quotav1.ClusterResourceQuota{}).
-			HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 		t.Run("delete the for-empty CRQ since it's the last one to be deleted", func(t *testing.T) {
 			// when
@@ -357,7 +357,7 @@ func TestDeleteClusterResources(t *testing.T) {
 			AssertThatCluster(t, cl).
 				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 				HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 		})
 	})
 
@@ -448,7 +448,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					WithLabel("toolchain.dev.openshift.com/templateref", "team-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "team"),
 					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`)).
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 
 			t.Run("upgrade from advanced to team tier by changing only the CRB since CRQ is already changed", func(t *testing.T) {
@@ -465,7 +465,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 						WithLabel("toolchain.dev.openshift.com/tier", "team"),
 						Containing(`"limits.cpu":"4","limits.memory":"15Gi"`)).
-					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 						WithLabel("toolchain.dev.openshift.com/tier", "team"))
 			})
 		})
@@ -488,7 +488,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
 				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}). // no cluster resources in 'basic` tier
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			t.Run("downgrade from advanced to basic tier by removing CRB since CRQ is already removed", func(t *testing.T) {
 				// when
@@ -502,7 +502,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatCluster(t, cl).
 					HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}). // no cluster resources in 'basic` tier
-					HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+					HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 			})
 		})
 
@@ -523,8 +523,8 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
 				HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}). // resources were deleted
-				HasNoResource("tekton-view-for-"+username, &v1alpha1.ClusterRole{}).
-				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasNoResource("tekton-view-for-"+username, &rbacv1.ClusterRole{}).
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 		})
 
 		t.Run("upgrade from basic to advanced by creating only CRQ", func(t *testing.T) {
@@ -546,7 +546,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
 					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
-				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			t.Run("upgrade from basic to advanced by creating CRB since CRQ is already created", func(t *testing.T) {
 				// when
@@ -562,7 +562,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
 						Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
-					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 			})
 		})
@@ -591,8 +591,8 @@ func TestPromoteClusterResources(t *testing.T) {
 				AssertThatCluster(t, cl).
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 					HasResource("for-another-user", &quotav1.ClusterResourceQuota{}).
-					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{}).
-					HasResource("another-tekton-view", &v1alpha1.ClusterRoleBinding{})
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+					HasResource("another-tekton-view", &rbacv1.ClusterRoleBinding{})
 			})
 
 			t.Run("cluster resources should be deleted since it doesn't contain clusterResources template", func(t *testing.T) {
@@ -614,9 +614,9 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatCluster(t, cl).
 					HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-					HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{}).
+					HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 					HasResource("for-another-user", &quotav1.ClusterResourceQuota{}).
-					HasResource("another-tekton-view", &v1alpha1.ClusterRoleBinding{})
+					HasResource("another-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			})
 		})
@@ -644,7 +644,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			require.NoError(t, err)
 			assert.Len(t, quotas.Items, 1)
 			AssertThatCluster(t, cl).
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			t.Run("it should delete the second for-empty CRQ since it's the last one", func(t *testing.T) {
 				// when - should delete the second ClusterResourceQuota
@@ -657,7 +657,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				require.NoError(t, err)
 				assert.Len(t, quotas.Items, 0)
 				AssertThatCluster(t, cl).
-					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 				t.Run("it should delete the CRB since both CRQs are already removed", func(t *testing.T) {
 					// when - should delete the second ClusterResourceQuota
@@ -669,7 +669,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					err = cl.List(context.TODO(), quotas, &client.ListOptions{})
 					require.NoError(t, err)
 					assert.Len(t, quotas.Items, 0)
-					roleBindings := &v1alpha1.ClusterRoleBindingList{}
+					roleBindings := &rbacv1.ClusterRoleBindingList{}
 					err = cl.List(context.TODO(), roleBindings, &client.ListOptions{})
 					require.NoError(t, err)
 					assert.Len(t, roleBindings.Items, 0)
@@ -702,7 +702,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "fail")).
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "fail"))
 		})
@@ -730,7 +730,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
-				HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{},
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 		})
@@ -742,7 +742,7 @@ func TestRetainObjectsOfSameGVK(t *testing.T) {
 	clusterRole := runtime.RawExtension{Object: &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"kind":       "ClusterRole",
-			"apiVersion": "rbac.authorization.k8s.io/v1alpha1",
+			"apiVersion": "rbac.authorization.k8s.io/v1",
 		}}}
 
 	namespace := runtime.RawExtension{Object: &unstructured.Unstructured{
@@ -758,12 +758,12 @@ func TestRetainObjectsOfSameGVK(t *testing.T) {
 	clusterRoleBinding := runtime.RawExtension{Object: &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"kind":       "ClusterRoleBinding",
-			"apiVersion": "rbac.authorization.k8s.io/v1alpha1",
+			"apiVersion": "rbac.authorization.k8s.io/v1",
 		}}}
 
 	t.Run("verify retainObjectsOfSameGVK function for ClusterRole", func(t *testing.T) {
 		// given
-		retain := retainObjectsOfSameGVK(v1alpha1.SchemeGroupVersion.WithKind("ClusterRole"))
+		retain := retainObjectsOfSameGVK(rbacv1.SchemeGroupVersion.WithKind("ClusterRole"))
 
 		t.Run("should return false since the GVK doesn't match", func(t *testing.T) {
 			for _, obj := range []runtime.RawExtension{namespace, clusterResQuota, clusterRoleBinding} {

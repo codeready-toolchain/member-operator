@@ -11,7 +11,7 @@ import (
 	quotav1 "github.com/openshift/api/quota/v1"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
-	"k8s.io/api/rbac/v1alpha1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +27,7 @@ type clusterResourcesManager struct {
 
 // clusterResourceKind represents a resource kind that should be present in templates containing cluster resources.
 // Such a kind should be watched by NSTempalateSet controller which means that every change of the
-// resources of that type triggers a new reconcile.
+// resources of that kind triggers a new reconcile.
 // It is expected that the template contains only the kinds that are being watched and there is an instance of
 // clusterResourceKind type created in clusterResourceKinds list
 type clusterResourceKind struct {
@@ -57,10 +57,10 @@ var clusterResourceKinds = []clusterResourceKind{
 		},
 	},
 	{
-		gvk:    v1alpha1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
-		object: &v1alpha1.ClusterRoleBinding{},
+		gvk:    rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
+		object: &rbacv1.ClusterRoleBinding{},
 		listExistingResources: func(cl client.Client, username string) ([]runtime.Object, error) {
-			itemList := &v1alpha1.ClusterRoleBindingList{}
+			itemList := &rbacv1.ClusterRoleBindingList{}
 			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
 				return nil, err
 			}
@@ -73,10 +73,9 @@ var clusterResourceKinds = []clusterResourceKind{
 	},
 }
 
-// ensure ensures that the cluster resources exists.
+// ensure ensures that the cluster resources exist.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
 func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-
 	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
 	username := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
@@ -84,7 +83,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	if nsTmplSet.Spec.ClusterResources != nil {
 		tierTemplate, err = r.getTemplateContent(nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
@@ -96,7 +95,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		if tierTemplate != nil {
 			newObjs, err = tierTemplate.process(r.scheme, username, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
+				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
 					"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 			}
 		}

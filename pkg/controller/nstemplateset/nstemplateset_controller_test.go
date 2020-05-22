@@ -19,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/api/rbac/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -213,7 +212,7 @@ func TestReconcileUpdate(t *testing.T) {
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
-				HasNoResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			for _, nsType := range []string{"code", "dev"} {
 				AssertThatNamespace(t, username+"-"+nsType, r.client).
@@ -239,7 +238,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
-					HasResource(username+"-tekton-view", &v1alpha1.ClusterRoleBinding{})
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 				for _, nsType := range []string{"code", "dev"} {
 					AssertThatNamespace(t, username+"-"+nsType, r.client).
 						HasNoOwnerReference().
@@ -593,7 +592,7 @@ func toStructured(obj runtime.Object, decoder runtime.Decoder) (runtime.Object, 
 			_, _, err = decoder.Decode(data, nil, crq)
 			return crq, err
 		case "ClusterRoleBinding":
-			crb := &v1alpha1.ClusterRoleBinding{}
+			crb := &rbacv1.ClusterRoleBinding{}
 			_, _, err = decoder.Decode(data, nil, crb)
 			return crb, err
 		}
@@ -724,11 +723,11 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 	}
 }
 
-func newTektonClusterRoleBinding(username, tier string) *v1alpha1.ClusterRoleBinding {
-	return &v1alpha1.ClusterRoleBinding{
+func newTektonClusterRoleBinding(username, tier string) *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterRoleBinding",
-			APIVersion: v1alpha1.SchemeGroupVersion.String(),
+			APIVersion: rbacv1.SchemeGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -741,12 +740,12 @@ func newTektonClusterRoleBinding(username, tier string) *v1alpha1.ClusterRoleBin
 			Name:       username + "-tekton-view",
 			Generation: int64(1),
 		},
-		RoleRef: v1alpha1.RoleRef{
+		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
 			Kind:     "ClusterRole",
 			Name:     "tekton-view-for-" + username,
 		},
-		Subjects: []v1alpha1.Subject{{
+		Subjects: []rbacv1.Subject{{
 			Kind: "User",
 			Name: username,
 		}},
@@ -938,7 +937,7 @@ var (
 `
 
 	clusterTektonRb test.TemplateObject = `
-- apiVersion: rbac.authorization.k8s.io/v1alpha1
+- apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
     name: ${USERNAME}-tekton-view

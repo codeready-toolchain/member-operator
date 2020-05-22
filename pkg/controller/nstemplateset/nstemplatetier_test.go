@@ -41,7 +41,7 @@ func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTem
 	}
 }
 
-func TestGetNSTemplateTier(t *testing.T) {
+func TestGetTierTemplate(t *testing.T) {
 
 	// given
 	// Setup Scheme for all resources (required before adding objects in the fake client)
@@ -74,7 +74,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, tierTmpl.Spec, basicTierCode.Spec)
+		assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
 	})
 
 	t.Run("return dev for advanced tier", func(t *testing.T) {
@@ -88,7 +88,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, tierTmpl.Spec, advancedTierDev.Spec)
+		assertThatTierTemplateIsSameAs(t, advancedTierDev, tierTmpl)
 	})
 
 	t.Run("return cluster type for basic tier", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestGetNSTemplateTier(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, tierTmpl.Spec, basicTierCluster.Spec)
+		assertThatTierTemplateIsSameAs(t, basicTierCluster, tierTmpl)
 	})
 
 	t.Run("failures", func(t *testing.T) {
@@ -157,8 +157,20 @@ func TestGetNSTemplateTier(t *testing.T) {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to retrieve the TierTemplate 'other-other-other' from 'Host' cluster")
 		})
-	})
 
+		t.Run("tier in another namespace", func(t *testing.T) {
+			// given
+			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
+				Type:   fedcommon.ClusterReady,
+				Status: apiv1.ConditionTrue,
+			})
+			// when
+			_, err := getTierTemplate(hostCluster, "")
+			// then
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+		})
+	})
 }
 
 func newHostCluster(cl client.Client, condition fedv1b1.ClusterCondition) cluster.GetHostClusterFunc {
@@ -171,4 +183,11 @@ func newHostCluster(cl client.Client, condition fedv1b1.ClusterCondition) cluste
 			},
 		}, true
 	}
+}
+
+func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.TierTemplate, actual *tierTemplate) {
+	assert.Equal(t, expected.Spec.Type, actual.typeName)
+	assert.Equal(t, expected.Spec.Template, actual.template)
+	assert.Equal(t, expected.Name, actual.templateRef)
+	assert.Equal(t, expected.Spec.TierName, actual.tierName)
 }

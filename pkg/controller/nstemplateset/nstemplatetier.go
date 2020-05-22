@@ -21,10 +21,15 @@ const clusterResourcesType = "clusterresources"
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
 func getTemplateFromHost(templateRef string) (*tierTemplate, error) {
+	return getTierTemplate(cluster.GetHostCluster, templateRef)
+}
+
+// getTierTemplate gets tierTemplate for the given source and templateRef
+func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	if templateRef == "" {
-		return nil, nil
+		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 	}
-	tmpl, err := getTierTemplate(cluster.GetHostCluster, templateRef)
+	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +41,8 @@ func getTemplateFromHost(templateRef string) (*tierTemplate, error) {
 	}, nil
 }
 
-// getTierTemplate gets the TierTemplate resource from the host cluster.
-func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplate, error) {
+// getToolchainTierTemplate gets the TierTemplate resource from the host cluster.
+func getToolchainTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplate, error) {
 	// retrieve the FedCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {

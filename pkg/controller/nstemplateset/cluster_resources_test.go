@@ -112,6 +112,15 @@ func TestClusterResourceKinds(t *testing.T) {
 		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.object)
 		assert.Equal(t, quotav1.GroupVersion.WithKind("ClusterResourceQuota"), clusterResource.gvk)
 	})
+
+	t.Run("verify ClusterRoleBinding is in clusterResourceKinds", func(t *testing.T) {
+		// given
+		clusterResource := clusterResourceKinds[1]
+
+		// then
+		assert.Equal(t, &rbacv1.ClusterRoleBinding{}, clusterResource.object)
+		assert.Equal(t, rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"), clusterResource.gvk)
+	})
 }
 
 func TestEnsureClusterResourcesOK(t *testing.T) {

@@ -6,7 +6,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	templatev1 "github.com/openshift/api/template/v1"
@@ -16,10 +15,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	fedcommon "sigs.k8s.io/kubefed/pkg/apis/core/common"
-	fedv1b1 "sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
 )
 
 func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
@@ -65,10 +61,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 	t.Run("return code for basic tier", func(t *testing.T) {
 		// given
-		hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-			Type:   fedcommon.ClusterReady,
-			Status: apiv1.ConditionTrue,
-		})
+		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		// when
 		tierTmpl, err := getTierTemplate(hostCluster, "basic-code-abcdef")
 
@@ -79,10 +72,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 	t.Run("return dev for advanced tier", func(t *testing.T) {
 		// given
-		hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-			Type:   fedcommon.ClusterReady,
-			Status: apiv1.ConditionTrue,
-		})
+		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		// when
 		tierTmpl, err := getTierTemplate(hostCluster, "advanced-dev-789012")
 
@@ -93,10 +83,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 	t.Run("return cluster type for basic tier", func(t *testing.T) {
 		// given
-		hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-			Type:   fedcommon.ClusterReady,
-			Status: apiv1.ConditionTrue,
-		})
+		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		// when
 		tierTmpl, err := getTierTemplate(hostCluster, "basic-clusterresources-aa11bb22")
 
@@ -109,9 +96,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("host cluster not available", func(t *testing.T) {
 			// given
-			hostCluster := func() (*cluster.FedCluster, bool) {
-				return nil, false
-			}
+			hostCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
 			// when
 			_, err := getTierTemplate(hostCluster, "unknown")
 			// then
@@ -121,10 +106,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("host cluster not ready", func(t *testing.T) {
 			// given
-			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-				Type:   fedcommon.ClusterReady,
-				Status: apiv1.ConditionFalse,
-			})
+			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
 			// when
 			_, err := getTierTemplate(hostCluster, "unknown")
 			// then
@@ -134,10 +116,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("unknown templateRef", func(t *testing.T) {
 			// given
-			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-				Type:   fedcommon.ClusterReady,
-				Status: apiv1.ConditionTrue,
-			})
+			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 			// when
 			_, err := getTierTemplate(hostCluster, "unknown")
 			// then
@@ -147,10 +126,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("tier in another namespace", func(t *testing.T) {
 			// given
-			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-				Type:   fedcommon.ClusterReady,
-				Status: apiv1.ConditionTrue,
-			})
+			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 			// when
 			_, err := getTierTemplate(hostCluster, "other-other-other")
 			// then
@@ -160,10 +136,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("tier in another namespace", func(t *testing.T) {
 			// given
-			hostCluster := newHostCluster(cl, fedv1b1.ClusterCondition{
-				Type:   fedcommon.ClusterReady,
-				Status: apiv1.ConditionTrue,
-			})
+			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 			// when
 			_, err := getTierTemplate(hostCluster, "")
 			// then
@@ -171,18 +144,6 @@ func TestGetTierTemplate(t *testing.T) {
 			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 		})
 	})
-}
-
-func newHostCluster(cl client.Client, condition fedv1b1.ClusterCondition) cluster.GetHostClusterFunc {
-	return func() (*cluster.FedCluster, bool) {
-		return &cluster.FedCluster{
-			OperatorNamespace: "toolchain-host-operator",
-			Client:            cl,
-			ClusterStatus: &fedv1b1.KubeFedClusterStatus{
-				Conditions: []fedv1b1.ClusterCondition{condition},
-			},
-		}, true
-	}
 }
 
 func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.TierTemplate, actual *tierTemplate) {

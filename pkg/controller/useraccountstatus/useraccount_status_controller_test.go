@@ -6,8 +6,8 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-
+	"github.com/codeready-toolchain/member-operator/test"
+	commontest "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -18,16 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"sigs.k8s.io/kubefed/pkg/apis/core/common"
-	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
 )
-
-const (
-	memberClusterName = "member-cluster"
-	hostOperatorNs    = "toolchain-host-operator"
-)
-
-type getHostCluster func(cl client.Client) func() (*cluster.FedCluster, bool)
 
 func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 	// given
@@ -37,7 +28,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 
 	t.Run("successful - should change the syncIndex", func(t *testing.T) {
 
-		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))
+		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 		// when
 		_, err := cntrl.Reconcile(newUaRequest(userAcc))
@@ -52,7 +43,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 
 	t.Run("failed - host not available", func(t *testing.T) {
 
-		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(false, ""))
+		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, false, "")
 
 		// when
 		_, err := cntrl.Reconcile(newUaRequest(userAcc))
@@ -68,7 +59,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 
 	t.Run("failed - host not ready", func(t *testing.T) {
 
-		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionFalse))
+		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionFalse)
 
 		// when
 		_, err := cntrl.Reconcile(newUaRequest(userAcc))
@@ -92,7 +83,7 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 		TargetCluster: "second-member-cluster",
 		SyncIndex:     "aaaaaa",
 	})
-	cntrl, hostClient := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))
+	cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 	// when
 	_, err := cntrl.Reconcile(newUaRequest(userAcc))
@@ -103,7 +94,7 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 	require.NoError(t, err)
 	assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
-	assert.Equal(t, memberClusterName, currentMur.Spec.UserAccounts[0].TargetCluster)
+	assert.Equal(t, commontest.MemberClusterName, currentMur.Spec.UserAccounts[0].TargetCluster)
 
 	assert.Equal(t, "aaaaaa", currentMur.Spec.UserAccounts[1].SyncIndex)
 	assert.Equal(t, "second-member-cluster", currentMur.Spec.UserAccounts[1].TargetCluster)
@@ -117,7 +108,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 	t.Run("when there is no UserAccount", func(t *testing.T) {
 		mur := newMasterUserRecord("johny", "")
 		mur.Spec.UserAccounts = []toolchainv1alpha1.UserAccountEmbedded{}
-		cntrl, _ := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))
+		cntrl, _ := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 		// when
 		_, err := cntrl.Reconcile(newUaRequest(userAcc))
@@ -130,7 +121,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 	t.Run("when the cluster name is different", func(t *testing.T) {
 		mur := newMasterUserRecord("johny", "")
 		mur.Spec.UserAccounts[0].TargetCluster = "some-other-cluster"
-		cntrl, _ := newReconcileStatus(t, userAcc, mur, newGetHostCluster(true, v1.ConditionTrue))
+		cntrl, _ := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 		// when
 		_, err := cntrl.Reconcile(newUaRequest(userAcc))
@@ -144,7 +135,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 func newReconcileStatus(t *testing.T,
 	userAcc *toolchainv1alpha1.UserAccount,
 	mur *toolchainv1alpha1.MasterUserRecord,
-	getHostCluster getHostCluster) (ReconcileUserAccountStatus, client.Client) {
+	ok bool, status v1.ConditionStatus) (ReconcileUserAccountStatus, client.Client) {
 
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
@@ -155,35 +146,9 @@ func newReconcileStatus(t *testing.T,
 
 	return ReconcileUserAccountStatus{
 		client:         memberClient,
-		getHostCluster: getHostCluster(hostClient),
+		getHostCluster: test.NewGetHostCluster(hostClient, ok, status),
 		scheme:         s,
 	}, hostClient
-}
-
-func newGetHostCluster(ok bool, status v1.ConditionStatus) getHostCluster {
-	if !ok {
-		return func(cl client.Client) func() (*cluster.FedCluster, bool) {
-			return func() (fedCluster *cluster.FedCluster, b bool) {
-				return nil, false
-			}
-		}
-	}
-	return func(cl client.Client) func() (*cluster.FedCluster, bool) {
-		return func() (fedCluster *cluster.FedCluster, b bool) {
-			return &cluster.FedCluster{
-				Client:            cl,
-				Type:              cluster.Host,
-				OperatorNamespace: hostOperatorNs,
-				OwnerClusterName:  memberClusterName,
-				ClusterStatus: &v1beta1.KubeFedClusterStatus{
-					Conditions: []v1beta1.ClusterCondition{{
-						Type:   common.ClusterReady,
-						Status: status,
-					}},
-				},
-			}, true
-		}
-	}
 }
 
 func newUaRequest(userAcc *toolchainv1alpha1.UserAccount) reconcile.Request {
@@ -213,11 +178,11 @@ func newMasterUserRecord(userName, syncIndex string) *toolchainv1alpha1.MasterUs
 	userAcc := &toolchainv1alpha1.MasterUserRecord{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
-			Namespace: hostOperatorNs,
+			Namespace: commontest.HostOperatorNs,
 		},
 		Spec: toolchainv1alpha1.MasterUserRecordSpec{
 			UserAccounts: []toolchainv1alpha1.UserAccountEmbedded{{
-				TargetCluster: memberClusterName,
+				TargetCluster: commontest.MemberClusterName,
 				SyncIndex:     syncIndex,
 			}},
 		},

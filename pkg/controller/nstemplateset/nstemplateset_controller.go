@@ -5,6 +5,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"github.com/go-logr/logr"
 	quotav1 "github.com/openshift/api/quota/v1"
@@ -30,9 +31,9 @@ var log = logf.Log.WithName("controller_nstemplateset")
 // Add creates a new NSTemplateSetReconciler and starts it (ie, watches resources and reconciles the cluster state)
 func Add(mgr manager.Manager, _ *configuration.Config) error {
 	return add(mgr, newReconciler(&apiClient{
-		client:             mgr.GetClient(),
-		scheme:             mgr.GetScheme(),
-		getTemplateContent: getTemplateFromHost,
+		client:         mgr.GetClient(),
+		scheme:         mgr.GetScheme(),
+		getHostCluster: cluster.GetHostCluster,
 	}))
 }
 
@@ -80,9 +81,9 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 var _ reconcile.Reconciler = &NSTemplateSetReconciler{}
 
 type apiClient struct {
-	client             client.Client
-	scheme             *runtime.Scheme
-	getTemplateContent getTemplateFromHostFunc
+	client         client.Client
+	scheme         *runtime.Scheme
+	getHostCluster cluster.GetHostClusterFunc
 }
 
 // NSTemplateSetReconciler the NSTemplateSet reconciler
@@ -92,9 +93,6 @@ type NSTemplateSetReconciler struct {
 	clusterResources *clusterResourcesManager
 	status           *statusManager
 }
-
-// getTemplateFromHostFunc is a function that returns a TierTemplate for a given templateRef
-type getTemplateFromHostFunc func(templateRef string) (*tierTemplate, error)
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec

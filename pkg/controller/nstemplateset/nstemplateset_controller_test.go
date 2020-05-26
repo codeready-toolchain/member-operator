@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -477,7 +478,9 @@ func prepareApiClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *te
 	require.NoError(t, err)
 	codecFactory := serializer.NewCodecFactory(s)
 	decoder := codecFactory.UniversalDeserializer()
-	fakeClient := test.NewFakeClient(t, initObjs...)
+	tierTemplates, err := getTemplateTiers(decoder)
+	require.NoError(t, err)
+	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
 
 	// objects created from OpenShift templates are `*unstructured.Unstructured`,
 	// which causes troubles when calling the `List` method on the fake client,
@@ -503,9 +506,9 @@ func prepareApiClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *te
 		return passGeneration(o, obj)
 	}
 	return &apiClient{
-		client:             fakeClient,
-		scheme:             s,
-		getTemplateContent: getTemplateContent(decoder),
+		client:         fakeClient,
+		scheme:         s,
+		getHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
 	}, fakeClient
 }
 
@@ -716,60 +719,69 @@ func newClusterResourceQuota(username, tier string) *quotav1.ClusterResourceQuot
 	}
 }
 
-func getTemplateContent(decoder runtime.Decoder) func(templateRef string) (*tierTemplate, error) {
-	return func(templateRef string) (*tierTemplate, error) {
-		refParts := strings.Split(templateRef, "-")
-		tierName := refParts[0]
-		typeName := refParts[1]
-		if typeName == "fail" || tierName == "fail" {
-			return nil, fmt.Errorf("failed to retrieve template")
-		}
-		var tmplContent string
-		switch tierName {
-		case "advanced": // assume that this tier has a "cluster resources" template
+func getTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
+	var tierTemplates []runtime.Object
+
+	for _, tierName := range []string{"advanced", "basic", "team", "withemptycrq"} {
+		for _, typeName := range []string{"code", "dev", "stage", "clusterresources"} {
+			var tmplContent string
+			switch tierName {
+			case "advanced": // assume that this tier has a "cluster resources" template
+				switch typeName {
+				case "clusterresources":
+					tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
+				default:
+					tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
+				}
+			case "basic":
+				switch typeName {
+				case "clusterresources": // assume that this tier has no "cluster resources" template
+					continue
+				default:
+					tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
+				}
+			case "team": // assume that this tier has a "cluster resources" template
+				switch typeName {
+				case "clusterresources":
+					tmplContent = test.CreateTemplate(test.WithObjects(teamCrq), test.WithParams(username))
+				default:
+					tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
+				}
+			case "withemptycrq":
+				switch typeName {
+				case "clusterresources":
+					tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq), test.WithParams(username))
+				default:
+					tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
+				}
+			}
+			tmplContent = strings.ReplaceAll(tmplContent, "nsType", typeName)
+			tmpl := templatev1.Template{}
+			_, _, err := decoder.Decode([]byte(tmplContent), nil, &tmpl)
+			if err != nil {
+				return nil, err
+			}
+			revision := "abcde11"
 			switch typeName {
 			case "clusterresources":
-				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
-			default:
-				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
+				revision = "12345bb"
 			}
-		case "basic":
-			switch typeName {
-			case "clusterresources": // assume that this tier has no "cluster resources" template
-				return nil, nil
-			default:
-				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
+			tierTmpl := &toolchainv1alpha1.TierTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      strings.ToLower(fmt.Sprintf("%s-%s-%s", tierName, typeName, revision)),
+					Namespace: test.HostOperatorNs,
+				},
+				Spec: toolchainv1alpha1.TierTemplateSpec{
+					TierName: tierName,
+					Type:     typeName,
+					Revision: revision,
+					Template: tmpl,
+				},
 			}
-		case "team": // assume that this tier has a "cluster resources" template
-			switch typeName {
-			case "clusterresources":
-				tmplContent = test.CreateTemplate(test.WithObjects(teamCrq), test.WithParams(username))
-			default:
-				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
-			}
-		case "withemptycrq":
-			switch typeName {
-			case "clusterresources":
-				tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq), test.WithParams(username))
-			default:
-				tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
-			}
-		default:
-			return nil, fmt.Errorf("no template for tier '%s'", tierName)
+			tierTemplates = append(tierTemplates, tierTmpl)
 		}
-		tmplContent = strings.ReplaceAll(tmplContent, "nsType", typeName)
-		tmpl := templatev1.Template{}
-		_, _, err := decoder.Decode([]byte(tmplContent), nil, &tmpl)
-		if err != nil {
-			return nil, err
-		}
-		return &tierTemplate{
-			templateRef: templateRef,
-			tierName:    tierName,
-			typeName:    typeName,
-			template:    tmpl,
-		}, err
 	}
+	return tierTemplates, nil
 }
 
 var (

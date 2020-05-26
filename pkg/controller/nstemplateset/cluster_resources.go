@@ -26,7 +26,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		tierTemplate, err = r.getTemplateContent(nsTmplSet.Spec.ClusterResources.TemplateRef)
+		tierTemplate, err = getTierTemplate(r.getHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
@@ -55,7 +55,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 				return false, err
 			}
 
-			currentTierTemplate, err := r.getTemplateContent(currentTemplateRef)
+			currentTierTemplate, err := getTierTemplate(r.getHostCluster, currentTemplateRef)
 			if err != nil {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err,
 					"failed to retrieve TierTemplate for the cluster resources with the name '%s'", currentTemplateRef)
@@ -121,7 +121,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 		return false, nil
 	}
 	username := nsTmplSet.Name
-	tierTemplate, err := r.getTemplateContent(nsTmplSet.Spec.ClusterResources.TemplateRef)
+	tierTemplate, err := getTierTemplate(r.getHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err,
 			"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)

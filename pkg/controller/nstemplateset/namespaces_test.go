@@ -507,10 +507,11 @@ func TestEnsureNamespacesFail(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to retrieve template")
+		assert.Contains(t, err.Error(), "failed to get TierTemplates for tier 'basic'")
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(UnableToProvisionNamespace("failed to retrieve template"))
+			HasConditions(UnableToProvisionNamespace(
+				"unable to retrieve the TierTemplate 'basic-fail-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-fail-abcde11\" not found"))
 	})
 
 	t.Run("fail to get template for inner resources", func(t *testing.T) {
@@ -524,10 +525,11 @@ func TestEnsureNamespacesFail(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to retrieve template")
+		assert.Contains(t, err.Error(), "failed to get TierTemplates for tier 'basic'")
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(UnableToProvisionNamespace("failed to retrieve template"))
+			HasConditions(UnableToProvisionNamespace(
+				"unable to retrieve the TierTemplate 'basic-fail-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-fail-abcde11\" not found"))
 	})
 
 }
@@ -768,7 +770,8 @@ func TestPromoteNamespaces(t *testing.T) {
 			require.Error(t, err)
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
-				HasConditions(UpdateFailed("failed to retrieve template"))
+				HasConditions(UpdateFailed(
+					"unable to retrieve the TierTemplate 'fail-dev-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"fail-dev-abcde11\" not found"))
 			AssertThatNamespace(t, username+"-dev", cl).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).

@@ -15,14 +15,9 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-// getTemplateFromHost retrieves the TierTemplate resource with the given name from the host cluster
+// getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
-func getTemplateFromHost(templateRef string) (*tierTemplate, error) {
-	return getTierTemplate(cluster.GetHostCluster, templateRef)
-}
-
-// getTierTemplate gets tierTemplate for the given source and templateRef
 func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")

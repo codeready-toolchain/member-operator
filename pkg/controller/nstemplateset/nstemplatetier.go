@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
+var cachedTierTemplates = map[string]*tierTemplate{}
+
 // getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
@@ -22,16 +24,22 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 	}
+	if tierTmpl, ok := cachedTierTemplates[templateRef]; ok && tierTmpl != nil {
+		return tierTmpl, nil
+	}
 	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
 	if err != nil {
 		return nil, err
 	}
-	return &tierTemplate{
+	tierTmpl := &tierTemplate{
 		templateRef: templateRef,
 		tierName:    tmpl.Spec.TierName,
 		typeName:    tmpl.Spec.Type,
 		template:    tmpl.Spec.Template,
-	}, nil
+	}
+	cachedTierTemplates[templateRef] = tierTmpl
+
+	return tierTmpl, nil
 }
 
 // getToolchainTierTemplate gets the TierTemplate resource from the host cluster.
@@ -69,5 +77,5 @@ type tierTemplate struct {
 func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtime.RawExtension, error) {
 	tmplProcessor := template.NewProcessor(scheme)
 	params := map[string]string{"USERNAME": username}
-	return tmplProcessor.Process(&t.template, params, filters...)
+	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
 }

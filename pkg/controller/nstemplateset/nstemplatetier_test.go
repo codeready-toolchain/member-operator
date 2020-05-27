@@ -1,6 +1,7 @@
 package nstemplateset
 
 import (
+	"sync"
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -213,11 +214,47 @@ func TestGetTierTemplate(t *testing.T) {
 			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 		})
 	})
+
+	t.Run("test multiple retrievals in parallel", func(t *testing.T) {
+		// given
+		defer resetCache()
+		var latch sync.WaitGroup
+		latch.Add(1)
+		var waitForFinished sync.WaitGroup
+
+		for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
+			for i := 0; i < 1000; i++ {
+				waitForFinished.Add(1)
+				go func() {
+					// given
+					defer waitForFinished.Done()
+					latch.Wait()
+					hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
+					if _, ok := tierTemplatesCache.get(tierTemplate.Name); ok {
+						hostCluster = test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
+					}
+
+					// when
+					retrievedTierTemplate, err := getTierTemplate(hostCluster, tierTemplate.Name)
+
+					// then
+					assert.NoError(t, err)
+					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
+				}()
+			}
+		}
+
+		// when
+		latch.Done()
+
+		// then
+		waitForFinished.Wait()
+	})
 }
 
 func resetCache() func() {
 	reset := func() {
-		cachedTierTemplates = map[string]*tierTemplate{}
+		tierTemplatesCache = newTierTemplateCache()
 	}
 	reset()
 	return reset

@@ -3,6 +3,7 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -15,7 +16,7 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-var cachedTierTemplates = map[string]*tierTemplate{}
+var tierTemplatesCache = newTierTemplateCache()
 
 // getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
@@ -24,7 +25,7 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 	}
-	if tierTmpl, ok := cachedTierTemplates[templateRef]; ok && tierTmpl != nil {
+	if tierTmpl, ok := tierTemplatesCache.get(templateRef); ok && tierTmpl != nil {
 		return tierTmpl, nil
 	}
 	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
@@ -37,7 +38,7 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 		typeName:    tmpl.Spec.Type,
 		template:    tmpl.Spec.Template,
 	}
-	cachedTierTemplates[templateRef] = tierTmpl
+	tierTemplatesCache.add(tierTmpl)
 
 	return tierTmpl, nil
 }
@@ -78,4 +79,28 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters 
 	tmplProcessor := template.NewProcessor(scheme)
 	params := map[string]string{"USERNAME": username}
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
+}
+
+type tierTemplateCache struct {
+	sync.RWMutex
+	tierTemplates map[string]*tierTemplate
+}
+
+func newTierTemplateCache() *tierTemplateCache {
+	return &tierTemplateCache{
+		tierTemplates: map[string]*tierTemplate{},
+	}
+}
+
+func (c *tierTemplateCache) get(templateRef string) (*tierTemplate, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	tierTemplate, ok := c.tierTemplates[templateRef]
+	return tierTemplate, ok
+}
+
+func (c *tierTemplateCache) add(tierTemplate *tierTemplate) {
+	c.Lock()
+	defer c.Unlock()
+	c.tierTemplates[tierTemplate.templateRef] = tierTemplate
 }

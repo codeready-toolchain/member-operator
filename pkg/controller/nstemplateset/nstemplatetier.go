@@ -83,24 +83,25 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters 
 
 type tierTemplateCache struct {
 	sync.RWMutex
-	tierTemplates map[string]*tierTemplate
+	// tierTemplatesByTemplateRef contains tierTemplatesByTemplateRef mapped by TemplateRef key
+	tierTemplatesByTemplateRef map[string]*tierTemplate
 }
 
 func newTierTemplateCache() *tierTemplateCache {
 	return &tierTemplateCache{
-		tierTemplates: map[string]*tierTemplate{},
+		tierTemplatesByTemplateRef: map[string]*tierTemplate{},
 	}
 }
 
 func (c *tierTemplateCache) get(templateRef string) (*tierTemplate, bool) {
 	c.RLock()
 	defer c.RUnlock()
-	tierTemplate, ok := c.tierTemplates[templateRef]
+	tierTemplate, ok := c.tierTemplatesByTemplateRef[templateRef]
 	return tierTemplate, ok
 }
 
 func (c *tierTemplateCache) add(tierTemplate *tierTemplate) {
 	c.Lock()
 	defer c.Unlock()
-	c.tierTemplates[tierTemplate.templateRef] = tierTemplate
+	c.tierTemplatesByTemplateRef[tierTemplate.templateRef] = tierTemplate
 }

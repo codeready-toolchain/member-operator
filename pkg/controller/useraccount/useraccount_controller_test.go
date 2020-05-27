@@ -39,18 +39,16 @@ func TestReconcile(t *testing.T) {
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      ToIdentityName(userAcc.Spec.UserID, config),
-		Namespace: "toolchain-member",
-		UID:       types.UID(username + "identity"),
+		Name: ToIdentityName(userAcc.Spec.UserID, config),
+		UID:  types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
 		Name: username,
 		UID:  userUID,
 	}}
 	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-		Name:      username,
-		Namespace: "toolchain-member",
-		UID:       userUID,
-		Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
+		Name:   username,
+		UID:    userUID,
+		Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -143,10 +141,9 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-				Name:      username,
-				Namespace: "toolchain-member",
-				UID:       userUID,
-				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
+				Name:   username,
+				UID:    userUID,
+				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 			}}
 			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			reconcile(r, req)
@@ -175,10 +172,9 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-				Name:      username,
-				Namespace: "toolchain-member",
-				UID:       userUID,
-				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
+				Name:   username,
+				UID:    userUID,
+				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 			}}
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
@@ -237,10 +233,9 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:      ToIdentityName(userAcc.Spec.UserID, config),
-				Namespace: "toolchain-member",
-				UID:       types.UID(uuid.NewV4().String()),
-				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
+				Name:   ToIdentityName(userAcc.Spec.UserID, config),
+				UID:    types.UID(uuid.NewV4().String()),
+				Labels: map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
 			}}
 
 			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
@@ -270,10 +265,9 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:      ToIdentityName(userAcc.Spec.UserID, config),
-				Namespace: "toolchain-member",
-				UID:       types.UID(uuid.NewV4().String()),
-				Labels:    map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
+				Name:   ToIdentityName(userAcc.Spec.UserID, config),
+				UID:    types.UID(uuid.NewV4().String()),
+				Labels: map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
 			}}
 			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
@@ -516,7 +510,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -560,7 +554,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the user account finalizer has been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
@@ -595,7 +589,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -649,7 +643,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
@@ -666,7 +660,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -707,7 +701,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -852,18 +846,16 @@ func TestDisabledUserAccount(t *testing.T) {
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name:      ToIdentityName(userAcc.Spec.UserID, config),
-		Namespace: "toolchain-member",
-		UID:       types.UID(username + "identity"),
+		Name: ToIdentityName(userAcc.Spec.UserID, config),
+		UID:  types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
 		Name: username,
 		UID:  userUID,
 	}}
 	preexistingUser := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-		Name:      username,
-		Namespace: "toolchain-member",
-		UID:       userUID,
-		Labels:    map[string]string{"toolchain.dev.openshift.com/owner": username},
+		Name:   username,
+		UID:    userUID,
+		Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1022,7 +1014,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		assertNSTemplateFound(t, r, userAcc)
 
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
@@ -1062,7 +1054,7 @@ func assertIdentityNotFound(t *testing.T, r *ReconcileUserAccount, identityName 
 func assertNSTemplateFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
 	// Get NSTemplate
 	tmplTier := &toolchainv1alpha1.NSTemplateSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name}, tmplTier)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: "toolchain-member"}, tmplTier)
 	require.NoError(t, err)
 }
 

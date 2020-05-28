@@ -3,6 +3,7 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -15,30 +16,31 @@ import (
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
-const clusterResourcesType = "clusterresources"
+var tierTemplatesCache = newTierTemplateCache()
 
-// getTemplateFromHost retrieves the TierTemplate resource with the given name from the host cluster
+// getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
-func getTemplateFromHost(templateRef string) (*tierTemplate, error) {
-	return getTierTemplate(cluster.GetHostCluster, templateRef)
-}
-
-// getTierTemplate gets tierTemplate for the given source and templateRef
 func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+	}
+	if tierTmpl, ok := tierTemplatesCache.get(templateRef); ok && tierTmpl != nil {
+		return tierTmpl, nil
 	}
 	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
 	if err != nil {
 		return nil, err
 	}
-	return &tierTemplate{
+	tierTmpl := &tierTemplate{
 		templateRef: templateRef,
 		tierName:    tmpl.Spec.TierName,
 		typeName:    tmpl.Spec.Type,
 		template:    tmpl.Spec.Template,
-	}, nil
+	}
+	tierTemplatesCache.add(tierTmpl)
+
+	return tierTmpl, nil
 }
 
 // getToolchainTierTemplate gets the TierTemplate resource from the host cluster.
@@ -76,5 +78,30 @@ type tierTemplate struct {
 func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtime.RawExtension, error) {
 	tmplProcessor := template.NewProcessor(scheme)
 	params := map[string]string{"USERNAME": username}
-	return tmplProcessor.Process(&t.template, params, filters...)
+	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
+}
+
+type tierTemplateCache struct {
+	sync.RWMutex
+	// tierTemplatesByTemplateRef contains tierTemplatesByTemplateRef mapped by TemplateRef key
+	tierTemplatesByTemplateRef map[string]*tierTemplate
+}
+
+func newTierTemplateCache() *tierTemplateCache {
+	return &tierTemplateCache{
+		tierTemplatesByTemplateRef: map[string]*tierTemplate{},
+	}
+}
+
+func (c *tierTemplateCache) get(templateRef string) (*tierTemplate, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	tierTemplate, ok := c.tierTemplatesByTemplateRef[templateRef]
+	return tierTemplate, ok
+}
+
+func (c *tierTemplateCache) add(tierTemplate *tierTemplate) {
+	c.Lock()
+	defer c.Unlock()
+	c.tierTemplatesByTemplateRef[tierTemplate.templateRef] = tierTemplate
 }

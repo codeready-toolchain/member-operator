@@ -276,10 +276,11 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to retrieve template")
+		assert.Contains(t, err.Error(), "failed to retrieve TierTemplate for the cluster resources with the name 'fail-clusterresources-12345bb'")
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasConditions(UnableToProvisionClusterResources("failed to retrieve template"))
+			HasConditions(UnableToProvisionClusterResources(
+				"unable to retrieve the TierTemplate 'fail-clusterresources-12345bb' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"fail-clusterresources-12345bb\" not found"))
 	})
 
 	t.Run("fail to create cluster resources", func(t *testing.T) {

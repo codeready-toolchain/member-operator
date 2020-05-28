@@ -97,7 +97,6 @@ data:
                       - templateRef
                       type: object
                     type: array
-                    x-kubernetes-list-type: set
                   tierName:
                     description: The name of the tier represented by this template set
                     type: string
@@ -136,7 +135,6 @@ data:
                       - type
                       type: object
                     type: array
-                    x-kubernetes-list-type: set
                 type: object
             x-kubernetes-preserve-unknown-fields: true
         version: v1alpha1
@@ -261,7 +259,6 @@ data:
                           - templateRef
                           type: object
                         type: array
-                        x-kubernetes-list-type: set
                       tierName:
                         description: The name of the tier represented by this template set
                         type: string
@@ -310,7 +307,6 @@ data:
                       - type
                       type: object
                     type: array
-                    x-kubernetes-list-type: set
                 type: object
             x-kubernetes-preserve-unknown-fields: true
         version: v1alpha1

@@ -7,6 +7,9 @@ metadata:
   name: nstemplatesets.toolchain.dev.openshift.com
 spec:
   additionalPrinterColumns:
+  - JSONPath: .spec.tierName
+    name: Tier Name
+    type: string
   - JSONPath: .status.conditions[?(@.type=="Ready")].status
     name: Ready
     type: string
@@ -76,8 +79,12 @@ spec:
                 - templateRef
                 type: object
               type: array
+            tierName:
+              description: The name of the tier represented by this template set
+              type: string
           required:
           - namespaces
+          - tierName
           type: object
         status:
           description: NSTemplateSetStatus defines the observed state of NSTemplateSet

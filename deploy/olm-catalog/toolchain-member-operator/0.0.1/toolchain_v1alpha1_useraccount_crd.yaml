@@ -100,8 +100,12 @@ spec:
                     - templateRef
                     type: object
                   type: array
+                tierName:
+                  description: The name of the tier represented by this template set
+                  type: string
               required:
               - namespaces
+              - tierName
               type: object
             userID:
               description: UserID is the user ID from RHD Identity Provider token

@@ -176,7 +176,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 }
 
 // updateOrDeleteRedundant takes the given currentObjs and newObjs and compares them.
-
+//
 // If there is any existing redundant resource (exist in the currentObjs, but not in the newObjs), then it deletes the resource and returns 'true, nil'.
 //
 // If there is any resource that is outdated (exists in both currentObjs and newObjs but its templateref is not matching),

@@ -73,7 +73,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 	for _, clusterResource := range clusterResourceKinds {
 		// watch for all cluster resource kinds associated with an NSTemplateSet
-		if err := c.Watch(&source.Kind{Type: clusterResource.object}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
 			return err
 		}
 	}

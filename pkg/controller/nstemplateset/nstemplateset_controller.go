@@ -209,7 +209,7 @@ Current:
 				continue Current
 			}
 		}
-		if err := client.Delete(context.TODO(), currentObj.GetObject()); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
+		if err := client.Delete(context.TODO(), currentObj.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
 			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetGvk().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted

@@ -215,7 +215,7 @@ func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1al
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 		return false, err
 	}
-	if err := r.client.Delete(context.TODO(), currentObject.GetObject()); err != nil {
+	if err := r.client.Delete(context.TODO(), currentObject.GetRuntimeObject()); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
 			currentObject.GetName(), currentObject.GetGvk())
 	}
@@ -274,7 +274,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 		}
 
 		for _, toDelete := range currentObjects {
-			if err := r.client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetObject()); err != nil && !errors.IsNotFound(err) {
+			if err := r.client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err,
 					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetGvk())
 			}
@@ -284,7 +284,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 			}
 
 			logger.Info("deleting cluster resource", "name", toDelete.GetName())
-			if err := r.client.Delete(context.TODO(), toDelete.GetObject()); err != nil && errors.IsNotFound(err) {
+			if err := r.client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue
 			} else if err != nil {

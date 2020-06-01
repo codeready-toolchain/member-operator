@@ -480,6 +480,56 @@ func TestPromoteClusterResources(t *testing.T) {
 			})
 		})
 
+		t.Run("promote from withemptycrq to advanced tier by removing the redundant CRQ", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
+			codeNs := newNamespace("advanced", username, "code")
+			crq := newClusterResourceQuota(username, "withemptycrq")
+			crb := newTektonClusterRoleBinding(username, "withemptycrq")
+			emptyCrq := newClusterResourceQuota(username, "withemptycrq")
+			emptyCrq.Name = "for-empty"
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, codeNs)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq")).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq"))
+
+			t.Run("promote from withemptycrq to advanced tier by changing only the CRQ since redundant CRQ is already removed", func(t *testing.T) {
+				// when
+				updated, err := manager.ensure(log, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, updated)
+				AssertThatNSTemplateSet(t, namespaceName, username, cl).
+					HasFinalizer().
+					HasConditions(Updating())
+				AssertThatCluster(t, cl).
+					HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
+					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+						WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+						WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-12345bb"),
+						WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq"))
+
+			})
+		})
+
 		t.Run("downgrade from advanced to basic tier by removing CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))

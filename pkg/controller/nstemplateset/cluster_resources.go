@@ -185,6 +185,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 // If no resource to be updated or deleted was found then it returns 'false, nil'. In case of any errors 'false, error'
 func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, currentObjs []applycl.ComparableToolchainObject, newObjs []applycl.ToolchainObject, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
+CurrentObjects:
 	for _, currentObject := range currentObjs {
 
 		// if the template is not specified, then delete all cluster resources one by one
@@ -192,32 +193,34 @@ func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, cu
 			return r.deleteClusterResource(nsTmplSet, currentObject)
 		}
 
-		// if the existing object is not up-to-date, then check if it should be only updated or completely removed (in case it's missing the in set of the requested objects)
-		if !isUpToDateAndProvisioned(currentObject, tierTemplate) {
-			for _, newObject := range newObjs {
-				if newObject.HasSameName(currentObject) {
-					// is found then let's update it
+		// check if the object should still exist and should be updated
+		for _, newObject := range newObjs {
+			if newObject.HasSameName(currentObject) {
+				// is found then let's check if we need to update it
+				if !isUpToDate(currentObject, newObject, tierTemplate) {
+					// let's update it
 					if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 						return false, err
 					}
 					return r.apply(logger, nsTmplSet, tierTemplate, newObject)
 				}
+				continue CurrentObjects
 			}
-			// is not found then let's delete it
-			return r.deleteClusterResource(nsTmplSet, currentObject)
 		}
+		// is not found then let's delete it
+		return r.deleteClusterResource(nsTmplSet, currentObject)
 	}
 	return false, nil
 }
 
 // deleteClusterResource sets status to updating, deletes the given resource and returns 'true, nil'. In case of any errors 'false, error'.
-func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1alpha1.NSTemplateSet, currentObject applycl.ToolchainObject) (bool, error) {
+func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete applycl.ToolchainObject) (bool, error) {
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 		return false, err
 	}
-	if err := r.client.Delete(context.TODO(), currentObject.GetRuntimeObject()); err != nil {
+	if err := r.client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
-			currentObject.GetName(), currentObject.GetGvk())
+			toDelete.GetName(), toDelete.GetGvk())
 	}
 	return true, nil
 }
@@ -296,6 +299,13 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 		}
 	}
 	return false, nil
+}
+
+// isUpToDate returns true if the currentObject uses the corresponding templateRef and equals to the new object
+func isUpToDate(currentObject, _ applycl.ToolchainObject, tierTemplate *tierTemplate) bool {
+	return currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
+	// && currentObject.IsSame(newObject)  <-- TODO Uncomment when IsSame is implemented for all ToolchainObjects!
 }
 
 func retainObjectsOfSameGVK(gvk schema.GroupVersionKind) template.FilterFunc {

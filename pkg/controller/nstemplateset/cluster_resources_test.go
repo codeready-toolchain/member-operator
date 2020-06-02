@@ -129,7 +129,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
+	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 
 	t.Run("should create only CRQ and set status to provisioning", func(t *testing.T) {
 		// given
@@ -151,7 +151,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 	t.Run("should not create ClusterResource objects when the field is nil", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
@@ -168,7 +168,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 	t.Run("should create only one CRQ when the template contains two CRQs", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
+		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
@@ -220,7 +220,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 	t.Run("should not do anything when the CRQ and CRB are already created", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources(), withConditions(Provisioned()))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withConditions(Provisioned()))
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
@@ -246,7 +246,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
+	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 
 	t.Run("fail to list cluster resources", func(t *testing.T) {
 		// given
@@ -268,7 +268,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 
 	t.Run("fail to get template containing cluster resources", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "fail", withNamespaces("dev"), withClusterResources())
+		nsTmplSet := newNSTmplSet(namespaceName, username, "fail", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
@@ -276,11 +276,11 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to retrieve TierTemplate for the cluster resources with the name 'fail-clusterresources-12345bb'")
+		assert.Contains(t, err.Error(), "failed to retrieve TierTemplate for the cluster resources with the name 'fail-clusterresources-abcde11'")
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionClusterResources(
-				"unable to retrieve the TierTemplate 'fail-clusterresources-12345bb' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"fail-clusterresources-12345bb\" not found"))
+				"unable to retrieve the TierTemplate 'fail-clusterresources-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"fail-clusterresources-abcde11\" not found"))
 	})
 
 	t.Run("fail to create cluster resources", func(t *testing.T) {
@@ -309,7 +309,7 @@ func TestDeleteClusterResources(t *testing.T) {
 	namespaceName := "toolchain-member"
 	crq := newClusterResourceQuota(username, "advanced")
 	crb := newTektonClusterRoleBinding(username, "advanced")
-	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev", "code"), withDeletionTs(), withClusterResources())
+	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"))
 
 	t.Run("delete only ClusterResourceQuota", func(t *testing.T) {
 		// given
@@ -340,7 +340,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 	t.Run("should delete only one ClusterResourceQuota even when tier contains more ", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
+		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(username, "withemptycrq")
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
 		emptyCrq.Labels["toolchain.dev.openshift.com/owner"] = username
@@ -373,7 +373,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 	t.Run("delete the second ClusterResourceQuota since the first one has deletion timestamp set", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("dev"), withClusterResources())
+		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(username, "withemptycrq")
 		deletionTS := v1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
@@ -438,7 +438,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 		t.Run("upgrade from advanced to team tier by changing only the CRQ", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "team", withNamespaces("dev"), withClusterResources())
+			nsTmplSet := newNSTmplSet(namespaceName, username, "team", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			codeNs := newNamespace("advanced", username, "code")
 			crq := newClusterResourceQuota(username, "advanced")
 			crb := newTektonClusterRoleBinding(username, "advanced")
@@ -455,7 +455,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "team-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "team-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "team"),
 					Containing(`"limits.cpu":"4","limits.memory":"15Gi"`)).
 				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
@@ -482,7 +482,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 		t.Run("promote from withemptycrq to advanced tier by removing the redundant CRQ", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources())
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources("abcde11"))
 			codeNs := newNamespace("advanced", username, "code")
 			crq := newClusterResourceQuota(username, "withemptycrq")
 			crb := newTektonClusterRoleBinding(username, "withemptycrq")
@@ -502,10 +502,10 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatCluster(t, cl).
 				HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq")).
 				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq"))
 
 			t.Run("promote from withemptycrq to advanced tier by changing only the CRQ since redundant CRQ is already removed", func(t *testing.T) {
@@ -521,10 +521,10 @@ func TestPromoteClusterResources(t *testing.T) {
 				AssertThatCluster(t, cl).
 					HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
-						WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-12345bb"),
+						WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-abcde11"),
 						WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq"))
 
 			})
@@ -532,7 +532,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 		t.Run("downgrade from advanced to basic tier by removing CRQ", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
@@ -589,7 +589,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 		t.Run("upgrade from basic to advanced by creating only CRQ", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources())
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources("abcde11"))
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
 
 			// when
@@ -603,7 +603,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Provisioning())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
 					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
 				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
@@ -636,7 +636,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given
-				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources())
+				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources("abcde11"))
 				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb)
 
 				// when
@@ -742,7 +742,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 		t.Run("promotion to another tier fails because it cannot list current resources", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"), withConditions(Updating()))
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"), withConditions(Updating()))
 			crq := newClusterResourceQuota(username, "fail")
 			crb := newTektonClusterRoleBinding(username, "fail")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
@@ -760,16 +760,16 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(UpdateFailed("some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "fail")).
 				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "fail-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "fail"))
 		})
 
 		t.Run("fail to downgrade from advanced to basic tier", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev"))
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 			cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
@@ -788,11 +788,139 @@ func TestPromoteClusterResources(t *testing.T) {
 					"failed to delete an existing redundant cluster resource of name 'for-johnsmith' and gvk 'quota.openshift.io/v1, Kind=ClusterResourceQuota': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-12345bb"),
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+		})
+	})
+}
+
+func TestUpdateClusterResources(t *testing.T) {
+
+	logf.SetLogger(logf.ZapLogger(true))
+	// given
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+	crb := newTektonClusterRoleBinding(username, "advanced")
+	crq := newClusterResourceQuota(username, "advanced")
+
+	t.Run("success", func(t *testing.T) {
+
+		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
+			codeNs := newNamespace("advanced", username, "dev")
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12")).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"))
+
+			t.Run("update from abcde11 revision to abcde12 revision by deleting CRB since CRQ is already changed", func(t *testing.T) {
+				// when
+				updated, err := manager.ensure(log, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, updated)
+				AssertThatNSTemplateSet(t, namespaceName, username, cl).HasConditions(Updating())
+				AssertThatCluster(t, cl).
+					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12")).
+					HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+			})
+		})
+
+		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+			crq := newClusterResourceQuota(username, "advanced", withTempalteRefUsingRevision("abcde12"))
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11")).
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+
+			t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by creating CRB", func(t *testing.T) {
+				// when
+				updated, err := manager.ensure(log, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, updated)
+				AssertThatNSTemplateSet(t, namespaceName, username, cl).HasConditions(Updating())
+				AssertThatCluster(t, cl).
+					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11")).
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"))
+			})
+		})
+	})
+
+	t.Run("failure", func(t *testing.T) {
+
+		t.Run("update to abcde11 fails because it cannot list current resources", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources("abcde11"), withConditions(Updating()))
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+			cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+				return fmt.Errorf("some error")
+			}
+
+			// when
+			_, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.Error(t, err)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(UpdateFailed("some error"))
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11")).
+				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+		})
+
+		t.Run("update to abcde13 fails because it find the template", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources("abcde13"), withConditions(Updating()))
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
+
+			// when
+			updated, err := manager.ensure(log, nsTmplSet)
+
+			// then
+			require.Error(t, err)
+			assert.False(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(UpdateFailed(
+					"unable to retrieve the TierTemplate 'advanced-clusterresources-abcde13' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"advanced-clusterresources-abcde13\" not found"))
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11")).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"))
 		})
 	})
 }

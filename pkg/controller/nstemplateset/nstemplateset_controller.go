@@ -5,16 +5,17 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/go-logr/logr"
-	quotav1 "github.com/openshift/api/quota/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,9 +71,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
 		return err
 	}
-	// also, watch for secondary resources: cluster resources quotas associated with an NSTemplateSet, too
-	if err := c.Watch(&source.Kind{Type: &quotav1.ClusterResourceQuota{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
-		return err
+	for _, clusterResource := range clusterResourceKinds {
+		// watch for all cluster resource kinds associated with an NSTemplateSet
+		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -195,32 +198,23 @@ func (r *NSTemplateSetReconciler) deleteNSTemplateSet(logger logr.Logger, nsTmpl
 // deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteRedundantObjects(logger logr.Logger, client client.Client, deleteOnlyOne bool, currentObjs []runtime.RawExtension, newObjects []runtime.RawExtension) (bool, error) {
+func deleteRedundantObjects(logger logr.Logger, client client.Client, deleteOnlyOne bool, currentObjs []applycl.ToolchainObject, newObjects []applycl.ToolchainObject) (bool, error) {
 	deleted := false
 	logger.Info("checking redundant objects", "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
-		current, err := meta.Accessor(currentObj.Object)
-		if err != nil {
-			return false, err
-		}
-		logger.Info("checking redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
+		logger.Info("checking redundant object", "objectName", currentObj.GetGvk().Kind+"/"+currentObj.GetName())
 		for _, newObj := range newObjects {
-			newOb, err := meta.Accessor(newObj.Object)
-			if err != nil {
-				return false, err
-			}
-			if current.GetName() == newOb.GetName() &&
-				currentObj.Object.GetObjectKind().GroupVersionKind() == newObj.Object.GetObjectKind().GroupVersionKind() {
+			if currentObj.HasSameGvkAndName(newObj) {
 				continue Current
 			}
 		}
-		if err := client.Delete(context.TODO(), currentObj.Object); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
-			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", current.GetName(), currentObj.Object.GetObjectKind().GroupVersionKind().Kind, current.GetNamespace())
+		if err := client.Delete(context.TODO(), currentObj.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
+			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetGvk().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted
 		}
-		logger.Info("deleted redundant object", "objectName", currentObj.Object.GetObjectKind().GroupVersionKind().Kind+"/"+current.GetName())
+		logger.Info("deleted redundant object", "objectName", currentObj.GetGvk().Kind+"/"+currentObj.GetName())
 		if deleteOnlyOne {
 			return true, nil
 		}
@@ -234,4 +228,9 @@ func listByOwnerLabel(username string) client.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 
 	return client.MatchingLabels(labels)
+}
+
+func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {
+	return obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
 }

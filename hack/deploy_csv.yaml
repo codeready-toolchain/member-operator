@@ -465,6 +465,7 @@ data:
                 - rolebindings
                 - roles
                 - clusterroles
+                - clusterrolebindings
                 verbs:
                 - '*'
               - apiGroups:

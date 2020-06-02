@@ -212,8 +212,7 @@ func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, names
 		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				if namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] == "" ||
-					namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] != nsTemplate.templateRef {
+				if !isUpToDateAndProvisioned(&namespace, nsTemplate) {
 					return nsTemplate, &namespace, true
 				}
 			}

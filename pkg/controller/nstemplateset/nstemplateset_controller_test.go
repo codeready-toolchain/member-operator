@@ -1144,6 +1144,6 @@ var (
     name: tekton-view-for-${USERNAME}
   subjects:
     - kind: User
-      name: ${USERNAME}}
+      name: ${USERNAME}
 `
 )

@@ -498,6 +498,7 @@ data:
                 - ""
                 resources:
                 - nodes
+                - pods
                 verbs:
                 - list
               - apiGroups:

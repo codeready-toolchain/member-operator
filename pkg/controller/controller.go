@@ -2,9 +2,11 @@ package controller
 
 import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/idler"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccountstatus"
+
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -15,6 +17,7 @@ func init() {
 	addToManagerFuncs = append(addToManagerFuncs, useraccount.Add)
 	addToManagerFuncs = append(addToManagerFuncs, useraccountstatus.Add)
 	addToManagerFuncs = append(addToManagerFuncs, nstemplateset.Add)
+	addToManagerFuncs = append(addToManagerFuncs, idler.Add)
 }
 
 // AddToManager adds all Controllers to the Manager

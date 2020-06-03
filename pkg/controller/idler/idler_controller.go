@@ -3,6 +3,8 @@ package idler
 import (
 	"context"
 
+	v1 "k8s.io/apiserver/pkg/apis/example/v1"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 
@@ -72,17 +74,23 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	var err error
 
+	logger.Info("!!!!! reconciling Idler 1")
+
 	namespace := request.Namespace
 	if namespace == "" {
 		return reconcile.Result{}, errs.New("request namespace is empty")
 	}
 
+	logger.Info("!!!!! reconciling Idler 2")
+
 	// Fetch the Idler instance
 	idlerList := &toolchainv1alpha1.IdlerList{}
 	if err := r.client.List(context.TODO(), idlerList, &client.ListOptions{Namespace: namespace}); err != nil {
+		logger.Info("!!!!! reconciling Idler 3")
 		return reconcile.Result{}, err
 	}
 	if len(idlerList.Items) == 0 {
+		logger.Info("!!!!! reconciling Idler 4")
 		// If no Idlers found then ignore. It happens when the reconcile is triggered by a Pod from a namespace with no Idler.
 		// We should ignore such namespaces and pods.
 		return reconcile.Result{}, nil
@@ -105,6 +113,14 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+	podList := &v1.PodList{}
+	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: idler.Namespace}); err != nil {
+		return err
+	}
+	for _, pod := range podList.Items {
+		logger.Info("pod", "name", pod.Name, "phase", pod.Status.Phase)
+	}
+
 	return nil
 }
 

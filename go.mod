@@ -3,8 +3,8 @@ module github.com/codeready-toolchain/member-operator
 require (
 	github.com/Azure/go-autorest/autorest v0.9.2 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.0 // indirect
-	github.com/codeready-toolchain/api v0.0.0-20200528065459-3e3f8c07df39
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20200602094958-d7789630e080
+	github.com/codeready-toolchain/api v0.0.0-20200602152926-20f91753faab
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20200602160631-319809018d01
 	github.com/go-logr/logr v0.1.0
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible

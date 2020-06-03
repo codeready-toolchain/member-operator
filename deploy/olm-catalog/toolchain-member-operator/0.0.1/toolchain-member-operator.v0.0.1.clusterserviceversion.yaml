@@ -106,6 +106,8 @@ spec:
           resources:
           - nodes
           - pods
+          - watch
+          - get
           verbs:
           - list
         - apiGroups:

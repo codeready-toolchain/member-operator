@@ -3,8 +3,6 @@ package idler
 import (
 	"context"
 
-	v1 "k8s.io/apiserver/pkg/apis/example/v1"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 
@@ -115,7 +113,7 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
-	podList := &v1.PodList{}
+	podList := &corev1.PodList{}
 	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: idler.Namespace}); err != nil {
 		return err
 	}

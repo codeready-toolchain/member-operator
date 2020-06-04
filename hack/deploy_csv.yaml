@@ -499,10 +499,11 @@ data:
                 resources:
                 - nodes
                 - pods
-                - watch
-                - get
+                - secrets
                 verbs:
                 - list
+                - get
+                - watch
               - apiGroups:
                 - ""
                 resources:

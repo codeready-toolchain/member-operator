@@ -41,11 +41,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	log.Info("!!!!! reconciling Idler 0")
 	// Watch for changes to primary resource Idler
 	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.Idler{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
 
+	log.Info("!!!!! reconciling Idler 2")
 	// Watch for changes to secondary resources: Pods
 	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{}); err != nil {
 		return err

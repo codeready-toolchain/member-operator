@@ -15,10 +15,11 @@ rules:
   resources:
   - nodes
   - pods
-  - watch
-  - get
+  - secrets
   verbs:
-  - "list"
+  - list
+  - get
+  - watch
 - apiGroups:
   - ""
   resources:

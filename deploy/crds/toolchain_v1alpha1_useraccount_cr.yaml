@@ -9,9 +9,8 @@ spec:
   nsTemplateSet:
     tierName: basic
     namespaces:
-      - type: dev
-        revision: 34efcd
-      - type: code
-        revision: ab12ef
-      - type: stage
-        revision: cdef56
+    - templateRef: basic-code-abcdef
+    - templateRef: basic-dev-1d2f3q
+    - templateRef: basic-stage-a34r57
+    clusterResources:
+    - templateRef: basic-clusterresources-a34r57

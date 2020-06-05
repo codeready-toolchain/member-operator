@@ -331,18 +331,20 @@ data:
                   "name": "johnsmith"
                 },
                 "spec": {
+                  "clusterResources": [
+                    {
+                      "templateRef": "basic-clusterresources-a34r57"
+                    }
+                  ],
                   "namespaces": [
                     {
-                      "revision": "ab12ef",
-                      "type": "ide"
+                      "templateRef": "basic-code-abcdef"
                     },
                     {
-                      "revision": "34efcd",
-                      "type": "cicd"
+                      "templateRef": "basic-dev-1d2f3q"
                     },
                     {
-                      "revision": "cdef56",
-                      "type": "stage"
+                      "templateRef": "basic-stage-a34r57"
                     }
                   ],
                   "tierName": "basic"
@@ -358,18 +360,20 @@ data:
                 "spec": {
                   "nsLimit": "admin",
                   "nsTemplateSet": {
+                    "clusterResources": [
+                      {
+                        "templateRef": "basic-clusterresources-a34r57"
+                      }
+                    ],
                     "namespaces": [
                       {
-                        "revision": "34efcd",
-                        "type": "dev"
+                        "templateRef": "basic-code-abcdef"
                       },
                       {
-                        "revision": "ab12ef",
-                        "type": "code"
+                        "templateRef": "basic-dev-1d2f3q"
                       },
                       {
-                        "revision": "cdef56",
-                        "type": "stage"
+                        "templateRef": "basic-stage-a34r57"
                       }
                     ],
                     "tierName": "basic"

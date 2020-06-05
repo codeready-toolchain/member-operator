@@ -7,9 +7,8 @@ metadata:
 spec:
   tierName: basic
   namespaces:
-    - type: ide
-      revision: ab12ef
-    - type: cicd
-      revision: 34efcd
-    - type: stage
-      revision: cdef56
+  - templateRef: basic-code-abcdef
+  - templateRef: basic-dev-1d2f3q
+  - templateRef: basic-stage-a34r57
+  clusterResources:
+  - templateRef: basic-clusterresources-a34r57

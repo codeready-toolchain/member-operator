@@ -176,6 +176,7 @@ data:
                       - templateRef
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   tierName:
                     description: The name of the tier represented by this template set
                     type: string
@@ -214,6 +215,9 @@ data:
                       - type
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - type
+                    x-kubernetes-list-type: map
                 type: object
             x-kubernetes-preserve-unknown-fields: true
         version: v1alpha1
@@ -329,6 +333,7 @@ data:
                           - templateRef
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       tierName:
                         description: The name of the tier represented by this template set
                         type: string
@@ -377,6 +382,9 @@ data:
                       - type
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - type
+                    x-kubernetes-list-type: map
                 type: object
             x-kubernetes-preserve-unknown-fields: true
         version: v1alpha1
@@ -407,18 +415,20 @@ data:
                   "name": "johnsmith"
                 },
                 "spec": {
+                  "clusterResources": [
+                    {
+                      "templateRef": "basic-clusterresources-a34r57"
+                    }
+                  ],
                   "namespaces": [
                     {
-                      "revision": "ab12ef",
-                      "type": "ide"
+                      "templateRef": "basic-code-abcdef"
                     },
                     {
-                      "revision": "34efcd",
-                      "type": "cicd"
+                      "templateRef": "basic-dev-1d2f3q"
                     },
                     {
-                      "revision": "cdef56",
-                      "type": "stage"
+                      "templateRef": "basic-stage-a34r57"
                     }
                   ],
                   "tierName": "basic"
@@ -434,18 +444,20 @@ data:
                 "spec": {
                   "nsLimit": "admin",
                   "nsTemplateSet": {
+                    "clusterResources": [
+                      {
+                        "templateRef": "basic-clusterresources-a34r57"
+                      }
+                    ],
                     "namespaces": [
                       {
-                        "revision": "34efcd",
-                        "type": "dev"
+                        "templateRef": "basic-code-abcdef"
                       },
                       {
-                        "revision": "ab12ef",
-                        "type": "code"
+                        "templateRef": "basic-dev-1d2f3q"
                       },
                       {
-                        "revision": "cdef56",
-                        "type": "stage"
+                        "templateRef": "basic-stage-a34r57"
                       }
                     ],
                     "tierName": "basic"

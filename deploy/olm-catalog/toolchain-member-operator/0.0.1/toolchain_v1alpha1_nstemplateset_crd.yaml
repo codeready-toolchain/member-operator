@@ -79,9 +79,7 @@ spec:
                 - templateRef
                 type: object
               type: array
-              x-kubernetes-list-map-keys:
-              - type
-              x-kubernetes-list-type: map
+              x-kubernetes-list-type: atomic
             tierName:
               description: The name of the tier represented by this template set
               type: string

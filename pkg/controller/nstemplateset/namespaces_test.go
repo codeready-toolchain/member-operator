@@ -324,7 +324,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 	t.Run("should create the second namespace when the first one already exists", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
-		devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 		// when
@@ -377,7 +377,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 	t.Run("ensure inner resources for code namespace if the dev is already provisioned", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
-		devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("", username, "code") // NS exist but it is not complete yet
 		rb := newRoleBinding(devNS.Name, "user-edit")
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS, rb)
@@ -538,8 +538,8 @@ func TestDeleteNamespsace(t *testing.T) {
 	namespaceName := "toolchain-member"
 	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
 	nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withDeletionTs())
-	devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
-	codeNS := newNamespace("basic", username, "code", withTempalteRefUsingRevision("abcde11"))
+	devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+	codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 
 	t.Run("delete user namespace", func(t *testing.T) {
 		// given
@@ -646,7 +646,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "rbac-edit")
 			rb := newRoleBinding(devNS.Name, "user-edit")
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
@@ -675,7 +675,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			rb := newRoleBinding(devNS.Name, "user-edit")
 			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
 			ro := newRole(devNS.Name, "rbac-edit")
@@ -706,8 +706,8 @@ func TestPromoteNamespaces(t *testing.T) {
 		t.Run("delete redundant namespace while upgrading tier", func(t *testing.T) {
 			// given 'advanced' NSTemplate only has a 'dev' namespace
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "code", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'code' NS
 
 			// when - should delete the code namespace
@@ -759,7 +759,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace but with an unknown tier
-			devNS := newNamespace("fail", username, "dev", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("fail", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
@@ -783,8 +783,8 @@ func TestPromoteNamespaces(t *testing.T) {
 		t.Run("fail to delete redundant namespace while upgrading tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
-			devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "code", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'code' NS
 			cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("mock error: '%T'", obj)
@@ -828,7 +828,7 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
-			devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "rbac-edit")
 			rb := newRoleBinding(devNS.Name, "user-edit")
 			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
@@ -859,7 +859,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde12"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde12"))
 			rb := newRoleBinding(devNS.Name, "user-edit")
 			ro := newRole(devNS.Name, "rbac-edit")
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, ro)
@@ -888,8 +888,8 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("delete redundant namespace while updating revision", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
-			devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde11"))
-			codeNS := newNamespace("advanced", username, "code", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'code' NS
 
 			// when - should delete the code namespace
@@ -918,7 +918,7 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("update to abcde13 fails because it find the new template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde13", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
@@ -942,7 +942,7 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("update from abcde13 fails because it find current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde13"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde13"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when

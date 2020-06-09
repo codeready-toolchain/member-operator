@@ -87,8 +87,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
-		codeNS := newNamespace("basic", username, "code", withTempalteRefUsingRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
 
 		// when
@@ -121,8 +121,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde11"))
-		codeNS := newNamespace("advanced", username, "code", withTempalteRefUsingRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withClusterResources("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS, crb)
 
@@ -377,8 +377,8 @@ func TestReconcilePromotion(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("basic", username, "dev", withTempalteRefUsingRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "code", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "rbac-edit")
 			codeRo := newRole(codeNS.Name, "rbac-edit")
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo)
@@ -529,12 +529,12 @@ func TestReconcileUpdate(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
 
-			devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "rbac-edit")
 			devRb := newRoleBinding(devNS.Name, "user-edit")
 			devRbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
 
-			codeNS := newNamespace("advanced", username, "code", withTempalteRefUsingRevision("abcde11"))
+			codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 			codeRo := newRole(codeNS.Name, "rbac-edit")
 			codeRb := newRoleBinding(codeNS.Name, "user-edit")
 			codeRbacRb := newRoleBinding(codeNS.Name, "user-rbac-edit")
@@ -763,8 +763,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(username, "advanced")
-		devNS := newNamespace("advanced", username, "dev", withTempalteRefUsingRevision("abcde11"))
-		codeNS := newNamespace("advanced", username, "code", withTempalteRefUsingRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 		r, _ := prepareController(t, nsTmplSet, crq, devNS, codeNS)
 		req := newReconcileRequest(namespaceName, username)
 
@@ -1156,7 +1156,7 @@ func newClusterResourceQuota(username, tier string, options ...objectMetaOption)
 
 type objectMetaOption func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta
 
-func withTempalteRefUsingRevision(revision string) objectMetaOption {
+func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
 		meta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, revision)
 		return meta

@@ -73,6 +73,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: Idler enables automatic idling of payloads in a namespace
+      displayName: Idler
+      kind: Idler
+      name: idlers.toolchain.dev.openshift.com
+      version: v1alpha1
     - description: NSTemplateSet defines user environment via templates that are used
         for namespace provisioning
       displayName: Namespace Template Set
@@ -105,8 +110,12 @@ spec:
           - ""
           resources:
           - nodes
+          - pods
+          - secrets
           verbs:
           - list
+          - get
+          - watch
         - apiGroups:
           - ""
           resources:

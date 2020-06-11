@@ -30,7 +30,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status updated", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 		condition := toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -53,7 +53,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -68,7 +68,7 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("status error wrapped", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
 		statusManager, _ := prepareStatusManager(t, nsTmplSet)
 		log := logf.Log.WithName("test")
 
@@ -106,7 +106,7 @@ func TestUpdateStatus(t *testing.T) {
 
 		t.Run("failed to update status during deletion", func(t *testing.T) {
 			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withClusterResources(), withNamespaces("dev", "code"))
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 				return fmt.Errorf("status update mock error")
@@ -130,7 +130,7 @@ func TestUpdateStatus(t *testing.T) {
 			Status: corev1.ConditionFalse,
 			Reason: toolchainv1alpha1.NSTemplateSetUpdatingReason,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -150,7 +150,7 @@ func TestUpdateStatus(t *testing.T) {
 			Status: corev1.ConditionFalse,
 			Reason: toolchainv1alpha1.NSTemplateSetProvisioningReason,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -179,7 +179,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 	t.Run("when status is set to false with message, then next update to true should remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(failed))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -194,9 +194,9 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("dev", "code"), withConditions(failed))
-		devNS := newNamespace("basic", username, "dev", withTemplateRef())
-		codeNS := newNamespace("basic", username, "code", withTemplateRef())
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
 
 		// when

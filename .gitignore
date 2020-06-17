@@ -80,3 +80,5 @@ tags
 /vendor
 
 out/
+
+tmp/

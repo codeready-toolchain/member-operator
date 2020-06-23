@@ -13,6 +13,101 @@ data:
         annotations:
           controller-gen.kubebuilder.io/version: (devel)
         creationTimestamp: null
+        name: idlers.toolchain.dev.openshift.com
+      spec:
+        group: toolchain.dev.openshift.com
+        names:
+          kind: Idler
+          listKind: IdlerList
+          plural: idlers
+          singular: idler
+        scope: Namespaced
+        subresources:
+          status: {}
+        validation:
+          openAPIV3Schema:
+            description: Idler enables automatic idling of payloads in a namespace
+            properties:
+              apiVersion:
+                description: 'APIVersion defines the versioned schema of this representation
+                  of an object. Servers should convert recognized schemas to the latest
+                  internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                type: string
+              kind:
+                description: 'Kind is a string value representing the REST resource this
+                  object represents. Servers may infer this from the endpoint the client
+                  submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              metadata:
+                type: object
+              spec:
+                description: IdlerSpec defines the desired state of Idler
+                properties:
+                  timeoutSeconds:
+                    description: TimeoutSeconds is the number of seconds before the running
+                      pods will be deleted
+                    format: int32
+                    type: integer
+                required:
+                - timeoutSeconds
+                type: object
+              status:
+                description: IdlerStatus defines the observed state of Idler
+                properties:
+                  conditions:
+                    description: 'Conditions is an array of current Idler conditions Supported
+                      condition types: ConditionReady'
+                    items:
+                      properties:
+                        lastTransitionTime:
+                          description: Last time the condition transit from one status to
+                            another.
+                          format: date-time
+                          type: string
+                        lastUpdatedTime:
+                          description: Last time the condition was updated
+                          format: date-time
+                          type: string
+                        message:
+                          description: Human readable message indicating details about last
+                            transition.
+                          type: string
+                        reason:
+                          description: (brief) reason for the condition's last transition.
+                          type: string
+                        status:
+                          description: Status of the condition, one of True, False, Unknown.
+                          type: string
+                        type:
+                          description: Type of condition
+                          type: string
+                      required:
+                      - status
+                      - type
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - type
+                    x-kubernetes-list-type: map
+                type: object
+            x-kubernetes-preserve-unknown-fields: true
+        version: v1alpha1
+        versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+      status:
+        acceptedNames:
+          kind: ""
+          plural: ""
+        conditions: []
+        storedVersions: []
+    - apiVersion: apiextensions.k8s.io/v1beta1
+      kind: CustomResourceDefinition
+      metadata:
+        annotations:
+          controller-gen.kubebuilder.io/version: (devel)
+        creationTimestamp: null
         name: memberstatuses.toolchain.dev.openshift.com
       spec:
         additionalPrinterColumns:
@@ -360,6 +455,10 @@ data:
                             another.
                           format: date-time
                           type: string
+                        lastUpdatedTime:
+                          description: Last time the condition was updated
+                          format: date-time
+                          type: string
                         message:
                           description: Human readable message indicating details about last
                             transition.
@@ -527,6 +626,10 @@ data:
                             another.
                           format: date-time
                           type: string
+                        lastUpdatedTime:
+                          description: Last time the condition was updated
+                          format: date-time
+                          type: string
                         message:
                           description: Human readable message indicating details about last
                             transition.
@@ -637,6 +740,16 @@ data:
         apiservicedefinitions: {}
         customresourcedefinitions:
           owned:
+          - description: Idler enables automatic idling of payloads in a namespace
+            displayName: Idler
+            kind: Idler
+            name: idlers.toolchain.dev.openshift.com
+            version: v1alpha1
+          - description: MemberStatus is used to track toolchain member status
+            displayName: CodeReady Toolchain Member Status
+            kind: MemberStatus
+            name: memberstatuses.toolchain.dev.openshift.com
+            version: v1alpha1
           - description: NSTemplateSet defines user environment via templates that are used
               for namespace provisioning
             displayName: Namespace Template Set
@@ -669,8 +782,12 @@ data:
                 - ""
                 resources:
                 - nodes
+                - pods
+                - secrets
                 verbs:
                 - list
+                - get
+                - watch
               - apiGroups:
                 - ""
                 resources:

@@ -1,4 +1,4 @@
-package memberstatus
+package test
 
 import (
 	"context"
@@ -57,7 +57,7 @@ func ComponentsReady() toolchainv1alpha1.Condition {
 	}
 }
 
-func ComponentsNotReady(components ...statusComponentTag) toolchainv1alpha1.Condition {
+func ComponentsNotReady(components ...string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,

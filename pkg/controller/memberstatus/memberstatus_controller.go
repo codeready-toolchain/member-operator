@@ -3,6 +3,7 @@ package memberstatus
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -11,6 +12,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
 	"github.com/go-logr/logr"
+	errs "github.com/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -33,10 +35,10 @@ var log = logf.Log.WithName("controller_memberstatus")
 
 // general memberstatus constants
 const (
-	defaultMemberStatusName      = "toolchain-member-status"
-	memberOperatorDeploymentName = "member-operator"
+	OperatorNameVar = "OPERATOR_NAME"
 
-	defaultRequeueTime = time.Second * 10
+	defaultMemberStatusName = "toolchain-member-status"
+	defaultRequeueTime      = time.Second * 5
 )
 
 // statusComponentTags are used in the overall condition to point out which components are not ready
@@ -102,10 +104,11 @@ func (r *ReconcileMemberStatus) Reconcile(request reconcile.Request) (reconcile.
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// MemberStatus resource not found, log error and return
-			reqLogger.Error(err, "MemberStatus resource was not found")
+			// Request object not found, could have been deleted after reconcile request.
+			return reconcile.Result{}, nil
 		}
-		return reconcile.Result{}, nil
+		reqLogger.Error(err, "Unable to fetch MemberStatus resource")
+		return reconcile.Result{}, err
 	}
 
 	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus)
@@ -122,6 +125,8 @@ type statusHandler struct {
 	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error
 }
 
+// aggregateAndUpdateStatus runs each of the status handlers. Each status handler reports readiness for a toolchain component. If any
+// component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
 func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 
 	memberOperatorStatusHandler := statusHandler{Name: memberOperator, handleStatus: r.memberOperatorHandleStatus}
@@ -149,6 +154,9 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 	return r.setStatusReady(memberStatus)
 }
 
+// hostConnectionHandleStatus retrieves the host cluster object that represents the connection between this member cluster and the host cluster.
+// It then takes the status from the cluster object and adds it to MemberStatus. Finally, it checks its status and will return an error if
+// its status is not ready
 func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 	// look up host connection status
 	fedCluster, ok := r.getHostCluster()
@@ -165,6 +173,8 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	return nil
 }
 
+// memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
+// if any of the conditions have a status that is not 'true'
 func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 	operatorStatus := toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
@@ -173,11 +183,15 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	}
 
 	// look up status of member deployment
+	memberOperatorDeploymentName, err := getMemberOperatorDeploymentName()
+	if err != nil {
+		return errs.Wrap(err, "unable to get the member operator deployment")
+	}
 	memberDeploymentName := types.NamespacedName{Namespace: memberStatus.Namespace, Name: memberOperatorDeploymentName}
 	memberDeployment := &appsv1.Deployment{}
-	err := r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
+	err = r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
 	if err != nil {
-		return fmt.Errorf("the member operator deployment was not found")
+		return errs.Wrap(err, "unable to get the member operator deployment")
 	}
 
 	// get and check conditions of member deployment
@@ -233,4 +247,12 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 			Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
 			Message: message,
 		})
+}
+
+func getMemberOperatorDeploymentName() (string, error) {
+	memberOperatorDeploymentName := os.Getenv(OperatorNameVar)
+	if len(memberOperatorDeploymentName) == 0 {
+		return "", fmt.Errorf("unable to look up the member operator name, the environment variable OPERATOR_NAME is not set")
+	}
+	return memberOperatorDeploymentName, nil
 }

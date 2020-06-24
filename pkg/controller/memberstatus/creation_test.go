@@ -29,6 +29,11 @@ func TestCreateOrUpdateResources(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
+
+		// check that the MemberStatus exists now
+		memberStatus := newMemberStatus()
+		err = cl.Get(context.TODO(), NamespacedName(MemberOperatorNs, defaultMemberStatusName), memberStatus)
+		require.NoError(t, err)
 	})
 
 	t.Run("should return an error if creation fails ", func(t *testing.T) {
@@ -43,5 +48,6 @@ func TestCreateOrUpdateResources(t *testing.T) {
 
 		// then
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "unable to create resource")
 	})
 }

@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	kubefed_v1beta1 "sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
 	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
@@ -161,7 +162,20 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	// look up host connection status
 	fedCluster, ok := r.getHostCluster()
 	if !ok {
-		return fmt.Errorf("the host connection was not found")
+		notFoundMsg := "the host connection was not found"
+		notFoundReason := "KubefedNotFound"
+		memberStatus.Status.HostConnection = kubefed_v1beta1.KubeFedClusterStatus{
+			Conditions: []kubefed_v1beta1.ClusterCondition{
+				{
+					Type:          "Ready",
+					Status:        corev1.ConditionFalse,
+					Reason:        &notFoundReason,
+					Message:       &notFoundMsg,
+					LastProbeTime: metav1.Now(),
+				},
+			},
+		}
+		return fmt.Errorf(notFoundMsg)
 	}
 	memberStatus.Status.HostConnection = *fedCluster.ClusterStatus.DeepCopy()
 
@@ -183,15 +197,23 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	}
 
 	// look up status of member deployment
+	cannotGetDeploymentMsg := "unable to get the member operator deployment"
+	noDeploymentReason := "DeploymentNotFound"
 	memberOperatorDeploymentName, err := getMemberOperatorDeploymentName()
 	if err != nil {
-		return errs.Wrap(err, "unable to get the member operator deployment")
+		errCondition := newComponentErrorCondition(noDeploymentReason, cannotGetDeploymentMsg)
+		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		memberStatus.Status.MemberOperator = operatorStatus
+		return fmt.Errorf(cannotGetDeploymentMsg)
 	}
 	memberDeploymentName := types.NamespacedName{Namespace: memberStatus.Namespace, Name: memberOperatorDeploymentName}
 	memberDeployment := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
 	if err != nil {
-		return errs.Wrap(err, "unable to get the member operator deployment")
+		errCondition := newComponentErrorCondition(noDeploymentReason, cannotGetDeploymentMsg)
+		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		memberStatus.Status.MemberOperator = operatorStatus
+		return errs.Wrap(err, cannotGetDeploymentMsg)
 	}
 
 	// get and check conditions of member deployment
@@ -249,10 +271,23 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 		})
 }
 
+// gets the member operator deployment name via environment variable, returns an error if the value is empty or not set
 func getMemberOperatorDeploymentName() (string, error) {
 	memberOperatorDeploymentName := os.Getenv(OperatorNameVar)
 	if len(memberOperatorDeploymentName) == 0 {
 		return "", fmt.Errorf("unable to look up the member operator name, the environment variable OPERATOR_NAME is not set")
 	}
 	return memberOperatorDeploymentName, nil
+}
+
+func newComponentErrorCondition(reason, msg string) *toolchainv1alpha1.Condition {
+	currentTime := metav1.Now()
+	return &toolchainv1alpha1.Condition{
+		Type:               toolchainv1alpha1.ConditionReady,
+		Status:             corev1.ConditionFalse,
+		Reason:             reason,
+		Message:            msg,
+		LastTransitionTime: currentTime,
+		LastUpdatedTime:    &currentTime,
+	}
 }

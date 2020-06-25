@@ -200,20 +200,22 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	cannotGetDeploymentMsg := "unable to get the member operator deployment"
 	noDeploymentReason := "DeploymentNotFound"
 	memberOperatorDeploymentName, err := getMemberOperatorDeploymentName()
+	err = errs.Wrap(err, cannotGetDeploymentMsg)
 	if err != nil {
-		errCondition := newComponentErrorCondition(noDeploymentReason, cannotGetDeploymentMsg)
+		errCondition := newComponentErrorCondition(noDeploymentReason, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
-		return fmt.Errorf(cannotGetDeploymentMsg)
+		return err
 	}
 	memberDeploymentName := types.NamespacedName{Namespace: memberStatus.Namespace, Name: memberOperatorDeploymentName}
 	memberDeployment := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
+	err = errs.Wrap(err, cannotGetDeploymentMsg)
 	if err != nil {
-		errCondition := newComponentErrorCondition(noDeploymentReason, cannotGetDeploymentMsg)
+		errCondition := newComponentErrorCondition(noDeploymentReason, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
-		return errs.Wrap(err, cannotGetDeploymentMsg)
+		return err
 	}
 
 	// get and check conditions of member deployment
@@ -271,7 +273,7 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 		})
 }
 
-// gets the member operator deployment name via environment variable, returns an error if the value is empty or not set
+// getMemberOperatorDeploymentName gets the member operator deployment name via environment variable, returns an error if the value is empty or not set
 func getMemberOperatorDeploymentName() (string, error) {
 	memberOperatorDeploymentName := os.Getenv(OperatorNameVar)
 	if len(memberOperatorDeploymentName) == 0 {

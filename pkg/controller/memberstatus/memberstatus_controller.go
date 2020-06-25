@@ -42,6 +42,18 @@ const (
 	defaultRequeueTime      = time.Second * 5
 )
 
+// custom component condition error messages & reasons
+const (
+	// deployment not found
+	reasonNoDeployment         = "DeploymentNotFound"
+	errMsgNoMemberOperatorName = "unable to look up the member operator name, the environment variable OPERATOR_NAME is not set"
+	errMsgCannotGetDeployment  = "unable to get the member operator deployment"
+
+	// kubefed not found
+	reasonHostConnectionNotFound = "KubefedNotFound"
+	errMsgHostConnectionNotFound = "the host connection was not found"
+)
+
 // statusComponentTags are used in the overall condition to point out which components are not ready
 type statusComponentTag string
 
@@ -162,8 +174,8 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	// look up host connection status
 	fedCluster, ok := r.getHostCluster()
 	if !ok {
-		notFoundMsg := "the host connection was not found"
-		notFoundReason := "KubefedNotFound"
+		notFoundMsg := errMsgHostConnectionNotFound
+		notFoundReason := reasonHostConnectionNotFound
 		memberStatus.Status.HostConnection = kubefed_v1beta1.KubeFedClusterStatus{
 			Conditions: []kubefed_v1beta1.ClusterCondition{
 				{
@@ -197,12 +209,10 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	}
 
 	// look up status of member deployment
-	cannotGetDeploymentMsg := "unable to get the member operator deployment"
-	noDeploymentReason := "DeploymentNotFound"
 	memberOperatorDeploymentName, err := getMemberOperatorDeploymentName()
-	err = errs.Wrap(err, cannotGetDeploymentMsg)
 	if err != nil {
-		errCondition := newComponentErrorCondition(noDeploymentReason, err.Error())
+		err = errs.Wrap(err, errMsgCannotGetDeployment)
+		errCondition := newComponentErrorCondition(reasonNoDeployment, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
@@ -210,9 +220,9 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	memberDeploymentName := types.NamespacedName{Namespace: memberStatus.Namespace, Name: memberOperatorDeploymentName}
 	memberDeployment := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
-	err = errs.Wrap(err, cannotGetDeploymentMsg)
 	if err != nil {
-		errCondition := newComponentErrorCondition(noDeploymentReason, err.Error())
+		err = errs.Wrap(err, errMsgCannotGetDeployment)
+		errCondition := newComponentErrorCondition(reasonNoDeployment, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
@@ -277,7 +287,7 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 func getMemberOperatorDeploymentName() (string, error) {
 	memberOperatorDeploymentName := os.Getenv(OperatorNameVar)
 	if len(memberOperatorDeploymentName) == 0 {
-		return "", fmt.Errorf("unable to look up the member operator name, the environment variable OPERATOR_NAME is not set")
+		return "", fmt.Errorf(errMsgNoMemberOperatorName)
 	}
 	return memberOperatorDeploymentName, nil
 }

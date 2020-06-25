@@ -1,6 +1,8 @@
 package memberstatus
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/codeready-toolchain/api/pkg/apis"
@@ -16,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -37,6 +40,25 @@ func TestNoMemberStatusFound(t *testing.T) {
 
 		// then - there should not be any error, the controller should only log that the resource was not found
 		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+	})
+
+	t.Run("No memberstatus resource found - right name but not found", func(t *testing.T) {
+		// given
+		expectedErrMsg := "get failed"
+		requestName := defaultMemberStatusName
+		getHostClusterFunc := newGetHostClusterReady
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc)
+		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj runtime.Object) error {
+			return fmt.Errorf(expectedErrMsg)
+		}
+
+		// when
+		res, err := reconciler.Reconcile(req)
+
+		// then - there should not be any error, the controller should only log that the resource was not found
+		require.Error(t, err)
+		require.Equal(t, expectedErrMsg, err.Error())
 		assert.Equal(t, reconcile.Result{}, res)
 	})
 }
@@ -78,6 +100,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnection)))
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg(errMsgHostConnectionNotFound)
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -96,6 +119,26 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnection)))
+	})
+
+	t.Run("Member operator no deployment not found - deployment env var not set", func(t *testing.T) {
+		// given
+		resetFunc := test.UnsetEnvVarAndRestore(t, OperatorNameVar)
+		requestName := defaultMemberStatusName
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterReady
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberStatus)
+
+		// when
+		res, err := reconciler.Reconcile(req)
+
+		// then
+		resetFunc()
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+			HasCondition(ComponentsNotReady(string(memberOperator)))
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg(errMsgCannotGetDeployment)
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {

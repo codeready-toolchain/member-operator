@@ -49,6 +49,20 @@ func (a *MemberStatusAssertion) HasCondition(expected toolchainv1alpha1.Conditio
 	return a
 }
 
+func (a *MemberStatusAssertion) HasMemberOperatorConditionErrorMsg(msg string) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	require.Contains(a.t, a.memberStatus.Status.MemberOperator.Conditions[0].Message, msg)
+	return a
+}
+
+func (a *MemberStatusAssertion) HasHostConnectionConditionErrorMsg(msg string) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	require.Contains(a.t, *a.memberStatus.Status.HostConnection.Conditions[0].Message, msg)
+	return a
+}
+
 func ComponentsReady() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,

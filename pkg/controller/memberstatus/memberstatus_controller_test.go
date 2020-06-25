@@ -56,7 +56,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		// when
 		res, err := reconciler.Reconcile(req)
 
-		// then - there should not be any error, the controller should only log that the resource was not found
+		// then
 		require.Error(t, err)
 		require.Equal(t, expectedErrMsg, err.Error())
 		assert.Equal(t, reconcile.Result{}, res)
@@ -100,7 +100,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnection)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg(errMsgHostConnectionNotFound)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg("the host connection was not found")
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperator)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg(errMsgCannotGetDeployment)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the member operator deployment")
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {

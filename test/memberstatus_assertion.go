@@ -35,6 +35,12 @@ func AssertThatMemberStatus(t test.T, namespace, name string, client client.Clie
 	}
 }
 
+func (a *MemberStatusAssertion) Exists() *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	return a
+}
+
 func (a *MemberStatusAssertion) HasNoConditions() *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)
@@ -76,6 +82,6 @@ func ComponentsNotReady(components ...string) toolchainv1alpha1.Condition {
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
 		Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
-		Message: fmt.Sprintf("Components not ready: %v", components),
+		Message: fmt.Sprintf("components not ready: %v", components),
 	}
 }

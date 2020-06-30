@@ -3,7 +3,6 @@ package memberstatus
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -12,6 +11,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
 	"github.com/go-logr/logr"
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	errs "github.com/pkg/errors"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -28,18 +28,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	kubefed_common "sigs.k8s.io/kubefed/pkg/apis/core/common"
 	kubefed_v1beta1 "sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
-	"sigs.k8s.io/kubefed/pkg/controller/util"
+	kubefed_util "sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
 var log = logf.Log.WithName("controller_memberstatus")
 
 // general memberstatus constants
 const (
-	OperatorNameVar = "OPERATOR_NAME"
-
-	defaultMemberStatusName = "toolchain-member-status"
-	defaultRequeueTime      = time.Second * 5
+	defaultRequeueTime = time.Second * 5
 )
 
 // custom component condition error messages & reasons
@@ -127,6 +125,7 @@ func (r *ReconcileMemberStatus) Reconcile(request reconcile.Request) (reconcile.
 	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus)
 	if err != nil {
 		reqLogger.Error(err, "Failed to update status")
+		return reconcile.Result{RequeueAfter: defaultRequeueTime}, err
 	}
 
 	reqLogger.Info(fmt.Sprintf("Finished updating MemberStatus, requeueing after %v", defaultRequeueTime))
@@ -161,8 +160,7 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 
 	// if any components were not ready then set the overall status to not ready
 	if len(unreadyComponents) > 0 {
-		err := fmt.Errorf("Components not ready: %v", unreadyComponents)
-		return r.setStatusNotReady(memberStatus, err.Error())
+		return r.setStatusNotReady(memberStatus, fmt.Sprintf("components not ready: %v", unreadyComponents))
 	}
 	return r.setStatusReady(memberStatus)
 }
@@ -179,7 +177,7 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 		memberStatus.Status.HostConnection = kubefed_v1beta1.KubeFedClusterStatus{
 			Conditions: []kubefed_v1beta1.ClusterCondition{
 				{
-					Type:          "Ready",
+					Type:          kubefed_common.ClusterReady,
 					Status:        corev1.ConditionFalse,
 					Reason:        &notFoundReason,
 					Message:       &notFoundMsg,
@@ -192,7 +190,7 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	memberStatus.Status.HostConnection = *fedCluster.ClusterStatus.DeepCopy()
 
 	// check conditions of host connection
-	if !util.IsClusterReady(fedCluster.ClusterStatus) {
+	if !kubefed_util.IsClusterReady(fedCluster.ClusterStatus) {
 		return fmt.Errorf("the host connection is not ready")
 	}
 
@@ -209,7 +207,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	}
 
 	// look up status of member deployment
-	memberOperatorDeploymentName, err := getMemberOperatorDeploymentName()
+	memberOperatorDeploymentName, err := k8sutil.GetOperatorName()
 	if err != nil {
 		err = errs.Wrap(err, errMsgCannotGetDeployment)
 		errCondition := newComponentErrorCondition(reasonNoDeployment, err.Error())
@@ -217,6 +215,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
 	}
+
 	memberDeploymentName := types.NamespacedName{Namespace: memberStatus.Namespace, Name: memberOperatorDeploymentName}
 	memberDeployment := &appsv1.Deployment{}
 	err = r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
@@ -281,15 +280,6 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 			Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
 			Message: message,
 		})
-}
-
-// getMemberOperatorDeploymentName gets the member operator deployment name via environment variable, returns an error if the value is empty or not set
-func getMemberOperatorDeploymentName() (string, error) {
-	memberOperatorDeploymentName := os.Getenv(OperatorNameVar)
-	if len(memberOperatorDeploymentName) == 0 {
-		return "", fmt.Errorf(errMsgNoMemberOperatorName)
-	}
-	return memberOperatorDeploymentName, nil
 }
 
 func newComponentErrorCondition(reason, msg string) *toolchainv1alpha1.Condition {

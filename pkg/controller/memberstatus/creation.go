@@ -9,15 +9,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func CreateOrUpdateResources(client client.Client, s *runtime.Scheme, namespace string) error {
+func CreateOrUpdateResources(client client.Client, s *runtime.Scheme, namespace, memberStatusName string) error {
 	memberStatus := &v1alpha1.MemberStatus{
 		ObjectMeta: v1.ObjectMeta{
 			Namespace: namespace,
-			Name:      defaultMemberStatusName,
+			Name:      memberStatusName,
 		},
 		Spec: v1alpha1.MemberStatusSpec{},
 	}
-	commonclient := commonclient.NewApplyClient(client, s)
-	_, err := commonclient.CreateOrUpdateObject(memberStatus, false, nil)
+	cl := commonclient.NewApplyClient(client, s)
+	_, err := cl.CreateOrUpdateObject(memberStatus, false, nil)
 	return err
 }

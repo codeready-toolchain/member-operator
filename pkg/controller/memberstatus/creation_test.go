@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	. "github.com/codeready-toolchain/member-operator/test"
 	. "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/require"
 
@@ -25,15 +27,13 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		cl := NewFakeClient(t)
 
 		// when
-		err = CreateOrUpdateResources(cl, s, MemberOperatorNs)
+		err = CreateOrUpdateResources(cl, s, MemberOperatorNs, configuration.DefaultMemberStatusName)
 
 		// then
 		require.NoError(t, err)
 
 		// check that the MemberStatus exists now
-		memberStatus := newMemberStatus()
-		err = cl.Get(context.TODO(), NamespacedName(MemberOperatorNs, defaultMemberStatusName), memberStatus)
-		require.NoError(t, err)
+		AssertThatMemberStatus(t, MemberOperatorNs, "toolchain-member-status", cl).Exists()
 	})
 
 	t.Run("should return an error if creation fails ", func(t *testing.T) {
@@ -44,7 +44,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		}
 
 		// when
-		err = CreateOrUpdateResources(cl, s, MemberOperatorNs)
+		err = CreateOrUpdateResources(cl, s, MemberOperatorNs, configuration.DefaultMemberStatusName)
 
 		// then
 		require.Error(t, err)

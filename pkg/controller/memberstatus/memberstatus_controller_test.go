@@ -7,10 +7,12 @@ import (
 
 	"github.com/codeready-toolchain/api/pkg/apis"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,6 +29,8 @@ import (
 var requeueResult = reconcile.Result{RequeueAfter: defaultRequeueTime}
 
 const defaultMemberOperatorName = "member-operator"
+
+const defaultMemberStatusName = configuration.DefaultMemberStatusName
 
 func TestNoMemberStatusFound(t *testing.T) {
 	t.Run("No memberstatus resource found", func(t *testing.T) {
@@ -64,7 +68,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 }
 
 func TestOverallStatusCondition(t *testing.T) {
-	restore := test.SetEnvVarsAndRestore(t, test.Env(OperatorNameVar, defaultMemberOperatorName))
+	restore := test.SetEnvVarsAndRestore(t, test.Env(k8sutil.OperatorNameEnvVar, defaultMemberOperatorName))
 	defer restore()
 	t.Run("All components ready", func(t *testing.T) {
 		// given
@@ -123,7 +127,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 	t.Run("Member operator no deployment not found - deployment env var not set", func(t *testing.T) {
 		// given
-		resetFunc := test.UnsetEnvVarAndRestore(t, OperatorNameVar)
+		resetFunc := test.UnsetEnvVarAndRestore(t, k8sutil.OperatorNameEnvVar)
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
@@ -205,8 +209,7 @@ func newMemberStatus() *toolchainv1alpha1.MemberStatus {
 }
 
 func newMemberDeploymentWithConditions(t *testing.T, deploymentConditions ...appsv1.DeploymentCondition) *appsv1.Deployment {
-	memberOperatorDeploymentName, err := getMemberOperatorDeploymentName()
-	require.NoError(t, err)
+	memberOperatorDeploymentName := defaultMemberOperatorName
 	replicas := int32(1)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{

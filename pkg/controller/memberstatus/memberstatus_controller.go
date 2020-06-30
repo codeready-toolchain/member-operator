@@ -6,7 +6,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
@@ -42,14 +42,28 @@ const (
 
 // custom component condition error messages & reasons
 const (
+	// deployment ready
+	reasonDeploymentReady = "DeploymentReady"
+
 	// deployment not found
-	reasonNoDeployment         = "DeploymentNotFound"
-	errMsgNoMemberOperatorName = "unable to look up the member operator name, the environment variable OPERATOR_NAME is not set"
-	errMsgCannotGetDeployment  = "unable to get the member operator deployment"
+	reasonNoDeployment        = "DeploymentNotFound"
+	errMsgCannotGetDeployment = "unable to get the member operator deployment"
+
+	// deployment has unavailable replicas
+	reasonUnavailableReplicas = "DeploymentUnavailableReplicas"
+	errMsgUnavailableReplicas = "the member operator deployment has unavailable replicas"
+
+	// deployment not ready
+	reasonDeploymentConditionNotReady = "DeploymentNotReady"
+	errMsgDeploymentConditionNotReady = "member operator deployment has unready status conditions"
 
 	// kubefed not found
 	reasonHostConnectionNotFound = "KubefedNotFound"
 	errMsgHostConnectionNotFound = "the host connection was not found"
+
+	// kubefed last probe time exceeded
+	reasonHostConnectionLastProbeTimeExceeded = "KubefedLastProbeTimeExceeded"
+	errMsgHostConnectionLastProbeTimeExceeded = "exceeded the maximum duration since the last probe"
 )
 
 // statusComponentTags are used in the overall condition to point out which components are not ready
@@ -62,16 +76,17 @@ const (
 
 // Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, _ *configuration.Config) error {
-	return add(mgr, newReconciler(mgr))
+func Add(mgr manager.Manager, crtConfig *crtCfg.Config) error {
+	return add(mgr, newReconciler(mgr, crtConfig))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) *ReconcileMemberStatus {
+func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config) *ReconcileMemberStatus {
 	return &ReconcileMemberStatus{
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),
 		getHostCluster: cluster.GetHostCluster,
+		config:         crtConfig,
 	}
 }
 
@@ -102,6 +117,7 @@ type ReconcileMemberStatus struct {
 	client         client.Client
 	scheme         *runtime.Scheme
 	getHostCluster func() (*cluster.FedCluster, bool)
+	config         *crtCfg.Config
 }
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
@@ -133,7 +149,7 @@ func (r *ReconcileMemberStatus) Reconcile(request reconcile.Request) (reconcile.
 }
 
 type statusHandler struct {
-	Name         statusComponentTag
+	name         statusComponentTag
 	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error
 }
 
@@ -141,8 +157,8 @@ type statusHandler struct {
 // component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
 func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 
-	memberOperatorStatusHandler := statusHandler{Name: memberOperator, handleStatus: r.memberOperatorHandleStatus}
-	hostConnectionStatusHandler := statusHandler{Name: hostConnection, handleStatus: r.hostConnectionHandleStatus}
+	memberOperatorStatusHandler := statusHandler{name: memberOperator, handleStatus: r.memberOperatorHandleStatus}
+	hostConnectionStatusHandler := statusHandler{name: hostConnection, handleStatus: r.hostConnectionHandleStatus}
 
 	statusHandlers := []statusHandler{memberOperatorStatusHandler, hostConnectionStatusHandler}
 
@@ -154,7 +170,7 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 		err := handler.handleStatus(reqLogger, memberStatus)
 		if err != nil {
 			reqLogger.Error(err, "status update problem")
-			unreadyComponents = append(unreadyComponents, string(handler.Name))
+			unreadyComponents = append(unreadyComponents, string(handler.name))
 		}
 	}
 
@@ -194,6 +210,44 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 		return fmt.Errorf("the host connection is not ready")
 	}
 
+	var lastProbeTime metav1.Time
+	foundLastProbeTime := false
+	for _, condition := range fedCluster.ClusterStatus.Conditions {
+		if condition.Type == kubefed_common.ClusterReady {
+			lastProbeTime = condition.LastProbeTime
+			foundLastProbeTime = true
+		}
+	}
+	if !foundLastProbeTime {
+		return fmt.Errorf("the time of the last probe could not be determined")
+	}
+
+	// check that the last probe time is within limits. It should be less than (period + timeout) * threshold
+	period := r.config.GetClusterHealthCheckPeriod()
+	timeout := r.config.GetClusterHealthCheckTimeout()
+	threshold := r.config.GetClusterHealthCheckFailureThreshold()
+	totalf := (period.Seconds() + timeout.Seconds()) * float64(threshold)
+	maxDuration, err := time.ParseDuration(fmt.Sprintf("%fs", totalf))
+	if err != nil {
+		return fmt.Errorf("the maximum duration since the last probe could not be determined - check the configured %s %s and %s", crtCfg.ClusterHealthCheckPeriod, crtCfg.ClusterHealthCheckTimeout, crtCfg.ClusterHealthCheckFailureThreshold)
+	}
+
+	lastProbedTimePlusMaxDuration := lastProbeTime.Add(maxDuration)
+	currentTime := time.Now()
+	if currentTime.After(lastProbedTimePlusMaxDuration) {
+		errMsg := fmt.Sprintf("%s: %s", errMsgHostConnectionLastProbeTimeExceeded, maxDuration.String())
+		errReason := reasonHostConnectionLastProbeTimeExceeded
+		probeCondition := kubefed_v1beta1.ClusterCondition{
+			Type:          "ProbeWorking",
+			Status:        corev1.ConditionFalse,
+			Reason:        &errReason,
+			Message:       &errMsg,
+			LastProbeTime: lastProbeTime,
+		}
+		memberStatus.Status.HostConnection.Conditions = append(memberStatus.Status.HostConnection.Conditions, probeCondition)
+		return fmt.Errorf(errMsg)
+	}
+
 	return nil
 }
 
@@ -226,23 +280,31 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
 	}
-
-	// get and check conditions of member deployment
-	conditionsReady := true
-	deploymentConditions := []appsv1.DeploymentCondition{}
-	for _, condition := range memberDeployment.Status.Conditions {
-		deploymentConditions = append(deploymentConditions, condition)
-		conditionsReady = conditionsReady && condition.Status == corev1.ConditionTrue
-	}
-
-	// update member status
 	operatorStatus.Deployment.Name = memberDeployment.Name
-	operatorStatus.Deployment.DeploymentConditions = deploymentConditions
-	memberStatus.Status.MemberOperator = operatorStatus
 
-	if !conditionsReady {
-		return fmt.Errorf("the member operator deployment is not ready")
+	// check replicas
+	if memberDeployment.Status.UnavailableReplicas > 0 {
+		errCondition := newComponentErrorCondition(reasonUnavailableReplicas, errMsgUnavailableReplicas)
+		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		memberStatus.Status.MemberOperator = operatorStatus
+		return fmt.Errorf(errMsgUnavailableReplicas)
 	}
+
+	// get and check conditions
+	for _, condition := range memberDeployment.Status.Conditions {
+		if condition.Status != corev1.ConditionTrue {
+			errMsg := fmt.Sprintf("%s: %s", errMsgDeploymentConditionNotReady, condition.Type)
+			errCondition := newComponentErrorCondition(reasonDeploymentConditionNotReady, errMsg)
+			operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+			memberStatus.Status.MemberOperator = operatorStatus
+			return fmt.Errorf(errMsg)
+		}
+	}
+
+	// update member operator status
+	operatorReadyCondition := newComponentReadyCondition(reasonDeploymentReady)
+	operatorStatus.Conditions = []toolchainv1alpha1.Condition{*operatorReadyCondition}
+	memberStatus.Status.MemberOperator = operatorStatus
 
 	return nil
 }
@@ -280,6 +342,17 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 			Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
 			Message: message,
 		})
+}
+
+func newComponentReadyCondition(reason string) *toolchainv1alpha1.Condition {
+	currentTime := metav1.Now()
+	return &toolchainv1alpha1.Condition{
+		Type:               toolchainv1alpha1.ConditionReady,
+		Status:             corev1.ConditionTrue,
+		Reason:             reason,
+		LastTransitionTime: currentTime,
+		LastUpdatedTime:    &currentTime,
+	}
 }
 
 func newComponentErrorCondition(reason, msg string) *toolchainv1alpha1.Condition {

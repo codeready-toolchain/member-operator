@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/codeready-toolchain/api/pkg/apis"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -125,6 +126,24 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(hostConnection)))
 	})
 
+	t.Run("Host connection probe not working", func(t *testing.T) {
+		// given
+		requestName := defaultMemberStatusName
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterProbeNotWorking
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+
+		// when
+		res, err := reconciler.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+			HasCondition(ComponentsNotReady(string(hostConnection)))
+	})
+
 	t.Run("Member operator no deployment not found - deployment env var not set", func(t *testing.T) {
 		// given
 		resetFunc := test.UnsetEnvVarAndRestore(t, k8sutil.OperatorNameEnvVar)
@@ -151,6 +170,25 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberStatus)
+
+		// when
+		res, err := reconciler.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+			HasCondition(ComponentsNotReady(string(memberOperator)))
+	})
+
+	t.Run("Member operator deployment replicas unavailable", func(t *testing.T) {
+		// given
+		requestName := defaultMemberStatusName
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
+		memberOperatorDeployment.Status.UnavailableReplicas = 1
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterReady
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -233,15 +271,22 @@ func newMemberDeploymentWithConditions(t *testing.T, deploymentConditions ...app
 }
 
 func newGetHostClusterReady(fakeClient client.Client) cluster.GetHostClusterFunc {
-	return NewGetHostCluster(fakeClient, true, corev1.ConditionTrue)
+	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionTrue, metav1.Now())
 }
 
 func newGetHostClusterNotReady(fakeClient client.Client) cluster.GetHostClusterFunc {
-	return NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionFalse, metav1.Now())
+}
+
+func newGetHostClusterProbeNotWorking(fakeClient client.Client) cluster.GetHostClusterFunc {
+	aMinuteAgo := metav1.Time{
+		Time: time.Now().Add(time.Duration(-60 * time.Second)),
+	}
+	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionTrue, aMinuteAgo)
 }
 
 func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterFunc {
-	return NewGetHostCluster(fakeClient, false, corev1.ConditionFalse)
+	return NewGetHostClusterWithProbe(fakeClient, false, corev1.ConditionFalse, metav1.Now())
 }
 
 func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initObjs ...runtime.Object) (*ReconcileMemberStatus, reconcile.Request, *test.FakeClient) {
@@ -254,6 +299,7 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		client:         fakeClient,
 		scheme:         s,
 		getHostCluster: getHostClusterFunc(fakeClient),
+		config:         configuration.LoadConfig(),
 	}
 	return r, reconcile.Request{test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }

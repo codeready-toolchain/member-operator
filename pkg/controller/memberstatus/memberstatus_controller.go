@@ -229,7 +229,7 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	totalf := (period.Seconds() + timeout.Seconds()) * float64(threshold)
 	maxDuration, err := time.ParseDuration(fmt.Sprintf("%fs", totalf))
 	if err != nil {
-		return fmt.Errorf("the maximum duration since the last probe could not be determined - check the configured %s %s and %s", crtCfg.ClusterHealthCheckPeriod, crtCfg.ClusterHealthCheckTimeout, crtCfg.ClusterHealthCheckFailureThreshold)
+		return errs.Wrap(err, fmt.Sprintf("the maximum duration since the last probe could not be determined - check the configured values for %s %s and %s", crtCfg.ClusterHealthCheckPeriod, crtCfg.ClusterHealthCheckTimeout, crtCfg.ClusterHealthCheckFailureThreshold))
 	}
 
 	lastProbedTimePlusMaxDuration := lastProbeTime.Add(maxDuration)
@@ -238,13 +238,14 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 		errMsg := fmt.Sprintf("%s: %s", errMsgHostConnectionLastProbeTimeExceeded, maxDuration.String())
 		errReason := reasonHostConnectionLastProbeTimeExceeded
 		probeCondition := kubefed_v1beta1.ClusterCondition{
-			Type:          "ProbeWorking",
+			Type:          kubefed_common.ClusterReady,
 			Status:        corev1.ConditionFalse,
 			Reason:        &errReason,
 			Message:       &errMsg,
 			LastProbeTime: lastProbeTime,
 		}
-		memberStatus.Status.HostConnection.Conditions = append(memberStatus.Status.HostConnection.Conditions, probeCondition)
+		// override the ready condition
+		memberStatus.Status.HostConnection.Conditions = []kubefed_v1beta1.ClusterCondition{probeCondition}
 		return fmt.Errorf(errMsg)
 	}
 
@@ -292,7 +293,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 
 	// get and check conditions
 	for _, condition := range memberDeployment.Status.Conditions {
-		if condition.Status != corev1.ConditionTrue {
+		if (condition.Type == appsv1.DeploymentAvailable || condition.Type == appsv1.DeploymentProgressing) && condition.Status != corev1.ConditionTrue {
 			errMsg := fmt.Sprintf("%s: %s", errMsgDeploymentConditionNotReady, condition.Type)
 			errCondition := newComponentErrorCondition(reasonDeploymentConditionNotReady, errMsg)
 			operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}

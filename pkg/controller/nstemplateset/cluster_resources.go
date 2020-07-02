@@ -88,6 +88,25 @@ var clusterResourceKinds = []toolchainObjectKind{
 			}
 			return list, nil
 		}),
+
+	newToolchainObjectKind(
+		rbacv1.SchemeGroupVersion.WithKind("Idler"),
+		&toolchainv1alpha1.Idler{},
+		func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error) {
+			itemList := &toolchainv1alpha1.IdlerList{}
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
+				return nil, err
+			}
+			list := make([]applycl.ComparableToolchainObject, len(itemList.Items))
+			for index := range itemList.Items {
+				toolchainObject, err := applycl.NewComparableToolchainObject(&itemList.Items[index], compareNotSupported)
+				if err != nil {
+					return nil, err
+				}
+				list[index] = toolchainObject
+			}
+			return list, nil
+		}),
 }
 
 // ensure ensures that the cluster resources exist.

@@ -3,6 +3,9 @@ package idler
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 
@@ -76,33 +79,16 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 
 	logger.Info("!!!!! reconciling Idler 1")
 
-	namespace := request.Namespace
-	if namespace == "" {
-		return reconcile.Result{}, errs.New("request namespace is empty")
-	}
-
-	logger.Info("!!!!! reconciling Idler 2")
-
 	// Fetch the Idler instance
-	idlerList := &toolchainv1alpha1.IdlerList{}
-	if err := r.client.List(context.TODO(), idlerList, &client.ListOptions{Namespace: namespace}); err != nil {
-		logger.Info("!!!!! reconciling Idler 3")
+	idler := &toolchainv1alpha1.Idler{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: request.Name}, idler)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return reconcile.Result{}, nil
+		}
+		logger.Error(err, "failed to get Idler")
 		return reconcile.Result{}, err
 	}
-	if len(idlerList.Items) == 0 {
-		logger.Info("!!!!! reconciling Idler 4")
-		// If no Idlers found then ignore. It happens when the reconcile is triggered by a Pod from a namespace with no Idler.
-		// We should ignore such namespaces and pods.
-		return reconcile.Result{}, nil
-	}
-	logger.Info("reconciling Idler")
-	if len(idlerList.Items) > 1 {
-		err = errs.New("more than one Idler found in the namespace")
-		logger.Error(err, "Only one Idler allowed per namespace")
-		return reconcile.Result{}, err
-	}
-
-	idler := &idlerList.Items[0]
 	if !util.IsBeingDeleted(idler) {
 		logger.Info("ensuring idling")
 		if err = r.ensureIdling(logger, idler); err != nil {
@@ -113,14 +99,31 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+	// List all namespaces by the user owner for this idler
+	namespaceList := &corev1.NamespaceList{}
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: idler.Name}
+	if err := r.client.List(context.TODO(), namespaceList, client.MatchingLabels(labels)); err != nil {
+		return err
+	}
+
+	for _, userNamespace := range namespaceList.Items {
+		if err := r.ensureIdlingForNamespace(logger, userNamespace.Name); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *ReconcileIdler) ensureIdlingForNamespace(logger logr.Logger, namespace string) error {
 	podList := &corev1.PodList{}
-	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: idler.Namespace}); err != nil {
+	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: namespace}); err != nil {
 		return err
 	}
 	for _, pod := range podList.Items {
+		// TODO
 		logger.Info("pod", "name", pod.Name, "phase", pod.Status.Phase)
 	}
-
 	return nil
 }
 

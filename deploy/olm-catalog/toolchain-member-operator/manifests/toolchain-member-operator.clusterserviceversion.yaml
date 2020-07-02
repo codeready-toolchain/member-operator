@@ -73,7 +73,7 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - description: Idler enables automatic idling of payloads in a namespace
+    - description: Idler enables automatic idling of payloads in all user's namespaces
       displayName: Idler
       kind: Idler
       name: idlers.toolchain.dev.openshift.com

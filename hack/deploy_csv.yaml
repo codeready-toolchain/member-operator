@@ -21,12 +21,12 @@ data:
           listKind: IdlerList
           plural: idlers
           singular: idler
-        scope: Namespaced
+        scope: Cluster
         subresources:
           status: {}
         validation:
           openAPIV3Schema:
-            description: Idler enables automatic idling of payloads in a namespace
+            description: Idler enables automatic idling of payloads in all user's namespaces
             properties:
               apiVersion:
                 description: 'APIVersion defines the versioned schema of this representation
@@ -740,7 +740,7 @@ data:
         apiservicedefinitions: {}
         customresourcedefinitions:
           owned:
-          - description: Idler enables automatic idling of payloads in a namespace
+          - description: Idler enables automatic idling of payloads in all user's namespaces
             displayName: Idler
             kind: Idler
             name: idlers.toolchain.dev.openshift.com

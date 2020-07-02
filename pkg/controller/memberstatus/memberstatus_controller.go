@@ -49,10 +49,6 @@ const (
 	reasonNoDeployment        = "DeploymentNotFound"
 	errMsgCannotGetDeployment = "unable to get the member operator deployment"
 
-	// deployment has unavailable replicas
-	reasonUnavailableReplicas = "DeploymentUnavailableReplicas"
-	errMsgUnavailableReplicas = "the member operator deployment has unavailable replicas"
-
 	// deployment not ready
 	reasonDeploymentConditionNotReady = "DeploymentNotReady"
 	errMsgDeploymentConditionNotReady = "member operator deployment has unready status conditions"
@@ -282,14 +278,6 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 		return err
 	}
 	operatorStatus.Deployment.Name = memberDeployment.Name
-
-	// check replicas
-	if memberDeployment.Status.UnavailableReplicas > 0 {
-		errCondition := newComponentErrorCondition(reasonUnavailableReplicas, errMsgUnavailableReplicas)
-		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-		memberStatus.Status.MemberOperator = operatorStatus
-		return fmt.Errorf(errMsgUnavailableReplicas)
-	}
 
 	// get and check conditions
 	for _, condition := range memberDeployment.Status.Conditions {

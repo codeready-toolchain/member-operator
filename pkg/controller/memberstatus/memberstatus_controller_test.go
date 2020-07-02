@@ -181,25 +181,6 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(memberOperator)))
 	})
 
-	t.Run("Member operator deployment replicas unavailable", func(t *testing.T) {
-		// given
-		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
-		memberOperatorDeployment.Status.UnavailableReplicas = 1
-		memberStatus := newMemberStatus()
-		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
-
-		// when
-		res, err := reconciler.Reconcile(req)
-
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, requeueResult, res)
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(memberOperator)))
-	})
-
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName

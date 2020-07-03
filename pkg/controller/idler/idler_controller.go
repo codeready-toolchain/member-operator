@@ -3,6 +3,8 @@ package idler
 import (
 	"context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -50,7 +52,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	log.Info("!!!!! reconciling Idler 2")
 	// Watch for changes to secondary resources: Pods
-	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{}); err != nil {
+	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
+				}},
+			}
+		}),
+	}); err != nil {
 		return err
 	}
 
@@ -99,31 +109,19 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
-	// List all namespaces by the user owner for this idler
-	namespaceList := &corev1.NamespaceList{}
-	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: idler.Name}
-	if err := r.client.List(context.TODO(), namespaceList, client.MatchingLabels(labels)); err != nil {
+	podList := &corev1.PodList{}
+	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: idler.Name}); err != nil {
 		return err
 	}
-
-	for _, userNamespace := range namespaceList.Items {
-		if err := r.ensureIdlingForNamespace(logger, userNamespace.Name); err != nil {
-			return err
+	namespacePods := make(map[string]metav1.Time) // key = pod name; value = pod start time
+	for _, pod := range podList.Items {
+		logger.Info("pod", "name", pod.Name, "phase", pod.Status.Phase)
+		if pod.Status.StartTime != nil {
+			namespacePods[pod.Name] = *pod.Status.StartTime
 		}
 	}
 
-	return nil
-}
-
-func (r *ReconcileIdler) ensureIdlingForNamespace(logger logr.Logger, namespace string) error {
-	podList := &corev1.PodList{}
-	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: namespace}); err != nil {
-		return err
-	}
-	for _, pod := range podList.Items {
-		// TODO
-		logger.Info("pod", "name", pod.Name, "phase", pod.Status.Phase)
-	}
+	//for _, pod := range idler.Status
 	return nil
 }
 

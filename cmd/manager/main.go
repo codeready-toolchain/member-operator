@@ -17,6 +17,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
@@ -153,6 +154,23 @@ func main() {
 		log.Error(err, "Unable to start the KubeFedCluster controllers")
 		os.Exit(1)
 	}
+
+	go func() {
+		log.Info("Waiting for cache to sync")
+		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
+			log.Error(fmt.Errorf("timed out waiting for caches to sync"), "")
+			os.Exit(1)
+		}
+
+		// create or update Member status during the operator deployment
+		log.Info("Creating/updating the MemberStatus resource")
+		memberStatusName := crtConfig.GetMemberStatusName()
+		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), mgr.GetScheme(), namespace, memberStatusName); err != nil {
+			log.Error(err, "cannot create/update MemberStatus resource")
+			os.Exit(1)
+		}
+		log.Info("Created/updated the MemberStatus resource")
+	}()
 
 	log.Info("Starting the Cmd.")
 

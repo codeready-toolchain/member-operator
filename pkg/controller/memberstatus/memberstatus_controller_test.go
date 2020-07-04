@@ -105,7 +105,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnection)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg("the host connection was not found")
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg("the cluster connection was not found")
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperator)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the member operator deployment")
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the operator deployment")
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {

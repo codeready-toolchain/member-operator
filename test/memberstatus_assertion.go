@@ -73,7 +73,7 @@ func ComponentsReady() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
-		Reason: toolchainv1alpha1.MemberStatusAllComponentsReady,
+		Reason: toolchainv1alpha1.ToolchainStatusReasonAllComponentsReady,
 	}
 }
 
@@ -81,7 +81,7 @@ func ComponentsNotReady(components ...string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
-		Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
+		Reason:  toolchainv1alpha1.ToolchainStatusReasonComponentsNotReady,
 		Message: fmt.Sprintf("components not ready: %v", components),
 	}
 }

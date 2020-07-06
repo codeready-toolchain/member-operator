@@ -2,7 +2,7 @@ package controller
 
 import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
-	"github.com/codeready-toolchain/member-operator/pkg/controller/idler"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccountstatus"
@@ -14,6 +14,7 @@ import (
 var addToManagerFuncs []func(manager.Manager, *configuration.Config) error
 
 func init() {
+	addToManagerFuncs = append(addToManagerFuncs, memberstatus.Add)
 	addToManagerFuncs = append(addToManagerFuncs, useraccount.Add)
 	addToManagerFuncs = append(addToManagerFuncs, useraccountstatus.Add)
 	addToManagerFuncs = append(addToManagerFuncs, nstemplateset.Add)

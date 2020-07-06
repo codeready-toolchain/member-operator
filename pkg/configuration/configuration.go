@@ -23,6 +23,12 @@ const (
 
 	// DefaultIdentityProvider the default value used for the identity provider (IdP) for newly created users
 	DefaultIdentityProvider = "rhd"
+
+	// MemberStatusName specifies the name of the toolchain member status resource that provides information about the toolchain components in this cluster
+	MemberStatusName = "member.status"
+
+	// DefaultMemberStatusName the default name for the member status resource created during initialization of the operator
+	DefaultMemberStatusName = "toolchain-member-status"
 )
 
 // Kubefed configuration constants
@@ -71,6 +77,7 @@ func LoadConfig() *Config {
 func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
 	c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
+	c.member.SetDefault(MemberStatusName, DefaultMemberStatusName)
 	c.member.SetDefault(ClusterHealthCheckPeriod, DefaultClusterHealthCheckPeriod)
 	c.member.SetDefault(ClusterHealthCheckTimeout, DefaultClusterHealthCheckTimeout)
 	c.member.SetDefault(ClusterHealthCheckFailureThreshold, DefaultClusterHealthCheckFailureThreshold)
@@ -99,6 +106,11 @@ func (c *Config) GetAllMemberParameters() map[string]string {
 // Openshift clusters can be configured with multiple IdPs. This config option allows admins to specify which IdP should be used by the toolchain operator.
 func (c *Config) GetIdP() string {
 	return c.member.GetString(IdentityProvider)
+}
+
+// GetMemberStatusName returns the configured name of the member status resource
+func (c *Config) GetMemberStatusName() string {
+	return c.member.GetString(MemberStatusName)
 }
 
 // GetClusterHealthCheckPeriod returns the configured cluster health check period

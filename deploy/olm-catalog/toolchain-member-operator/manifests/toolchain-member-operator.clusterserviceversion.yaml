@@ -117,6 +117,7 @@ spec:
           - nodes
           - pods
           - secrets
+          - deploymentconfigs
           verbs:
           - list
           - get
@@ -190,6 +191,17 @@ spec:
           - clusterresourcequotas
           verbs:
           - '*'
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - daemonsets
+          - replicasets
+          - statefulsets
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: member-operator
       deployments:
       - name: member-operator

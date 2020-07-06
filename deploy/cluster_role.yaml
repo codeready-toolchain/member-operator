@@ -16,6 +16,7 @@ rules:
   - nodes
   - pods
   - secrets
+  - deploymentconfigs
   verbs:
   - list
   - get
@@ -89,3 +90,14 @@ rules:
   - clusterresourcequotas
   verbs:
   - "*"
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  - replicasets
+  - statefulsets
+  verbs:
+  - "get"
+  - "list"
+  - "watch"

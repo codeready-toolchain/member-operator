@@ -124,7 +124,7 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				// Running too long. Kill the pod.
-				// TODO Check if it belongs to a replica set (or Deployment or DC) and scale it down. Otherwise kill it.
+				// TODO Check if it belongs to a replica set (or Deployment or DC) and scale it down to zero. Otherwise kill it.
 			}
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
 			// New pod. Start tracking.

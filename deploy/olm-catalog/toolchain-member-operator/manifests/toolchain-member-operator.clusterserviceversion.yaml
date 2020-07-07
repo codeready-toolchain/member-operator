@@ -118,6 +118,7 @@ spec:
           - pods
           - secrets
           - deploymentconfigs
+          - replicationcontrollers
           verbs:
           - list
           - get

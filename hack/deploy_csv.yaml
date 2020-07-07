@@ -801,7 +801,6 @@ data:
                 - nodes
                 - pods
                 - secrets
-                - deploymentconfigs
                 - replicationcontrollers
                 verbs:
                 - list
@@ -883,6 +882,14 @@ data:
                 - daemonsets
                 - replicasets
                 - statefulsets
+                verbs:
+                - get
+                - list
+                - watch
+              - apiGroups:
+                - apps.openshift.io
+                resources:
+                - deploymentconfigs
                 verbs:
                 - get
                 - list

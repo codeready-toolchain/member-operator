@@ -2,6 +2,7 @@ package controller
 
 import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/idler"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"

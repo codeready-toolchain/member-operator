@@ -118,15 +118,16 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		logger.Info("pod", "name", pod.Name, "phase", pod.Status.Phase)
+		podLogger := logger.WithValues("name", pod.Name)
+		podLogger.Info("Pod", "phase", pod.Status.Phase, "startTime", pod.Status.StartTime)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
 			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				// Running too long. Kill the pod.
-				logger.Info("Pod running too long", "pod", pod.Name)
+				podLogger.Info("Pod running for too long")
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				deletedByController, err := r.scaleControllerToZero(logger, pod.ObjectMeta)
+				deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
 				if err != nil {
 					return err
 				}
@@ -134,11 +135,11 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 					if err := r.client.Delete(context.TODO(), &pod); err != nil {
 						return err
 					}
-					logger.Info("Pod deleted", "name", pod.Name)
+					podLogger.Info("Pod deleted")
 				}
 			}
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
-			// New pod. Start tracking.
+			podLogger.Info("New pod detected. Start tracking.")
 			newStatusPods = append(newStatusPods, toolchainv1alpha1.Pod{
 				Name:      pod.Name,
 				StartTime: *pod.Status.StartTime,
@@ -330,6 +331,7 @@ func (r *ReconcileIdler) updateStatusPods(idler *toolchainv1alpha1.Idler, newPod
 	if nothingChanged {
 		return nil
 	}
+	idler.Status.Pods = newPods
 	return r.client.Status().Update(context.TODO(), idler)
 }
 

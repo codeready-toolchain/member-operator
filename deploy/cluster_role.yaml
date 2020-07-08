@@ -14,9 +14,7 @@ rules:
   - ""
   resources:
   - nodes
-  - pods
   - secrets
-  - replicationcontrollers
   verbs:
   - list
   - get
@@ -91,6 +89,13 @@ rules:
   verbs:
   - "*"
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  - replicationcontrollers
+  verbs:
+  - "*"
+- apiGroups:
   - apps
   resources:
   - deployments
@@ -98,14 +103,10 @@ rules:
   - replicasets
   - statefulsets
   verbs:
-  - "get"
-  - "list"
-  - "watch"
+  - "*"
 - apiGroups:
   - apps.openshift.io
   resources:
   - deploymentconfigs
   verbs:
-    - "get"
-    - "list"
-    - "watch"
+    - "*"

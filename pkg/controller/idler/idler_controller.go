@@ -119,7 +119,7 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
 		podLogger := logger.WithValues("name", pod.Name)
-		podLogger.Info("Pod", "phase", pod.Status.Phase, "startTime", pod.Status.StartTime)
+		podLogger.Info("Pod", "phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
 			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking

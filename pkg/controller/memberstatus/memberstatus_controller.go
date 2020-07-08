@@ -203,7 +203,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	memberOperatorDeploymentName, err := k8sutil.GetOperatorName()
 	if err != nil {
 		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusReasonNoDeployment, err.Error())
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusReasonDeploymentNotFound, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err

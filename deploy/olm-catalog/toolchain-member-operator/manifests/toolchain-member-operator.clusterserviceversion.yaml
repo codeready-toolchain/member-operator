@@ -73,6 +73,13 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: Idler enables automatic idling of payloads in a user namespaces
+        where the name of the Idler matches the name of the corresponding namespace.
+        For example an Idler with "foo" name will be managing pods in namespace "foo".
+      displayName: Idler
+      kind: Idler
+      name: idlers.toolchain.dev.openshift.com
+      version: v1alpha1
     - description: MemberStatus is used to track toolchain member status
       displayName: CodeReady Toolchain Member Status
       kind: MemberStatus

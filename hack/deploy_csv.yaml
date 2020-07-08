@@ -799,9 +799,7 @@ data:
                 - ""
                 resources:
                 - nodes
-                - pods
                 - secrets
-                - replicationcontrollers
                 verbs:
                 - list
                 - get
@@ -876,6 +874,13 @@ data:
                 verbs:
                 - '*'
               - apiGroups:
+                - ""
+                resources:
+                - pods
+                - replicationcontrollers
+                verbs:
+                - '*'
+              - apiGroups:
                 - apps
                 resources:
                 - deployments
@@ -883,17 +888,13 @@ data:
                 - replicasets
                 - statefulsets
                 verbs:
-                - get
-                - list
-                - watch
+                - '*'
               - apiGroups:
                 - apps.openshift.io
                 resources:
                 - deploymentconfigs
                 verbs:
-                - get
-                - list
-                - watch
+                - '*'
               serviceAccountName: member-operator
             deployments:
             - name: member-operator

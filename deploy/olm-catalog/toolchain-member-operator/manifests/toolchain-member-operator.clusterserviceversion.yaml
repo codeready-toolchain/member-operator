@@ -115,9 +115,7 @@ spec:
           - ""
           resources:
           - nodes
-          - pods
           - secrets
-          - replicationcontrollers
           verbs:
           - list
           - get
@@ -192,6 +190,13 @@ spec:
           verbs:
           - '*'
         - apiGroups:
+          - ""
+          resources:
+          - pods
+          - replicationcontrollers
+          verbs:
+          - '*'
+        - apiGroups:
           - apps
           resources:
           - deployments
@@ -199,17 +204,13 @@ spec:
           - replicasets
           - statefulsets
           verbs:
-          - get
-          - list
-          - watch
+          - '*'
         - apiGroups:
           - apps.openshift.io
           resources:
           - deploymentconfigs
           verbs:
-          - get
-          - list
-          - watch
+          - '*'
         serviceAccountName: member-operator
       deployments:
       - name: member-operator

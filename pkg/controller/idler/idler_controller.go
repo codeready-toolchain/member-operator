@@ -124,8 +124,7 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 			// Already tracking this pod. Check the timeout.
 			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
-				// Running too long. Kill the pod.
-				podLogger.Info("Pod running for too long")
+				podLogger.Info("Pod running for too long. Killing the pod.")
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
 				if err != nil {
@@ -180,7 +179,6 @@ func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace str
 	d := &appsv1.Deployment{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "Deployment not found", "name", d.Name)
 			return true, nil
 		}
 		return false, err
@@ -198,7 +196,6 @@ func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace str
 	rs := &appsv1.ReplicaSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "ReplicaSet not found", "name", rs.Name)
 			return true, nil
 		}
 		return false, err
@@ -223,12 +220,14 @@ func (r *ReconcileIdler) scaleDaemonSetToZero(logger logr.Logger, namespace stri
 	ds := &appsv1.DaemonSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "DaemonSet not found", "name", ds.Name)
 			return true, nil
 		}
 		return false, err
 	}
 	if err := r.client.Delete(context.TODO(), ds); err != nil {
+		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			return true, nil
+		}
 		return false, err
 	}
 	logger.Info("DaemonSet deleted", "name", ds.Name)
@@ -239,7 +238,6 @@ func (r *ReconcileIdler) scaleStatefulSetToZero(logger logr.Logger, namespace st
 	s := &appsv1.StatefulSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, s); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "Deployment not found", "name", s.Name)
 			return true, nil
 		}
 		return false, err
@@ -257,7 +255,6 @@ func (r *ReconcileIdler) scaleDeploymentConfigToZero(logger logr.Logger, namespa
 	dc := &openshiftappsv1.DeploymentConfig{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, dc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "DeploymentConfig not found", "name", dc.Name)
 			return true, nil
 		}
 		return false, err
@@ -274,7 +271,6 @@ func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, na
 	rc := &corev1.ReplicationController{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "ReplicationController not found", "name", rc.Name)
 			return true, nil
 		}
 		return false, err

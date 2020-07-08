@@ -17,7 +17,9 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: Idler enables automatic idling of payloads in all user's namespaces
+      description: Idler enables automatic idling of payloads in a user namespaces
+        where the name of the Idler matches the name of the corresponding namespace.
+        For example an Idler with "foo" name will be managing pods in namespace "foo".
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation

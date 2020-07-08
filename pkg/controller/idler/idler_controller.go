@@ -118,8 +118,8 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		podLogger := logger.WithValues("name", pod.Name)
-		podLogger.Info("Pod", "phase", pod.Status.Phase)
+		podLogger := logger.WithValues("Pod.Name", pod.Name)
+		podLogger.Info("Pod", "Pod.Phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
 			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
@@ -150,7 +150,7 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 }
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
-// and scale the owner down to zero and returns "true".
+// and scales the owner down to zero and returns "true".
 // Otherwise returns "false".
 func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (bool, error) {
 	owners := meta.GetOwnerReferences()
@@ -300,6 +300,8 @@ func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alph
 	return nil
 }
 
+// nextPodToBeKilledAfter checks the start times of all the tracked pods in the Idler and returns the timeout left
+// for the next pod to be killed.
 func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) time.Duration {
 	var d time.Duration
 	for _, pod := range idler.Status.Pods {

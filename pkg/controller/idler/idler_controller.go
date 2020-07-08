@@ -46,13 +46,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	log.Info("!!!!! reconciling Idler 0")
 	// Watch for changes to primary resource Idler
 	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.Idler{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
 
-	log.Info("!!!!! reconciling Idler 2")
 	// Watch for changes to secondary resources: Pods
 	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
 		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
@@ -87,8 +85,6 @@ type ReconcileIdler struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-
-	logger.Info("!!!!! reconciling Idler 1")
 
 	// Fetch the Idler instance
 	idler := &toolchainv1alpha1.Idler{}

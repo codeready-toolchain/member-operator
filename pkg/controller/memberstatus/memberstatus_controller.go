@@ -208,7 +208,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
 	}
-	operatorStatus.Deployment.Name = memberOperatorDeploymentName
+	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// check member operator deployment status
 	deploymentConditions, err := status.GetDeploymentStatusConditions(r.client, memberOperatorDeploymentName, memberStatus.Namespace)

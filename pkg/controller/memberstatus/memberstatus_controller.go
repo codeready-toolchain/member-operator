@@ -38,24 +38,6 @@ const (
 	defaultRequeueTime = time.Second * 5
 )
 
-// custom component condition error messages & reasons
-const (
-// // deployment ready
-// reasonDeploymentReady = "DeploymentReady"
-
-// // deployment not found
-// reasonNoDeployment = "DeploymentNotFound"
-
-// // deployment not ready
-// reasonDeploymentConditionNotReady = "DeploymentNotReady"
-
-// // kubefed not found
-// reasonHostConnectionNotFound = "KubefedNotFound"
-
-// // kubefed last probe time exceeded
-// reasonHostConnectionLastProbeTimeExceeded = "KubefedLastProbeTimeExceeded"
-)
-
 // statusComponentTags are used in the overall condition to point out which components are not ready
 type statusComponentTag string
 

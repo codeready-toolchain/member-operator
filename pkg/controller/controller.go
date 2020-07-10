@@ -7,6 +7,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/controller/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccountstatus"
+	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -24,6 +25,9 @@ func init() {
 
 // AddToManager adds all Controllers to the Manager
 func AddToManager(m manager.Manager, config *configuration.Config) error {
+	if err := toolchaincluster.Add(m, config.GetToolchainClusterTimeout()); err != nil {
+		return err
+	}
 	for _, f := range addToManagerFuncs {
 		if err := f(m, config); err != nil {
 			return err

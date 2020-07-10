@@ -31,25 +31,13 @@ const (
 	DefaultMemberStatusName = "toolchain-member-status"
 )
 
-// Kubefed configuration constants
+// ToolchainCluster configuration constants
 const (
-	ClusterHealthCheckPeriod        = "cluster.healthcheck.period"
-	DefaultClusterHealthCheckPeriod = "10s"
+	clusterHealthCheckPeriod        = "cluster.healthcheck.period"
+	defaultClusterHealthCheckPeriod = "10s"
 
-	ClusterHealthCheckTimeout        = "cluster.healthcheck.timeout"
-	DefaultClusterHealthCheckTimeout = "3s"
-
-	ClusterHealthCheckFailureThreshold        = "cluster.healthcheck.failure.threshold"
-	DefaultClusterHealthCheckFailureThreshold = 3
-
-	ClusterHealthCheckSuccessThreshold        = "cluster.healthcheck.success.threshold"
-	DefaultClusterHealthCheckSuccessThreshold = 1
-
-	ClusterAvailableDelay        = "cluster.available.delay"
-	DefaultClusterAvailableDelay = "20s"
-
-	ClusterUnavailableDelay        = "cluster.unavailable.delay"
-	DefaultClusterUnavailableDelay = "60s"
+	toolchainClusterTimeout          = "cluster.healthcheck.timeout"
+	defaultClusterHealthCheckTimeout = "3s"
 )
 
 // Config encapsulates the Viper configuration registry which stores the
@@ -78,12 +66,8 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
 	c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
 	c.member.SetDefault(MemberStatusName, DefaultMemberStatusName)
-	c.member.SetDefault(ClusterHealthCheckPeriod, DefaultClusterHealthCheckPeriod)
-	c.member.SetDefault(ClusterHealthCheckTimeout, DefaultClusterHealthCheckTimeout)
-	c.member.SetDefault(ClusterHealthCheckFailureThreshold, DefaultClusterHealthCheckFailureThreshold)
-	c.member.SetDefault(ClusterHealthCheckSuccessThreshold, DefaultClusterHealthCheckSuccessThreshold)
-	c.member.SetDefault(ClusterAvailableDelay, DefaultClusterAvailableDelay)
-	c.member.SetDefault(ClusterUnavailableDelay, DefaultClusterUnavailableDelay)
+	c.member.SetDefault(clusterHealthCheckPeriod, defaultClusterHealthCheckPeriod)
+	c.member.SetDefault(toolchainClusterTimeout, defaultClusterHealthCheckTimeout)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
@@ -115,30 +99,10 @@ func (c *Config) GetMemberStatusName() string {
 
 // GetClusterHealthCheckPeriod returns the configured cluster health check period
 func (c *Config) GetClusterHealthCheckPeriod() time.Duration {
-	return c.member.GetDuration(ClusterHealthCheckPeriod)
+	return c.member.GetDuration(clusterHealthCheckPeriod)
 }
 
-// GetClusterHealthCheckTimeout returns the configured cluster health check timeout
-func (c *Config) GetClusterHealthCheckTimeout() time.Duration {
-	return c.member.GetDuration(ClusterHealthCheckTimeout)
-}
-
-// GetClusterHealthCheckFailureThreshold returns the configured cluster health check failure threshold
-func (c *Config) GetClusterHealthCheckFailureThreshold() int64 {
-	return c.member.GetInt64(ClusterHealthCheckFailureThreshold)
-}
-
-// GetClusterHealthCheckSuccessThreshold returns the configured cluster health check failure threshold
-func (c *Config) GetClusterHealthCheckSuccessThreshold() int64 {
-	return c.member.GetInt64(ClusterHealthCheckSuccessThreshold)
-}
-
-// GetClusterAvailableDelay returns the configured cluster available delay
-func (c *Config) GetClusterAvailableDelay() time.Duration {
-	return c.member.GetDuration(ClusterAvailableDelay)
-}
-
-// GetClusterUnavailableDelay returns the configured cluster unavailable delay
-func (c *Config) GetClusterUnavailableDelay() time.Duration {
-	return c.member.GetDuration(ClusterUnavailableDelay)
+// GetToolchainClusterTimeout returns the configured cluster health check timeout
+func (c *Config) GetToolchainClusterTimeout() time.Duration {
+	return c.member.GetDuration(toolchainClusterTimeout)
 }

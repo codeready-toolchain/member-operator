@@ -14,7 +14,6 @@ import (
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
 var tierTemplatesCache = newTierTemplateCache()
@@ -46,12 +45,12 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 
 // getToolchainTierTemplate gets the TierTemplate resource from the host cluster.
 func getToolchainTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplate, error) {
-	// retrieve the FedCluster instance representing the host cluster
+	// retrieve the ToolchainCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {
 		return nil, fmt.Errorf("unable to connect to the host cluster: unknown cluster")
 	}
-	if !util.IsClusterReady(host.ClusterStatus) {
+	if !cluster.IsReady(host.ClusterStatus) {
 		return nil, fmt.Errorf("the host cluster is not ready")
 	}
 

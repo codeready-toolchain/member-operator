@@ -185,7 +185,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	memberOperatorDeploymentName, err := k8sutil.GetOperatorName()
 	if err != nil {
 		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusReasonDeploymentNotFound, err.Error())
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
@@ -221,7 +221,7 @@ func (r *ReconcileMemberStatus) setStatusReady(memberStatus *toolchainv1alpha1.M
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
-			Reason: toolchainv1alpha1.ToolchainStatusReasonAllComponentsReady,
+			Reason: toolchainv1alpha1.ToolchainStatusAllComponentsReadyReason,
 		})
 }
 
@@ -231,7 +231,7 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.ToolchainStatusReasonComponentsNotReady,
+			Reason:  toolchainv1alpha1.ToolchainStatusComponentsNotReadyReason,
 			Message: message,
 		})
 }

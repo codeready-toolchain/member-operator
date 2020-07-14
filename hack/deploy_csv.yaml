@@ -769,6 +769,13 @@ data:
         apiservicedefinitions: {}
         customresourcedefinitions:
           owned:
+          - description: Idler enables automatic idling of payloads in a user namespaces
+              where the name of the Idler matches the name of the corresponding namespace.
+              For example an Idler with "foo" name will be managing pods in namespace "foo".
+            displayName: Idler
+            kind: Idler
+            name: idlers.toolchain.dev.openshift.com
+            version: v1alpha1
           - description: MemberStatus is used to track toolchain member status
             displayName: CodeReady Toolchain Member Status
             kind: MemberStatus
@@ -806,8 +813,11 @@ data:
                 - ""
                 resources:
                 - nodes
+                - secrets
                 verbs:
                 - list
+                - get
+                - watch
               - apiGroups:
                 - ""
                 resources:
@@ -875,6 +885,28 @@ data:
                 - quota.openshift.io
                 resources:
                 - clusterresourcequotas
+                verbs:
+                - '*'
+              - apiGroups:
+                - ""
+                resources:
+                - pods
+                - replicationcontrollers
+                verbs:
+                - '*'
+              - apiGroups:
+                - apps
+                resources:
+                - deployments
+                - daemonsets
+                - replicasets
+                - statefulsets
+                verbs:
+                - '*'
+              - apiGroups:
+                - apps.openshift.io
+                resources:
+                - deploymentconfigs
                 verbs:
                 - '*'
               serviceAccountName: member-operator

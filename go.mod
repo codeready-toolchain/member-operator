@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20200622222042-5476a67572d2
+	github.com/codeready-toolchain/api v0.0.0-20200710162906-7355c357655b
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20200622223559-7ee9f1eaa00a
 	github.com/go-logr/logr v0.1.0
 	github.com/gofrs/uuid v3.2.0+incompatible
@@ -30,7 +30,5 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.17.4 // Required by prometheus-operator
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200204173128-addea2498afe // avoids case-insensitive import collision: "github.com/googleapis/gnostic/openapiv2" and "github.com/googleapis/gnostic/OpenAPIv2"
 )
-
-replace github.com/codeready-toolchain/api => ../api
 
 go 1.13

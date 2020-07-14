@@ -6,6 +6,16 @@ metadata:
   creationTimestamp: null
   name: idlers.toolchain.dev.openshift.com
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.timeoutSeconds
+    name: Timeout
+    type: integer
+  - JSONPath: .status.conditions[?(@.type=="Ready")].status
+    name: Ready
+    type: string
+  - JSONPath: .status.conditions[?(@.type=="Ready")].reason
+    name: Reason
+    type: string
   group: toolchain.dev.openshift.com
   names:
     kind: Idler

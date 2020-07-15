@@ -8,18 +8,19 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
+
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 
 	"github.com/go-logr/logr"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	errs "github.com/pkg/errors"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -28,9 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	kubefed_common "sigs.k8s.io/kubefed/pkg/apis/core/common"
-	kubefed_v1beta1 "sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
-	kubefed_util "sigs.k8s.io/kubefed/pkg/controller/util"
 )
 
 var log = logf.Log.WithName("controller_memberstatus")
@@ -38,28 +36,6 @@ var log = logf.Log.WithName("controller_memberstatus")
 // general memberstatus constants
 const (
 	defaultRequeueTime = time.Second * 5
-)
-
-// custom component condition error messages & reasons
-const (
-	// deployment ready
-	reasonDeploymentReady = "DeploymentReady"
-
-	// deployment not found
-	reasonNoDeployment        = "DeploymentNotFound"
-	errMsgCannotGetDeployment = "unable to get the member operator deployment"
-
-	// deployment not ready
-	reasonDeploymentConditionNotReady = "DeploymentNotReady"
-	errMsgDeploymentConditionNotReady = "member operator deployment has unready status conditions"
-
-	// kubefed not found
-	reasonHostConnectionNotFound = "KubefedNotFound"
-	errMsgHostConnectionNotFound = "the host connection was not found"
-
-	// kubefed last probe time exceeded
-	reasonHostConnectionLastProbeTimeExceeded = "KubefedLastProbeTimeExceeded"
-	errMsgHostConnectionLastProbeTimeExceeded = "exceeded the maximum duration since the last probe"
 )
 
 // statusComponentTags are used in the overall condition to point out which components are not ready
@@ -181,77 +157,25 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 // It then takes the status from the cluster object and adds it to MemberStatus. Finally, it checks its status and will return an error if
 // its status is not ready
 func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+
+	attributes := status.KubefedAttributes{
+		GetClusterFunc: r.getHostCluster,
+		Period:         r.config.GetClusterHealthCheckPeriod(),
+		Timeout:        r.config.GetClusterHealthCheckTimeout(),
+		Threshold:      r.config.GetClusterHealthCheckFailureThreshold(),
+	}
+
 	// look up host connection status
-	fedCluster, ok := r.getHostCluster()
-	if !ok {
-		notFoundMsg := errMsgHostConnectionNotFound
-		notFoundReason := reasonHostConnectionNotFound
-		memberStatus.Status.HostConnection = kubefed_v1beta1.KubeFedClusterStatus{
-			Conditions: []kubefed_v1beta1.ClusterCondition{
-				{
-					Type:          kubefed_common.ClusterReady,
-					Status:        corev1.ConditionFalse,
-					Reason:        &notFoundReason,
-					Message:       &notFoundMsg,
-					LastProbeTime: metav1.Now(),
-				},
-			},
-		}
-		return fmt.Errorf(notFoundMsg)
-	}
-	memberStatus.Status.HostConnection = *fedCluster.ClusterStatus.DeepCopy()
+	clusterStatus, err := status.GetKubefedConditions(attributes)
+	memberStatus.Status.HostConnection = clusterStatus
 
-	// check conditions of host connection
-	if !kubefed_util.IsClusterReady(fedCluster.ClusterStatus) {
-		return fmt.Errorf("the host connection is not ready")
-	}
-
-	var lastProbeTime metav1.Time
-	foundLastProbeTime := false
-	for _, condition := range fedCluster.ClusterStatus.Conditions {
-		if condition.Type == kubefed_common.ClusterReady {
-			lastProbeTime = condition.LastProbeTime
-			foundLastProbeTime = true
-		}
-	}
-	if !foundLastProbeTime {
-		return fmt.Errorf("the time of the last probe could not be determined")
-	}
-
-	// check that the last probe time is within limits. It should be less than (period + timeout) * threshold
-	period := r.config.GetClusterHealthCheckPeriod()
-	timeout := r.config.GetClusterHealthCheckTimeout()
-	threshold := r.config.GetClusterHealthCheckFailureThreshold()
-	totalf := (period.Seconds() + timeout.Seconds()) * float64(threshold)
-	maxDuration, err := time.ParseDuration(fmt.Sprintf("%fs", totalf))
-	if err != nil {
-		return errs.Wrap(err, fmt.Sprintf("the maximum duration since the last probe could not be determined - check the configured values for %s %s and %s", crtCfg.ClusterHealthCheckPeriod, crtCfg.ClusterHealthCheckTimeout, crtCfg.ClusterHealthCheckFailureThreshold))
-	}
-
-	lastProbedTimePlusMaxDuration := lastProbeTime.Add(maxDuration)
-	currentTime := time.Now()
-	if currentTime.After(lastProbedTimePlusMaxDuration) {
-		errMsg := fmt.Sprintf("%s: %s", errMsgHostConnectionLastProbeTimeExceeded, maxDuration.String())
-		errReason := reasonHostConnectionLastProbeTimeExceeded
-		probeCondition := kubefed_v1beta1.ClusterCondition{
-			Type:          kubefed_common.ClusterReady,
-			Status:        corev1.ConditionFalse,
-			Reason:        &errReason,
-			Message:       &errMsg,
-			LastProbeTime: lastProbeTime,
-		}
-		// override the ready condition
-		memberStatus.Status.HostConnection.Conditions = []kubefed_v1beta1.ClusterCondition{probeCondition}
-		return fmt.Errorf(errMsg)
-	}
-
-	return nil
+	return err
 }
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
 func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
-	operatorStatus := toolchainv1alpha1.MemberOperatorStatus{
+	operatorStatus := &toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
 		Revision:       version.Commit,
 		BuildTimestamp: version.BuildTime,
@@ -260,42 +184,21 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	// look up status of member deployment
 	memberOperatorDeploymentName, err := k8sutil.GetOperatorName()
 	if err != nil {
-		err = errs.Wrap(err, errMsgCannotGetDeployment)
-		errCondition := newComponentErrorCondition(reasonNoDeployment, err.Error())
+		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, err.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
 	}
+	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
-	memberDeploymentName := types.NamespacedName{Namespace: memberStatus.Namespace, Name: memberOperatorDeploymentName}
-	memberDeployment := &appsv1.Deployment{}
-	err = r.client.Get(context.TODO(), memberDeploymentName, memberDeployment)
-	if err != nil {
-		err = errs.Wrap(err, errMsgCannotGetDeployment)
-		errCondition := newComponentErrorCondition(reasonNoDeployment, err.Error())
-		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-		memberStatus.Status.MemberOperator = operatorStatus
-		return err
-	}
-	operatorStatus.Deployment.Name = memberDeployment.Name
+	// check member operator deployment status
+	deploymentConditions, err := status.GetDeploymentStatusConditions(r.client, memberOperatorDeploymentName, memberStatus.Namespace)
 
-	// get and check conditions
-	for _, condition := range memberDeployment.Status.Conditions {
-		if (condition.Type == appsv1.DeploymentAvailable || condition.Type == appsv1.DeploymentProgressing) && condition.Status != corev1.ConditionTrue {
-			errMsg := fmt.Sprintf("%s: %s", errMsgDeploymentConditionNotReady, condition.Type)
-			errCondition := newComponentErrorCondition(reasonDeploymentConditionNotReady, errMsg)
-			operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-			memberStatus.Status.MemberOperator = operatorStatus
-			return fmt.Errorf(errMsg)
-		}
-	}
-
-	// update member operator status
-	operatorReadyCondition := newComponentReadyCondition(reasonDeploymentReady)
-	operatorStatus.Conditions = []toolchainv1alpha1.Condition{*operatorReadyCondition}
+	// update memberstatus
+	operatorStatus.Conditions = deploymentConditions
 	memberStatus.Status.MemberOperator = operatorStatus
-
-	return nil
+	return err
 }
 
 // updateStatusConditions updates Member status conditions with the new conditions
@@ -318,7 +221,7 @@ func (r *ReconcileMemberStatus) setStatusReady(memberStatus *toolchainv1alpha1.M
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
-			Reason: toolchainv1alpha1.MemberStatusAllComponentsReady,
+			Reason: toolchainv1alpha1.ToolchainStatusAllComponentsReadyReason,
 		})
 }
 
@@ -328,30 +231,7 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
+			Reason:  toolchainv1alpha1.ToolchainStatusComponentsNotReadyReason,
 			Message: message,
 		})
-}
-
-func newComponentReadyCondition(reason string) *toolchainv1alpha1.Condition {
-	currentTime := metav1.Now()
-	return &toolchainv1alpha1.Condition{
-		Type:               toolchainv1alpha1.ConditionReady,
-		Status:             corev1.ConditionTrue,
-		Reason:             reason,
-		LastTransitionTime: currentTime,
-		LastUpdatedTime:    &currentTime,
-	}
-}
-
-func newComponentErrorCondition(reason, msg string) *toolchainv1alpha1.Condition {
-	currentTime := metav1.Now()
-	return &toolchainv1alpha1.Condition{
-		Type:               toolchainv1alpha1.ConditionReady,
-		Status:             corev1.ConditionFalse,
-		Reason:             reason,
-		Message:            msg,
-		LastTransitionTime: currentTime,
-		LastUpdatedTime:    &currentTime,
-	}
 }

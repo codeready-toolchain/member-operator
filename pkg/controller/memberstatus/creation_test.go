@@ -48,6 +48,6 @@ func TestCreateOrUpdateResources(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "unable to create resource")
+		require.Equal(t, err.Error(), "unable to create resource of kind: , version: : creation failed")
 	})
 }

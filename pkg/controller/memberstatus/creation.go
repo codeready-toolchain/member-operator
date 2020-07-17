@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// CreateOrUpdateResources creates a memberstatus resource with the given name in the given namespace
 func CreateOrUpdateResources(client client.Client, s *runtime.Scheme, namespace, memberStatusName string) error {
 	memberStatus := &v1alpha1.MemberStatus{
 		ObjectMeta: v1.ObjectMeta{

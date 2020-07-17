@@ -11,6 +11,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -74,7 +75,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("All components ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -92,7 +93,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Host connection not found", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotExist
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -105,13 +106,13 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnection)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg("the host connection was not found")
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg("the cluster connection was not found")
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -129,7 +130,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Host connection probe not working", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterProbeNotWorking
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -144,7 +145,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(hostConnection)))
 	})
 
-	t.Run("Member operator no deployment not found - deployment env var not set", func(t *testing.T) {
+	t.Run("Member operator deployment not found - deployment env var not set", func(t *testing.T) {
 		// given
 		resetFunc := test.UnsetEnvVarAndRestore(t, k8sutil.OperatorNameEnvVar)
 		requestName := defaultMemberStatusName
@@ -161,7 +162,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperator)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the member operator deployment")
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the deployment: OPERATOR_NAME must be set")
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {
@@ -184,7 +185,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentNotReadyCondition(), MemberDeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -202,7 +203,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Member operator deployment not progressing", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, MemberDeploymentReadyCondition(), MemberDeploymentNotProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -282,33 +283,5 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		getHostCluster: getHostClusterFunc(fakeClient),
 		config:         configuration.LoadConfig(),
 	}
-	return r, reconcile.Request{test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
-}
-
-func MemberDeploymentReadyCondition() appsv1.DeploymentCondition {
-	return appsv1.DeploymentCondition{
-		Type:   appsv1.DeploymentAvailable,
-		Status: corev1.ConditionTrue,
-	}
-}
-
-func MemberDeploymentNotReadyCondition() appsv1.DeploymentCondition {
-	return appsv1.DeploymentCondition{
-		Type:   appsv1.DeploymentAvailable,
-		Status: corev1.ConditionFalse,
-	}
-}
-
-func MemberDeploymentProgressingCondition() appsv1.DeploymentCondition {
-	return appsv1.DeploymentCondition{
-		Type:   appsv1.DeploymentProgressing,
-		Status: corev1.ConditionTrue,
-	}
-}
-
-func MemberDeploymentNotProgressingCondition() appsv1.DeploymentCondition {
-	return appsv1.DeploymentCondition{
-		Type:   appsv1.DeploymentProgressing,
-		Status: corev1.ConditionFalse,
-	}
+	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }

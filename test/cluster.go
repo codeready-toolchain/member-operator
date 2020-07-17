@@ -38,8 +38,8 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 
 }
 
-// NewGetHostCluster returns cluster.GetHostClusterFunc function. The cluster.FedCluster
-// that is returned by the function then contains the given client and the given status and lastProbeTime.
+// NewGetHostClusterWithProbe returns a cluster.GetHostClusterFunc function which returns a cluster.FedCluster.
+// The returned cluster.FedCluster contains the given client and the given status and lastProbeTime.
 // If ok == false, then the function returns nil for the cluster.
 func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionStatus, lastProbeTime metav1.Time) cluster.GetHostClusterFunc {
 	if !ok {

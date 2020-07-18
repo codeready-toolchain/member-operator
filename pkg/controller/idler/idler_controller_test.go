@@ -128,49 +128,88 @@ func TestEnsureIdling(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
 			},
-			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
 		reconciler, req, cl := prepareReconcile(t, idler.Name, idler)
-		podsTooEarlyToKill := preparePods(t, reconciler, idler.Name, "", time.Now())
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds + 1))
+		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
+		podsTooEarlyToKill := preparePods(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 		podsRunningForTooLong := preparePods(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
 		noise := preparePods(t, reconciler, "another-namespace", "", idlerTimeoutPlusOneSecondAgo)
 
-		t.Run("First reconcile. Start tracking", func(t *testing.T) {
+		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
 			//when
 			res, err := reconciler.Reconcile(req)
 
 			// then
 			require.NoError(t, err)
-
 			// Idler tracks all pods now.
 			AssertThatCluster(t, cl).
-				HasPods(podsRunningForTooLong.podsToKill).
-				HasPods(podsTooEarlyToKill.podsToKill).
-				HasPods(noise.podsToKill)
+				HasPods(podsRunningForTooLong.standalonePods).
+				HasPods(podsTooEarlyToKill.standalonePods).
+				HasPods(noise.standalonePods)
 			// Tracked pods
-			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.podsToTrack, podsRunningForTooLong.podsToTrack...))
+			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...))
 
-			assert.Equal(t, reconcile.Result{}, res)
+			assert.True(t, res.Requeue)
+			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
 		})
 
-		t.Run("Second Reconcile. Delete long running", func(t *testing.T) {
+		t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
 			//when
 			res, err := reconciler.Reconcile(req)
 
 			// then
 			require.NoError(t, err)
-
 			// Too long running pods are gone. The rest of the pods are still there.
 			AssertThatCluster(t, cl).
-				DoesnHavePods(podsRunningForTooLong.podsToKill).
-				HasPods(podsTooEarlyToKill.podsToKill).
-				HasPods(noise.podsToKill)
-			// Tracked pods
-			AssertThatIdler(t, idler.Name, cl).TracksPods(podsTooEarlyToKill.podsToTrack)
+				DoesNotHavePods(podsRunningForTooLong.standalonePods).
+				HasPods(podsTooEarlyToKill.standalonePods).
+				HasPods(noise.standalonePods)
+			// Still tracking all pods. Even deleted ones.
+			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...))
+
+			assert.True(t, res.Requeue)
+			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+		})
+
+		t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
+			//when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			// Tracking existing pods only.
+			AssertThatIdler(t, idler.Name, cl).TracksPods(append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.controlledPods...), podsTooEarlyToKill.standalonePods...))
+
+			assert.True(t, res.Requeue)
+			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+		})
+
+		t.Run("No pods. No requeue.", func(t *testing.T) {
+			//given
+			// cleanup remaining pods
+			pods := append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.standalonePods...), podsRunningForTooLong.controlledPods...)
+			for _, pod := range pods {
+				err := cl.Delete(context.TODO(), pod)
+				require.NoError(t, err)
+			}
+
+			//when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			// No pods tracked
+			AssertThatIdler(t, idler.Name, cl).TracksPods([]*corev1.Pod{})
 
 			assert.Equal(t, reconcile.Result{}, res)
 		})
+
+		// TODO:
+		// 1. Check controllers replica counts
+		// 2. Check status
+		// 3. Cover all errors
 	})
 }
 
@@ -205,9 +244,10 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 
 	require.Len(a.t, a.idler.Status.Pods, len(pods))
 	for _, pod := range pods {
+		startTimeNoMilSec := pod.Status.StartTime.Truncate(time.Second)
 		expected := v1alpha1.Pod{
 			Name:      pod.Name,
-			StartTime: *pod.Status.StartTime,
+			StartTime: v1.NewTime(startTimeNoMilSec),
 		}
 		assert.Contains(a.t, a.idler.Status.Pods, expected)
 	}
@@ -226,7 +266,7 @@ func AssertThatCluster(t *testing.T, client client.Client) *ClusterAssertion {
 	}
 }
 
-func (a *ClusterAssertion) DoesnHavePods(pods []*corev1.Pod) *ClusterAssertion {
+func (a *ClusterAssertion) DoesNotHavePods(pods []*corev1.Pod) *ClusterAssertion {
 	for _, pod := range pods {
 		p := &corev1.Pod{}
 		err := a.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, p)
@@ -246,12 +286,14 @@ func (a *ClusterAssertion) HasPods(pods []*corev1.Pod) *ClusterAssertion {
 }
 
 type payloads struct {
-	// podsToKill are pods which are supposed to be tracked and also deleted directly by the Idler controller
+	// standalonePods are pods which are supposed to be tracked and also deleted directly by the Idler controller
 	// if run for too long
-	podsToKill []*corev1.Pod
-	// podsToTrack are pods which are supposed to be tracked only and won't be deleted by the Idler controller
-	// because they are managed by Deployment/ReplicaSet/etc controllers
-	podsToTrack []*corev1.Pod
+	standalonePods []*corev1.Pod
+	// controlledPods are pods which are managed by Deployment/ReplicaSet/etc controllers and not supposed to be deleted
+	// by the Idler controller directly
+	controlledPods []*corev1.Pod
+	// standalonePods + controlledPods
+	allPods []*corev1.Pod
 
 	deployment            *appsv1.Deployment
 	replicaSet            *appsv1.ReplicaSet
@@ -280,7 +322,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.client.Create(context.TODO(), rs)
 	require.NoError(t, err)
-	podsToTrack := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
+	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
 
 	// Standalone ReplicaSet
 	standaloneRs := &appsv1.ReplicaSet{
@@ -289,7 +331,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	}
 	err = r.client.Create(context.TODO(), standaloneRs)
 	require.NoError(t, err)
-	podsToTrack = createPods(t, r, standaloneRs, sTime, podsToTrack)
+	controlledPods = createPods(t, r, standaloneRs, sTime, controlledPods)
 
 	// DaemonSet
 	ds := &appsv1.DaemonSet{
@@ -297,7 +339,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	}
 	err = r.client.Create(context.TODO(), ds)
 	require.NoError(t, err)
-	podsToTrack = createPods(t, r, ds, sTime, podsToTrack)
+	controlledPods = createPods(t, r, ds, sTime, controlledPods)
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
@@ -305,7 +347,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	}
 	err = r.client.Create(context.TODO(), sts)
 	require.NoError(t, err)
-	podsToTrack = createPods(t, r, sts, sTime, podsToTrack)
+	controlledPods = createPods(t, r, sts, sTime, controlledPods)
 
 	// DeploymentConfig
 	dc := &openshiftappsv1.DeploymentConfig{
@@ -322,7 +364,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.client.Create(context.TODO(), rc)
 	require.NoError(t, err)
-	podsToTrack = createPods(t, r, rc, sTime, podsToTrack)
+	controlledPods = createPods(t, r, rc, sTime, controlledPods)
 
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
@@ -331,16 +373,19 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	}
 	err = r.client.Create(context.TODO(), standaloneRC)
 	require.NoError(t, err)
-	podsToTrack = createPods(t, r, standaloneRC, sTime, podsToTrack)
+	controlledPods = createPods(t, r, standaloneRC, sTime, controlledPods)
 
 	// Pods with unknown owner. They are subject of direct management by the Idler.
+	// It doesn't have to be Idler. We just need any object as the owner of the pods
+	// which is not a tracked controller such as Deployment or ReplicaSet.
 	idler := &v1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s%s-somename", namePrefix, namespace),
+			Name:      fmt.Sprintf("%s%s-somename", namePrefix, namespace),
+			Namespace: namespace,
 		},
 		Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
 	}
-	podsToKill := createPods(t, r, idler, sTime, make([]*corev1.Pod, 0, 3))
+	standalonePods := createPods(t, r, idler, sTime, make([]*corev1.Pod, 0, 3))
 
 	// Pods with no owner.
 	for i := 0; i < 3; i++ {
@@ -349,16 +394,15 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 			Status:     corev1.PodStatus{StartTime: &sTime},
 		}
 		require.NoError(t, err)
-		podsToKill = append(podsToKill, pod)
+		standalonePods = append(standalonePods, pod)
 		err = r.client.Create(context.TODO(), pod)
 		require.NoError(t, err)
 	}
 
-	podsToTrack = append(podsToTrack, podsToKill...)
-
 	return payloads{
-		podsToKill:            podsToKill,
-		podsToTrack:           podsToTrack,
+		standalonePods:        standalonePods,
+		controlledPods:        controlledPods,
+		allPods:               append(standalonePods, controlledPods...),
 		deployment:            d,
 		replicaSet:            standaloneRs,
 		daemonSet:             ds,

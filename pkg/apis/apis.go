@@ -28,7 +28,7 @@ func AddToScheme(s *runtime.Scheme) error {
 	addToSchemes = append(addToSchemes, rbacv1.AddToScheme)
 	addToSchemes = append(addToSchemes, corev1.AddToScheme)
 	addToSchemes = append(addToSchemes, appsv1.AddToScheme)
-	addToSchemes = append(addToSchemes, openshiftappsv1.AddToScheme)
+	addToSchemes = append(addToSchemes, openshiftappsv1.Install)
 
 	return addToSchemes.AddToScheme(s)
 }

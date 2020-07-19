@@ -143,11 +143,30 @@ func TestEnsureIdling(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			// Idler tracks all pods now.
-			AssertThatCluster(t, cl).
-				HasPods(podsRunningForTooLong.standalonePods).
-				HasPods(podsTooEarlyToKill.standalonePods).
-				HasPods(noise.standalonePods)
+			// Idler tracks all pods now but pods have not been deleted yet
+			Assert(t, cl).
+				PodsExist(podsRunningForTooLong.standalonePods).
+				PodsExist(podsTooEarlyToKill.standalonePods).
+				PodsExist(noise.standalonePods).
+				DaemonSetExists(podsRunningForTooLong.daemonSet).
+				DaemonSetExists(podsTooEarlyToKill.daemonSet).
+				DaemonSetExists(noise.daemonSet).
+				DeploymentScaledUp(podsRunningForTooLong.deployment).
+				DeploymentScaledUp(podsTooEarlyToKill.deployment).
+				DeploymentScaledUp(noise.deployment).
+				ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
+				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
+				ReplicaSetScaledUp(noise.replicaSet).
+				DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
+				DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
+				DeploymentConfigScaledUp(noise.deploymentConfig).
+				ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
+				ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
+				ReplicationControllerScaledUp(noise.replicationController).
+				StatefulSetScaledUp(podsRunningForTooLong.statefulSet).
+				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
+				StatefulSetScaledUp(noise.statefulSet)
+
 			// Tracked pods
 			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...))
 
@@ -161,11 +180,31 @@ func TestEnsureIdling(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			// Too long running pods are gone. The rest of the pods are still there.
-			AssertThatCluster(t, cl).
-				DoesNotHavePods(podsRunningForTooLong.standalonePods).
-				HasPods(podsTooEarlyToKill.standalonePods).
-				HasPods(noise.standalonePods)
+			// Too long running pods are gone. All long running controllers are scaled down.
+			// The rest of the pods are still there and controllers are scaled up.
+			Assert(t, cl).
+				PodsDoNotExist(podsRunningForTooLong.standalonePods).
+				PodsExist(podsTooEarlyToKill.standalonePods).
+				PodsExist(noise.standalonePods).
+				DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
+				DaemonSetExists(podsTooEarlyToKill.daemonSet).
+				DaemonSetExists(noise.daemonSet).
+				DeploymentScaledDown(podsRunningForTooLong.deployment).
+				DeploymentScaledUp(podsTooEarlyToKill.deployment).
+				DeploymentScaledUp(noise.deployment).
+				ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
+				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
+				ReplicaSetScaledUp(noise.replicaSet).
+				DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
+				DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
+				DeploymentConfigScaledUp(noise.deploymentConfig).
+				ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
+				ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
+				ReplicationControllerScaledUp(noise.replicationController).
+				StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
+				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
+				StatefulSetScaledUp(noise.statefulSet)
+
 			// Still tracking all pods. Even deleted ones.
 			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...))
 
@@ -207,9 +246,8 @@ func TestEnsureIdling(t *testing.T) {
 		})
 
 		// TODO:
-		// 1. Check controllers replica counts
-		// 2. Check status
-		// 3. Cover all errors
+		// 1. Check Idler status
+		// 2. Cover all errors
 	})
 }
 
@@ -254,34 +292,137 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 	return a
 }
 
-type ClusterAssertion struct {
+type PayloadAssertion struct {
 	client client.Client
 	t      *testing.T
 }
 
-func AssertThatCluster(t *testing.T, client client.Client) *ClusterAssertion {
-	return &ClusterAssertion{
+func Assert(t *testing.T, client client.Client) *PayloadAssertion {
+	return &PayloadAssertion{
 		client: client,
 		t:      t,
 	}
 }
 
-func (a *ClusterAssertion) DoesNotHavePods(pods []*corev1.Pod) *ClusterAssertion {
+func (a *PayloadAssertion) PodsDoNotExist(pods []*corev1.Pod) *PayloadAssertion {
 	for _, pod := range pods {
 		p := &corev1.Pod{}
 		err := a.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, p)
-		require.Error(a.t, err, "pod still exist", p)
+		require.Error(a.t, err, "pod %s still exists", p.Name)
 		assert.True(a.t, apierrors.IsNotFound(err))
 	}
 	return a
 }
 
-func (a *ClusterAssertion) HasPods(pods []*corev1.Pod) *ClusterAssertion {
+func (a *PayloadAssertion) PodsExist(pods []*corev1.Pod) *PayloadAssertion {
 	for _, pod := range pods {
 		p := &corev1.Pod{}
 		err := a.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, p)
 		require.NoError(a.t, err)
 	}
+	return a
+}
+
+func (a *PayloadAssertion) DeploymentScaledDown(deployment *appsv1.Deployment) *PayloadAssertion {
+	d := &appsv1.Deployment{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, d.Spec.Replicas)
+	assert.Equal(a.t, int32(0), *d.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) DeploymentScaledUp(deployment *appsv1.Deployment) *PayloadAssertion {
+	d := &appsv1.Deployment{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, d.Spec.Replicas)
+	assert.Equal(a.t, int32(3), *d.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) ReplicaSetScaledDown(replicaSet *appsv1.ReplicaSet) *PayloadAssertion {
+	r := &appsv1.ReplicaSet{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: replicaSet.Name, Namespace: replicaSet.Namespace}, r)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, r.Spec.Replicas)
+	assert.Equal(a.t, int32(0), *r.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) ReplicaSetScaledUp(replicaSet *appsv1.ReplicaSet) *PayloadAssertion {
+	r := &appsv1.ReplicaSet{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: replicaSet.Name, Namespace: replicaSet.Namespace}, r)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, r.Spec.Replicas)
+	assert.Equal(a.t, int32(3), *r.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) DeploymentConfigScaledDown(deployment *openshiftappsv1.DeploymentConfig) *PayloadAssertion {
+	d := &openshiftappsv1.DeploymentConfig{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
+	require.NoError(a.t, err)
+	assert.Equal(a.t, int32(0), d.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) DeploymentConfigScaledUp(deployment *openshiftappsv1.DeploymentConfig) *PayloadAssertion {
+	d := &openshiftappsv1.DeploymentConfig{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
+	require.NoError(a.t, err)
+	assert.Equal(a.t, int32(3), d.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) ReplicationControllerScaledDown(rc *corev1.ReplicationController) *PayloadAssertion {
+	r := &corev1.ReplicationController{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: rc.Name, Namespace: rc.Namespace}, r)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, r.Spec.Replicas)
+	assert.Equal(a.t, int32(0), *r.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) ReplicationControllerScaledUp(rc *corev1.ReplicationController) *PayloadAssertion {
+	r := &corev1.ReplicationController{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: rc.Name, Namespace: rc.Namespace}, r)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, r.Spec.Replicas)
+	assert.Equal(a.t, int32(3), *r.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) DaemonSetExists(daemonSet *appsv1.DaemonSet) *PayloadAssertion {
+	d := &appsv1.DaemonSet{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
+	require.NoError(a.t, err)
+	return a
+}
+
+func (a *PayloadAssertion) DaemonSetDoesNotExist(daemonSet *appsv1.DaemonSet) *PayloadAssertion {
+	d := &appsv1.DaemonSet{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
+	require.Error(a.t, err, "daemonSet %s still exists", d.Name)
+	assert.True(a.t, apierrors.IsNotFound(err))
+	return a
+}
+
+func (a *PayloadAssertion) StatefulSetScaledDown(statefulSet *appsv1.StatefulSet) *PayloadAssertion {
+	s := &appsv1.StatefulSet{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, s)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, s.Spec.Replicas)
+	assert.Equal(a.t, int32(0), *s.Spec.Replicas)
+	return a
+}
+
+func (a *PayloadAssertion) StatefulSetScaledUp(statefulSet *appsv1.StatefulSet) *PayloadAssertion {
+	s := &appsv1.StatefulSet{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, s)
+	require.NoError(a.t, err)
+	require.NotNil(a.t, s.Spec.Replicas)
+	assert.Equal(a.t, int32(3), *s.Spec.Replicas)
 	return a
 }
 
@@ -298,7 +439,7 @@ type payloads struct {
 	deployment            *appsv1.Deployment
 	replicaSet            *appsv1.ReplicaSet
 	daemonSet             *appsv1.DaemonSet
-	statefulSer           *appsv1.StatefulSet
+	statefulSet           *appsv1.StatefulSet
 	deploymentConfig      *openshiftappsv1.DeploymentConfig
 	replicationController *corev1.ReplicationController
 }
@@ -344,6 +485,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-statefulset", namePrefix, namespace), Namespace: namespace},
+		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
 	err = r.client.Create(context.TODO(), sts)
 	require.NoError(t, err)
@@ -406,7 +548,7 @@ func preparePods(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, 
 		deployment:            d,
 		replicaSet:            standaloneRs,
 		daemonSet:             ds,
-		statefulSer:           sts,
+		statefulSet:           sts,
 		deploymentConfig:      dc,
 		replicationController: standaloneRC,
 	}

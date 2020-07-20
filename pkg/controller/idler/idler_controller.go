@@ -95,22 +95,24 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 		logger.Error(err, "failed to get Idler")
 		return reconcile.Result{}, err
 	}
-	if !util.IsBeingDeleted(idler) {
-		logger.Info("ensuring idling")
-		if err := r.ensureIdling(logger, idler); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
-				"failed to ensure idling '%s'", idler.Name)
-		}
-		// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
-		d := nextPodToBeKilledAfter(idler)
-		if d != nil {
-			return reconcile.Result{
-				Requeue:      true,
-				RequeueAfter: *d,
-			}, r.setStatusReady(idler)
-		}
+	if util.IsBeingDeleted(idler) {
+		return reconcile.Result{}, nil
 	}
-	return reconcile.Result{}, nil
+
+	logger.Info("ensuring idling")
+	if err := r.ensureIdling(logger, idler); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
+			"failed to ensure idling '%s'", idler.Name)
+	}
+	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
+	d := nextPodToBeKilledAfter(idler)
+	if d != nil {
+		return reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: *d,
+		}, r.setStatusReady(idler)
+	}
+	return reconcile.Result{}, r.setStatusReady(idler)
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
@@ -357,7 +359,7 @@ func (r *ReconcileIdler) setStatusFailed(idler *toolchainv1alpha1.Idler, message
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
-			Reason:  "UnableToEnsureIdling", //TODO move to common
+			Reason:  toolchainv1alpha1.IdlerUnableToEnsureIdlingReason,
 			Message: message,
 		})
 }
@@ -368,7 +370,7 @@ func (r *ReconcileIdler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
-			Reason: "Running", //TODO move to common
+			Reason: toolchainv1alpha1.IdlerRunningReason,
 		})
 }
 

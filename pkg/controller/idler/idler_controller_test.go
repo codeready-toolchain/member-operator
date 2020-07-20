@@ -11,6 +11,7 @@ import (
 	"github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
@@ -18,11 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -107,11 +106,12 @@ func TestEnsureIdling(t *testing.T) {
 		// then
 		require.EqualError(t, err, "failed to ensure idling 'john-dev': can't list pods")
 		assert.Equal(t, reconcile.Result{}, res)
+		memberoperatortest.AssertThatIdler(t, johnDevIdler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("can't list pods"))
 	})
 
 	t.Run("No pods in namespace managed by idler", func(t *testing.T) {
 		// given
-		reconciler, req, _ := prepareReconcile(t, johnDevIdler.Name, johnDevIdler)
+		reconciler, req, cl := prepareReconcile(t, johnDevIdler.Name, johnDevIdler)
 		preparePods(t, reconciler, "another-namespace", "", time.Now()) // noise
 
 		// when
@@ -120,6 +120,7 @@ func TestEnsureIdling(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
+		memberoperatortest.AssertThatIdler(t, johnDevIdler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
 
 	t.Run("Idle pods", func(t *testing.T) {
@@ -144,7 +145,7 @@ func TestEnsureIdling(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			// Idler tracks all pods now but pods have not been deleted yet
-			Assert(t, cl).
+			memberoperatortest.AssertThatInIdleableCluster(t, cl).
 				PodsExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
@@ -168,7 +169,9 @@ func TestEnsureIdling(t *testing.T) {
 				StatefulSetScaledUp(noise.statefulSet)
 
 			// Tracked pods
-			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...))
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
 			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -182,7 +185,7 @@ func TestEnsureIdling(t *testing.T) {
 			require.NoError(t, err)
 			// Too long running pods are gone. All long running controllers are scaled down.
 			// The rest of the pods are still there and controllers are scaled up.
-			Assert(t, cl).
+			memberoperatortest.AssertThatInIdleableCluster(t, cl).
 				PodsDoNotExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
@@ -206,7 +209,9 @@ func TestEnsureIdling(t *testing.T) {
 				StatefulSetScaledUp(noise.statefulSet)
 
 			// Still tracking all pods. Even deleted ones.
-			AssertThatIdler(t, idler.Name, cl).TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...))
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
 			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -219,7 +224,9 @@ func TestEnsureIdling(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			// Tracking existing pods only.
-			AssertThatIdler(t, idler.Name, cl).TracksPods(append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.controlledPods...), podsTooEarlyToKill.standalonePods...))
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				TracksPods(append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.controlledPods...), podsTooEarlyToKill.standalonePods...)).
+				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
 			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -240,190 +247,16 @@ func TestEnsureIdling(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			// No pods tracked
-			AssertThatIdler(t, idler.Name, cl).TracksPods([]*corev1.Pod{})
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				TracksPods([]*corev1.Pod{}).
+				HasConditions(memberoperatortest.Running())
 
 			assert.Equal(t, reconcile.Result{}, res)
 		})
 
 		// TODO:
-		// 1. Check Idler status
-		// 2. Cover all errors
+		// 1. Cover all errors
 	})
-}
-
-type IdlerAssertion struct {
-	idler          *v1alpha1.Idler
-	client         client.Client
-	namespacedName types.NamespacedName
-	t              *testing.T
-}
-
-func (a *IdlerAssertion) loadIdlerAssertion() error {
-	if a.idler != nil {
-		return nil
-	}
-	idler := &v1alpha1.Idler{}
-	err := a.client.Get(context.TODO(), a.namespacedName, idler)
-	a.idler = idler
-	return err
-}
-
-func AssertThatIdler(t *testing.T, name string, client client.Client) *IdlerAssertion {
-	return &IdlerAssertion{
-		client:         client,
-		namespacedName: types.NamespacedName{Name: name},
-		t:              t,
-	}
-}
-
-func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
-	err := a.loadIdlerAssertion()
-	require.NoError(a.t, err)
-
-	require.Len(a.t, a.idler.Status.Pods, len(pods))
-	for _, pod := range pods {
-		startTimeNoMilSec := pod.Status.StartTime.Truncate(time.Second)
-		expected := v1alpha1.Pod{
-			Name:      pod.Name,
-			StartTime: v1.NewTime(startTimeNoMilSec),
-		}
-		assert.Contains(a.t, a.idler.Status.Pods, expected)
-	}
-	return a
-}
-
-type PayloadAssertion struct {
-	client client.Client
-	t      *testing.T
-}
-
-func Assert(t *testing.T, client client.Client) *PayloadAssertion {
-	return &PayloadAssertion{
-		client: client,
-		t:      t,
-	}
-}
-
-func (a *PayloadAssertion) PodsDoNotExist(pods []*corev1.Pod) *PayloadAssertion {
-	for _, pod := range pods {
-		p := &corev1.Pod{}
-		err := a.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, p)
-		require.Error(a.t, err, "pod %s still exists", p.Name)
-		assert.True(a.t, apierrors.IsNotFound(err))
-	}
-	return a
-}
-
-func (a *PayloadAssertion) PodsExist(pods []*corev1.Pod) *PayloadAssertion {
-	for _, pod := range pods {
-		p := &corev1.Pod{}
-		err := a.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, p)
-		require.NoError(a.t, err)
-	}
-	return a
-}
-
-func (a *PayloadAssertion) DeploymentScaledDown(deployment *appsv1.Deployment) *PayloadAssertion {
-	d := &appsv1.Deployment{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, d.Spec.Replicas)
-	assert.Equal(a.t, int32(0), *d.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) DeploymentScaledUp(deployment *appsv1.Deployment) *PayloadAssertion {
-	d := &appsv1.Deployment{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, d.Spec.Replicas)
-	assert.Equal(a.t, int32(3), *d.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) ReplicaSetScaledDown(replicaSet *appsv1.ReplicaSet) *PayloadAssertion {
-	r := &appsv1.ReplicaSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: replicaSet.Name, Namespace: replicaSet.Namespace}, r)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, r.Spec.Replicas)
-	assert.Equal(a.t, int32(0), *r.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) ReplicaSetScaledUp(replicaSet *appsv1.ReplicaSet) *PayloadAssertion {
-	r := &appsv1.ReplicaSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: replicaSet.Name, Namespace: replicaSet.Namespace}, r)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, r.Spec.Replicas)
-	assert.Equal(a.t, int32(3), *r.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) DeploymentConfigScaledDown(deployment *openshiftappsv1.DeploymentConfig) *PayloadAssertion {
-	d := &openshiftappsv1.DeploymentConfig{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
-	assert.Equal(a.t, int32(0), d.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) DeploymentConfigScaledUp(deployment *openshiftappsv1.DeploymentConfig) *PayloadAssertion {
-	d := &openshiftappsv1.DeploymentConfig{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
-	assert.Equal(a.t, int32(3), d.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) ReplicationControllerScaledDown(rc *corev1.ReplicationController) *PayloadAssertion {
-	r := &corev1.ReplicationController{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: rc.Name, Namespace: rc.Namespace}, r)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, r.Spec.Replicas)
-	assert.Equal(a.t, int32(0), *r.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) ReplicationControllerScaledUp(rc *corev1.ReplicationController) *PayloadAssertion {
-	r := &corev1.ReplicationController{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: rc.Name, Namespace: rc.Namespace}, r)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, r.Spec.Replicas)
-	assert.Equal(a.t, int32(3), *r.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) DaemonSetExists(daemonSet *appsv1.DaemonSet) *PayloadAssertion {
-	d := &appsv1.DaemonSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
-	require.NoError(a.t, err)
-	return a
-}
-
-func (a *PayloadAssertion) DaemonSetDoesNotExist(daemonSet *appsv1.DaemonSet) *PayloadAssertion {
-	d := &appsv1.DaemonSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
-	require.Error(a.t, err, "daemonSet %s still exists", d.Name)
-	assert.True(a.t, apierrors.IsNotFound(err))
-	return a
-}
-
-func (a *PayloadAssertion) StatefulSetScaledDown(statefulSet *appsv1.StatefulSet) *PayloadAssertion {
-	s := &appsv1.StatefulSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, s)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, s.Spec.Replicas)
-	assert.Equal(a.t, int32(0), *s.Spec.Replicas)
-	return a
-}
-
-func (a *PayloadAssertion) StatefulSetScaledUp(statefulSet *appsv1.StatefulSet) *PayloadAssertion {
-	s := &appsv1.StatefulSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, s)
-	require.NoError(a.t, err)
-	require.NotNil(a.t, s.Spec.Replicas)
-	assert.Equal(a.t, int32(3), *s.Spec.Replicas)
-	return a
 }
 
 type payloads struct {

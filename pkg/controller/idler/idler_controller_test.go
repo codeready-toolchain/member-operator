@@ -19,9 +19,11 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -272,7 +274,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
 
-		t.Run("can't get controllers", func(t *testing.T) {
+		t.Run("can't get controllers because of general error", func(t *testing.T) {
 			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
 				reconciler, req, cl := prepareReconcileWithPodsRunningTooLong(t, idler)
@@ -301,6 +303,41 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
 			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
+		})
+
+		t.Run("can't get controllers because not found", func(t *testing.T) {
+			assertCanNotGetObject := func(inaccessible runtime.Object) {
+				// given
+				reconciler, req, cl := prepareReconcileWithPodsRunningTooLong(t, idler)
+
+				get := cl.MockGet
+				defer func() { cl.MockGet = get }()
+				cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
+						return apierrors.NewNotFound(schema.GroupResource{
+							Group:    "",
+							Resource: reflect.TypeOf(obj).Name(),
+						}, key.Name)
+					}
+					return cl.Client.Get(ctx, key, obj)
+				}
+
+				//when
+				res, err := reconciler.Reconcile(req)
+
+				// then
+				assert.NoError(t, err) // NotFound errors are ignored!
+				assert.True(t, res.Requeue)
+				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
+			}
+
+			assertCanNotGetObject(&appsv1.Deployment{})
+			assertCanNotGetObject(&appsv1.ReplicaSet{})
+			assertCanNotGetObject(&appsv1.DaemonSet{})
+			assertCanNotGetObject(&appsv1.StatefulSet{})
+			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{})
+			assertCanNotGetObject(&corev1.ReplicationController{})
 		})
 
 		t.Run("can't update controllers", func(t *testing.T) {

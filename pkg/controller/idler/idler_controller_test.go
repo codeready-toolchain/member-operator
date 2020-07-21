@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -155,83 +155,83 @@ func TestEnsureIdling(t *testing.T) {
 
 			assert.True(t, res.Requeue)
 			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
-		})
 
-		t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
-			//when
-			res, err := reconciler.Reconcile(req)
+			t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
+				//when
+				res, err := reconciler.Reconcile(req)
 
-			// then
-			require.NoError(t, err)
-			// Too long running pods are gone. All long running controllers are scaled down.
-			// The rest of the pods are still there and controllers are scaled up.
-			memberoperatortest.AssertThatInIdleableCluster(t, cl).
-				PodsDoNotExist(podsRunningForTooLong.standalonePods).
-				PodsExist(podsTooEarlyToKill.standalonePods).
-				PodsExist(noise.standalonePods).
-				DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
-				DaemonSetExists(podsTooEarlyToKill.daemonSet).
-				DaemonSetExists(noise.daemonSet).
-				DeploymentScaledDown(podsRunningForTooLong.deployment).
-				DeploymentScaledUp(podsTooEarlyToKill.deployment).
-				DeploymentScaledUp(noise.deployment).
-				ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
-				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
-				ReplicaSetScaledUp(noise.replicaSet).
-				DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
-				DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
-				DeploymentConfigScaledUp(noise.deploymentConfig).
-				ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
-				ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
-				ReplicationControllerScaledUp(noise.replicationController).
-				StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
-				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
-				StatefulSetScaledUp(noise.statefulSet)
-
-			// Still tracking all pods. Even deleted ones.
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
-				HasConditions(memberoperatortest.Running())
-
-			assert.True(t, res.Requeue)
-			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
-		})
-
-		t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
-			//when
-			res, err := reconciler.Reconcile(req)
-
-			// then
-			require.NoError(t, err)
-			// Tracking existing pods only.
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.controlledPods...), podsTooEarlyToKill.standalonePods...)).
-				HasConditions(memberoperatortest.Running())
-
-			assert.True(t, res.Requeue)
-			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
-		})
-
-		t.Run("No pods. No requeue.", func(t *testing.T) {
-			//given
-			// cleanup remaining pods
-			pods := append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.standalonePods...), podsRunningForTooLong.controlledPods...)
-			for _, pod := range pods {
-				err := cl.Delete(context.TODO(), pod)
+				// then
 				require.NoError(t, err)
-			}
+				// Too long running pods are gone. All long running controllers are scaled down.
+				// The rest of the pods are still there and controllers are scaled up.
+				memberoperatortest.AssertThatInIdleableCluster(t, cl).
+					PodsDoNotExist(podsRunningForTooLong.standalonePods).
+					PodsExist(podsTooEarlyToKill.standalonePods).
+					PodsExist(noise.standalonePods).
+					DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
+					DaemonSetExists(podsTooEarlyToKill.daemonSet).
+					DaemonSetExists(noise.daemonSet).
+					DeploymentScaledDown(podsRunningForTooLong.deployment).
+					DeploymentScaledUp(podsTooEarlyToKill.deployment).
+					DeploymentScaledUp(noise.deployment).
+					ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
+					ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
+					ReplicaSetScaledUp(noise.replicaSet).
+					DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
+					DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
+					DeploymentConfigScaledUp(noise.deploymentConfig).
+					ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
+					ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
+					ReplicationControllerScaledUp(noise.replicationController).
+					StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
+					StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
+					StatefulSetScaledUp(noise.statefulSet)
 
-			//when
-			res, err := reconciler.Reconcile(req)
+				// Still tracking all pods. Even deleted ones.
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+					HasConditions(memberoperatortest.Running())
 
-			// then
-			require.NoError(t, err)
-			// No pods tracked
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods([]*corev1.Pod{}).
-				HasConditions(memberoperatortest.Running())
+				assert.True(t, res.Requeue)
+				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
 
-			assert.Equal(t, reconcile.Result{}, res)
+				t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
+					//when
+					res, err := reconciler.Reconcile(req)
+
+					// then
+					require.NoError(t, err)
+					// Tracking existing pods only.
+					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+						TracksPods(append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.controlledPods...), podsTooEarlyToKill.standalonePods...)).
+						HasConditions(memberoperatortest.Running())
+
+					assert.True(t, res.Requeue)
+					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+
+					t.Run("No pods. No requeue.", func(t *testing.T) {
+						//given
+						// cleanup remaining pods
+						pods := append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.standalonePods...), podsRunningForTooLong.controlledPods...)
+						for _, pod := range pods {
+							err := cl.Delete(context.TODO(), pod)
+							require.NoError(t, err)
+						}
+
+						//when
+						res, err := reconciler.Reconcile(req)
+
+						// then
+						require.NoError(t, err)
+						// No pods tracked
+						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+							TracksPods([]*corev1.Pod{}).
+							HasConditions(memberoperatortest.Running())
+
+						assert.Equal(t, reconcile.Result{}, res)
+					})
+				})
+			})
 		})
 	})
 }
@@ -507,10 +507,7 @@ func createPods(t *testing.T, r *ReconcileIdler, owner v1.Object, startTime meta
 
 func prepareReconcile(t *testing.T, name string, initObjs ...runtime.Object) (*ReconcileIdler, reconcile.Request, *test.FakeClient) {
 	s := scheme.Scheme
-	addToSchemes := append(apis.AddToSchemes, corev1.AddToScheme)
-	addToSchemes = append(addToSchemes, appsv1.AddToScheme)
-	addToSchemes = append(addToSchemes, openshiftappsv1.Install)
-	err := addToSchemes.AddToScheme(s)
+	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initObjs...)

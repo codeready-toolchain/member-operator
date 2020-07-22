@@ -205,7 +205,7 @@ func TestEnsureIdling(t *testing.T) {
 					require.NoError(t, err)
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.controlledPods...), podsTooEarlyToKill.standalonePods...)).
+						TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)).
 						HasConditions(memberoperatortest.Running())
 
 					assert.True(t, res.Requeue)
@@ -214,7 +214,7 @@ func TestEnsureIdling(t *testing.T) {
 					t.Run("No pods. No requeue.", func(t *testing.T) {
 						//given
 						// cleanup remaining pods
-						pods := append(append(podsTooEarlyToKill.controlledPods, podsTooEarlyToKill.standalonePods...), podsRunningForTooLong.controlledPods...)
+						pods := append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)
 						for _, pod := range pods {
 							err := cl.Delete(context.TODO(), pod)
 							require.NoError(t, err)

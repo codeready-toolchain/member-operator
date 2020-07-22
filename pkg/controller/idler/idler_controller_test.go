@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -134,6 +135,9 @@ func TestEnsureIdling(t *testing.T) {
 				DaemonSetExists(podsRunningForTooLong.daemonSet).
 				DaemonSetExists(podsTooEarlyToKill.daemonSet).
 				DaemonSetExists(noise.daemonSet).
+				JobExists(podsRunningForTooLong.job).
+				JobExists(podsTooEarlyToKill.job).
+				JobExists(noise.job).
 				DeploymentScaledUp(podsRunningForTooLong.deployment).
 				DeploymentScaledUp(podsTooEarlyToKill.deployment).
 				DeploymentScaledUp(noise.deployment).
@@ -173,6 +177,9 @@ func TestEnsureIdling(t *testing.T) {
 					DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
 					DaemonSetExists(podsTooEarlyToKill.daemonSet).
 					DaemonSetExists(noise.daemonSet).
+					JobDoesNotExist(podsRunningForTooLong.job).
+					JobExists(podsTooEarlyToKill.job).
+					JobExists(noise.job).
 					DeploymentScaledDown(podsRunningForTooLong.deployment).
 					DeploymentScaledUp(podsTooEarlyToKill.deployment).
 					DeploymentScaledUp(noise.deployment).
@@ -324,6 +331,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
 			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset")
 			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset")
+			assertCanNotGetObject(&batchv1.Job{}, "can't get job")
 			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
 			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
@@ -359,6 +367,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.Deployment{})
 			assertCanNotGetObject(&appsv1.ReplicaSet{})
 			assertCanNotGetObject(&appsv1.DaemonSet{})
+			assertCanNotGetObject(&batchv1.Job{})
 			assertCanNotGetObject(&appsv1.StatefulSet{})
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{})
 			assertCanNotGetObject(&corev1.ReplicationController{})
@@ -418,6 +427,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			}
 
 			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
+			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
 			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
 		})
 	})
@@ -439,6 +449,7 @@ type payloads struct {
 	statefulSet           *appsv1.StatefulSet
 	deploymentConfig      *openshiftappsv1.DeploymentConfig
 	replicationController *corev1.ReplicationController
+	job                   *batchv1.Job
 }
 
 func preparePayloads(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, startTime time.Time) payloads {
@@ -478,6 +489,14 @@ func preparePayloads(t *testing.T, r *ReconcileIdler, namespace, namePrefix stri
 	err = r.client.Create(context.TODO(), ds)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, ds, sTime, controlledPods)
+
+	// Job
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-job", namePrefix, namespace), Namespace: namespace},
+	}
+	err = r.client.Create(context.TODO(), job)
+	require.NoError(t, err)
+	controlledPods = createPods(t, r, job, sTime, controlledPods)
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
@@ -548,6 +567,7 @@ func preparePayloads(t *testing.T, r *ReconcileIdler, namespace, namePrefix stri
 		statefulSet:           sts,
 		deploymentConfig:      dc,
 		replicationController: standaloneRC,
+		job:                   job,
 	}
 }
 

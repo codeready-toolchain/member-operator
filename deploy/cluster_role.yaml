@@ -110,3 +110,9 @@ rules:
   - deploymentconfigs
   verbs:
     - "*"
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - "*"

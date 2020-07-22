@@ -10,6 +10,7 @@ import (
 	templatev1 "github.com/openshift/api/template/v1"
 	userv1 "github.com/openshift/api/user/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
@@ -29,6 +30,7 @@ func AddToScheme(s *runtime.Scheme) error {
 	addToSchemes = append(addToSchemes, corev1.AddToScheme)
 	addToSchemes = append(addToSchemes, appsv1.AddToScheme)
 	addToSchemes = append(addToSchemes, openshiftappsv1.Install)
+	addToSchemes = append(addToSchemes, batchv1.AddToScheme)
 
 	return addToSchemes.AddToScheme(s)
 }

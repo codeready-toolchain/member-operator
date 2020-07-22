@@ -213,6 +213,12 @@ spec:
           - deploymentconfigs
           verbs:
           - '*'
+        - apiGroups:
+          - batch
+          resources:
+          - jobs
+          verbs:
+          - '*'
         serviceAccountName: member-operator
       deployments:
       - name: member-operator

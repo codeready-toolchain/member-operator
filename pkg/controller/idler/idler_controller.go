@@ -14,6 +14,7 @@ import (
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -173,13 +174,15 @@ func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.O
 			case "ReplicaSet":
 				return r.scaleReplicaSetToZero(logger, meta.Namespace, owner)
 			case "DaemonSet":
-				return r.scaleDaemonSetToZero(logger, meta.Namespace, owner)
+				return r.deleteDaemonSet(logger, meta.Namespace, owner) // Nothing to scale down. Delete instead.
 			case "StatefulSet":
 				return r.scaleStatefulSetToZero(logger, meta.Namespace, owner)
 			case "DeploymentConfig":
 				return r.scaleDeploymentConfigToZero(logger, meta.Namespace, owner)
 			case "ReplicationController":
 				return r.scaleReplicationControllerToZero(logger, meta.Namespace, owner)
+			case "Job":
+				return r.deleteJob(logger, meta.Namespace, owner) // Nothing to scale down. Delete instead.
 			}
 		}
 	}
@@ -227,7 +230,7 @@ func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace str
 	return true, nil
 }
 
-func (r *ReconcileIdler) scaleDaemonSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *ReconcileIdler) deleteDaemonSet(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	ds := &appsv1.DaemonSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -299,6 +302,24 @@ func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, na
 		}
 		logger.Info("ReplicationController scaled to zero", "name", rc.Name)
 	}
+	return true, nil
+}
+
+func (r *ReconcileIdler) deleteJob(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+	j := &batchv1.Job{}
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
+		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			return true, nil
+		}
+		return false, err
+	}
+	if err := r.client.Delete(context.TODO(), j); err != nil {
+		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			return true, nil
+		}
+		return false, err
+	}
+	logger.Info("Job deleted", "name", j.Name)
 	return true, nil
 }
 

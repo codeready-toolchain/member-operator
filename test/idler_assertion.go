@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
+
 	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -196,6 +198,21 @@ func (a *IdleablePayloadAssertion) DaemonSetDoesNotExist(daemonSet *appsv1.Daemo
 	d := &appsv1.DaemonSet{}
 	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
 	require.Error(a.t, err, "daemonSet %s still exists", d.Name)
+	assert.True(a.t, apierrors.IsNotFound(err))
+	return a
+}
+
+func (a *IdleablePayloadAssertion) JobExists(job *batchv1.Job) *IdleablePayloadAssertion {
+	j := &batchv1.Job{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, j)
+	require.NoError(a.t, err)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) JobDoesNotExist(job *batchv1.Job) *IdleablePayloadAssertion {
+	j := &batchv1.Job{}
+	err := a.client.Get(context.TODO(), types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, j)
+	require.Error(a.t, err, "job %s still exists", j.Name)
 	assert.True(a.t, apierrors.IsNotFound(err))
 	return a
 }

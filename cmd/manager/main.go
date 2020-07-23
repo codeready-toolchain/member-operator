@@ -105,7 +105,7 @@ func main() {
 
 	// Set default manager options
 	options := manager.Options{
-		Namespace:          namespace,
+		Namespace:          "", // Watch all namespaces! Idler needs to watch Pods from all namespaces
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
 	}
 

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -15,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -104,7 +106,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		})
 	}
 
-	t.Run("verify ClusteResourceQuota is in clusterResourceKinds", func(t *testing.T) {
+	t.Run("verify ClusterResourceQuota is in clusterResourceKinds", func(t *testing.T) {
 		// given
 		clusterResource := clusterResourceKinds[0]
 
@@ -120,6 +122,15 @@ func TestClusterResourceKinds(t *testing.T) {
 		// then
 		assert.Equal(t, &rbacv1.ClusterRoleBinding{}, clusterResource.objectType)
 		assert.Equal(t, rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"), clusterResource.gvk)
+	})
+
+	t.Run("verify Idler is in clusterResourceKinds", func(t *testing.T) {
+		// given
+		clusterResource := clusterResourceKinds[2]
+
+		// then
+		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.objectType)
+		assert.Equal(t, toolchainv1alpha1.SchemeGroupVersion.WithKind("Idler"), clusterResource.gvk)
 	})
 }
 
@@ -218,12 +229,15 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		})
 	})
 
-	t.Run("should not do anything when the CRQ and CRB are already created", func(t *testing.T) {
+	t.Run("should not do anything when all cluster resources are already created", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withConditions(Provisioned()))
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
+		idlerDev := newIdler(username, username+"-dev", "advanced")
+		idlerCode := newIdler(username, username+"-code", "advanced")
+		idlerStage := newIdler(username, username+"-stage", "advanced")
+		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerCode, idlerStage)
 
 		// when
 		createdOrUpdated, err := manager.ensure(log, nsTmplSet)
@@ -236,7 +250,10 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasConditions(Provisioned())
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+			HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
+			HasResource(username+"-code", &toolchainv1alpha1.Idler{}).
+			HasResource(username+"-stage", &toolchainv1alpha1.Idler{})
 	})
 }
 
@@ -634,10 +651,17 @@ func TestPromoteClusterResources(t *testing.T) {
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
 			anotherCrb := newTektonClusterRoleBinding("another", "basic")
 
+			idlerDev := newIdler(username, username+"-dev", "advanced")
+			idlerCode := newIdler(username, username+"-code", "advanced")
+			idlerStage := newIdler(username, username+"-stage", "advanced")
+			anotherIdlerDev := newIdler("another", "another-dev", "advanced")
+			anotherIdlerCode := newIdler("another", "another-code", "advanced")
+			anotherIdlerStage := newIdler("another", "another-stage", "advanced")
+
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given
 				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources("abcde11"))
-				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb)
+				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerCode, idlerStage, anotherIdlerDev, anotherIdlerCode, anotherIdlerStage)
 
 				// when
 				updated, err := manager.ensure(log, nsTmplSet)
@@ -652,7 +676,13 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 					HasResource("for-another-user", &quotav1.ClusterResourceQuota{}).
 					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
-					HasResource("another-tekton-view", &rbacv1.ClusterRoleBinding{})
+					HasResource("another-tekton-view", &rbacv1.ClusterRoleBinding{}).
+					HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
+					HasResource(username+"-code", &toolchainv1alpha1.Idler{}).
+					HasResource(username+"-stage", &toolchainv1alpha1.Idler{}).
+					HasResource("another-dev", &toolchainv1alpha1.Idler{}).
+					HasResource("another-code", &toolchainv1alpha1.Idler{}).
+					HasResource("another-stage", &toolchainv1alpha1.Idler{})
 			})
 
 			t.Run("cluster resources should be deleted since it doesn't contain clusterResources template", func(t *testing.T) {

@@ -246,14 +246,14 @@ func TestEnsureIdling(t *testing.T) {
 }
 
 func TestEnsureIdlingFailed(t *testing.T) {
-	t.Run("Fail if Idler.Spec.TimoutSec is invalid", func(t *testing.T) {
-		assertInvalidTimout := func(timout int32) {
+	t.Run("Fail if Idler.Spec.TimeoutSec is invalid", func(t *testing.T) {
+		assertInvalidTimeout := func(timeout int32) {
 			// given
 			idler := &v1alpha1.Idler{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "john-dev",
 				},
-				Spec: v1alpha1.IdlerSpec{TimeoutSeconds: timout},
+				Spec: v1alpha1.IdlerSpec{TimeoutSeconds: timeout},
 			}
 			reconciler, req, cl := prepareReconcile(t, idler.Name, idler)
 
@@ -263,11 +263,11 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			assert.Equal(t, reconcile.Result{}, res)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("timoutSeconds should be bigger than 0"))
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("timeoutSeconds should be bigger than 0"))
 		}
 
-		assertInvalidTimout(0)
-		assertInvalidTimout(-1)
+		assertInvalidTimeout(0)
+		assertInvalidTimeout(-1)
 	})
 
 	t.Run("Fail if can't list pods", func(t *testing.T) {

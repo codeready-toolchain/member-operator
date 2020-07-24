@@ -117,8 +117,11 @@ spec:
           - ""
           resources:
           - nodes
+          - secrets
           verbs:
           - list
+          - get
+          - watch
         - apiGroups:
           - ""
           resources:
@@ -186,6 +189,34 @@ spec:
           - quota.openshift.io
           resources:
           - clusterresourcequotas
+          verbs:
+          - '*'
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          - replicationcontrollers
+          verbs:
+          - '*'
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - daemonsets
+          - replicasets
+          - statefulsets
+          verbs:
+          - '*'
+        - apiGroups:
+          - apps.openshift.io
+          resources:
+          - deploymentconfigs
+          verbs:
+          - '*'
+        - apiGroups:
+          - batch
+          resources:
+          - jobs
           verbs:
           - '*'
         serviceAccountName: member-operator

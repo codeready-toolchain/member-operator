@@ -106,7 +106,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnection)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConnectionConditionErrorMsg("the cluster connection was not found")
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConditionErrorMsg("the cluster connection was not found")
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {

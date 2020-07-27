@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -166,8 +167,11 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	}
 
 	// look up host connection status
-	clusterStatus, err := status.GetKubefedConditions(attributes)
-	memberStatus.Status.HostConnection = clusterStatus
+	connectionConditions := status.GetKubefedConditions(attributes)
+	err := status.ValidateComponentConditionReady(connectionConditions...)
+	memberStatus.Status.Host = &v1alpha1.HostStatus{
+		Conditions: connectionConditions,
+	}
 
 	return err
 }
@@ -193,7 +197,8 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// check member operator deployment status
-	deploymentConditions, err := status.GetDeploymentStatusConditions(r.client, memberOperatorDeploymentName, memberStatus.Namespace)
+	deploymentConditions := status.GetDeploymentStatusConditions(r.client, memberOperatorDeploymentName, memberStatus.Namespace)
+	err = status.ValidateComponentConditionReady(deploymentConditions...)
 
 	// update memberstatus
 	operatorStatus.Conditions = deploymentConditions

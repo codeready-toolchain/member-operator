@@ -63,11 +63,11 @@ func (a *MemberStatusAssertion) HasMemberOperatorConditionErrorMsg(expected stri
 	return a
 }
 
-func (a *MemberStatusAssertion) HasHostConnectionConditionErrorMsg(expected string) *MemberStatusAssertion {
+func (a *MemberStatusAssertion) HasHostConditionErrorMsg(expected string) *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)
-	require.Len(a.t, a.memberStatus.Status.HostConnection.Conditions, 1)
-	require.Equal(a.t, expected, *a.memberStatus.Status.HostConnection.Conditions[0].Message)
+	require.Len(a.t, a.memberStatus.Status.Host.Conditions, 1)
+	require.Equal(a.t, expected, a.memberStatus.Status.Host.Conditions[0].Message)
 	return a
 }
 

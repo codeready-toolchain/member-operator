@@ -54,8 +54,6 @@ const (
 	DefaultIdentityProviderName = "rhd"
 )
 
-var log = logf.Log.WithName("configuration")
-
 // Config encapsulates the Viper configuration registry which stores the
 // configuration data in-memory.
 type Config struct {

@@ -75,7 +75,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("All components ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -93,7 +93,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Host connection not found", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotExist
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -112,7 +112,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Host connection not ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -130,7 +130,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Host connection probe not working", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterProbeNotWorking
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -185,7 +185,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -203,7 +203,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	t.Run("Member operator deployment not progressing", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(t, status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
@@ -228,7 +228,7 @@ func newMemberStatus() *toolchainv1alpha1.MemberStatus {
 	}
 }
 
-func newMemberDeploymentWithConditions(t *testing.T, deploymentConditions ...appsv1.DeploymentCondition) *appsv1.Deployment {
+func newMemberDeploymentWithConditions(deploymentConditions ...appsv1.DeploymentCondition) *appsv1.Deployment {
 	memberOperatorDeploymentName := defaultMemberOperatorName
 	replicas := int32(1)
 	return &appsv1.Deployment{

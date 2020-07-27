@@ -10,7 +10,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller"
 
 	"github.com/spf13/viper"
-	errs "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
@@ -54,6 +53,8 @@ const (
 	DefaultIdentityProviderName = "rhd"
 )
 
+var log = logf.Log.WithName("configuration")
+
 // Config encapsulates the Viper configuration registry which stores the
 // configuration data in-memory.
 type Config struct {
@@ -75,10 +76,7 @@ func initConfig() *Config {
 func LoadConfig(cl client.Client) (*Config, error) {
 	err := controller.LoadFromConfigMap(MemberEnvPrefix, "MEMBER_OPERATOR_CONFIG_MAP_NAME", cl)
 	if err != nil {
-		if !errs.IsNotFound(err) {
-			return nil, err
-		}
-		logf.Log.Info("configmap is not found")
+		return nil, err
 	}
 
 	return initConfig(), nil

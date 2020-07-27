@@ -55,17 +55,19 @@ func (a *MemberStatusAssertion) HasCondition(expected toolchainv1alpha1.Conditio
 	return a
 }
 
-func (a *MemberStatusAssertion) HasMemberOperatorConditionErrorMsg(msg string) *MemberStatusAssertion {
+func (a *MemberStatusAssertion) HasMemberOperatorConditionErrorMsg(expected string) *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)
-	require.Contains(a.t, a.memberStatus.Status.MemberOperator.Conditions[0].Message, msg)
+	require.Len(a.t, a.memberStatus.Status.MemberOperator.Conditions, 1)
+	require.Equal(a.t, expected, a.memberStatus.Status.MemberOperator.Conditions[0].Message)
 	return a
 }
 
-func (a *MemberStatusAssertion) HasHostConnectionConditionErrorMsg(msg string) *MemberStatusAssertion {
+func (a *MemberStatusAssertion) HasHostConditionErrorMsg(expected string) *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)
-	require.Contains(a.t, *a.memberStatus.Status.HostConnection.Conditions[0].Message, msg)
+	require.Len(a.t, a.memberStatus.Status.Host.Conditions, 1)
+	require.Equal(a.t, expected, a.memberStatus.Status.Host.Conditions[0].Message)
 	return a
 }
 
@@ -73,7 +75,7 @@ func ComponentsReady() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
-		Reason: toolchainv1alpha1.MemberStatusAllComponentsReady,
+		Reason: toolchainv1alpha1.ToolchainStatusAllComponentsReadyReason,
 	}
 }
 
@@ -81,7 +83,7 @@ func ComponentsNotReady(components ...string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
-		Reason:  toolchainv1alpha1.MemberStatusComponentsNotReady,
+		Reason:  toolchainv1alpha1.ToolchainStatusComponentsNotReadyReason,
 		Message: fmt.Sprintf("components not ready: %v", components),
 	}
 }

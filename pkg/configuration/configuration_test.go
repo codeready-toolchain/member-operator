@@ -30,6 +30,14 @@ func TestLoadConfig(t *testing.T) {
 	})
 }
 
+func TestGetAllMemberParameters(t *testing.T) {
+	t.Run("default configuration", func(t *testing.T) {
+		config := getDefaultConfiguration(t)
+		params := config.GetAllMemberParameters()
+		require.Empty(t, params)
+	})
+}
+
 func TestLoadFromConfigMap(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, "WATCH_NAMESPACE", "toolchain-member-operator")
 	defer restore()
@@ -107,14 +115,6 @@ func TestGetIdP(t *testing.T) {
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, "testingIdP", config.GetIdP())
-	})
-}
-
-func TestGetAllMemberParameters(t *testing.T) {
-	t.Run("default configuration", func(t *testing.T) {
-		config := getDefaultConfiguration(t)
-		params := config.GetAllMemberParameters()
-		require.Empty(t, params)
 	})
 }
 

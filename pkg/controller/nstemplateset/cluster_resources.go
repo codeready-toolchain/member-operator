@@ -88,31 +88,53 @@ var clusterResourceKinds = []toolchainObjectKind{
 			}
 			return list, nil
 		}),
+
+	newToolchainObjectKind(
+		toolchainv1alpha1.SchemeGroupVersion.WithKind("Idler"),
+		&toolchainv1alpha1.Idler{},
+		func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error) {
+			itemList := &toolchainv1alpha1.IdlerList{}
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
+				return nil, err
+			}
+			list := make([]applycl.ComparableToolchainObject, len(itemList.Items))
+			for index := range itemList.Items {
+				toolchainObject, err := applycl.NewComparableToolchainObject(&itemList.Items[index], compareNotSupported)
+				if err != nil {
+					return nil, err
+				}
+				list[index] = toolchainObject
+			}
+			return list, nil
+		}),
 }
 
 // ensure ensures that the cluster resources exist.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
 func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	logger.Info("ensuring cluster resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
+	userTierLogger := logger.WithValues("username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
+	userTierLogger.Info("ensuring cluster resources")
 	username := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
 		tierTemplate, err = getTierTemplate(r.getHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierLogger, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
 	// go though all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {
+		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
+		gvkLogger.Info("ensuring cluster resource kind")
 		newObjs := make([]applycl.ToolchainObject, 0)
 
 		// get all objects of the resource kind from the template (if the template is specified)
 		if tierTemplate != nil {
 			newObjs, err = tierTemplate.process(r.scheme, username, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
+				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 					"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 			}
 		}
@@ -120,15 +142,15 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		// list all existing objects of the cluster resource kind
 		currentObjects, err := clusterResourceKind.listExistingResources(r.client, username)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 		}
 
 		// if there are more than one existing, then check if there is any that should be updated or deleted
 		if len(currentObjects) > 0 {
-			updatedOrDeleted, err := r.updateOrDeleteRedundant(logger, currentObjects, newObjs, tierTemplate, nsTmplSet)
+			updatedOrDeleted, err := r.updateOrDeleteRedundant(gvkLogger, currentObjects, newObjs, tierTemplate, nsTmplSet)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed,
+				return false, r.wrapErrorWithStatusUpdate(gvkLogger, nsTmplSet, r.setStatusUpdateFailed,
 					err, "failed to update/delete existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 			}
 			if updatedOrDeleted {
@@ -138,18 +160,20 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		// if none was found to be either updated or deleted or if there is no existing object available,
 		// then check if there is any object to be created
 		if len(newObjs) > 0 {
-			anyCreated, err := r.createMissing(logger, currentObjects, newObjs, tierTemplate, nsTmplSet)
+			anyCreated, err := r.createMissing(gvkLogger, currentObjects, newObjs, tierTemplate, nsTmplSet)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
+				return false, r.wrapErrorWithStatusUpdate(gvkLogger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
 					err, "failed to create missing cluster resource of GVK '%v'", clusterResourceKind.gvk)
 			}
 			if anyCreated {
 				return true, nil
 			}
+		} else {
+			gvkLogger.Info("no new cluster resources to create")
 		}
 	}
 
-	logger.Info("cluster resources already provisioned")
+	userTierLogger.Info("cluster resources already provisioned")
 	return false, nil
 }
 

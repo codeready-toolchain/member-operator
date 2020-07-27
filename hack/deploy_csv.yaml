@@ -213,6 +213,46 @@ data:
                     x-kubernetes-list-map-keys:
                     - type
                     x-kubernetes-list-type: map
+                  host:
+                    description: Host is the status of the connection with the host cluster
+                    properties:
+                      conditions:
+                        description: 'Conditions is an array of current member operator
+                          status conditions Supported condition types: ConditionReady'
+                        items:
+                          properties:
+                            lastTransitionTime:
+                              description: Last time the condition transit from one status
+                                to another.
+                              format: date-time
+                              type: string
+                            lastUpdatedTime:
+                              description: Last time the condition was updated
+                              format: date-time
+                              type: string
+                            message:
+                              description: Human readable message indicating details about
+                                last transition.
+                              type: string
+                            reason:
+                              description: (brief) reason for the condition's last transition.
+                              type: string
+                            status:
+                              description: Status of the condition, one of True, False,
+                                Unknown.
+                              type: string
+                            type:
+                              description: Type of condition
+                              type: string
+                          required:
+                          - status
+                          - type
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - type
+                        x-kubernetes-list-type: map
+                    type: object
                   hostConnection:
                     description: HostConnection is the status of the connection with the
                       host cluster
@@ -306,53 +346,9 @@ data:
                         x-kubernetes-list-map-keys:
                         - type
                         x-kubernetes-list-type: map
-                      deployment:
+                      deploymentName:
                         description: The status of the member operator's deployment
-                        properties:
-                          deploymentConditions:
-                            description: 'Conditions is an array of current deployment status
-                              conditions for a member operator Supported condition types:
-                              Available, Progressing'
-                            items:
-                              description: DeploymentCondition describes the state of a
-                                deployment at a certain point.
-                              properties:
-                                lastTransitionTime:
-                                  description: Last time the condition transitioned from
-                                    one status to another.
-                                  format: date-time
-                                  type: string
-                                lastUpdateTime:
-                                  description: The last time this condition was updated.
-                                  format: date-time
-                                  type: string
-                                message:
-                                  description: A human readable message indicating details
-                                    about the transition.
-                                  type: string
-                                reason:
-                                  description: The reason for the condition's last transition.
-                                  type: string
-                                status:
-                                  description: Status of the condition, one of True, False,
-                                    Unknown.
-                                  type: string
-                                type:
-                                  description: Type of deployment condition.
-                                  type: string
-                              required:
-                              - status
-                              - type
-                              type: object
-                            type: array
-                            x-kubernetes-list-map-keys:
-                            - type
-                            x-kubernetes-list-type: map
-                          name:
-                            type: string
-                        required:
-                        - name
-                        type: object
+                        type: string
                       revision:
                         description: The commit id from the member-operator repository used
                           to build the operator
@@ -362,13 +358,10 @@ data:
                         type: string
                     required:
                     - buildTimestamp
-                    - deployment
+                    - deploymentName
                     - revision
                     - version
                     type: object
-                required:
-                - hostConnection
-                - memberOperator
                 type: object
             x-kubernetes-preserve-unknown-fields: true
         version: v1alpha1
@@ -813,8 +806,11 @@ data:
                 - ""
                 resources:
                 - nodes
+                - secrets
                 verbs:
                 - list
+                - get
+                - watch
               - apiGroups:
                 - ""
                 resources:
@@ -882,6 +878,34 @@ data:
                 - quota.openshift.io
                 resources:
                 - clusterresourcequotas
+                verbs:
+                - '*'
+              - apiGroups:
+                - ""
+                resources:
+                - pods
+                - replicationcontrollers
+                verbs:
+                - '*'
+              - apiGroups:
+                - apps
+                resources:
+                - deployments
+                - daemonsets
+                - replicasets
+                - statefulsets
+                verbs:
+                - '*'
+              - apiGroups:
+                - apps.openshift.io
+                resources:
+                - deploymentconfigs
+                verbs:
+                - '*'
+              - apiGroups:
+                - batch
+                resources:
+                - jobs
                 verbs:
                 - '*'
               serviceAccountName: member-operator

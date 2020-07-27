@@ -6,6 +6,7 @@ import (
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
+	"github.com/gofrs/uuid"
 	"github.com/spf13/cast"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
@@ -35,6 +36,18 @@ func TestGetAllMemberParameters(t *testing.T) {
 		config := getDefaultConfiguration(t)
 		params := config.GetAllMemberParameters()
 		require.Empty(t, params)
+	})
+	t.Run("IdP environment variable", func(t *testing.T) {
+		key := MemberEnvPrefix + "_IDENTITY_PROVIDER"
+		u, err := uuid.NewV4()
+		require.NoError(t, err)
+		restore := test.SetEnvVarAndRestore(t, key, u.String())
+		defer restore()
+		config := getDefaultConfiguration(t)
+		params := config.GetAllMemberParameters()
+		expected := make(map[string]string, 1)
+		expected[key] = u.String()
+		require.EqualValues(t, expected, params)
 	})
 }
 

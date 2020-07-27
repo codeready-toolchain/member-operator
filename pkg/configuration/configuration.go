@@ -56,7 +56,7 @@ const (
 	ClusterUnavailableDelay        = "cluster.unavailable.delay"
 	DefaultClusterUnavailableDelay = "60s"
 
-	IdpProviderName = "identity.provider.name"
+	IdpProviderName = "identity.provider"
 	DefaultIdPName  = "rhd"
 )
 

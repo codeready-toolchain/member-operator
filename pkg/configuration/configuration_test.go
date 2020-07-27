@@ -59,8 +59,8 @@ func TestLoadFromConfigMap(t *testing.T) {
 				Namespace: "toolchain-member-operator",
 			},
 			Data: map[string]string{
-				"identity.provider.name": "test-idp",
-				"test-test":              "test-test",
+				"identity.provider": "test-idp",
+				"test-test":         "test-test",
 			},
 		}
 
@@ -74,7 +74,7 @@ func TestLoadFromConfigMap(t *testing.T) {
 		assert.Equal(t, "test-idp", config.GetIdP())
 
 		// test env vars are parsed and created correctly
-		idpName := os.Getenv("MEMBER_OPERATOR_IDENTITY_PROVIDER_NAME")
+		idpName := os.Getenv("MEMBER_OPERATOR_IDENTITY_PROVIDER")
 		assert.Equal(t, idpName, "test-idp")
 		testTest := os.Getenv("MEMBER_OPERATOR_TEST_TEST")
 		assert.Equal(t, testTest, "test-test")
@@ -97,7 +97,7 @@ func TestLoadFromConfigMap(t *testing.T) {
 }
 
 func TestGetIdP(t *testing.T) {
-	key := MemberEnvPrefix + "_IDENTITY_PROVIDER_NAME"
+	key := MemberEnvPrefix + "_IDENTITY_PROVIDER"
 	resetFunc := test.UnsetEnvVarAndRestore(t, key)
 	defer resetFunc()
 

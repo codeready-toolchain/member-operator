@@ -30,8 +30,6 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
-	restore := test.SetEnvVarAndRestore(t, "WATCH_NAMESPACE", "toolchain-member-operator")
-	defer restore()
 	logf.SetLogger(logf.ZapLogger(true))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()

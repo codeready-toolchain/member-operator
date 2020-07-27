@@ -275,12 +275,13 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
-
+	config, err := configuration.LoadConfig(fakeClient)
+	require.NoError(t, err)
 	r := &ReconcileMemberStatus{
 		client:         fakeClient,
 		scheme:         s,
 		getHostCluster: getHostClusterFunc(fakeClient),
-		config:         configuration.LoadConfig(),
+		config:         config,
 	}
 	return r, reconcile.Request{test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }

@@ -7,7 +7,12 @@ import (
 	"strings"
 	"time"
 
+	errs "k8s.io/apimachinery/pkg/api/errors"
+
+	"github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	"github.com/spf13/viper"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 // prefixes
@@ -18,11 +23,11 @@ const (
 
 // Configuration constants
 const (
-	// IdentityProvider specifies an identity provider (IdP) for newly created users
-	IdentityProvider = "identity.provider"
-
-	// DefaultIdentityProvider the default value used for the identity provider (IdP) for newly created users
-	DefaultIdentityProvider = "rhd"
+	//// IdentityProvider specifies an identity provider (IdP) for newly created users
+	//IdentityProvider = "identity.provider"
+	//
+	//// DefaultIdentityProvider the default value used for the identity provider (IdP) for newly created users
+	//DefaultIdentityProvider = "rhd"
 
 	// MemberStatusName specifies the name of the toolchain member status resource that provides information about the toolchain components in this cluster
 	MemberStatusName = "member.status"
@@ -50,7 +55,12 @@ const (
 
 	ClusterUnavailableDelay        = "cluster.unavailable.delay"
 	DefaultClusterUnavailableDelay = "60s"
+
+	IdpProviderName = "identity.provider.name"
+	DefaultIdPName  = "rhd"
 )
+
+var log = logf.Log.WithName("configuration")
 
 // Config encapsulates the Viper configuration registry which stores the
 // configuration data in-memory.
@@ -70,13 +80,21 @@ func initConfig() *Config {
 	return &c
 }
 
-func LoadConfig() *Config {
-	return initConfig()
+func LoadConfig(cl client.Client) (*Config, error) {
+	err := controller.LoadFromConfigMap(MemberEnvPrefix, "MEMBER_OPERATOR_CONFIG_MAP_NAME", cl)
+	if err != nil {
+		if !errs.IsNotFound(err) {
+			return nil, err
+		}
+		logf.Log.Info("configmap is not found")
+	}
+
+	return initConfig(), nil
 }
 
 func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
-	c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
+	//c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
 	c.member.SetDefault(MemberStatusName, DefaultMemberStatusName)
 	c.member.SetDefault(ClusterHealthCheckPeriod, DefaultClusterHealthCheckPeriod)
 	c.member.SetDefault(ClusterHealthCheckTimeout, DefaultClusterHealthCheckTimeout)
@@ -84,6 +102,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(ClusterHealthCheckSuccessThreshold, DefaultClusterHealthCheckSuccessThreshold)
 	c.member.SetDefault(ClusterAvailableDelay, DefaultClusterAvailableDelay)
 	c.member.SetDefault(ClusterUnavailableDelay, DefaultClusterUnavailableDelay)
+	c.member.SetDefault(IdpProviderName, DefaultIdPName)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
@@ -105,7 +124,7 @@ func (c *Config) GetAllMemberParameters() map[string]string {
 // GetIdP returns the configured Identity Provider (IdP) for the member operator
 // Openshift clusters can be configured with multiple IdPs. This config option allows admins to specify which IdP should be used by the toolchain operator.
 func (c *Config) GetIdP() string {
-	return c.member.GetString(IdentityProvider)
+	return c.member.GetString(IdpProviderName)
 }
 
 // GetMemberStatusName returns the configured name of the member status resource

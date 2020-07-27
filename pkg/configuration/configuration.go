@@ -88,7 +88,6 @@ func LoadConfig(cl client.Client) (*Config, error) {
 
 func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
-	//c.member.SetDefault(IdentityProvider, DefaultIdentityProvider)
 	c.member.SetDefault(MemberStatusName, DefaultMemberStatusName)
 	c.member.SetDefault(ClusterHealthCheckPeriod, DefaultClusterHealthCheckPeriod)
 	c.member.SetDefault(ClusterHealthCheckTimeout, DefaultClusterHealthCheckTimeout)

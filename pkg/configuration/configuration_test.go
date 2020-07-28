@@ -63,7 +63,10 @@ func TestLoadFromConfigMap(t *testing.T) {
 	})
 	t.Run("env overwrite", func(t *testing.T) {
 		// given
-		restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_CONFIG_MAP_NAME", "test-config")
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env("MEMBER_OPERATOR_CONFIG_MAP_NAME", "test-config"),
+			test.Env("MEMBER_OPERATOR_IDENTITY_PROVIDER", ""),
+			test.Env("MEMBER_OPERATOR_TEST_TEST", ""))
 		defer restore()
 
 		configMap := &v1.ConfigMap{

@@ -843,6 +843,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	config, err := configuration.LoadConfig(test.NewFakeClient(t))
+	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")

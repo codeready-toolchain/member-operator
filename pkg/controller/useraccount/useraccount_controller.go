@@ -3,6 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
@@ -307,8 +308,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 	logger.Info("NSTemplateSet already exists", "name", name)
 
 	// update if not same
-	equal := nsTmplSet.Spec.CompareTo(userAcc.Spec.NSTemplateSet)
-	if !equal {
+	if !reflect.DeepEqual(nsTmplSet.Spec, userAcc.Spec.NSTemplateSet) {
 		return r.updateNSTemplateSet(logger, userAcc, nsTmplSet)
 	}
 

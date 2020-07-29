@@ -10,7 +10,9 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -53,7 +55,7 @@ func TestReconcile(t *testing.T) {
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 		},
 		Spec: newNSTmplSetSpec(),
 		Status: toolchainv1alpha1.NSTemplateSetStatus{
@@ -85,9 +87,8 @@ func TestReconcile(t *testing.T) {
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check the NSTmplSet is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &toolchainv1alpha1.NSTemplateSet{})
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
+		AssertThatNSTemplateSet(t, req.Namespace, userAcc.Name, r.client).
+			DoesNotExist()
 	})
 
 	// First cycle of reconcile. Freshly created UserAccount.
@@ -129,9 +130,8 @@ func TestReconcile(t *testing.T) {
 			assert.True(t, apierros.IsNotFound(err))
 
 			// Check the NSTmplSet is not created yet
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &toolchainv1alpha1.NSTemplateSet{})
-			require.Error(t, err)
-			assert.True(t, apierros.IsNotFound(err))
+			AssertThatNSTemplateSet(t, req.Namespace, userAcc.Name, r.client).
+				DoesNotExist()
 		}
 
 		t.Run("create", func(t *testing.T) {
@@ -166,7 +166,8 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertNotReadyStatus(t, r, userAcc, "UnableToCreateUser", "unable to create user")
+			useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+				HasConditions(failed("UnableToCreateUser", "unable to create user"))
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -189,7 +190,8 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertNotReadyStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update user")
+			useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+				HasConditions(failed("UnableToCreateMapping", "unable to update user"))
 		})
 	})
 
@@ -259,7 +261,8 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertNotReadyStatus(t, r, userAcc, "UnableToCreateIdentity", "unable to create identity")
+			useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+				HasConditions(failed("UnableToCreateIdentity", "unable to create identity"))
 		})
 		t.Run("update", func(t *testing.T) {
 			// given
@@ -282,68 +285,93 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
-			assertNotReadyStatus(t, r, userAcc, "UnableToCreateMapping", "unable to update identity")
+			useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+				HasConditions(failed("UnableToCreateMapping", "unable to update identity"))
 		})
 	})
 
 	t.Run("create nstmplset OK", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			// given
+			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
-			// test
+			// when
 			_, err := r.Reconcile(req)
 
+			// then
 			require.NoError(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "Provisioning", "")
-			checkNSTmplSet(t, r.client, username)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioning())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 
 		t.Run("status_not_changed", func(t *testing.T) {
+			// given
 			userAcc := newUserAccountWithStatus(username, userID)
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "Provisioning", "")
 
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
 
-			// test
+			// when
 			_, err := r.Reconcile(req)
 
+			// then
 			require.NoError(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "", "")
-			checkNSTmplSet(t, r.client, username)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(failed("", ""))
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 
 		t.Run("status_changed_with_error", func(t *testing.T) {
+			// given
 			userAcc := newUserAccountWithStatus(username, userID)
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
 
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
 
-			// test
+			// when
 			_, err := r.Reconcile(req)
 
+			// then
 			require.NoError(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToProvisionNamespace", "error message")
-			checkNSTmplSet(t, r.client, username)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(failed("UnableToProvisionNamespace", "error message"))
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 
 		t.Run("status_changed_ready_ok", func(t *testing.T) {
+			// given
 			userAcc := newUserAccountWithStatus(username, userID)
 
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
-			// test
+			// when
 			_, err := r.Reconcile(req)
 
+			// then
 			require.NoError(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionTrue, "Provisioned", "")
-			checkNSTmplSet(t, r.client, username)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioned())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 	})
 
 	t.Run("create nstmplset failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
-			fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			cl.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create NSTemplateSet")
 			}
 
@@ -351,7 +379,10 @@ func TestReconcile(t *testing.T) {
 			_, err := r.Reconcile(req)
 
 			require.Error(t, err)
-			checkStatus(t, r.client, username, corev1.ConditionFalse, "UnableToCreateNSTemplateSet", "unable to create NSTemplateSet")
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(failed("UnableToCreateNSTemplateSet", "unable to create NSTemplateSet"))
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				DoesNotExist()
 		})
 
 		t.Run("provision status failed", func(t *testing.T) {
@@ -388,7 +419,7 @@ func TestReconcile(t *testing.T) {
 	// Last cycle of reconcile. User, Identity created/updated.
 	t.Run("provisioned", func(t *testing.T) {
 		// given
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		res, err := r.Reconcile(req)
@@ -396,82 +427,151 @@ func TestReconcile(t *testing.T) {
 		//then
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
-
-		// Check that the user account status is now "provisioned"
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionTrue,
-				Reason: "Provisioned",
-			})
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(provisioned())
 	})
 
-	t.Run("update when tierName and set of namespaces in NSTemplateSet are different", func(t *testing.T) {
+	t.Run("update when tierName is different", func(t *testing.T) {
 		// given
+		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.TierName = "advanced"
-		userAcc.Spec.NSTemplateSet.Namespaces = userAcc.Spec.NSTemplateSet.Namespaces[1:2]
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(req)
 
 		//then
 		require.NoError(t, err)
-
-		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
-		require.NoError(t, err)
-		assert.Equal(t, "advanced", updatedNSTmplSet.Spec.TierName)
-		assert.Len(t, updatedNSTmplSet.Spec.Namespaces, 1)
-
-		// Check that the user account status is now "provisioned"
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Updating",
-			})
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("advanced").
+			HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+			HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
 	})
 
-	t.Run("update when templateRef in NSTemplateSet is different", func(t *testing.T) {
+	t.Run("update when namespace templateRef in NSTemplateSet is different", func(t *testing.T) {
 		// given
+		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.Namespaces[0].TemplateRef = "basic-dev-09876"
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(req)
 
 		//then
 		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("basic").
+			HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+			HasNamespaceTemplateRefs("basic-dev-09876", codeTemplateRef)
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
+	})
 
-		updatedNSTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: username}, updatedNSTmplSet)
-		require.NoError(t, err)
-		assert.Equal(t, "basic-dev-09876", updatedNSTmplSet.Spec.Namespaces[0].TemplateRef)
+	t.Run("update when one namespace templateRef is removed", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		userAcc.Spec.NSTemplateSet.Namespaces = userAcc.Spec.NSTemplateSet.Namespaces[1:2]
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
-		// Check that the user account status is now "provisioned"
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
 		require.NoError(t, err)
-		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:   toolchainv1alpha1.ConditionReady,
-				Status: corev1.ConditionFalse,
-				Reason: "Updating",
-			})
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("basic").
+			HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+			HasNamespaceTemplateRefs(codeTemplateRef)
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
+	})
+
+	t.Run("update when one namespace templateRef is added", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		userAcc.Spec.NSTemplateSet.Namespaces = append(userAcc.Spec.NSTemplateSet.Namespaces,
+			toolchainv1alpha1.NSTemplateSetNamespace{TemplateRef: "basic-stage-1234"})
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("basic").
+			HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+			HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef, "basic-stage-1234")
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
+	})
+
+	t.Run("update when ClusterResources templateRef in NSTemplateSet is different", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		userAcc.Spec.NSTemplateSet.ClusterResources.TemplateRef = "basic-clusterresources-007"
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("basic").
+			HasClusterResourcesTemplateRef("basic-clusterresources-007").
+			HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
+	})
+
+	t.Run("update when ClusterResources object is set to nil", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		userAcc.Spec.NSTemplateSet.ClusterResources = nil
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("basic").
+			HasClusterResourcesNil().
+			HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
+	})
+
+	t.Run("update when original ClusterResources object was nil but is defined in UserAccount", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		nsTemplateSet := preexistingNsTmplSet.DeepCopy()
+		nsTemplateSet.Spec.ClusterResources = nil
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, nsTemplateSet)
+
+		//when
+		_, err := r.Reconcile(req)
+
+		//then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, req.Namespace, username, cl).
+			HasTierName("basic").
+			HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+			HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).
+			HasConditions(updating())
 	})
 
 	t.Run("set failed reason when update of NSTemplateSet fails", func(t *testing.T) {
 		// given
+		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.TierName = "advanced"
-		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		cl.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
 			if obj.GetObjectKind().GroupVersionKind().Kind == "NSTemplateSet" {
 				return fmt.Errorf("some error")
 			}
@@ -483,25 +583,19 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		require.Error(t, err)
-
-		// Check that the user account status is now "provisioned"
-		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
-		require.NoError(t, err)
-		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-			toolchainv1alpha1.Condition{
-				Type:    toolchainv1alpha1.ConditionReady,
-				Status:  corev1.ConditionFalse,
-				Reason:  "NSTemplateSetUpdateFailed",
-				Message: "some error",
-			})
+		useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  "NSTemplateSetUpdateFailed",
+			Message: "some error",
+		})
 	})
 
 	// Delete useraccount and ensure related resources are also removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
 		res, err := r.Reconcile(req)
@@ -510,7 +604,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -525,7 +619,8 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Terminating", "deleting user/identity"))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -538,7 +633,8 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Terminating", "deleting user/identity"))
 
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -554,7 +650,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the user account finalizer has been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
@@ -589,7 +685,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -612,19 +708,22 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(failed("Terminating", "deleting user/identity"))
 
 		res, err = r.Reconcile(req)
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(failed("Terminating", "deleting user/identity"))
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("failed to remove finalizer: unable to remove finalizer for user account %s", userAcc.Name))
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name))
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(failed("Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name)))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -643,7 +742,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
@@ -660,7 +759,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -686,7 +785,8 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name))
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(failed("Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name)))
 	})
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
@@ -701,7 +801,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -721,7 +821,8 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to delete user/identity for user account %s", userAcc.Name))
 
-		assertNotReadyStatus(t, r, userAcc, "Terminating", fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name))
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(failed("Terminating", fmt.Sprintf("unable to delete user/identity for user account %s", userAcc.Name)))
 
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -764,7 +865,7 @@ func TestUpdateStatus(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
+		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: test.MemberOperatorNs, Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions, condition)
 	})
@@ -789,7 +890,7 @@ func TestUpdateStatus(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: "toolchain-member", Name: userAcc.Name}, updatedAcc)
+		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: test.MemberOperatorNs, Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
 		// Status is not updated
 		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions)
@@ -860,7 +961,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 		},
 		Spec: newNSTmplSetSpec(),
 		Status: toolchainv1alpha1.NSTemplateSetStatus{
@@ -872,7 +973,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("disabling useraccount", func(t *testing.T) {
 		// given
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		// when
 		userAcc.Spec.Disabled = true
@@ -885,13 +986,15 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		//then
 		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
-		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Disabling", "deleting user/identity"))
 
 		res, err = r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Disabling", "deleting user/identity"))
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -909,13 +1012,14 @@ func TestDisabledUserAccount(t *testing.T) {
 		userAcc := newUserAccount(username, userID, true)
 
 		// given
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
 
 		res, err := r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Disabled", ""))
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -932,7 +1036,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	t.Run("disabling useraccount without user", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, true)
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
 
 		// when
 		res, err := r.Reconcile(req)
@@ -940,7 +1044,8 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		// then
-		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Disabling", "deleting user/identity"))
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -957,14 +1062,15 @@ func TestDisabledUserAccount(t *testing.T) {
 	t.Run("disabling useraccount without identity", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, true)
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
 
 		// when
 		res, err := r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Disabling", "deleting user/identity")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Disabling", "deleting user/identity"))
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
@@ -982,13 +1088,14 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		userAcc := newDisabledUserAccountWithFinalizer(username, userID)
 
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
 
 		res, err := r.Reconcile(req)
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 
-		assertNotReadyStatus(t, r, userAcc, "Disabled", "")
+		useraccount.AssertThatUserAccount(t, req.Name, cl).
+			HasConditions(failed("Disabled", ""))
 
 		// Check that the finalizer is present
 		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
@@ -1014,23 +1121,10 @@ func TestDisabledUserAccount(t *testing.T) {
 		assertNSTemplateFound(t, r, userAcc)
 
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, userAcc)
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
-}
-
-func assertNotReadyStatus(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount, status string, msg string) {
-	userAcc := &toolchainv1alpha1.UserAccount{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: "toolchain-member"}, userAcc)
-	require.NoError(t, err)
-	test.AssertConditionsMatch(t, userAcc.Status.Conditions,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  status,
-			Message: msg,
-		})
 }
 
 func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
@@ -1054,7 +1148,7 @@ func assertIdentityNotFound(t *testing.T, r *ReconcileUserAccount, identityName 
 func assertNSTemplateFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
 	// Get NSTemplate
 	tmplTier := &toolchainv1alpha1.NSTemplateSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: "toolchain-member"}, tmplTier)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: test.MemberOperatorNs}, tmplTier)
 	require.NoError(t, err)
 }
 
@@ -1062,7 +1156,7 @@ func newUserAccount(userName, userID string, disabled bool) *toolchainv1alpha1.U
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
@@ -1081,7 +1175,7 @@ func newUserAccountWithFinalizer(userName, userID string) *toolchainv1alpha1.Use
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       userName,
-			Namespace:  "toolchain-member",
+			Namespace:  test.MemberOperatorNs,
 			UID:        types.UID(uuid.NewV4().String()),
 			Finalizers: finalizers,
 		},
@@ -1098,7 +1192,7 @@ func newDisabledUserAccountWithFinalizer(userName, userID string) *toolchainv1al
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       userName,
-			Namespace:  "toolchain-member",
+			Namespace:  test.MemberOperatorNs,
 			UID:        types.UID(uuid.NewV4().String()),
 			Finalizers: finalizers,
 		},
@@ -1114,7 +1208,7 @@ func newUserAccountWithStatus(userName, userID string) *toolchainv1alpha1.UserAc
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 			UID:       types.UID(uuid.NewV4().String()),
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
@@ -1132,12 +1226,21 @@ func newUserAccountWithStatus(userName, userID string) *toolchainv1alpha1.UserAc
 	return userAcc
 }
 
+const (
+	clusterResourcesTemplateRef = "basic-clusterresources-abcde00"
+	devTemplateRef              = "basic-dev-abcde11"
+	codeTemplateRef             = "basic-code-abcde21"
+)
+
 func newNSTmplSetSpec() toolchainv1alpha1.NSTemplateSetSpec {
 	return toolchainv1alpha1.NSTemplateSetSpec{
 		TierName: "basic",
+		ClusterResources: &toolchainv1alpha1.NSTemplateSetClusterResources{
+			TemplateRef: clusterResourcesTemplateRef,
+		},
 		Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{
-			{TemplateRef: "basic-dev-abcde11"},
-			{TemplateRef: "basic-code-abcde21"},
+			{TemplateRef: devTemplateRef},
+			{TemplateRef: codeTemplateRef},
 		},
 	}
 }
@@ -1146,7 +1249,7 @@ func newNSTmplSetWithStatus(username, reason, meessage string) *toolchainv1alpha
 	return &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      username,
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 		},
 		Spec: newNSTmplSetSpec(),
 		Status: toolchainv1alpha1.NSTemplateSetStatus{
@@ -1166,7 +1269,7 @@ func newReconcileRequest(name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      name,
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 		},
 	}
 }
@@ -1176,34 +1279,6 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, user.UID, identity.User.UID)
 	require.Len(t, user.Identities, 1)
 	assert.Equal(t, identity.Name, user.Identities[0])
-}
-
-func checkStatus(t *testing.T, client client.Client, username string, status corev1.ConditionStatus, wantReason, wantMsg string) {
-	t.Helper()
-
-	updatedAcc := &toolchainv1alpha1.UserAccount{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, updatedAcc)
-	require.NoError(t, err)
-	test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  status,
-			Reason:  wantReason,
-			Message: wantMsg,
-		})
-}
-
-func checkNSTmplSet(t *testing.T, client client.Client, username string) {
-	t.Helper()
-
-	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: "toolchain-member"}, nsTmplSet)
-	require.NoError(t, err)
-
-	assert.Equal(t, "basic", nsTmplSet.Spec.TierName)
-	assert.Equal(t, 2, len(nsTmplSet.Spec.Namespaces))
-	assert.Equal(t, nsTmplSet.Spec.Namespaces[0].TemplateRef, "basic-dev-abcde11")
-	assert.Equal(t, nsTmplSet.Spec.Namespaces[1].TemplateRef, "basic-code-abcde21")
 }
 
 func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {
@@ -1219,4 +1294,37 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 		config: config,
 	}
 	return r, newReconcileRequest(username), fakeClient
+}
+
+func updating() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionFalse,
+		Reason: "Updating",
+	}
+}
+
+func failed(reason, msg string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.ConditionReady,
+		Status:  corev1.ConditionFalse,
+		Reason:  reason,
+		Message: msg,
+	}
+}
+
+func provisioned() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionTrue,
+		Reason: "Provisioned",
+	}
+}
+
+func provisioning() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionFalse,
+		Reason: "Provisioning",
+	}
 }

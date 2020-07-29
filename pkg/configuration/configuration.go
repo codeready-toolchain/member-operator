@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codeready-toolchain/toolchain-common/pkg/controller"
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
 	"github.com/spf13/viper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -74,7 +74,7 @@ func initConfig() *Config {
 }
 
 func LoadConfig(cl client.Client) (*Config, error) {
-	err := controller.LoadFromConfigMap(MemberEnvPrefix, "MEMBER_OPERATOR_CONFIG_MAP_NAME", cl)
+	err := configuration.LoadFromConfigMap(MemberEnvPrefix, "MEMBER_OPERATOR_CONFIG_MAP_NAME", cl)
 	if err != nil {
 		return nil, err
 	}

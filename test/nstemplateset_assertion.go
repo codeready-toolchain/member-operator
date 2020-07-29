@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -37,6 +39,13 @@ func AssertThatNSTemplateSet(t test.T, namespace, name string, client client.Cli
 	}
 }
 
+func (a *NSTemplateSetAssertion) DoesNotExist() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.Error(a.t, err)
+	assert.IsType(a.t, v1.StatusReasonNotFound, errors.ReasonForError(err))
+	return a
+}
+
 func (a *NSTemplateSetAssertion) HasNoConditions() *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
@@ -48,6 +57,45 @@ func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Con
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
 	test.AssertConditionsMatch(a.t, a.nsTmplSet.Status.Conditions, expected...)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasTierName(tierName string) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Equal(a.t, a.nsTmplSet.Spec.TierName, tierName)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasClusterResourcesTemplateRef(templateRef string) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.NotNil(a.t, a.nsTmplSet.Spec.ClusterResources.TemplateRef)
+	assert.Equal(a.t, a.nsTmplSet.Spec.ClusterResources.TemplateRef, templateRef)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasClusterResourcesNil() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Nil(a.t, a.nsTmplSet.Spec.ClusterResources)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasNamespaceTemplateRefs(templateRefs ...string) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	require.Len(a.t, a.nsTmplSet.Spec.Namespaces, len(templateRefs))
+TemplateRefs:
+	for _, templateRef := range templateRefs {
+		for _, nsRef := range a.nsTmplSet.Spec.Namespaces {
+			if nsRef.TemplateRef == templateRef {
+				continue TemplateRefs
+			}
+		}
+		assert.Failf(a.t, "TemplateRef not found",
+			"the TemplateRef %s wasn't found in the set of Namespace TemplateRefs %s", templateRef, a.nsTmplSet.Spec.Namespaces)
+	}
 	return a
 }
 

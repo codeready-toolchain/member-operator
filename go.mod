@@ -24,6 +24,8 @@ require (
 	sigs.k8s.io/kubefed v0.3.0
 )
 
+replace github.com/codeready-toolchain/api => github.com/MatousJobanek/api v0.0.0-20200729123850-0de38b7419d0
+
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.0.0+incompatible
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20200414152312-3e8f22fb0b56 // Using 'github.com/openshift/api@release-4.4'

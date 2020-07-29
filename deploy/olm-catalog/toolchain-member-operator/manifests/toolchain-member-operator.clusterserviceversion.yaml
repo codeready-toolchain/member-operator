@@ -91,6 +91,12 @@ spec:
       kind: NSTemplateSet
       name: nstemplatesets.toolchain.dev.openshift.com
       version: v1alpha1
+    - description: ToolchainCluster configures Toolchain to be aware of a Kubernetes
+        cluster and encapsulates the details necessary to communicate with the cluster.
+      displayName: Toolchain Cluster
+      kind: ToolchainCluster
+      name: toolchainclusters.toolchain.dev.openshift.com
+      version: v1alpha1
     - description: UserAccount keeps all information about user provisioned in the
         cluster
       displayName: User Account

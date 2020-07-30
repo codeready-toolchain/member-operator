@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/viper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 // prefixes
@@ -48,12 +47,12 @@ const (
 
 	ClusterUnavailableDelay        = "cluster.unavailable.delay"
 	DefaultClusterUnavailableDelay = "60s"
-
-	identityProviderName        = "identity.provider"
-	DefaultIdentityProviderName = "rhd"
 )
 
-var log = logf.Log.WithName("configuration")
+const (
+	identityProviderName        = "identity.provider"
+	defaultIdentityProviderName = "rhd"
+)
 
 // Config encapsulates the Viper configuration registry which stores the
 // configuration data in-memory.
@@ -91,7 +90,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(ClusterHealthCheckSuccessThreshold, DefaultClusterHealthCheckSuccessThreshold)
 	c.member.SetDefault(ClusterAvailableDelay, DefaultClusterAvailableDelay)
 	c.member.SetDefault(ClusterUnavailableDelay, DefaultClusterUnavailableDelay)
-	c.member.SetDefault(identityProviderName, DefaultIdentityProviderName)
+	c.member.SetDefault(identityProviderName, defaultIdentityProviderName)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix

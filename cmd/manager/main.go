@@ -11,6 +11,7 @@ import (
 
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -77,19 +78,23 @@ func main() {
 
 	printVersion()
 
-	crtConfig := configuration.LoadConfig()
+	// Get a config to talk to the apiserver
+	cfg, err := config.GetConfig()
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	crtConfig, err := getCRTConfiguration(cfg)
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
 	printConfig(crtConfig)
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
 		log.Error(err, "Failed to get watch namespace")
-		os.Exit(1)
-	}
-
-	// Get a config to talk to the apiserver
-	cfg, err := config.GetConfig()
-	if err != nil {
-		log.Error(err, "")
 		os.Exit(1)
 	}
 
@@ -244,7 +249,19 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
 func printConfig(cfg *configuration.Config) {
 	logWithValuesMemberOperator := log
 	for key, value := range cfg.GetAllMemberParameters() {
-		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues("key", key, "value", value)
+		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues(key, value)
 	}
 	logWithValuesMemberOperator.Info("Member operator configuration variables:")
+}
+
+// getCRTConfiguration creates the client used for configuration and
+// returns the loaded crt configuration
+func getCRTConfiguration(config *rest.Config) (*configuration.Config, error) {
+	// create client that will be used for retrieving the member operator config maps
+	cl, err := client.New(config, client.Options{})
+	if err != nil {
+		return nil, err
+	}
+
+	return configuration.LoadConfig(cl)
 }

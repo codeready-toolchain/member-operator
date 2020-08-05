@@ -1,22 +1,26 @@
 package configuration
 
 import (
+	"os"
 	"testing"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"gotest.tools/assert"
 
 	"github.com/gofrs/uuid"
 	"github.com/spf13/cast"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // getDefaultConfiguration returns a configuration initialized without anything but
 // defaults set. Remember that environment variables can overwrite defaults, so
-// please ensure to properly unset envionment variables using
+// please ensure to properly unset environment variables using
 // UnsetEnvVarAndRestore().
 func getDefaultConfiguration(t *testing.T) *Config {
-	config := LoadConfig()
+	config, err := LoadConfig(test.NewFakeClient(t))
+	require.NoError(t, err)
 	require.NotNil(t, config)
 	return config
 }
@@ -44,6 +48,67 @@ func TestGetAllMemberParameters(t *testing.T) {
 		expected := make(map[string]string, 1)
 		expected[key] = u.String()
 		require.EqualValues(t, expected, params)
+	})
+}
+
+func TestLoadFromConfigMap(t *testing.T) {
+	restore := test.SetEnvVarAndRestore(t, "WATCH_NAMESPACE", "toolchain-member-operator")
+	defer restore()
+	t.Run("default", func(t *testing.T) {
+		// when
+		config := getDefaultConfiguration(t)
+
+		// then
+		assert.Equal(t, "rhd", config.GetIdP())
+	})
+	t.Run("env overwrite", func(t *testing.T) {
+		// given
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env("MEMBER_OPERATOR_CONFIG_MAP_NAME", "test-config"),
+			test.Env("MEMBER_OPERATOR_IDENTITY_PROVIDER", ""),
+			test.Env("MEMBER_OPERATOR_TEST_TEST", ""))
+		defer restore()
+
+		configMap := &v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-config",
+				Namespace: "toolchain-member-operator",
+			},
+			Data: map[string]string{
+				"identity.provider": "test-idp",
+				"test-test":         "test-test",
+			},
+		}
+
+		cl := test.NewFakeClient(t, configMap)
+
+		// when
+		config, err := LoadConfig(cl)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "test-idp", config.GetIdP())
+
+		// test env vars are parsed and created correctly
+		idpName := os.Getenv("MEMBER_OPERATOR_IDENTITY_PROVIDER")
+		assert.Equal(t, idpName, "test-idp")
+		testTest := os.Getenv("MEMBER_OPERATOR_TEST_TEST")
+		assert.Equal(t, testTest, "test-test")
+	})
+
+	t.Run("configMap not found", func(t *testing.T) {
+		// given
+		restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_CONFIG_MAP_NAME", "test-config")
+		defer restore()
+
+		cl := test.NewFakeClient(t)
+
+		// when
+		config, err := LoadConfig(cl)
+
+		// then
+		require.NoError(t, err)
+		require.NotNil(t, config)
 	})
 }
 

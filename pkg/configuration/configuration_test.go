@@ -186,7 +186,7 @@ func TestGetClusterHealthCheckTimeout(t *testing.T) {
 		resetFunc := test.UnsetEnvVarAndRestore(t, key)
 		defer resetFunc()
 		config := getDefaultConfiguration(t)
-		assert.Equal(t, cast.ToDuration("3s"), config.GetClusterHealthCheckTimeout())
+		assert.Equal(t, cast.ToDuration("3s"), config.GetToolchainClusterTimeout())
 	})
 
 	t.Run("env overwrite", func(t *testing.T) {
@@ -195,94 +195,6 @@ func TestGetClusterHealthCheckTimeout(t *testing.T) {
 			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
 		defer restore()
 		config := getDefaultConfiguration(t)
-		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterHealthCheckTimeout())
-	})
-}
-
-func TestGetClusterHealthCheckFailureThreshold(t *testing.T) {
-	key := MemberEnvPrefix + "_CLUSTER_HEALTHCHECK_FAILURE_THRESHOLD"
-	resetFunc := test.UnsetEnvVarAndRestore(t, key)
-	defer resetFunc()
-
-	t.Run("default", func(t *testing.T) {
-		resetFunc := test.UnsetEnvVarAndRestore(t, key)
-		defer resetFunc()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, int64(3), config.GetClusterHealthCheckFailureThreshold())
-	})
-
-	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env(key, "5"),
-			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20"))
-		defer restore()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, int64(5), config.GetClusterHealthCheckFailureThreshold())
-	})
-}
-
-func TestGetClusterHealthCheckSuccessThreshold(t *testing.T) {
-	key := MemberEnvPrefix + "_CLUSTER_HEALTHCHECK_SUCCESS_THRESHOLD"
-	resetFunc := test.UnsetEnvVarAndRestore(t, key)
-	defer resetFunc()
-
-	t.Run("default", func(t *testing.T) {
-		resetFunc := test.UnsetEnvVarAndRestore(t, key)
-		defer resetFunc()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, int64(1), config.GetClusterHealthCheckSuccessThreshold())
-	})
-
-	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env(key, "3"),
-			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
-		defer restore()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, int64(3), config.GetClusterHealthCheckSuccessThreshold())
-	})
-}
-
-func TestGetClusterAvailableDelay(t *testing.T) {
-	key := MemberEnvPrefix + "_CLUSTER_AVAILABLE_DELAY"
-	resetFunc := test.UnsetEnvVarAndRestore(t, key)
-	defer resetFunc()
-
-	t.Run("default", func(t *testing.T) {
-		resetFunc := test.UnsetEnvVarAndRestore(t, key)
-		defer resetFunc()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, cast.ToDuration("20s"), config.GetClusterAvailableDelay())
-	})
-
-	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env(key, "30s"),
-			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "40s"))
-		defer restore()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterAvailableDelay())
-	})
-}
-
-func TestGetClusterUnavailableDelay(t *testing.T) {
-	key := MemberEnvPrefix + "_CLUSTER_UNAVAILABLE_DELAY"
-	resetFunc := test.UnsetEnvVarAndRestore(t, key)
-	defer resetFunc()
-
-	t.Run("default", func(t *testing.T) {
-		resetFunc := test.UnsetEnvVarAndRestore(t, key)
-		defer resetFunc()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, cast.ToDuration("60s"), config.GetClusterUnavailableDelay())
-	})
-
-	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env(key, "30s"),
-			test.Env(MemberEnvPrefix+"_"+"ANY_CONFIG", "20s"))
-		defer restore()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, cast.ToDuration("30s"), config.GetClusterUnavailableDelay())
+		assert.Equal(t, cast.ToDuration("30s"), config.GetToolchainClusterTimeout())
 	})
 }

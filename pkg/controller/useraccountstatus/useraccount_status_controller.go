@@ -4,15 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/kubefed/pkg/controller/util"
-
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -65,7 +63,7 @@ type ReconcileUserAccountStatus struct {
 	// that reads objects from the cache and writes to the apiserver
 	client         client.Client
 	scheme         *runtime.Scheme
-	getHostCluster func() (*cluster.FedCluster, bool)
+	getHostCluster func() (*cluster.CachedToolchainCluster, bool)
 }
 
 // Reconcile watches changes in status of UserAccount object
@@ -99,24 +97,24 @@ func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (recon
 }
 
 func (r *ReconcileUserAccountStatus) updateMasterUserRecord(userAcc *toolchainv1alpha1.UserAccount) (error, *toolchainv1alpha1.MasterUserRecord) {
-	fedCluster, ok := r.getHostCluster()
+	cachedToolchainCluster, ok := r.getHostCluster()
 	if !ok {
 		return fmt.Errorf("there is no host cluster registered"), nil
 	}
-	if !util.IsClusterReady(fedCluster.ClusterStatus) {
+	if !cluster.IsReady(cachedToolchainCluster.ClusterStatus) {
 		return fmt.Errorf("the host cluster is not ready"), nil
 	}
 	mur := &toolchainv1alpha1.MasterUserRecord{}
-	name := types.NamespacedName{Namespace: fedCluster.OperatorNamespace, Name: userAcc.Name}
-	err := fedCluster.Client.Get(context.TODO(), name, mur)
+	name := types.NamespacedName{Namespace: cachedToolchainCluster.OperatorNamespace, Name: userAcc.Name}
+	err := cachedToolchainCluster.Client.Get(context.TODO(), name, mur)
 	if err != nil {
 		return err, nil
 	}
 	for i, account := range mur.Spec.UserAccounts {
-		if account.TargetCluster == fedCluster.OwnerClusterName {
+		if account.TargetCluster == cachedToolchainCluster.OwnerClusterName {
 			mur.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
-			return fedCluster.Client.Update(context.TODO(), mur), mur
+			return cachedToolchainCluster.Client.Update(context.TODO(), mur), mur
 		}
 	}
-	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", fedCluster.OwnerClusterName), mur
+	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", cachedToolchainCluster.OwnerClusterName), mur
 }

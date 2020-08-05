@@ -258,7 +258,7 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
 func printConfig(cfg *configuration.Config) {
 	logWithValuesMemberOperator := log
 	for key, value := range cfg.GetAllMemberParameters() {
-		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues("key", key, "value", value)
+		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues(key, value)
 	}
 	logWithValuesMemberOperator.Info("Member operator configuration variables:")
 }

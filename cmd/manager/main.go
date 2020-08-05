@@ -10,6 +10,9 @@ import (
 	"strings"
 
 	api "github.com/codeready-toolchain/api/pkg/apis"
+	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -19,8 +22,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
 	"github.com/codeready-toolchain/member-operator/version"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
@@ -30,9 +31,7 @@ import (
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -122,11 +121,6 @@ func main() {
 		options.NewCache = cache.MultiNamespacedCacheBuilder(strings.Split(namespace, ","))
 	}
 
-	if err := ensureKubeFedClusterCRD(cfg); err != nil {
-		log.Error(err, "Unable to ensure the existence of the KubeFedCluster CRD")
-		os.Exit(1)
-	}
-
 	// Create a new manager to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, options)
 	if err != nil {
@@ -153,18 +147,15 @@ func main() {
 
 	stopChannel := signals.SetupSignalHandler()
 
-	log.Info("Starting KubeFedCluster controllers.")
-	if err = controller.StartKubeFedClusterControllers(mgr, crtConfig, stopChannel); err != nil {
-		log.Error(err, "Unable to start the KubeFedCluster controllers")
-		os.Exit(1)
-	}
-
 	go func() {
 		log.Info("Waiting for cache to sync")
 		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
 			log.Error(fmt.Errorf("timed out waiting for caches to sync"), "")
 			os.Exit(1)
 		}
+
+		log.Info("Starting ToolchainCluster health checks.")
+		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.GetClusterHealthCheckPeriod())
 
 		// create or update Member status during the operator deployment
 		log.Info("Creating/updating the MemberStatus resource")
@@ -261,29 +252,6 @@ func printConfig(cfg *configuration.Config) {
 		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues(key, value)
 	}
 	logWithValuesMemberOperator.Info("Member operator configuration variables:")
-}
-
-// ensureKubeFedClusterCRD ensure that KubeFedCluster CRD exists in the cluster.
-// This function has to be created before creating/starting cache, the client and controllers
-func ensureKubeFedClusterCRD(config *rest.Config) error {
-	// setup Scheme for KubeFedCluster CRD creator
-	s := scheme.Scheme
-	if err := apis.AddToScheme(s); err != nil {
-		return err
-	}
-
-	// create client that will be used only for creating KubeFedCluster CRD
-	cl, err := client.New(config, client.Options{})
-	if err != nil {
-		return err
-	}
-
-	// create the KubeFedCluster CRD
-	if err := cluster.EnsureKubeFedClusterCRD(s, cl); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // getCRTConfiguration creates the client used for configuration and

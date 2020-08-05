@@ -260,7 +260,8 @@ data:
                       conditions:
                         description: Conditions is an array of current cluster conditions.
                         items:
-                          description: ClusterCondition describes current state of a cluster.
+                          description: ToolchainClusterCondition describes current state
+                            of a cluster.
                           properties:
                             lastProbeTime:
                               description: Last time the condition was checked.
@@ -291,6 +292,7 @@ data:
                           - type
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       region:
                         description: Region is the name of the region in which all of the
                           nodes in the cluster exist.  e.g. 'us-east1'.
@@ -301,6 +303,7 @@ data:
                         items:
                           type: string
                         type: array
+                        x-kubernetes-list-type: set
                     required:
                     - conditions
                     type: object
@@ -862,6 +865,26 @@ data:
                     }
                   ],
                   "tierName": "basic"
+                }
+              },
+              {
+                "apiVersion": "toolchain.dev.openshift.com/v1alpha1",
+                "kind": "ToolchainCluster",
+                "metadata": {
+                  "labels": {
+                    "namespace": "toolchain-host-operator",
+                    "ownerClusterName": "member-member-crvjv",
+                    "type": "host"
+                  },
+                  "name": "host-host-8bs24",
+                  "namespace": "toolchain-member-operator"
+                },
+                "spec": {
+                  "apiEndpoint": "https://api.host.crt-stage.com:6443",
+                  "caBundle": "LS0tLS1CRUdJTiBDRVJUSVORCBDRVJUSUZJQ0FURS0tLS0tCg==",
+                  "secretRef": {
+                    "name": "host-operator-host-8ns25"
+                  }
                 }
               },
               {

@@ -89,7 +89,7 @@ type ReconcileMemberStatus struct {
 	// that reads objects from the cache and writes to the apiserver
 	client         client.Client
 	scheme         *runtime.Scheme
-	getHostCluster func() (*cluster.FedCluster, bool)
+	getHostCluster func() (*cluster.CachedToolchainCluster, bool)
 	config         *crtCfg.Config
 }
 
@@ -138,7 +138,7 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 	// track components that are not ready
 	unreadyComponents := []string{}
 
-	// retrieve component statuses eg. kubefed, member deployment
+	// retrieve component statuses eg. toolchainCluster, member deployment
 	for _, handler := range statusHandlers {
 		err := handler.handleStatus(reqLogger, memberStatus)
 		if err != nil {
@@ -159,15 +159,14 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 // its status is not ready
 func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 
-	attributes := status.KubefedAttributes{
+	attributes := status.ToolchainClusterAttributes{
 		GetClusterFunc: r.getHostCluster,
 		Period:         r.config.GetClusterHealthCheckPeriod(),
-		Timeout:        r.config.GetClusterHealthCheckTimeout(),
-		Threshold:      r.config.GetClusterHealthCheckFailureThreshold(),
+		Timeout:        r.config.GetToolchainClusterTimeout(),
 	}
 
 	// look up host connection status
-	connectionConditions := status.GetKubefedConditions(attributes)
+	connectionConditions := status.GetToolchainClusterConditions(attributes)
 	err := status.ValidateComponentConditionReady(connectionConditions...)
 	memberStatus.Status.Host = &v1alpha1.HostStatus{
 		Conditions: connectionConditions,

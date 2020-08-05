@@ -1,6 +1,7 @@
 package test
 
 import (
+	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -8,28 +9,26 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/kubefed/pkg/apis/core/common"
-	"sigs.k8s.io/kubefed/pkg/apis/core/v1beta1"
 )
 
-// NewGetHostCluster returns cluster.GetHostClusterFunc function. The cluster.FedCluster
+// NewGetHostCluster returns cluster.GetHostClusterFunc function. The cluster.CachedToolchainCluster
 // that is returned by the function then contains the given client and the given status.
 // If ok == false, then the function returns nil for the cluster.
 func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) cluster.GetHostClusterFunc {
 	if !ok {
-		return func() (*cluster.FedCluster, bool) {
+		return func() (*cluster.CachedToolchainCluster, bool) {
 			return nil, false
 		}
 	}
-	return func() (fedCluster *cluster.FedCluster, b bool) {
-		return &cluster.FedCluster{
+	return func() (toolchainCluster *cluster.CachedToolchainCluster, b bool) {
+		return &cluster.CachedToolchainCluster{
 			Client:            cl,
 			Type:              cluster.Host,
 			OperatorNamespace: test.HostOperatorNs,
 			OwnerClusterName:  test.MemberClusterName,
-			ClusterStatus: &v1beta1.KubeFedClusterStatus{
-				Conditions: []v1beta1.ClusterCondition{{
-					Type:   common.ClusterReady,
+			ClusterStatus: &v1alpha1.ToolchainClusterStatus{
+				Conditions: []v1alpha1.ToolchainClusterCondition{{
+					Type:   v1alpha1.ToolchainClusterReady,
 					Status: status,
 				}},
 			},
@@ -38,24 +37,24 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 
 }
 
-// NewGetHostClusterWithProbe returns a cluster.GetHostClusterFunc function which returns a cluster.FedCluster.
-// The returned cluster.FedCluster contains the given client and the given status and lastProbeTime.
+// NewGetHostClusterWithProbe returns a cluster.GetHostClusterFunc function which returns a cluster.CachedToolchainCluster.
+// The returned cluster.CachedToolchainCluster contains the given client and the given status and lastProbeTime.
 // If ok == false, then the function returns nil for the cluster.
 func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionStatus, lastProbeTime metav1.Time) cluster.GetHostClusterFunc {
 	if !ok {
-		return func() (*cluster.FedCluster, bool) {
+		return func() (*cluster.CachedToolchainCluster, bool) {
 			return nil, false
 		}
 	}
-	return func() (fedCluster *cluster.FedCluster, b bool) {
-		return &cluster.FedCluster{
+	return func() (toolchainCluster *cluster.CachedToolchainCluster, b bool) {
+		return &cluster.CachedToolchainCluster{
 			Client:            cl,
 			Type:              cluster.Host,
 			OperatorNamespace: test.HostOperatorNs,
 			OwnerClusterName:  test.MemberClusterName,
-			ClusterStatus: &v1beta1.KubeFedClusterStatus{
-				Conditions: []v1beta1.ClusterCondition{{
-					Type:          common.ClusterReady,
+			ClusterStatus: &v1alpha1.ToolchainClusterStatus{
+				Conditions: []v1alpha1.ToolchainClusterCondition{{
+					Type:          v1alpha1.ToolchainClusterReady,
 					Status:        status,
 					LastProbeTime: lastProbeTime,
 				}},

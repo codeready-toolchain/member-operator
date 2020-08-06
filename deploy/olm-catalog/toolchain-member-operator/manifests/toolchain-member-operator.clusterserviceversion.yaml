@@ -170,12 +170,6 @@ spec:
           verbs:
           - '*'
         - apiGroups:
-          - core.kubefed.io
-          resources:
-          - kubefedclusters
-          verbs:
-          - '*'
-        - apiGroups:
           - toolchain.dev.openshift.com
           resources:
           - '*'
@@ -308,12 +302,6 @@ spec:
           - member-operator
           resources:
           - deployments/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - core.kubefed.io
-          resources:
-          - kubefedclusters/status
           verbs:
           - update
         serviceAccountName: member-operator

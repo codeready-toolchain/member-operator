@@ -41,12 +41,6 @@ rules:
   verbs:
   - "*"
 - apiGroups:
-  - core.kubefed.io
-  resources:
-  - kubefedclusters
-  verbs:
-  - "*"
-- apiGroups:
   - toolchain.dev.openshift.com
   resources:
   - "*"

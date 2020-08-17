@@ -239,11 +239,7 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
 	}
 
 	// Generate and serve custom resource specific metrics.
-	err = kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
-	if err != nil {
-		return err
-	}
-	return nil
+	return kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
 }
 
 func printConfig(cfg *configuration.Config) {

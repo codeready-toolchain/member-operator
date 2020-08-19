@@ -11,6 +11,11 @@ check-go-format:
 	&& exit 1 \
 	|| true
 
+.PHONY: vet
+## Run go vet against code
+vet:
+	go vet ./...
+	
 .PHONY: format-go-code
 ## Formats any go file that does not match formatting defined by gofmt
 format-go-code:

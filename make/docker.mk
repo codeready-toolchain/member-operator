@@ -6,7 +6,7 @@ QUAY_USERNAME ?= ${QUAY_NAMESPACE}
 .PHONY: docker-image
 ## Build the docker image locally that can be deployed (only contains bare operator)
 docker-image: build
-	$(Q)docker build -f build/Dockerfile -t ${IMAGE} .
+	$(Q)docker build . -t ${IMG}
 
 .PHONY: docker-push
 ## Push the docker image to quay.io registry

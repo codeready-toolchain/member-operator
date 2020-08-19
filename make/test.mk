@@ -6,10 +6,10 @@
 
 .PHONY: test
 ## runs the tests without coverage and excluding E2E tests
-test:
+test: generate fmt vet manifests
 	@echo "running the tests without coverage and excluding E2E tests..."
-	$(Q)go test ${V_FLAG} -race $(shell go list ./... | grep -v /test/e2e) -failfast
-	
+	$(Q)go test ${V_FLAG} -race -failfast
+
 ############################################################
 #
 # Unit Tests (OpenShift CI )

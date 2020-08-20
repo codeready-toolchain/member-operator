@@ -3,7 +3,6 @@ package useraccountstatus
 import (
 	"context"
 	"testing"
-	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
@@ -47,7 +46,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 		t.Run("should reset the syncIndex", func(t *testing.T) {
 			// given
 			userAcc := newUserAccount("foo", "222222")
-			now := metav1.NewTime(time.Now())
+			now := metav1.Now()
 			userAcc.DeletionTimestamp = &now
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 

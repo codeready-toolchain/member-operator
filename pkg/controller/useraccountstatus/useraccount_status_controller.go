@@ -8,6 +8,8 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"github.com/go-logr/logr"
+	"github.com/redhat-cop/operator-utils/pkg/util"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -71,8 +73,8 @@ type ReconcileUserAccountStatus struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("reconciling UserAccountStatus")
+	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	logger.Info("reconciling UserAccountStatus")
 
 	// Fetch the UserAccount object
 	userAcc := &toolchainv1alpha1.UserAccount{}
@@ -88,33 +90,41 @@ func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (recon
 		return reconcile.Result{}, err
 	}
 
-	err, mur := r.updateMasterUserRecord(userAcc)
+	mur, err := r.updateMasterUserRecord(logger, userAcc)
 	if err != nil {
-		reqLogger.Error(err, "unable to update the master user record", "MasterUserRecord", mur, "UserAccount", userAcc)
+		logger.Error(err, "unable to update the master user record", "MasterUserRecord", mur, "UserAccount", userAcc)
 		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileUserAccountStatus) updateMasterUserRecord(userAcc *toolchainv1alpha1.UserAccount) (error, *toolchainv1alpha1.MasterUserRecord) {
+func (r *ReconcileUserAccountStatus) updateMasterUserRecord(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.MasterUserRecord, error) {
+	if userAcc.DeletionTimestamp != nil {
+		logger.Info("Updating MUR after UserAccount deletion")
+	} else {
+		logger.Info("Updating MUR")
+	}
 	cachedToolchainCluster, ok := r.getHostCluster()
 	if !ok {
-		return fmt.Errorf("there is no host cluster registered"), nil
+		return nil, fmt.Errorf("there is no host cluster registered")
 	}
 	if !cluster.IsReady(cachedToolchainCluster.ClusterStatus) {
-		return fmt.Errorf("the host cluster is not ready"), nil
+		return nil, fmt.Errorf("the host cluster is not ready")
 	}
 	mur := &toolchainv1alpha1.MasterUserRecord{}
 	name := types.NamespacedName{Namespace: cachedToolchainCluster.OperatorNamespace, Name: userAcc.Name}
-	err := cachedToolchainCluster.Client.Get(context.TODO(), name, mur)
-	if err != nil {
-		return err, nil
+	if err := cachedToolchainCluster.Client.Get(context.TODO(), name, mur); err != nil {
+		return nil, err
 	}
 	for i, account := range mur.Spec.UserAccounts {
 		if account.TargetCluster == cachedToolchainCluster.OwnerClusterName {
-			mur.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
-			return cachedToolchainCluster.Client.Update(context.TODO(), mur), mur
+			if util.IsBeingDeleted(userAcc) {
+				mur.Spec.UserAccounts[i].SyncIndex = "0"
+			} else {
+				mur.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
+			}
+			return mur, cachedToolchainCluster.Client.Update(context.TODO(), mur)
 		}
 	}
-	return fmt.Errorf("the MasterUserRecord doesn't have UserAccount embedded for the cluster %s", cachedToolchainCluster.OwnerClusterName), mur
+	return mur, fmt.Errorf("the MasterUserRecord '%s' doesn't have any embedded UserAccount for cluster '%s'", mur.Name, cachedToolchainCluster.OwnerClusterName)
 }

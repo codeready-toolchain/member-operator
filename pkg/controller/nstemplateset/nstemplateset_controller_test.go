@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
@@ -1120,7 +1119,7 @@ func withoutFinalizer() nsTmplSetOption {
 
 func withDeletionTs() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
-		deletionTS := metav1.NewTime(time.Now())
+		deletionTS := metav1.Now()
 		nsTmplSet.SetDeletionTimestamp(&deletionTS)
 	}
 }

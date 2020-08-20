@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -564,7 +563,7 @@ func TestDeleteNamespsace(t *testing.T) {
 		cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
 			if obj, ok := obj.(*corev1.Namespace); ok {
 				// mark namespaces as deleted...
-				deletionTS := metav1.NewTime(time.Now())
+				deletionTS := metav1.Now()
 				obj.SetDeletionTimestamp(&deletionTS)
 				// ... but replace them in the fake client cache yet instead of deleting them
 				return cl.Client.Update(ctx, obj)

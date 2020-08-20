@@ -26,51 +26,75 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 	userAcc := newUserAccount("foo", "222222")
 	mur := newMasterUserRecord("foo", "111111")
 
-	t.Run("successful - should change the syncIndex", func(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
 
-		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
+		t.Run("should change the syncIndex", func(t *testing.T) {
+			// given
+			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
-		// when
-		_, err := cntrl.Reconcile(newUaRequest(userAcc))
+			// when
+			_, err := cntrl.Reconcile(newUaRequest(userAcc))
 
-		// then
-		require.NoError(t, err)
-		currentMur := &toolchainv1alpha1.MasterUserRecord{}
-		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
-		require.NoError(t, err)
-		assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
+			// then
+			require.NoError(t, err)
+			currentMur := &toolchainv1alpha1.MasterUserRecord{}
+			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
+			require.NoError(t, err)
+			assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
+		})
+
+		t.Run("should reset the syncIndex", func(t *testing.T) {
+			// given
+			userAcc := newUserAccount("foo", "222222")
+			now := metav1.Now()
+			userAcc.DeletionTimestamp = &now
+			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
+
+			// when
+			_, err := cntrl.Reconcile(newUaRequest(userAcc))
+
+			// then
+			require.NoError(t, err)
+			currentMur := &toolchainv1alpha1.MasterUserRecord{}
+			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
+			require.NoError(t, err)
+			assert.Equal(t, "0", currentMur.Spec.UserAccounts[0].SyncIndex)
+		})
 	})
 
-	t.Run("failed - host not available", func(t *testing.T) {
+	t.Run("failure", func(t *testing.T) {
 
-		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, false, "")
+		t.Run("host not available", func(t *testing.T) {
+			// given
+			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, false, "")
 
-		// when
-		_, err := cntrl.Reconcile(newUaRequest(userAcc))
+			// when
+			_, err := cntrl.Reconcile(newUaRequest(userAcc))
 
-		// then
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "there is no host cluster registered")
-		currentMur := &toolchainv1alpha1.MasterUserRecord{}
-		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
-		require.NoError(t, err)
-		assert.Equal(t, "111111", currentMur.Spec.UserAccounts[0].SyncIndex)
-	})
+			// then
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "there is no host cluster registered")
+			currentMur := &toolchainv1alpha1.MasterUserRecord{}
+			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
+			require.NoError(t, err)
+			assert.Equal(t, "111111", currentMur.Spec.UserAccounts[0].SyncIndex)
+		})
 
-	t.Run("failed - host not ready", func(t *testing.T) {
+		t.Run("host not ready", func(t *testing.T) {
+			// given
+			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionFalse)
 
-		cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionFalse)
+			// when
+			_, err := cntrl.Reconcile(newUaRequest(userAcc))
 
-		// when
-		_, err := cntrl.Reconcile(newUaRequest(userAcc))
-
-		// then
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "the host cluster is not ready")
-		currentMur := &toolchainv1alpha1.MasterUserRecord{}
-		err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
-		require.NoError(t, err)
-		assert.Equal(t, "111111", currentMur.Spec.UserAccounts[0].SyncIndex)
+			// then
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "the host cluster is not ready")
+			currentMur := &toolchainv1alpha1.MasterUserRecord{}
+			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
+			require.NoError(t, err)
+			assert.Equal(t, "111111", currentMur.Spec.UserAccounts[0].SyncIndex)
+		})
 	})
 }
 
@@ -115,7 +139,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "the MasterUserRecord doesn't have UserAccount embedded")
+		assert.Contains(t, err.Error(), "the MasterUserRecord 'johny' doesn't have any embedded UserAccount for cluster 'member-cluster'")
 	})
 
 	t.Run("when the cluster name is different", func(t *testing.T) {
@@ -128,7 +152,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "the MasterUserRecord doesn't have UserAccount embedded")
+		assert.Contains(t, err.Error(), "the MasterUserRecord 'johny' doesn't have any embedded UserAccount for cluster 'member-cluster'")
 	})
 }
 

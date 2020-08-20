@@ -148,7 +148,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
-		deleted, err := r.deleteIdentityAndUser(userAcc)
+		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
 		}
@@ -169,7 +169,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
-		deleted, err := r.deleteIdentityAndUser(userAcc)
+		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
@@ -358,23 +358,20 @@ func (r *ReconcileUserAccount) addFinalizer(logger logr.Logger, userAcc *toolcha
 
 // deleteIdentityAndUser deletes the identity and user. Returns bool and error indicating that
 // whether the user/identity were deleted.
-func (r *ReconcileUserAccount) deleteIdentityAndUser(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-
-	if deleted, err := r.deleteIdentity(userAcc); err != nil || deleted {
+func (r *ReconcileUserAccount) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	if deleted, err := r.deleteIdentity(logger, userAcc); err != nil || deleted {
 		return deleted, err
 	}
-
-	if deleted, err := r.deleteUser(userAcc); err != nil || deleted {
+	if deleted, err := r.deleteUser(logger, userAcc); err != nil || deleted {
 		return deleted, err
 	}
-
 	return false, nil
 }
 
 // deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,
 // with the underlying error if the user existed and something wrong happened. If the user did not
 // exist, this func returns `false, nil`
-func (r *ReconcileUserAccount) deleteUser(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the User associated with the UserAccount
 	user := &userv1.User{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
@@ -384,7 +381,7 @@ func (r *ReconcileUserAccount) deleteUser(userAcc *toolchainv1alpha1.UserAccount
 		}
 		return false, nil
 	}
-
+	logger.Info("deleting the user resource")
 	// Delete User associated with UserAccount
 	if err := r.client.Delete(context.TODO(), user); err != nil {
 		return false, err
@@ -395,7 +392,7 @@ func (r *ReconcileUserAccount) deleteUser(userAcc *toolchainv1alpha1.UserAccount
 // deleteIdentity deletes the identity resource. Returns `true` if the identity was deleted, `false` otherwise,
 // with the underlying error if the identity existed and something wrong happened. If the identity did not
 // exist, this func returns `false, nil`
-func (r *ReconcileUserAccount) deleteIdentity(userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
 	identityName := ToIdentityName(userAcc.Spec.UserID, r.config)
@@ -406,7 +403,7 @@ func (r *ReconcileUserAccount) deleteIdentity(userAcc *toolchainv1alpha1.UserAcc
 		}
 		return false, nil
 	}
-
+	logger.Info("deleting the identity resource")
 	// Delete Identity associated with UserAccount
 	if err := r.client.Delete(context.TODO(), identity); err != nil {
 		return false, err

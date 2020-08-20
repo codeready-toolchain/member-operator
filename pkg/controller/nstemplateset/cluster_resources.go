@@ -310,7 +310,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 				continue
 			}
 
-			logger.Info("deleting cluster resource", "name", toDelete.GetName())
+			logger.Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetGvk().Kind)
 			if err := r.client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue

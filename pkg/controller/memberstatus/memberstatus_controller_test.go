@@ -6,17 +6,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeready-toolchain/api/pkg/apis"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -72,13 +74,20 @@ func TestNoMemberStatusFound(t *testing.T) {
 func TestOverallStatusCondition(t *testing.T) {
 	restore := test.SetEnvVarsAndRestore(t, test.Env(k8sutil.OperatorNameEnvVar, defaultMemberOperatorName))
 	defer restore()
+	nodeAndMetrics := newNodesAndNodeMetrics(
+		forNode("worker-123", "worker", "4000000Ki", withMemoryUsage("1250000Ki")),
+		forNode("worker-345", "worker", "6000000Ki", withMemoryUsage("2250000Ki")),
+		forNode("worker-567", "worker", "6000000Ki", withMemoryUsage("500000Ki")),
+		forNode("master-123", "master", "4000000Ki", withMemoryUsage("2000000Ki")),
+		forNode("master-456", "master", "5000000Ki", withMemoryUsage("1000000Ki")))
+
 	t.Run("All components ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -87,7 +96,27 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsReady())
+			HasCondition(ComponentsReady()).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+
+		t.Run("ignore infra node", func(t *testing.T) {
+			// given
+			nodeAndMetrics := newNodesAndNodeMetrics(
+				forNode("worker-123", "worker", "4000000Ki", withMemoryUsage("3000000Ki")),
+				forNode("infra-123", "infra", "4000000Ki", withMemoryUsage("1250000Ki")),
+				forNode("master-123", "master", "6000000Ki", withMemoryUsage("3000000Ki")))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).
+				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50))
+		})
 	})
 
 	t.Run("Host connection not found", func(t *testing.T) {
@@ -96,7 +125,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotExist
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -105,8 +134,9 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(hostConnection)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConditionErrorMsg("the cluster connection was not found")
+			HasCondition(ComponentsNotReady(string(hostConnectionTag)))
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConditionErrorMsg("the cluster connection was not found").
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -115,7 +145,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -124,7 +154,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(hostConnection)))
+			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 	})
 
 	t.Run("Host connection probe not working", func(t *testing.T) {
@@ -133,7 +164,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterProbeNotWorking
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -142,7 +173,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(hostConnection)))
+			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 	})
 
 	t.Run("Member operator deployment not found - deployment env var not set", func(t *testing.T) {
@@ -151,7 +183,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -161,7 +193,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(memberOperator)))
+			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the deployment: OPERATOR_NAME must be set")
 	})
 
@@ -170,7 +203,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -179,7 +212,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(memberOperator)))
+			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 	})
 
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
@@ -188,7 +222,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -197,7 +231,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(memberOperator)))
+			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 	})
 
 	t.Run("Member operator deployment not progressing", func(t *testing.T) {
@@ -206,7 +241,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, memberOperatorDeployment, memberStatus)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -215,7 +250,90 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(memberOperator)))
+			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+	})
+
+	t.Run("metrics failures", func(t *testing.T) {
+		// given
+		requestName := defaultMemberStatusName
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterReady
+
+		t.Run("when missing memory item", func(t *testing.T) {
+			// given
+			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", "worker", "3000000Ki"))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsNotReady(string("resourceUsage"))).
+				HasMemoryUsage()
+		})
+
+		t.Run("when unable to list Nodes", func(t *testing.T) {
+			// given
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+				if _, ok := list.(*corev1.NodeList); ok {
+					return fmt.Errorf("some error")
+				}
+				return fakeClient.Client.List(ctx, list, opts...)
+			}
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsNotReady(string("resourceUsage"))).
+				HasMemoryUsage()
+		})
+
+		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
+			// given
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+				if _, ok := list.(*v1beta1.NodeMetricsList); ok {
+					return fmt.Errorf("some error")
+				}
+				return fakeClient.Client.List(ctx, list, opts...)
+			}
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsNotReady(string("resourceUsage"))).
+				HasMemoryUsage()
+		})
+
+		t.Run("when missing NodeMetrics for Node", func(t *testing.T) {
+			// given
+			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", "worker", "3000000Ki"))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, nodeAndMetrics[0], memberOperatorDeployment, memberStatus)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsNotReady(string("resourceUsage"))).
+				HasMemoryUsage()
+		})
 	})
 }
 
@@ -275,6 +393,9 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
+	logf.SetLogger(logf.ZapLogger(true))
+
+	initObjs = append(initObjs)
 	fakeClient := test.NewFakeClient(t, initObjs...)
 	config, err := configuration.LoadConfig(fakeClient)
 	require.NoError(t, err)
@@ -285,4 +406,60 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		config:         config,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
+}
+
+type nodeAndMetricsCreator func() (node *corev1.Node, nodeMetric *v1beta1.NodeMetrics)
+
+func forNode(name, role string, allocatableMemory string, metricsModifiers ...nodeMetricsModifier) nodeAndMetricsCreator {
+	return func() (*corev1.Node, *v1beta1.NodeMetrics) {
+		node := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"beta.kubernetes.io/os":           "linux",
+					"node-role.kubernetes.io/" + role: "",
+					"kubernetes.io/arch":              "amd64",
+					"kubernetes.io/hostname":          "ip-10-0-140-242",
+				},
+			},
+			Status: corev1.NodeStatus{
+				Allocatable: map[corev1.ResourceName]resource.Quantity{
+					"cpu":    resource.MustParse("3500m"),
+					"memory": resource.MustParse(allocatableMemory),
+					"pods":   resource.MustParse("250"),
+				},
+			},
+		}
+		nodeMetrics := &v1beta1.NodeMetrics{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+			},
+			Usage: map[corev1.ResourceName]resource.Quantity{
+				corev1.ResourceCPU: resource.MustParse("3499m"),
+			},
+		}
+		for _, modifyMetrics := range metricsModifiers {
+			modifyMetrics(nodeMetrics)
+		}
+		return node, nodeMetrics
+	}
+}
+
+type nodeMetricsModifier func(metrics *v1beta1.NodeMetrics)
+
+func withMemoryUsage(usage string) nodeMetricsModifier {
+	return func(metrics *v1beta1.NodeMetrics) {
+		var resourceList map[corev1.ResourceName]resource.Quantity = metrics.Usage
+		resourceList[corev1.ResourceMemory] = resource.MustParse(usage)
+		metrics.Usage = resourceList
+	}
+}
+
+func newNodesAndNodeMetrics(nodeAndMetricsCreators ...nodeAndMetricsCreator) []runtime.Object {
+	var objects []runtime.Object
+	for _, create := range nodeAndMetricsCreators {
+		node, nodeMetrics := create()
+		objects = append(objects, node, nodeMetrics)
+	}
+	return objects
 }

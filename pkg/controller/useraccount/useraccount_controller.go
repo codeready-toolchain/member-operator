@@ -144,7 +144,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 		}
 	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) && util.IsBeingDeleted(userAcc) {
 		logger.Info("terminating UserAccount")
-		// We need to be sure that the status is updated in the when the UserAccount is deleted.
+		// We need to be sure that the status is updated when the UserAccount is deleted.
 		// In this case the UserAccountStatus controller updates the MUR on the host cluster
 		// with `syncIndex=0`.
 		// In turn, the MUR controller may decide to recreate the UserAccount resource on the

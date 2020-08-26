@@ -1086,46 +1086,48 @@ func TestDisabledUserAccount(t *testing.T) {
 		assertNSTemplateFound(t, r, userAcc)
 	})
 
-	t.Run("deleting disabled useraccount", func(t *testing.T) {
-
+	t.Run("deleting user for disabled useraccount", func(t *testing.T) {
+		// given
 		userAcc := newDisabledUserAccountWithFinalizer(username, userID)
+		userAcc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet, preexistingUser, preexistingIdentity)
 
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+		// when
+		_, err := r.Reconcile(req)
 
-		res, err := r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		useraccount.AssertThatUserAccount(t, req.Name, cl).
-			HasConditions(failed("Disabled", ""))
-
-		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
-
-		// Set the deletionTimestamp
-		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
-		err = r.client.Update(context.TODO(), userAcc)
-		require.NoError(t, err)
-
-		res, err = r.Reconcile(req)
-		assert.Equal(t, reconcile.Result{}, res)
+		// then
 		require.NoError(t, err)
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
 		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
 
-		// Check that the associated user has been deleted
-		// since disabled has been set to true
-		assertUserNotFound(t, r, userAcc)
+		t.Run("deleting identity for disabled useraccount", func(t *testing.T) {
+			// when
+			_, err := r.Reconcile(req)
 
-		// Check NSTemplate
-		assertNSTemplateFound(t, r, userAcc)
+			// then
+			require.NoError(t, err)
 
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
-		require.NoError(t, err)
-		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+			// Check that the associated user has been deleted
+			// since disabled has been set to true
+			assertUserNotFound(t, r, userAcc)
+
+			// Check NSTemplate
+			assertNSTemplateFound(t, r, userAcc)
+
+			t.Run("removing finalizer for disabled useraccount", func(t *testing.T) {
+				// when
+				_, err := r.Reconcile(req)
+
+				// then
+				require.NoError(t, err)
+				userAcc = &toolchainv1alpha1.UserAccount{}
+				err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+				require.NoError(t, err)
+				require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+			})
+		})
 	})
 }
 

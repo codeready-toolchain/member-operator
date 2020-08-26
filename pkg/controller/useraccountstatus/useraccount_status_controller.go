@@ -92,7 +92,11 @@ func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (recon
 
 	mur, err := r.updateMasterUserRecord(logger, userAcc)
 	if err != nil {
-		logger.Error(err, "unable to update the master user record", "MasterUserRecord", mur, "UserAccount", userAcc)
+		if mur != nil {
+			logger.Error(err, "unable to update the master user record", "MasterUserRecord", mur, "UserAccount", userAcc)
+		} else {
+			logger.Error(err, "unable to get the master user record for the UserAccount", "UserAccount", userAcc)
+		}
 		return reconcile.Result{}, err
 	}
 	return reconcile.Result{}, nil

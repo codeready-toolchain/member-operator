@@ -1,0 +1,51 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: deploy-toolchain-member-operator
+objects:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: ${NAMESPACE}
+- apiVersion: operators.coreos.com/v1
+  kind: OperatorGroup
+  metadata:
+    name: toolchain-member-operator
+    namespace: ${NAMESPACE}
+  spec:
+    targetNamespaces:
+    - ${NAMESPACE}
+- apiVersion: operators.coreos.com/v1alpha1
+  kind: Subscription
+  metadata:
+    name: toolchain-member-operator
+    namespace: ${NAMESPACE}
+  spec:
+    channel: ${CHANNEL_NAME}
+    installPlanApproval: Automatic
+    name: toolchain-member-operator
+    source: toolchain-member-operator
+    sourceNamespace: ${NAMESPACE}
+- apiVersion: operators.coreos.com/v1alpha1
+  kind: CatalogSource
+  metadata:
+    name: toolchain-member-operator
+    namespace: ${NAMESPACE}
+  spec:
+    sourceType: grpc
+    image: quay.io/${QUAY_NAMESPACE}/${INDEX_IMAGE_NAME}:${INDEX_IMAGE_TAG}
+    displayName: Hosted Toolchain Operators
+    updateStrategy:
+      registryPoll:
+        interval: 5m
+parameters:
+- name: NAMESPACE
+  value: toolchain-member-operator
+- name: QUAY_NAMESPACE
+  value: codeready-toolchain
+- name: INDEX_IMAGE_NAME
+  value: toolchain-member-operator-index
+- name: INDEX_IMAGE_TAG
+  value: latest
+- name: CHANNEL_NAME
+  value: app-sre-staging

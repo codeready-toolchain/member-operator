@@ -10,7 +10,7 @@ IMAGE_BUILDER?=docker
 INDEX_IMAGE?=hosted-toolchain-index
 FIRST_RELEASE?=false
 INDEX_PER_COMMIT?=false
-INDEX_IMAGE_CHANNEL?=staging
+CHANNEL_NAME?=staging
 
 .PHONY: push-to-quay-nightly
 ## Creates a new version of CSV and pushes it to quay
@@ -47,7 +47,7 @@ endif
 .PHONY: push-bundle-and-index-image
 ## Pushes generated manifests as a bundle image to quay and adds is to the image index
 push-bundle-and-index-image:
-	$(eval PUSH_BUNDLE_PARAMS = -pr ../member-operator/ -qn ${QUAY_NAMESPACE} -ch ${INDEX_IMAGE_CHANNEL} -td ${TMP_DIR} -ib ${IMAGE_BUILDER} -im ${INDEX_IMAGE} -ic ${INDEX_PER_COMMIT})
+	$(eval PUSH_BUNDLE_PARAMS = -pr ../member-operator/ -qn ${QUAY_NAMESPACE} -ch ${CHANNEL_NAME} -td ${TMP_DIR} -ib ${IMAGE_BUILDER} -im ${INDEX_IMAGE} -ic ${INDEX_PER_COMMIT})
 ifneq ("$(wildcard ../api/$(PATH_TO_BUNDLE_FILE))","")
 	@echo "pushing to quay in staging channel using script from local api repo..."
 	../api/${PATH_TO_BUNDLE_FILE} ${PUSH_BUNDLE_PARAMS}

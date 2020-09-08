@@ -3,7 +3,6 @@ package memberstatus
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
@@ -33,11 +32,6 @@ import (
 )
 
 var log = logf.Log.WithName("controller_memberstatus")
-
-// general memberstatus constants
-const (
-	defaultRequeueTime = time.Second * 5
-)
 
 // statusComponentTags are used in the overall condition to point out which components are not ready
 type statusComponentTag string
@@ -97,6 +91,7 @@ type ReconcileMemberStatus struct {
 func (r *ReconcileMemberStatus) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling MemberStatus")
+	requeueTime := r.config.GetMemberStatusRefreshTime()
 
 	// fetch the MemberStatus
 	memberStatus := &toolchainv1alpha1.MemberStatus{}
@@ -114,11 +109,11 @@ func (r *ReconcileMemberStatus) Reconcile(request reconcile.Request) (reconcile.
 	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus)
 	if err != nil {
 		reqLogger.Error(err, "Failed to update status")
-		return reconcile.Result{RequeueAfter: defaultRequeueTime}, err
+		return reconcile.Result{RequeueAfter: requeueTime}, err
 	}
 
-	reqLogger.Info(fmt.Sprintf("Finished updating MemberStatus, requeueing after %v", defaultRequeueTime))
-	return reconcile.Result{RequeueAfter: defaultRequeueTime}, nil
+	reqLogger.Info(fmt.Sprintf("Finished updating MemberStatus, requeueing after %v", requeueTime))
+	return reconcile.Result{RequeueAfter: requeueTime}, nil
 }
 
 type statusHandler struct {

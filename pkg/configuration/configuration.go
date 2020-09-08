@@ -26,6 +26,12 @@ const (
 
 	// DefaultMemberStatusName the default name for the member status resource created during initialization of the operator
 	DefaultMemberStatusName = "toolchain-member-status"
+
+	// varMemberStatusRefreshTime specifies how often the MemberStatus should load and refresh the current member cluster status
+	varMemberStatusRefreshTime = "memberstatus.refresh.time"
+
+	// defaultMemberStatusRefreshTime is the default refresh period for MemberStatus
+	defaultMemberStatusRefreshTime = "5s"
 )
 
 // ToolchainCluster configuration constants
@@ -75,6 +81,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(clusterHealthCheckPeriod, defaultClusterHealthCheckPeriod)
 	c.member.SetDefault(toolchainClusterTimeout, defaultClusterHealthCheckTimeout)
 	c.member.SetDefault(identityProviderName, defaultIdentityProviderName)
+	c.member.SetDefault(varMemberStatusRefreshTime, defaultMemberStatusRefreshTime)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
@@ -112,4 +119,9 @@ func (c *Config) GetClusterHealthCheckPeriod() time.Duration {
 // GetToolchainClusterTimeout returns the configured cluster health check timeout
 func (c *Config) GetToolchainClusterTimeout() time.Duration {
 	return c.member.GetDuration(toolchainClusterTimeout)
+}
+
+// GetMemberStatusRefreshTime returns the time how often the MemberStatus should load and refresh the current hosted-toolchain status
+func (c *Config) GetMemberStatusRefreshTime() time.Duration {
+	return c.member.GetDuration(varMemberStatusRefreshTime)
 }

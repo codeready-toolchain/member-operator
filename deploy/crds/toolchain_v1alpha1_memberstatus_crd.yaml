@@ -229,6 +229,16 @@ spec:
                 - revision
                 - version
                 type: object
+              resourceUsage:
+                description: Resource usage of the cluster
+                properties:
+                  memoryUsagePerNodeRole:
+                    additionalProperties:
+                      type: integer
+                    description: How many percent of the available memory is used
+                      per node role (eg. worker, master)
+                    type: object
+                type: object
             type: object
         type: object
         x-kubernetes-preserve-unknown-fields: true

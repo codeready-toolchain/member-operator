@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var requeueResult = reconcile.Result{RequeueAfter: defaultRequeueTime}
+var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 
 const defaultMemberOperatorName = "member-operator"
 

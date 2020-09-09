@@ -198,3 +198,26 @@ func TestGetClusterHealthCheckTimeout(t *testing.T) {
 		assert.Equal(t, cast.ToDuration("30s"), config.GetToolchainClusterTimeout())
 	})
 }
+
+func TestGetMemberStatusRefreshTime(t *testing.T) {
+	key := MemberEnvPrefix + "_" + "MEMBERSTATUS_REFRESH_TIME"
+	resetFunc := test.UnsetEnvVarAndRestore(t, key)
+	defer resetFunc()
+
+	t.Run("default", func(t *testing.T) {
+		resetFunc := test.UnsetEnvVarAndRestore(t, key)
+		defer resetFunc()
+		config := getDefaultConfiguration(t)
+		assert.Equal(t, cast.ToDuration("5s"), config.GetMemberStatusRefreshTime())
+	})
+
+	t.Run("env overwrite", func(t *testing.T) {
+		restore := test.SetEnvVarAndRestore(t, key, "1s")
+		defer restore()
+
+		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20s")
+		defer restore()
+		config := getDefaultConfiguration(t)
+		assert.Equal(t, cast.ToDuration("1s"), config.GetMemberStatusRefreshTime())
+	})
+}

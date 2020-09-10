@@ -954,7 +954,8 @@ data:
                 resources:
                 - '*'
                 verbs:
-                - '*'
+                - get
+                - list
               - apiGroups:
                 - ""
                 resources:

@@ -226,6 +226,7 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 				usagePerRole[nodeInfo.role] += float32(memoryUsage.Value())
 				allocatablePerRole[nodeInfo.role] += float32(nodeInfo.allocatable.Value())
 
+				// let's remove the used allocatable value from the map so we can later check if all values were used
 				delete(allocatableValues, nodeMetric.Name)
 			} else {
 				reqLogger.Info("skipping NodeMetrics resource - there wasn't found corresponding node that would be monitored", "name", nodeMetric.Name)
@@ -235,6 +236,8 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 		return fmt.Errorf("memory item not found in NodeMetrics: %v", nodeMetric)
 	}
 
+	// let's check if all allocatable values were used or if there is some value that the NodeMetrics resource wasn't found for.
+	// In such a case we need to return an error, because the metrics are not complete
 	if len(allocatableValues) > 0 {
 		var nodeNames []string
 		for nodeName := range allocatableValues {

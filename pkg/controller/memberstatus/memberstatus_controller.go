@@ -220,21 +220,17 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 
 	usagePerRole := map[string]float32{}
 	allocatablePerRole := map[string]float32{}
-NodeMetricsList:
 	for _, nodeMetric := range nodeMetricsList.Items {
-		for key, usage := range nodeMetric.Usage {
-			if key == "memory" {
-				nodeInfo, found := allocatableValues[nodeMetric.Name]
-				if found {
-					usagePerRole[nodeInfo.role] += float32(usage.Value())
-					allocatablePerRole[nodeInfo.role] += float32(nodeInfo.allocatable.Value())
+		if memoryUsage, usageFound := nodeMetric.Usage["memory"]; usageFound {
+			if nodeInfo, nodeFound := allocatableValues[nodeMetric.Name]; nodeFound {
+				usagePerRole[nodeInfo.role] += float32(memoryUsage.Value())
+				allocatablePerRole[nodeInfo.role] += float32(nodeInfo.allocatable.Value())
 
-					delete(allocatableValues, nodeMetric.Name)
-				} else {
-					reqLogger.Info("skipping NodeMetrics resource - there wasn't found corresponding node that would be monitored", "name", nodeMetric.Name)
-				}
-				continue NodeMetricsList
+				delete(allocatableValues, nodeMetric.Name)
+			} else {
+				reqLogger.Info("skipping NodeMetrics resource - there wasn't found corresponding node that would be monitored", "name", nodeMetric.Name)
 			}
+			continue
 		}
 		return fmt.Errorf("memory item not found in NodeMetrics: %v", nodeMetric)
 	}
@@ -266,13 +262,10 @@ func (r *ReconcileMemberStatus) getAllocatableValues(reqLogger logr.Logger) (map
 			reqLogger.Info("The node doesn't have role worker nor master - is ignored in resource consumption computing", "nodeName", node.Name)
 			continue
 		}
-		for key, value := range node.Status.Allocatable {
-			if key == "memory" {
-				allocatableValues[node.Name] = nodeInfo{
-					role:        role,
-					allocatable: value,
-				}
-				break
+		if memoryCapacity, found := node.Status.Allocatable["memory"]; found {
+			allocatableValues[node.Name] = nodeInfo{
+				role:        role,
+				allocatable: memoryCapacity,
 			}
 		}
 	}
@@ -285,12 +278,10 @@ type nodeInfo struct {
 }
 
 func getNodeRole(node corev1.Node) string {
-	for labelKey := range node.Labels {
-		if labelKey == labelNodeRoleWorker {
-			return "worker"
-		} else if labelKey == labelNodeRoleMaster {
-			return "master"
-		}
+	if _, isWorker := node.Labels[labelNodeRoleWorker]; isWorker {
+		return "worker"
+	} else if _, isMaster := node.Labels[labelNodeRoleMaster]; isMaster {
+		return "master"
 	}
 	return ""
 }

@@ -1,8 +1,8 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20200909202915-e74d6da8a04a
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20200903074939-0e6cc580a886
+	github.com/codeready-toolchain/api v0.0.0-20200914140452-d2c86086863e
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20200914220109-fa9ff58ae598
 	github.com/go-logr/logr v0.1.0
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
@@ -19,7 +19,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.18.3
 	k8s.io/apimachinery v0.18.3
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/metrics v0.18.3
+	k8s.io/metrics v0.18.2
 	sigs.k8s.io/controller-runtime v0.6.0
 )
 

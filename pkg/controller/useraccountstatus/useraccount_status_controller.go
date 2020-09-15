@@ -6,8 +6,8 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
-	"github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"github.com/codeready-toolchain/toolchain-common/pkg/predicate"
 	"github.com/go-logr/logr"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"k8s.io/apimachinery/pkg/api/errors"

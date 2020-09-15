@@ -223,6 +223,7 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 	for _, nodeMetric := range nodeMetricsList.Items {
 		if memoryUsage, usageFound := nodeMetric.Usage["memory"]; usageFound {
 			if nodeInfo, nodeFound := allocatableValues[nodeMetric.Name]; nodeFound {
+				// let's do the sum of usages and the allocatable capacity fer node role
 				usagePerRole[nodeInfo.role] += float32(memoryUsage.Value())
 				allocatablePerRole[nodeInfo.role] += float32(nodeInfo.allocatable.Value())
 
@@ -246,6 +247,9 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 		return fmt.Errorf("missing NodeMetrics resource for Nodes: %v", nodeNames)
 	}
 
+	// usagePerRole contains sum of usages per node role and
+	// allocatablePerRole contains sum of allocatable capacity per node role
+	// thus we can now count the ration and store the percentage of the usage
 	for role, usage := range usagePerRole {
 		memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole[role] = int((usage / allocatablePerRole[role]) * 100)
 	}

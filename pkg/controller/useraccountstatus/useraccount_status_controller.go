@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/metrics/pkg/client/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -27,15 +28,20 @@ var log = logf.Log.WithName("controller_useraccount_status")
 // Add creates a new UserAccountStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, _ *configuration.Config) error {
-	return add(mgr, newReconciler(mgr))
+	metricsClient, err := versioned.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	return add(mgr, newReconciler(mgr, metricsClient))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
+func newReconciler(mgr manager.Manager, metricsClient *versioned.Clientset) reconcile.Reconciler {
 	return &ReconcileUserAccountStatus{
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),
 		getHostCluster: cluster.GetHostCluster,
+		metricsClient:  metricsClient,
 	}
 }
 
@@ -64,6 +70,7 @@ type ReconcileUserAccountStatus struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client         client.Client
+	metricsClient  *versioned.Clientset
 	scheme         *runtime.Scheme
 	getHostCluster func() (*cluster.CachedToolchainCluster, bool)
 }

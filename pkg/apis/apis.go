@@ -15,6 +15,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	metrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 )
 
 // AddToScheme adds all Resources to the Scheme
@@ -31,6 +32,7 @@ func AddToScheme(s *runtime.Scheme) error {
 	addToSchemes = append(addToSchemes, appsv1.AddToScheme)
 	addToSchemes = append(addToSchemes, openshiftappsv1.Install)
 	addToSchemes = append(addToSchemes, batchv1.AddToScheme)
+	addToSchemes = append(addToSchemes, metrics.AddToScheme)
 
 	return addToSchemes.AddToScheme(s)
 }

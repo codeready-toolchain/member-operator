@@ -20,6 +20,13 @@ rules:
   - get
   - watch
 - apiGroups:
+  - metrics.k8s.io
+  resources:
+  - "*"
+  verbs:
+  - "get"
+  - "list"
+- apiGroups:
   - ""
   resources:
   - namespaces

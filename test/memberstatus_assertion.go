@@ -6,6 +6,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -68,6 +69,29 @@ func (a *MemberStatusAssertion) HasHostConditionErrorMsg(expected string) *Membe
 	require.NoError(a.t, err)
 	require.Len(a.t, a.memberStatus.Status.Host.Conditions, 1)
 	require.Equal(a.t, expected, a.memberStatus.Status.Host.Conditions[0].Message)
+	return a
+}
+
+type AddUsage func(map[string]int)
+
+func OfNodeRole(role string, usage int) AddUsage {
+	return func(nodesUsage map[string]int) {
+		nodesUsage[role] = usage
+	}
+}
+
+func (a *MemberStatusAssertion) HasMemoryUsage(usages ...AddUsage) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	expectedUsage := map[string]int{}
+	for _, addUsage := range usages {
+		addUsage(expectedUsage)
+	}
+	if len(usages) > 0 {
+		assert.Equal(a.t, expectedUsage, a.memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole)
+	} else {
+		assert.Empty(a.t, a.memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole)
+	}
 	return a
 }
 

@@ -54,7 +54,7 @@ ifeq ($(INDEX_IMAGE_URL), )
 else
 	$(eval PUSH_BUNDLE_PARAMS = -pr ../member-operator/ -qn ${QUAY_NAMESPACE} -ch ${CHANNEL_NAME} -td ${TMP_DIR} -ib ${IMAGE_BUILDER} -iu ${INDEX_IMAGE_URL} -ic ${INDEX_PER_COMMIT})
 endif
-ifneq ($(FROM_INDEX_URL), )
+ifneq ($(FROM_INDEX_URL),"")
 	$(eval PUSH_BUNDLE_PARAMS = ${PUSH_BUNDLE_PARAMS} -fu ${FROM_INDEX_URL})
 endif
 ifneq ("$(wildcard ../api/$(PATH_TO_BUNDLE_FILE))","")

@@ -5,6 +5,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	toolchainpredicate "github.com/codeready-toolchain/member-operator/pkg/predicate"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
@@ -68,12 +69,12 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to secondary resources: Namespaces associated with an NSTemplateSet (not owned, though - see https://issues.redhat.com/browse/CRT-429)
-	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey), predicate.GenerationChangedPredicate{}, toolchainpredicate.UserNamespace{}); err != nil {
 		return err
 	}
 	for _, clusterResource := range clusterResourceKinds {
 		// watch for all cluster resource kinds associated with an NSTemplateSet
-		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey), predicate.GenerationChangedPredicate{}, toolchainpredicate.UserNamespace{}); err != nil {
 			return err
 		}
 	}

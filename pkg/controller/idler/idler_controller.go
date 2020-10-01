@@ -6,6 +6,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
+	toolchainpredicate "github.com/codeready-toolchain/member-operator/pkg/predicate"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 
 	"github.com/go-logr/logr"
@@ -53,15 +54,21 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to secondary resources: Pods
-	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			return []reconcile.Request{
-				{NamespacedName: types.NamespacedName{
-					Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
-				}},
-			}
-		}),
-	}); err != nil {
+	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
+						},
+					},
+				}
+			}),
+		},
+		predicate.GenerationChangedPredicate{},
+		toolchainpredicate.UserNamespace{},
+	); err != nil {
 		return err
 	}
 
@@ -86,7 +93,7 @@ type ReconcileIdler struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-
+	logger.Info("reconciling idler")
 	// Fetch the Idler instance
 	idler := &toolchainv1alpha1.Idler{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: request.Name}, idler); err != nil {

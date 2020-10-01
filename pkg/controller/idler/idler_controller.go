@@ -98,8 +98,7 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill and requeue with the delay of one hour
-	// or with the earlier timout left for the next pod to delete whichever is the earliest.
+	// Find the earlier pod to kill
 	d := nextPodToBeKilledAfter(idler)
 	if d == nil {
 		// No pods tracked. Requeue after the idler timout so we don't miss new pods created withing the timeout.

@@ -19,7 +19,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("kube namespace", func(t *testing.T) {
 			// given
 			e := event.CreateEvent{
-				Meta:   &metav1.ObjectMeta{Name: "kube-public"},
+				Meta: &metav1.ObjectMeta{
+					Name: "kube-public",
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -31,7 +33,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("openshift namespace", func(t *testing.T) {
 			// given
 			e := event.CreateEvent{
-				Meta:   &metav1.ObjectMeta{Name: "openshift"},
+				Meta: &metav1.ObjectMeta{
+					Name: "openshift",
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -43,7 +47,12 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("user namespace", func(t *testing.T) {
 			// given
 			e := event.CreateEvent{
-				Meta:   &metav1.ObjectMeta{Name: "user-dev"},
+				Meta: &metav1.ObjectMeta{
+					Name: "user-dev",
+					Labels: map[string]string{
+						"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+					},
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -58,7 +67,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("kube namespace", func(t *testing.T) {
 			// given
 			e := event.UpdateEvent{
-				MetaNew:   &metav1.ObjectMeta{Name: "kube-public"},
+				MetaNew: &metav1.ObjectMeta{
+					Name: "kube-public",
+				},
 				ObjectNew: &corev1.Namespace{},
 			}
 			// then
@@ -70,7 +81,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("openshift namespace", func(t *testing.T) {
 			// given
 			e := event.UpdateEvent{
-				MetaNew:   &metav1.ObjectMeta{Name: "openshift"},
+				MetaNew: &metav1.ObjectMeta{
+					Name: "openshift",
+				},
 				ObjectNew: &corev1.Namespace{},
 			}
 			// then
@@ -82,7 +95,12 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("user namespace", func(t *testing.T) {
 			// given
 			e := event.UpdateEvent{
-				MetaNew:   &metav1.ObjectMeta{Name: "user-dev"},
+				MetaNew: &metav1.ObjectMeta{
+					Name: "user-dev",
+					Labels: map[string]string{
+						"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+					},
+				},
 				ObjectNew: &corev1.Namespace{},
 			}
 			// then
@@ -97,7 +115,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("kube namespace", func(t *testing.T) {
 			// given
 			e := event.DeleteEvent{
-				Meta:   &metav1.ObjectMeta{Name: "kube-public"},
+				Meta: &metav1.ObjectMeta{
+					Name: "kube-public",
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -109,7 +129,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("openshift namespace", func(t *testing.T) {
 			// given
 			e := event.DeleteEvent{
-				Meta:   &metav1.ObjectMeta{Name: "openshift"},
+				Meta: &metav1.ObjectMeta{
+					Name: "openshift",
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -121,7 +143,12 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("user namespace", func(t *testing.T) {
 			// given
 			e := event.DeleteEvent{
-				Meta:   &metav1.ObjectMeta{Name: "user-dev"},
+				Meta: &metav1.ObjectMeta{
+					Name: "user-dev",
+					Labels: map[string]string{
+						"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+					},
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -136,7 +163,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("kube namespace", func(t *testing.T) {
 			// given
 			e := event.GenericEvent{
-				Meta:   &metav1.ObjectMeta{Name: "kube-public"},
+				Meta: &metav1.ObjectMeta{
+					Name: "kube-public",
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -148,7 +177,9 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("openshift namespace", func(t *testing.T) {
 			// given
 			e := event.GenericEvent{
-				Meta:   &metav1.ObjectMeta{Name: "openshift"},
+				Meta: &metav1.ObjectMeta{
+					Name: "openshift",
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then
@@ -160,7 +191,12 @@ func TestUserNamespacePredicate(t *testing.T) {
 		t.Run("user namespace", func(t *testing.T) {
 			// given
 			e := event.GenericEvent{
-				Meta:   &metav1.ObjectMeta{Name: "user-dev"},
+				Meta: &metav1.ObjectMeta{
+					Name: "user-dev",
+					Labels: map[string]string{
+						"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+					},
+				},
 				Object: &corev1.Namespace{},
 			}
 			// then

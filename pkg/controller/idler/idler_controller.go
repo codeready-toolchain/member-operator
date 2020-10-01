@@ -101,17 +101,14 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 	// Find the earlier pod to kill and requeue with the delay of one hour
 	// or with the earlier timout left for the next pod to delete whichever is the earliest.
 	d := nextPodToBeKilledAfter(idler)
-	if d != nil {
-		h := time.Hour
-		if *d > h {
-			d = &h
-		}
-		return reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: *d,
-		}, r.setStatusReady(idler)
+	oneHour := time.Hour
+	if d == nil || *d > oneHour {
+		d = &oneHour
 	}
-	return reconcile.Result{}, r.setStatusReady(idler)
+	return reconcile.Result{
+		Requeue:      true,
+		RequeueAfter: *d,
+	}, r.setStatusReady(idler)
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {

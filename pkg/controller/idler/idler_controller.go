@@ -101,7 +101,7 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 	// Find the earlier pod to kill
 	d := nextPodToBeKilledAfter(idler)
 	if d == nil {
-		// No pods tracked. Requeue after the idler timout so we don't miss new pods created withing the timeout.
+		// No pods tracked. Requeue after the idler timout so we don't miss new pods created within the timeout.
 		timeout := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
 		d = &timeout
 	}

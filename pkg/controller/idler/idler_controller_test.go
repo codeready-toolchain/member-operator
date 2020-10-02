@@ -102,7 +102,11 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
+		// requeue after the idler timeout
+		assert.Equal(t, reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: 30 * time.Second,
+		}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
 
@@ -236,8 +240,11 @@ func TestEnsureIdling(t *testing.T) {
 						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 							TracksPods([]*corev1.Pod{}).
 							HasConditions(memberoperatortest.Running())
-
-						assert.Equal(t, reconcile.Result{}, res)
+						// requeue after the idler timeout
+						assert.Equal(t, reconcile.Result{
+							Requeue:      true,
+							RequeueAfter: time.Minute,
+						}, res)
 					})
 				})
 			})

@@ -222,7 +222,7 @@ func TestEnsureIdling(t *testing.T) {
 					assert.True(t, res.Requeue)
 					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
 
-					t.Run("No pods. No requeue.", func(t *testing.T) {
+					t.Run("No pods - requeue after the idler timeout", func(t *testing.T) {
 						//given
 						// cleanup remaining pods
 						pods := append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)

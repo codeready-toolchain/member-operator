@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kubeclientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -34,12 +35,11 @@ var log = logf.Log.WithName("controller_idler")
 // Add creates a new Idler Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, config *configuration.Config) error {
-	k8sConfig := mgr.GetConfig()
-	restClient, err := rest.RESTClientFor(k8sConfig)
+	clientset, err := kubeclientset.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return err
 	}
-	return add(mgr, newReconciler(mgr, config, restClient))
+	return add(mgr, newReconciler(mgr, config, clientset.RESTClient()))
 }
 
 func newReconciler(mgr manager.Manager, config *configuration.Config, restClient rest.Interface) reconcile.Reconciler {

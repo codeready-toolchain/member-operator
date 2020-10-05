@@ -52,6 +52,19 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to secondary resources: Pods
+	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
+				}},
+			}
+		}),
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -98,17 +111,15 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill
+	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
 	d := nextPodToBeKilledAfter(idler)
-	if d == nil {
-		// No pods tracked. Requeue after the idler timout so we don't miss new pods created within the timeout.
-		timeout := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
-		d = &timeout
+	if d != nil {
+		return reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: *d,
+		}, r.setStatusReady(idler)
 	}
-	return reconcile.Result{
-		Requeue:      true,
-		RequeueAfter: *d,
-	}, r.setStatusReady(idler)
+	return reconcile.Result{}, r.setStatusReady(idler)
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {

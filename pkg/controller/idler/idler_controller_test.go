@@ -2,8 +2,10 @@ package idler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
@@ -13,10 +15,10 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/h2non/gock.v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +27,9 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
+	fakerest "k8s.io/client-go/rest/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -93,16 +97,21 @@ func TestEnsureIdling(t *testing.T) {
 			},
 			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
-
 		reconciler, req, cl := prepareReconcile(t, idler.Name, idler)
-		preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
+		noise := preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
+		createGockMock(t, "another-namespace", noise.allPods...)
+		createGockMock(t, "john-dev")
 
 		// when
 		res, err := reconciler.Reconcile(req)
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
+		// requeue after the idler timeout
+		assert.Equal(t, reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: 30 * time.Second,
+		}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
 
@@ -119,7 +128,10 @@ func TestEnsureIdling(t *testing.T) {
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+		allPods := append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)
+		createGockMock(t, "alex-stage", allPods...)
 		noise := preparePayloads(t, reconciler, "another-namespace", "", idlerTimeoutPlusOneSecondAgo)
+		createGockMock(t, "another-namespace", noise.allPods...)
 
 		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
 			//when
@@ -156,7 +168,7 @@ func TestEnsureIdling(t *testing.T) {
 
 			// Tracked pods
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+				TracksPods(allPods).
 				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
@@ -198,13 +210,18 @@ func TestEnsureIdling(t *testing.T) {
 
 				// Still tracking all pods. Even deleted ones.
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+					TracksPods(allPods).
 					HasConditions(memberoperatortest.Running())
 
 				assert.True(t, res.Requeue)
 				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
 
 				t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
+					// given
+					allPods := append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)
+					gock.OffAll()
+					createGockMock(t, "alex-stage", allPods...)
+
 					//when
 					res, err := reconciler.Reconcile(req)
 
@@ -212,20 +229,21 @@ func TestEnsureIdling(t *testing.T) {
 					require.NoError(t, err)
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)).
+						TracksPods(allPods).
 						HasConditions(memberoperatortest.Running())
 
 					assert.True(t, res.Requeue)
 					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
 
-					t.Run("No pods. No requeue.", func(t *testing.T) {
+					t.Run("No pods - requeue after the idler timeout", func(t *testing.T) {
 						//given
 						// cleanup remaining pods
-						pods := append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)
-						for _, pod := range pods {
+						for _, pod := range allPods {
 							err := cl.Delete(context.TODO(), pod)
 							require.NoError(t, err)
 						}
+						gock.OffAll()
+						createGockMock(t, "alex-stage")
 
 						//when
 						res, err := reconciler.Reconcile(req)
@@ -236,8 +254,11 @@ func TestEnsureIdling(t *testing.T) {
 						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 							TracksPods([]*corev1.Pod{}).
 							HasConditions(memberoperatortest.Running())
-
-						assert.Equal(t, reconcile.Result{}, res)
+						// requeue after the idler timeout
+						assert.Equal(t, reconcile.Result{
+							Requeue:      true,
+							RequeueAfter: time.Minute,
+						}, res)
 					})
 				})
 			})
@@ -278,23 +299,19 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			},
 			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
-
 		reconciler, req, cl := prepareReconcile(t, idler.Name, idler)
-		cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
-			pl := &corev1.PodList{}
-			if reflect.TypeOf(list) == reflect.TypeOf(pl) && len(opts) == 1 {
-				return errors.New("can't list pods")
-			}
-			return nil
-		}
+		gock.New("https://localhost").
+			Get("api/v1/namespaces/john-dev/pods").
+			Reply(404)
+		defer gock.OffAll()
 
 		// when
 		res, err := reconciler.Reconcile(req)
 
 		// then
-		require.EqualError(t, err, "failed to ensure idling 'john-dev': can't list pods")
+		require.EqualError(t, err, "failed to ensure idling 'john-dev': unable to list pods: the server could not find the requested resource")
 		assert.Equal(t, reconcile.Result{}, res)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("can't list pods"))
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("unable to list pods: the server could not find the requested resource"))
 	})
 
 	t.Run("Fail if can't access payloads", func(t *testing.T) {
@@ -571,6 +588,24 @@ func preparePayloads(t *testing.T, r *ReconcileIdler, namespace, namePrefix stri
 	}
 }
 
+func createGockMock(t *testing.T, namespace string, podsToList ...*corev1.Pod) {
+	list := corev1.PodList{}
+	for _, pod := range podsToList {
+		list.Items = append(list.Items, *pod)
+	}
+	bytes, err := json.Marshal(&list)
+	require.NoError(t, err)
+
+	gock.New("https://localhost").
+		Get(fmt.Sprintf("api/v1/namespaces/%s/pods", namespace)).
+		Persist().
+		Reply(200).
+		BodyString(string(bytes))
+	t.Cleanup(func() {
+		gock.OffAll()
+	})
+}
+
 func createPods(t *testing.T, r *ReconcileIdler, owner v1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
@@ -594,10 +629,18 @@ func prepareReconcile(t *testing.T, name string, initObjs ...runtime.Object) (*R
 	fakeClient := test.NewFakeClient(t, initObjs...)
 	cfg, err := configuration.LoadConfig(fakeClient)
 	require.NoError(t, err)
+
+	fakeRestClient := &fakerest.RESTClient{
+		Client:               http.DefaultClient,
+		NegotiatedSerializer: serializer.NewCodecFactory(s).WithoutConversion(),
+		GroupVersion:         schema.GroupVersion{},
+	}
+
 	r := &ReconcileIdler{
-		client: fakeClient,
-		scheme: s,
-		config: cfg,
+		client:     fakeClient,
+		scheme:     s,
+		config:     cfg,
+		restClient: fakeRestClient,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient
 }
@@ -607,6 +650,7 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler v1alpha1.Idler) 
 	reconciler, req, cl := prepareReconcile(t, idler.Name, &idler)
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)
+	createGockMock(t, idler.Name, payloads.allPods...)
 	//start tracking pods, so the Idler status is filled with the tracked pods
 	_, err := reconciler.Reconcile(req)
 	require.NoError(t, err)

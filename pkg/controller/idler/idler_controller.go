@@ -7,7 +7,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
-
 	"github.com/go-logr/logr"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	"github.com/operator-framework/operator-sdk/pkg/predicate"
@@ -20,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -34,11 +34,16 @@ var log = logf.Log.WithName("controller_idler")
 // Add creates a new Idler Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, config *configuration.Config) error {
-	return add(mgr, newReconciler(mgr, config))
+	k8sConfig := mgr.GetConfig()
+	restClient, err := rest.RESTClientFor(k8sConfig)
+	if err != nil {
+		return err
+	}
+	return add(mgr, newReconciler(mgr, config, restClient))
 }
 
-func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
-	return &ReconcileIdler{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config}
+func newReconciler(mgr manager.Manager, config *configuration.Config, restClient rest.Interface) reconcile.Reconciler {
+	return &ReconcileIdler{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config, restClient: restClient}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -52,19 +57,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to secondary resources: Pods
-	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			return []reconcile.Request{
-				{NamespacedName: types.NamespacedName{
-					Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
-				}},
-			}
-		}),
-	}); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -74,9 +66,10 @@ var _ reconcile.Reconciler = &ReconcileIdler{}
 type ReconcileIdler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-	config *configuration.Config
+	client     client.Client
+	scheme     *runtime.Scheme
+	config     *configuration.Config
+	restClient rest.Interface
 }
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
@@ -111,22 +104,30 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
+	// Find the earlier pod to kill
 	d := nextPodToBeKilledAfter(idler)
-	if d != nil {
-		return reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: *d,
-		}, r.setStatusReady(idler)
+	if d == nil {
+		// No pods tracked. Requeue after the idler timout so we don't miss new pods created within the timeout.
+		timeout := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
+		d = &timeout
 	}
-	return reconcile.Result{}, r.setStatusReady(idler)
+	return reconcile.Result{
+		Requeue:      true,
+		RequeueAfter: *d,
+	}, r.setStatusReady(idler)
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
-	if err := r.client.List(context.TODO(), podList, &client.ListOptions{Namespace: idler.Name}); err != nil {
-		return err
+	err := r.restClient.Get().
+		Prefix("api", "v1").
+		Name("pods").
+		Namespace(idler.Name).
+		Do(context.TODO()).
+		Into(podList)
+	if err != nil {
+		return errs.Wrapf(err, "unable to list pods")
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {

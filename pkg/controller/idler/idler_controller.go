@@ -113,13 +113,16 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 	}
 	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
 	d := nextPodToBeKilledAfter(idler)
-	if d != nil {
-		return reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: *d,
-		}, r.setStatusReady(idler)
+	if d == nil || *d < time.Duration(0) {
+		// No pods tracked. Requeue after the idler timout so we don't miss new pods created within the timeout.
+		timeout := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
+		d = &timeout
 	}
-	return reconcile.Result{}, r.setStatusReady(idler)
+	log.Info("requeueing in", "duration", d)
+	return reconcile.Result{
+		Requeue:      true,
+		RequeueAfter: *d,
+	}, r.setStatusReady(idler)
 }
 
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
@@ -134,7 +137,6 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 		podLogger.Info("Pod", "Pod.Phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
-			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.")
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
@@ -143,11 +145,14 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 					return err
 				}
 				if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
+					logger.Info("Deleting pod without controller")
 					if err := r.client.Delete(context.TODO(), &pod); err != nil {
 						return err
 					}
 					podLogger.Info("Pod deleted")
 				}
+			} else {
+				newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			}
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
 			podLogger.Info("New pod detected. Start tracking.")
@@ -165,9 +170,11 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 // and scales the owner down to zero and returns "true".
 // Otherwise returns "false".
 func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (bool, error) {
+	logger.Info("Scaling controller to zero", "name", meta.Name)
 	owners := meta.GetOwnerReferences()
 	for _, owner := range owners {
 		if owner.Controller != nil && *owner.Controller {
+			log.Info("owner", "owner", owner.Kind)
 			switch owner.Kind {
 			case "Deployment":
 				return r.scaleDeploymentToZero(logger, meta.Namespace, owner)
@@ -190,6 +197,7 @@ func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.O
 }
 
 func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+	logger.Info("Scaling deployment to zero", "name", owner.Name)
 	d := &appsv1.Deployment{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -207,11 +215,14 @@ func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace str
 }
 
 func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+	logger.Info("Scaling replica set to zero", "name", owner.Name)
 	rs := &appsv1.ReplicaSet{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			log.Error(err, "replica set is not found; ignoring: it might be already deleted")
 			return true, nil
 		}
+		log.Error(err, "error deleting rs")
 		return false, err
 	}
 	deletedByController, err := r.scaleControllerToZero(logger, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)

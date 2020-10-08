@@ -5,7 +5,6 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 
 	"github.com/go-logr/logr"
@@ -33,12 +32,12 @@ var log = logf.Log.WithName("controller_idler")
 
 // Add creates a new Idler Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, config *configuration.Config) error {
-	return add(mgr, newReconciler(mgr, config))
+func Add(mgr manager.Manager, cl client.Client) error {
+	return add(mgr, newReconciler(mgr, cl))
 }
 
-func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
-	return &ReconcileIdler{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config}
+func newReconciler(mgr manager.Manager, cl client.Client) reconcile.Reconciler {
+	return &ReconcileIdler{client: cl, scheme: mgr.GetScheme()}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -76,7 +75,6 @@ type ReconcileIdler struct {
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
-	config *configuration.Config
 }
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read

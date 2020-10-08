@@ -10,7 +10,6 @@ import (
 
 	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -592,12 +591,9 @@ func prepareReconcile(t *testing.T, name string, initObjs ...runtime.Object) (*R
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	cfg, err := configuration.LoadConfig(fakeClient)
-	require.NoError(t, err)
 	r := &ReconcileIdler{
 		client: fakeClient,
 		scheme: s,
-		config: cfg,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient
 }

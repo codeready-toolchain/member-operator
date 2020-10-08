@@ -18,21 +18,27 @@ import (
 	metrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 )
 
-// AddToScheme adds all Resources to the Scheme
+// AddToScheme adds all Resources to the default Scheme
 func AddToScheme(s *runtime.Scheme) error {
 	// add openshift specific resource
-	addToSchemes := append(apis.AddToSchemes, userv1.Install)
-	addToSchemes = append(addToSchemes, templatev1.Install)
-	addToSchemes = append(addToSchemes, projectv1.Install)
-	addToSchemes = append(addToSchemes, authv1.Install)
-	addToSchemes = append(addToSchemes, quotav1.Install)
-	addToSchemes = append(addToSchemes, extensionsv1.AddToScheme)
-	addToSchemes = append(addToSchemes, rbacv1.AddToScheme)
-	addToSchemes = append(addToSchemes, corev1.AddToScheme)
-	addToSchemes = append(addToSchemes, appsv1.AddToScheme)
-	addToSchemes = append(addToSchemes, openshiftappsv1.Install)
-	addToSchemes = append(addToSchemes, batchv1.AddToScheme)
-	addToSchemes = append(addToSchemes, metrics.AddToScheme)
+	addToSchemes := append(apis.AddToSchemes, userv1.Install,
+		templatev1.Install,
+		projectv1.Install,
+		authv1.Install,
+		quotav1.Install,
+		extensionsv1.AddToScheme,
+		rbacv1.AddToScheme,
+		corev1.AddToScheme,
+		appsv1.AddToScheme,
+		openshiftappsv1.Install,
+		batchv1.AddToScheme,
+		metrics.AddToScheme)
 
+	return addToSchemes.AddToScheme(s)
+}
+
+// AddToIdlerScheme adds all Resources to the Idler Scheme
+func AddToIdlerScheme(s *runtime.Scheme) error {
+	addToSchemes := append(apis.AddToSchemes, corev1.AddToScheme)
 	return addToSchemes.AddToScheme(s)
 }

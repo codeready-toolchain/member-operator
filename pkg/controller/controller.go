@@ -21,7 +21,6 @@ func init() {
 	addToManagerFuncs = append(addToManagerFuncs, useraccount.Add)
 	addToManagerFuncs = append(addToManagerFuncs, useraccountstatus.Add)
 	addToManagerFuncs = append(addToManagerFuncs, nstemplateset.Add)
-	// addToManagerFuncs = append(addToManagerFuncs, idler.Add)
 }
 
 // AddControllersToManager adds all Controllers to the Manager

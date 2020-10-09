@@ -197,6 +197,11 @@ func main() {
 	log.Info("Starting the Cmd.")
 }
 
+// newIdlerClient creates a new client for the Idler Controller.
+// As opposed to the client used in other controllers, this one watches resources in all namespaces.
+// But since the Idler controller only cares about Idler resources (cluster-wide) and Pods (namespaced),
+// this client will not store all other namespaced resources (secrets, etc.).
+// This will help keeping a reasonnable memory usage for this operator.
 func newIdlerClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
 
 	// Create the mapper provider

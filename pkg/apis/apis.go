@@ -36,9 +36,3 @@ func AddToScheme(s *runtime.Scheme) error {
 
 	return addToSchemes.AddToScheme(s)
 }
-
-// AddToIdlerScheme adds all Resources to the Idler Scheme
-func AddToIdlerScheme(s *runtime.Scheme) error {
-	addToSchemes := append(apis.AddToSchemes, corev1.AddToScheme)
-	return addToSchemes.AddToScheme(s)
-}

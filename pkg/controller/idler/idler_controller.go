@@ -167,7 +167,6 @@ func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.O
 	owners := meta.GetOwnerReferences()
 	for _, owner := range owners {
 		if owner.Controller != nil && *owner.Controller {
-			log.Info("owner", "owner", owner.Kind)
 			switch owner.Kind {
 			case "Deployment":
 				return r.scaleDeploymentToZero(logger, meta.Namespace, owner)

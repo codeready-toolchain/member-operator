@@ -203,7 +203,6 @@ func main() {
 // this client will not store all other namespaced resources (secrets, etc.).
 // This will help keeping a reasonnable memory usage for this operator.
 func newIdlerClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
-
 	// Create the mapper provider
 	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
 	if err != nil {
@@ -220,6 +219,7 @@ func newIdlerClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// see https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.6/pkg/manager/manager.go#L374-L389
 	return &client.DelegatingClient{
 		Reader: &client.DelegatingReader{
 			CacheReader:  cache,

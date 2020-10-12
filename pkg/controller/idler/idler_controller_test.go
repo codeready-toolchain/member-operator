@@ -28,9 +28,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func TestReconcile(t *testing.T) {
+
 	t.Run("No Idler resource found", func(t *testing.T) {
 		// given
 		requestName := "not-existing-name"
@@ -84,6 +86,9 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestEnsureIdling(t *testing.T) {
+
+	logf.SetLogger(logf.ZapLogger(true))
+
 	t.Run("No pods in namespace managed by idler", func(t *testing.T) {
 		// given
 		idler := &v1alpha1.Idler{
@@ -101,6 +106,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
+		// no need to requeue, the controller will reconcile when a pod is created
 		assert.Equal(t, reconcile.Result{}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
@@ -197,7 +203,7 @@ func TestEnsureIdling(t *testing.T) {
 
 				// Still tracking all pods. Even deleted ones.
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+					TracksPods(podsTooEarlyToKill.allPods).
 					HasConditions(memberoperatortest.Running())
 
 				assert.True(t, res.Requeue)
@@ -236,6 +242,7 @@ func TestEnsureIdling(t *testing.T) {
 							TracksPods([]*corev1.Pod{}).
 							HasConditions(memberoperatortest.Running())
 
+						// requeue after the idler timeout
 						assert.Equal(t, reconcile.Result{}, res)
 					})
 				})
@@ -357,9 +364,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(req)
 
 				// then
-				assert.NoError(t, err) // NotFound errors are ignored!
-				assert.True(t, res.Requeue)
-				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+				assert.NoError(t, err) // 'NotFound' errors are ignored!
+				assert.Equal(t, reconcile.Result{}, res)
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 			}
 

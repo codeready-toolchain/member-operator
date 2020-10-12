@@ -75,8 +75,7 @@ rules:
   resources:
   - routes
   verbs:
-  - "get"
-  - "list"
+  - "*"
 - apiGroups:
   - networking.k8s.io
   resources:

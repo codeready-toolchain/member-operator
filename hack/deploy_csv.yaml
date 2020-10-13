@@ -371,8 +371,6 @@ data:
                             per node role (eg. worker, master)
                           type: object
                       type: object
-                  required:
-                  - consoleURL
                   type: object
               type: object
               x-kubernetes-preserve-unknown-fields: true

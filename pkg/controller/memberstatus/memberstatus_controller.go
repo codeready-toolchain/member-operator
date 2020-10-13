@@ -4,23 +4,23 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	errs "github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -168,7 +168,7 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	// look up host connection status
 	connectionConditions := status.GetToolchainClusterConditions(reqLogger, attributes)
 	err := status.ValidateComponentConditionReady(connectionConditions...)
-	memberStatus.Status.Host = &v1alpha1.HostStatus{
+	memberStatus.Status.Host = &toolchainv1alpha1.HostStatus{
 		Conditions: connectionConditions,
 	}
 
@@ -326,4 +326,41 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 			Reason:  toolchainv1alpha1.ToolchainStatusComponentsNotReadyReason,
 			Message: message,
 		})
+}
+
+// withConsoleURL returns the given user account status with Console URL set if it's not already set yet
+func (r *ReconcileMemberStatus) consoleURL(memberStatus *toolchainv1alpha1.MemberStatus) error {
+	if memberStatus.Status.ConsoleURL == "" {
+		route := &routev1.Route{}
+		namespacedName := types.NamespacedName{Namespace: r.config.GetConsoleNamespace(), Name: r.config.GetConsoleRouteName()}
+		if err := r.client.Get(context.TODO(), namespacedName, route); err != nil {
+			return err
+		}
+		memberStatus.Status.ConsoleURL = fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path)
+	}
+	return nil
+}
+
+// withCheDashboardURL returns the given user account status with Che Dashboard URL set if it's not already set yet
+func (r *ReconcileMemberStatus) withCheDashboardURL(status toolchainv1alpha1.UserAccountStatusEmbedded) (toolchainv1alpha1.UserAccountStatusEmbedded, error) {
+	if status.Cluster.CheDashboardURL == "" {
+		route := &routev1.Route{}
+		namespacedName := types.NamespacedName{Namespace: s.config.GetCheNamespace(), Name: s.config.GetCheRouteName()}
+		err := s.memberCluster.Client.Get(context.TODO(), namespacedName, route)
+		if err != nil {
+			if kuberrors.IsNotFound(err) {
+				// It can happen if Che Operator is not installed
+				s.logger.Info("unable to get che dashboard route (operator not installed?)")
+				return status, nil
+			}
+			s.logger.Error(err, "unable to get che dashboard route")
+			return status, err
+		}
+		scheme := "https"
+		if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
+			scheme = "http"
+		}
+		status.Cluster.CheDashboardURL = fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path)
+	}
+	return status, nil
 }

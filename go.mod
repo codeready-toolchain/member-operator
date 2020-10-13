@@ -5,6 +5,7 @@ require (
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20200914220109-fa9ff58ae598
 	github.com/go-logr/logr v0.1.0
 	github.com/gofrs/uuid v3.3.0+incompatible
+	github.com/golangci/golangci-lint v1.31.0 // indirect
 	github.com/openshift/api v3.9.1-0.20190924102528-32369d4db2ad+incompatible
 	github.com/operator-framework/operator-sdk v0.19.2
 	github.com/pkg/errors v0.9.1
@@ -12,8 +13,8 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/cast v1.3.1
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.5.1
+	github.com/spf13/viper v1.7.1
+	github.com/stretchr/testify v1.6.1
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.3
 	k8s.io/apiextensions-apiserver v0.18.3

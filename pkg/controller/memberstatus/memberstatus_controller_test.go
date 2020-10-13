@@ -13,20 +13,21 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -37,6 +38,7 @@ const defaultMemberOperatorName = "member-operator"
 const defaultMemberStatusName = configuration.DefaultMemberStatusName
 
 func TestNoMemberStatusFound(t *testing.T) {
+
 	t.Run("No memberstatus resource found", func(t *testing.T) {
 		// given
 		requestName := "bad-name"
@@ -393,9 +395,8 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 
-	initObjs = append(initObjs)
 	fakeClient := test.NewFakeClient(t, initObjs...)
 	config, err := configuration.LoadConfig(fakeClient)
 	require.NoError(t, err)

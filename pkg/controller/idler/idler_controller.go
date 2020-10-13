@@ -23,9 +23,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -340,8 +340,7 @@ func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 	}
 	var d time.Duration
 	for _, pod := range idler.Status.Pods {
-		whenToKill := pod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		killAfter := whenToKill.Sub(time.Now())
+		killAfter := time.Until(pod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second))
 		if d == 0 || killAfter < d {
 			d = killAfter
 		}

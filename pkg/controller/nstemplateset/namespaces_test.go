@@ -9,6 +9,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	. "github.com/codeready-toolchain/member-operator/test"
+
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,8 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func TestFindNamespace(t *testing.T) {
@@ -289,7 +291,7 @@ func TestGetNamespaceName(t *testing.T) {
 
 func TestEnsureNamespacesOK(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -404,7 +406,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 }
 
 func TestEnsureNamespacesFail(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 
 	// given
 	username := "johnsmith"
@@ -634,7 +636,7 @@ func TestDeleteNamespsace(t *testing.T) {
 
 func TestPromoteNamespaces(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -817,7 +819,7 @@ func TestPromoteNamespaces(t *testing.T) {
 
 func TestUpdateNamespaces(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"

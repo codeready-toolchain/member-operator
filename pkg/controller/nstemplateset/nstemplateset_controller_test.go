@@ -11,6 +11,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
@@ -27,13 +28,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func TestReconcileAddFinalizer(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -78,7 +80,7 @@ func TestReconcileAddFinalizer(t *testing.T) {
 
 func TestReconcileProvisionOK(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -119,9 +121,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// create cluster resources
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
-		idlerDev := newIdler(username, username+"-dev", "advanced")
-		idlerCode := newIdler(username, username+"-code", "advanced")
-		idlerStage := newIdler(username, username+"-stage", "advanced")
+		idlerDev := newIdler(username, username+"-dev")
+		idlerCode := newIdler(username, username+"-code")
+		idlerStage := newIdler(username, username+"-stage")
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
@@ -181,7 +183,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 func TestProvisionTwoUsers(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "john"
 	namespaceName := "toolchain-member"
@@ -448,7 +450,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 func TestReconcilePromotion(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -628,7 +630,7 @@ func TestReconcilePromotion(t *testing.T) {
 
 func TestReconcileUpdate(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -808,7 +810,7 @@ func TestReconcileUpdate(t *testing.T) {
 }
 
 func TestReconcileProvisionFail(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 
 	// given
 	username := "johnsmith"
@@ -1197,7 +1199,7 @@ func newRole(namespace, name string) *rbacv1.Role { //nolint: unparam
 	}
 }
 
-func newTektonClusterRoleBinding(username, tier string, options ...objectMetaOption) *rbacv1.ClusterRoleBinding {
+func newTektonClusterRoleBinding(username, tier string) *rbacv1.ClusterRoleBinding {
 	crb := &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "ClusterRoleBinding",
@@ -1223,9 +1225,6 @@ func newTektonClusterRoleBinding(username, tier string, options ...objectMetaOpt
 			Kind: "User",
 			Name: username,
 		}},
-	}
-	for _, option := range options {
-		crb.ObjectMeta = option(crb.ObjectMeta, tier, "clusterresources")
 	}
 	return crb
 }
@@ -1268,7 +1267,7 @@ func newClusterResourceQuota(username, tier string, options ...objectMetaOption)
 	return crq
 }
 
-func newIdler(username, name, tier string, options ...objectMetaOption) *toolchainv1alpha1.Idler {
+func newIdler(username, name string) *toolchainv1alpha1.Idler {
 	idler := &toolchainv1alpha1.Idler{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Idler",
@@ -1277,8 +1276,8 @@ func newIdler(username, name, tier string, options ...objectMetaOption) *toolcha
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":        tier,
-				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "clusterresources", "abcde11"),
+				"toolchain.dev.openshift.com/tier":        "advanced",
+				"toolchain.dev.openshift.com/templateref": NewTierTemplateName("advanced", "clusterresources", "abcde11"),
 				"toolchain.dev.openshift.com/owner":       username,
 				"toolchain.dev.openshift.com/type":        "clusterresources",
 			},
@@ -1288,9 +1287,6 @@ func newIdler(username, name, tier string, options ...objectMetaOption) *toolcha
 		Spec: toolchainv1alpha1.IdlerSpec{
 			TimeoutSeconds: 30,
 		},
-	}
-	for _, option := range options {
-		idler.ObjectMeta = option(idler.ObjectMeta, tier, "clusterresources")
 	}
 	return idler
 }

@@ -25,7 +25,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.6.0
 )
 
-replace github.com/codeready-toolchain/api => github.com/alexeykazakov/api v0.0.0-20201013003743-eed55bb9315f
+replace github.com/codeready-toolchain/api => github.com/alexeykazakov/api v0.0.0-20201013014555-9dd6144cdd45
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM

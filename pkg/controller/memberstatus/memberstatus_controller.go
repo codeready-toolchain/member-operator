@@ -40,6 +40,7 @@ const (
 	memberOperatorTag statusComponentTag = "memberOperator"
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"
+	routesTag         statusComponentTag = "routes"
 
 	labelNodeRoleMaster = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
@@ -129,11 +130,12 @@ type statusHandler struct {
 // component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
 func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 
-	memberOperatorStatusHandler := statusHandler{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus}
-	hostConnectionStatusHandler := statusHandler{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus}
-	resourceUsageStatusHandler := statusHandler{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage}
-
-	statusHandlers := []statusHandler{memberOperatorStatusHandler, hostConnectionStatusHandler, resourceUsageStatusHandler}
+	statusHandlers := []statusHandler{
+		{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus},
+		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
+		{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage},
+		{name: routesTag, handleStatus: r.routesHandleStatus},
+	}
 
 	// track components that are not ready
 	var unreadyComponents []string
@@ -256,6 +258,36 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 	return nil
 }
 
+// routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
+// Returns an error if at least one of the required routes are not available.
+func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+	consoleURL, err := r.consoleURL()
+	if err != nil {
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusConsoleRouteUnavailableReason, err.Error())
+		memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		return err
+	}
+	memberStatus.Status.Routes.ConsoleURL = consoleURL
+
+	if r.config.GetEnvironment() != "e2e-tests" {
+		cheURL, err := r.cheDashboardURL()
+		if err != nil {
+			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
+			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+			return err
+		}
+		memberStatus.Status.Routes.CheDashboardURL = cheURL
+	} else {
+		// There is no Che operator installed in e2e-tests but we still want to have the routes status to be ready
+		memberStatus.Status.Routes.CheDashboardURL = "e2e-tests"
+	}
+
+	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusRoutesAvailableReason)
+	memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
+
+	return nil
+}
+
 func (r *ReconcileMemberStatus) getAllocatableValues(reqLogger logr.Logger) (map[string]nodeInfo, error) {
 	nodes := &corev1.NodeList{}
 	err := r.client.List(context.TODO(), nodes)
@@ -328,38 +360,27 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 		})
 }
 
-// withConsoleURL returns the given user account status with Console URL set if it's not already set yet
-func (r *ReconcileMemberStatus) consoleURL(memberStatus *toolchainv1alpha1.MemberStatus) error {
-	if memberStatus.Status.ConsoleURL == "" {
-		route := &routev1.Route{}
-		namespacedName := types.NamespacedName{Namespace: r.config.GetConsoleNamespace(), Name: r.config.GetConsoleRouteName()}
-		if err := r.client.Get(context.TODO(), namespacedName, route); err != nil {
-			return err
-		}
-		memberStatus.Status.ConsoleURL = fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path)
+func (r *ReconcileMemberStatus) consoleURL() (string, error) {
+	route := &routev1.Route{}
+	namespacedName := types.NamespacedName{Namespace: r.config.GetConsoleNamespace(), Name: r.config.GetConsoleRouteName()}
+	// TODO User proper client with All Namespaces cache
+	if err := r.client.Get(context.TODO(), namespacedName, route); err != nil {
+		return "", err
 	}
-	return nil
+	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
 }
 
-// withCheDashboardURL returns the given user account status with Che Dashboard URL set if it's not already set yet
-func (r *ReconcileMemberStatus) cheDashboardURL(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
-	if memberStatus.Status.CheDashboardURL == "" {
-		route := &routev1.Route{}
-		namespacedName := types.NamespacedName{Namespace: r.config.GetCheNamespace(), Name: r.config.GetCheRouteName()}
-		err := r.client.Get(context.TODO(), namespacedName, route)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				// It can happen if Che Operator is not installed
-				reqLogger.Info("unable to get che dashboard route (operator not installed?)")
-				return nil
-			}
-			return err
-		}
-		scheme := "https"
-		if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
-			scheme = "http"
-		}
-		memberStatus.Status.CheDashboardURL = fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path)
+func (r *ReconcileMemberStatus) cheDashboardURL() (string, error) {
+	route := &routev1.Route{}
+	namespacedName := types.NamespacedName{Namespace: r.config.GetCheNamespace(), Name: r.config.GetCheRouteName()}
+	// TODO User proper client with All Namespaces cache
+	err := r.client.Get(context.TODO(), namespacedName, route)
+	if err != nil {
+		return "", err
 	}
-	return nil
+	scheme := "https"
+	if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path), nil
 }

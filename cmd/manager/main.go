@@ -149,7 +149,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := controller.AddIdlerControllerToManager(mgr, idlerClient); err != nil {
+	if err := controller.AddIdlerControllerToManager(mgr, idlerClient, idlerClientCache); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -162,11 +162,11 @@ func main() {
 	go func() {
 		log.Info("Waiting for cache to sync")
 		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
-			log.Error(fmt.Errorf("timed out waiting for caches to sync"), "")
+			log.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
 			os.Exit(1)
 		}
 		if !idlerClientCache.WaitForCacheSync(stopChannel) {
-			log.Error(fmt.Errorf("timed out waiting for caches to sync"), "")
+			log.Error(fmt.Errorf("timed out waiting for idler cache to sync"), "")
 			os.Exit(1)
 		}
 		log.Info("Starting ToolchainCluster health checks.")

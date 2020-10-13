@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -32,35 +33,48 @@ var log = logf.Log.WithName("controller_idler")
 
 // Add creates a new Idler Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, cl client.Client) error {
-	return add(mgr, newReconciler(mgr, cl))
+func Add(mgr manager.Manager, cl client.Client, cache cache.Cache) error {
+	return add(mgr, newReconciler(mgr, cl, cache))
 }
 
-func newReconciler(mgr manager.Manager, cl client.Client) reconcile.Reconciler {
-	return &ReconcileIdler{client: cl, scheme: mgr.GetScheme()}
+func newReconciler(mgr manager.Manager, cl client.Client, cache cache.Cache) *ReconcileIdler {
+	return &ReconcileIdler{
+		client: cl,
+		cache:  cache,
+		scheme: mgr.GetScheme(),
+	}
 }
 
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
+func add(mgr manager.Manager, r *ReconcileIdler) error {
 	c, err := controller.New("idler-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
 	// Watch for changes to primary resource Idler
-	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.Idler{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{}); err != nil {
+	if err := c.Watch(
+		source.NewKindWithCache(&toolchainv1alpha1.Idler{}, r.cache),
+		&handler.EnqueueRequestForObject{},
+		predicate.GenerationChangedPredicate{}); err != nil {
 		return err
 	}
 
 	// Watch for changes to secondary resources: Pods
-	if err := c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestsFromMapFunc{
-		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-			return []reconcile.Request{
-				{NamespacedName: types.NamespacedName{
-					Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
-				}},
-			}
-		}),
-	}); err != nil {
+	if err := c.Watch(
+		source.NewKindWithCache(&corev1.Pod{}, r.cache),
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				log.Info("triggering reconcile loop while watching pod", "namespace", a.Meta.GetNamespace(), "name", a.Meta.GetName())
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
+						},
+					},
+				}
+			}),
+		},
+	); err != nil {
 		return err
 	}
 
@@ -74,6 +88,7 @@ type ReconcileIdler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
+	cache  cache.Cache
 	scheme *runtime.Scheme
 }
 
@@ -84,11 +99,12 @@ type ReconcileIdler struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-
+	logger.Info("new reconcile loop")
 	// Fetch the Idler instance
 	idler := &toolchainv1alpha1.Idler{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: request.Name}, idler); err != nil {
 		if errors.IsNotFound(err) {
+			logger.Info("no Idler found for namespace", "name", request.Name)
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "failed to get Idler")
@@ -312,11 +328,19 @@ func (r *ReconcileIdler) deleteJob(logger logr.Logger, namespace string, owner m
 	j := &batchv1.Job{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			logger.Info("job not found")
 			return true, nil
 		}
 		return false, err
 	}
-	if err := r.client.Delete(context.TODO(), j); err != nil {
+	// see https://github.com/kubernetes/kubernetes/issues/20902#issuecomment-321484735
+	// also, this may be needed for the e2e tests if the call to `client.Delete` comes too quickly after creating the job,
+	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
+	propagationPolicy := metav1.DeletePropagationBackground
+
+	if err := r.client.Delete(context.TODO(), j, &client.DeleteOptions{
+		PropagationPolicy: &propagationPolicy,
+	}); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}

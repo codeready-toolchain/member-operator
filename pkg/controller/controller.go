@@ -8,8 +8,9 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccountstatus"
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -36,6 +37,6 @@ func AddControllersToManager(m manager.Manager, config *configuration.Config) er
 	return nil
 }
 
-func AddIdlerControllerToManager(m manager.Manager, cl client.Client) error {
-	return idler.Add(m, cl)
+func AddIdlerControllerToManager(m manager.Manager, cl client.Client, cache cache.Cache) error {
+	return idler.Add(m, cl, cache)
 }

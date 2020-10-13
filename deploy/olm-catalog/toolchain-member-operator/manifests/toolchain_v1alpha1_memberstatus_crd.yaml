@@ -42,6 +42,10 @@ spec:
             description: MemberStatusStatus defines the observed state of the toolchain
               member status
             properties:
+              cheDashboardURL:
+                description: CheDashboardURL is the Che Dashboard URL of the cluster
+                  if Che is installed
+                type: string
               conditions:
                 description: 'Conditions is an array of current toolchain status conditions
                   Supported condition types: ConditionReady'
@@ -77,6 +81,9 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              consoleURL:
+                description: ConsoleURL is the web console URL of the cluster
+                type: string
               host:
                 description: Host is the status of the connection with the host cluster
                 properties:
@@ -239,6 +246,8 @@ spec:
                       per node role (eg. worker, master)
                     type: object
                 type: object
+            required:
+            - consoleURL
             type: object
         type: object
         x-kubernetes-preserve-unknown-fields: true

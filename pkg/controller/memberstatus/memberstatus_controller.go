@@ -342,25 +342,24 @@ func (r *ReconcileMemberStatus) consoleURL(memberStatus *toolchainv1alpha1.Membe
 }
 
 // withCheDashboardURL returns the given user account status with Che Dashboard URL set if it's not already set yet
-func (r *ReconcileMemberStatus) withCheDashboardURL(status toolchainv1alpha1.UserAccountStatusEmbedded) (toolchainv1alpha1.UserAccountStatusEmbedded, error) {
-	if status.Cluster.CheDashboardURL == "" {
+func (r *ReconcileMemberStatus) cheDashboardURL(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+	if memberStatus.Status.CheDashboardURL == "" {
 		route := &routev1.Route{}
-		namespacedName := types.NamespacedName{Namespace: s.config.GetCheNamespace(), Name: s.config.GetCheRouteName()}
-		err := s.memberCluster.Client.Get(context.TODO(), namespacedName, route)
+		namespacedName := types.NamespacedName{Namespace: r.config.GetCheNamespace(), Name: r.config.GetCheRouteName()}
+		err := r.client.Get(context.TODO(), namespacedName, route)
 		if err != nil {
-			if kuberrors.IsNotFound(err) {
+			if errors.IsNotFound(err) {
 				// It can happen if Che Operator is not installed
-				s.logger.Info("unable to get che dashboard route (operator not installed?)")
-				return status, nil
+				reqLogger.Info("unable to get che dashboard route (operator not installed?)")
+				return nil
 			}
-			s.logger.Error(err, "unable to get che dashboard route")
-			return status, err
+			return err
 		}
 		scheme := "https"
 		if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
 			scheme = "http"
 		}
-		status.Cluster.CheDashboardURL = fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path)
+		memberStatus.Status.CheDashboardURL = fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path)
 	}
-	return status, nil
+	return nil
 }

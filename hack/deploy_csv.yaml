@@ -282,17 +282,6 @@ data:
                             type: object
                           type: array
                           x-kubernetes-list-type: atomic
-                        region:
-                          description: Region is the name of the region in which all of
-                            the nodes in the cluster exist.  e.g. 'us-east1'.
-                          type: string
-                        zones:
-                          description: Zones are the names of availability zones in which
-                            the nodes of the cluster exist, e.g. 'us-east1-a'.
-                          items:
-                            type: string
-                          type: array
-                          x-kubernetes-list-type: set
                       required:
                       - conditions
                       type: object
@@ -363,6 +352,54 @@ data:
                           description: How many percent of the available memory is used
                             per node role (eg. worker, master)
                           type: object
+                      type: object
+                    routes:
+                      description: Routes/URLs of the cluster, such as Console and Che Dashboard
+                        URLs
+                      properties:
+                        cheDashboardURL:
+                          description: CheDashboardURL is the Che Dashboard URL of the cluster
+                            if Che is installed
+                          type: string
+                        conditions:
+                          description: 'Conditions is an array of current member operator
+                            status conditions Supported condition types: ConditionReady'
+                          items:
+                            properties:
+                              lastTransitionTime:
+                                description: Last time the condition transit from one status
+                                  to another.
+                                format: date-time
+                                type: string
+                              lastUpdatedTime:
+                                description: Last time the condition was updated
+                                format: date-time
+                                type: string
+                              message:
+                                description: Human readable message indicating details about
+                                  last transition.
+                                type: string
+                              reason:
+                                description: (brief) reason for the condition's last transition.
+                                type: string
+                              status:
+                                description: Status of the condition, one of True, False,
+                                  Unknown.
+                                type: string
+                              type:
+                                description: Type of condition
+                                type: string
+                            required:
+                            - status
+                            - type
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                          - type
+                          x-kubernetes-list-type: map
+                        consoleURL:
+                          description: ConsoleURL is the web console URL of the cluster
+                          type: string
                       type: object
                   type: object
               type: object
@@ -613,17 +650,6 @@ data:
                         type: object
                       type: array
                       x-kubernetes-list-type: atomic
-                    region:
-                      description: Region is the name of the region in which all of the
-                        nodes in the cluster exist.  e.g. 'us-east1'.
-                      type: string
-                    zones:
-                      description: Zones are the names of availability zones in which the
-                        nodes of the cluster exist, e.g. 'us-east1-a'.
-                      items:
-                        type: string
-                      type: array
-                      x-kubernetes-list-type: set
                   required:
                   - conditions
                   type: object

@@ -1053,7 +1053,8 @@ data:
                 resources:
                 - routes
                 verbs:
-                - '*'
+                - get
+                - list
               - apiGroups:
                 - networking.k8s.io
                 resources:
@@ -1160,6 +1161,12 @@ data:
                 - deployments/finalizers
                 verbs:
                 - update
+              - apiGroups:
+                - route.openshift.io
+                resources:
+                - routes
+                verbs:
+                - create
               serviceAccountName: member-operator
           strategy: deployment
         installModes:

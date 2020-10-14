@@ -340,7 +340,8 @@ func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 	}
 	var d time.Duration
 	for _, pod := range idler.Status.Pods {
-		killAfter := time.Until(pod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second))
+		whenToKill := pod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		killAfter := whenToKill.Sub(time.Now())
 		if d == 0 || killAfter < d {
 			d = killAfter
 		}

@@ -1276,7 +1276,7 @@ func newIdler(username, name string) *toolchainv1alpha1.Idler {
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":        "advanced",
+				"toolchain.dev.openshift.com/tier":        "basic",
 				"toolchain.dev.openshift.com/templateref": NewTierTemplateName("advanced", "clusterresources", "abcde11"),
 				"toolchain.dev.openshift.com/owner":       username,
 				"toolchain.dev.openshift.com/type":        "clusterresources",

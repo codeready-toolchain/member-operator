@@ -261,6 +261,9 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 // routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
 // Returns an error if at least one of the required routes are not available.
 func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+	if memberStatus.Status.Routes == nil {
+		memberStatus.Status.Routes = &toolchainv1alpha1.Routes{}
+	}
 	consoleURL, err := r.consoleURL()
 	if err != nil {
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusConsoleRouteUnavailableReason, err.Error())
@@ -269,18 +272,16 @@ func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, member
 	}
 	memberStatus.Status.Routes.ConsoleURL = consoleURL
 
-	if r.config.GetEnvironment() != "e2e-tests" {
-		cheURL, err := r.cheDashboardURL()
-		if err != nil {
+	cheURL, err := r.cheDashboardURL()
+	if err != nil {
+		if r.config.IsCheRequired() {
 			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
 			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 			return err
 		}
-		memberStatus.Status.Routes.CheDashboardURL = cheURL
-	} else {
-		// There is no Che operator installed in e2e-tests but we still want to have the routes status to be ready
-		memberStatus.Status.Routes.CheDashboardURL = "e2e-tests"
+		reqLogger.Info("Che route is not available but not required. Ignoring.", "err", err.Error())
 	}
+	memberStatus.Status.Routes.CheDashboardURL = cheURL
 
 	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusRoutesAvailableReason)
 	memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*readyCondition}

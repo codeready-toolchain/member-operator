@@ -45,6 +45,10 @@ const (
 	// defaultConsoleRouteName is the default console route name
 	defaultConsoleRouteName = "console"
 
+	// varCheRequired is set to true if Che/CRW operator is expected to be installed on the cluster. May be used in monitoring.
+	varCheRequired     = "che.required"
+	defaultCheRequired = false
+
 	// varCheNamespace is the che route namespace
 	varCheNamespace = "che.namespace"
 
@@ -115,6 +119,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varConsoleNamespace, defaultConsoleNamespace)
 	c.member.SetDefault(varConsoleRouteName, defaultConsoleRouteName)
 	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
+	c.member.SetDefault(varCheRequired, defaultCheRequired)
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 	c.member.SetDefault(varEnvironment, defaultEnvironment)
 }
@@ -169,6 +174,11 @@ func (c *Config) GetConsoleNamespace() string {
 // GetConsoleRouteName returns the console route name
 func (c *Config) GetConsoleRouteName() string {
 	return c.member.GetString(varConsoleRouteName)
+}
+
+// GetCheRequired returns true if the Che operator is expected to be installed. May be used in monitoring.
+func (c *Config) IsCheRequired() bool {
+	return c.member.GetBool(varCheRequired)
 }
 
 // GetCheNamespace returns the Che route namespace

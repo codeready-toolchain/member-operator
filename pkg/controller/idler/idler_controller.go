@@ -365,6 +365,10 @@ func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 			d = killAfter
 		}
 	}
+	// do not allow negative durations: if a pod has timed out, then it should be killed immediately
+	if d < 0 {
+		d = 0
+	}
 	log.Info("next pod to kill", "after", d)
 	return &d
 }

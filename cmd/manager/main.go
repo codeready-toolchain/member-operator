@@ -143,7 +143,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	idlerClient, idlerClientCache, err := newIdlerClient(cfg)
+	idlerClient, idlerClientCache, err := newClient(cfg)
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -197,12 +197,12 @@ func main() {
 	log.Info("Starting the Cmd.")
 }
 
-// newIdlerClient creates a new client for the Idler Controller.
+// newClient creates a new "custom" client for a controller.
 // As opposed to the client used in other controllers, this one watches resources in all namespaces.
 // But since the Idler controller only cares about Idler resources (cluster-wide) and Pods (namespaced),
 // this client will not store all other namespaced resources (secrets, etc.).
 // This will help keeping a reasonable memory usage for this operator.
-func newIdlerClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
+func newClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
 	// Create the mapper provider
 	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
 	if err != nil {

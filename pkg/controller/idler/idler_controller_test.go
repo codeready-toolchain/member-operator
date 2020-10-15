@@ -168,7 +168,7 @@ func TestEnsureIdling(t *testing.T) {
 				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
-			assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+			assert.Equal(t, int(res.RequeueAfter), 0) // pods running for too long should be killed immediately
 
 			t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
 				//when

@@ -168,7 +168,7 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	}
 
 	// look up host connection status
-	connectionConditions := status.GetToolchainClusterConditions(attributes)
+	connectionConditions := status.GetToolchainClusterConditions(reqLogger, attributes)
 	err := status.ValidateComponentConditionReady(connectionConditions...)
 	memberStatus.Status.Host = &toolchainv1alpha1.HostStatus{
 		Conditions: connectionConditions,

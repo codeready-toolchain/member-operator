@@ -351,7 +351,7 @@ func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alph
 
 // nextPodToBeKilledAfter checks the start times of all the tracked pods in the Idler and returns `true` and the timeout left
 // for the next pod to be killed.
-// If there is no pod to kill, the func returns `false`, `0`
+// If there is no pod to kill, the func returns `nil`
 func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 	if len(idler.Status.Pods) == 0 {
 		// no pod tracked, so nothing to kill

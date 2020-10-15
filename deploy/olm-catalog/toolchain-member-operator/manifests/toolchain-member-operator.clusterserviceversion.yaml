@@ -312,6 +312,12 @@ spec:
           - deployments/finalizers
           verbs:
           - update
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - create
         serviceAccountName: member-operator
     strategy: deployment
   installModes:

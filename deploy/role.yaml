@@ -34,3 +34,9 @@ rules:
   - member-operator
   verbs:
   - "update"
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - "create"

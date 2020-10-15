@@ -59,25 +59,6 @@ func add(mgr manager.Manager, r *ReconcileIdler) error {
 		return err
 	}
 
-	// Watch for changes to secondary resources: Pods
-	if err := c.Watch(
-		source.NewKindWithCache(&corev1.Pod{}, r.cache),
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-				log.Info("triggering reconcile loop while watching pod", "namespace", a.Meta.GetNamespace(), "name", a.Meta.GetName())
-				return []reconcile.Request{
-					{
-						NamespacedName: types.NamespacedName{
-							Name: a.Meta.GetNamespace(), // Use pod's namespace name as the name of the corresponding Idler resource
-						},
-					},
-				}
-			}),
-		},
-	); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -126,11 +107,20 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 			"failed to ensure idling '%s'", idler.Name)
 	}
 	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
-	requeue, after := nextPodToBeKilledAfter(idler)
-	log.Info("requeueing in", "duration", after)
+	nextTime := nextPodToBeKilledAfter(idler)
+	if nextTime == nil {
+		log.Info("requeueing for next pod to check", "duration", nextTime)
+		after := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
+		return reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: after,
+		}, r.setStatusReady(idler)
+
+	}
+	log.Info("requeueing for next pod to kill", "duration", nextTime)
 	return reconcile.Result{
-		Requeue:      requeue,
-		RequeueAfter: after,
+		Requeue:      true,
+		RequeueAfter: *nextTime,
 	}, r.setStatusReady(idler)
 }
 
@@ -362,10 +352,10 @@ func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alph
 // nextPodToBeKilledAfter checks the start times of all the tracked pods in the Idler and returns `true` and the timeout left
 // for the next pod to be killed.
 // If there is no pod to kill, the func returns `false`, `0`
-func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) (bool, time.Duration) {
+func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 	if len(idler.Status.Pods) == 0 {
 		// no pod tracked, so nothing to kill
-		return false, time.Duration(0)
+		return nil
 	}
 	var d time.Duration
 	for _, pod := range idler.Status.Pods {
@@ -376,7 +366,7 @@ func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) (bool, time.Duration
 		}
 	}
 	log.Info("next pod to kill", "after", d)
-	return true, d
+	return &d
 }
 
 // updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.

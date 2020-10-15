@@ -107,7 +107,10 @@ func TestEnsureIdling(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		// no need to requeue, the controller will reconcile when a pod is created
-		assert.Equal(t, reconcile.Result{}, res)
+		assert.Equal(t, reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: 30 * time.Second,
+		}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
 
@@ -243,7 +246,10 @@ func TestEnsureIdling(t *testing.T) {
 							HasConditions(memberoperatortest.Running())
 
 						// requeue after the idler timeout
-						assert.Equal(t, reconcile.Result{}, res)
+						assert.Equal(t, reconcile.Result{
+							Requeue:      true,
+							RequeueAfter: 60 * time.Second,
+						}, res)
 					})
 				})
 			})
@@ -365,7 +371,10 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				// then
 				assert.NoError(t, err) // 'NotFound' errors are ignored!
-				assert.Equal(t, reconcile.Result{}, res)
+				assert.Equal(t, reconcile.Result{
+					Requeue:      true,
+					RequeueAfter: 60 * time.Second,
+				}, res)
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 			}
 

@@ -106,7 +106,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// no need to requeue, the controller will reconcile when a pod is created
+		// no pods found - the controller will requeue after the idler's timeout
 		assert.Equal(t, reconcile.Result{
 			Requeue:      true,
 			RequeueAfter: 30 * time.Second,

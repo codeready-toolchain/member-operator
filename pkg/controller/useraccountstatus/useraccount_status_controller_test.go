@@ -8,6 +8,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
 	commontest "github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -16,14 +17,15 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 	// given
-	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("foo", "222222")
+	logf.SetLogger(zap.Logger(true))
+	userAcc := newUserAccount("foo")
 	mur := newMasterUserRecord("foo", "111111")
 
 	t.Run("success", func(t *testing.T) {
@@ -45,7 +47,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 
 		t.Run("should reset the syncIndex", func(t *testing.T) {
 			// given
-			userAcc := newUserAccount("foo", "222222")
+			userAcc := newUserAccount("foo")
 			now := metav1.Now()
 			userAcc.DeletionTimestamp = &now
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
@@ -100,8 +102,8 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 
 func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	// given
-	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("bar", "222222")
+	logf.SetLogger(zap.Logger(true))
+	userAcc := newUserAccount("bar")
 	mur := newMasterUserRecord("bar", "111111")
 	mur.Spec.UserAccounts = append(mur.Spec.UserAccounts, toolchainv1alpha1.UserAccountEmbedded{
 		TargetCluster: "second-member-cluster",
@@ -126,8 +128,8 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 
 func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 	// given
-	logf.SetLogger(logf.ZapLogger(true))
-	userAcc := newUserAccount("johny", "222222")
+	logf.SetLogger(zap.Logger(true))
+	userAcc := newUserAccount("johny")
 
 	t.Run("when there is no UserAccount", func(t *testing.T) {
 		mur := newMasterUserRecord("johny", "")
@@ -188,11 +190,11 @@ func namespacedName(obj metav1.ObjectMeta) types.NamespacedName {
 	}
 }
 
-func newUserAccount(userName, resourceVersion string) *toolchainv1alpha1.UserAccount {
+func newUserAccount(userName string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            userName,
-			ResourceVersion: resourceVersion,
+			ResourceVersion: "222222",
 		},
 	}
 	return userAcc

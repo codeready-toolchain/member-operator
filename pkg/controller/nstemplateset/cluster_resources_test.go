@@ -8,10 +8,10 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	quotav1 "github.com/openshift/api/quota/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestClusterResourceKinds(t *testing.T) {
@@ -136,7 +137,7 @@ func TestClusterResourceKinds(t *testing.T) {
 
 func TestEnsureClusterResourcesOK(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -234,9 +235,9 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withConditions(Provisioned()))
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
-		idlerDev := newIdler(username, username+"-dev", "advanced")
-		idlerCode := newIdler(username, username+"-code", "advanced")
-		idlerStage := newIdler(username, username+"-stage", "advanced")
+		idlerDev := newIdler(username, username+"-dev")
+		idlerCode := newIdler(username, username+"-code")
+		idlerStage := newIdler(username, username+"-stage")
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerCode, idlerStage)
 
 		// when
@@ -258,7 +259,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 }
 
 func TestEnsureClusterResourcesFail(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 
 	// given
 	username := "johnsmith"
@@ -445,7 +446,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 func TestPromoteClusterResources(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -651,12 +652,12 @@ func TestPromoteClusterResources(t *testing.T) {
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
 			anotherCrb := newTektonClusterRoleBinding("another", "basic")
 
-			idlerDev := newIdler(username, username+"-dev", "advanced")
-			idlerCode := newIdler(username, username+"-code", "advanced")
-			idlerStage := newIdler(username, username+"-stage", "advanced")
-			anotherIdlerDev := newIdler("another", "another-dev", "advanced")
-			anotherIdlerCode := newIdler("another", "another-code", "advanced")
-			anotherIdlerStage := newIdler("another", "another-stage", "advanced")
+			idlerDev := newIdler(username, username+"-dev")
+			idlerCode := newIdler(username, username+"-code")
+			idlerStage := newIdler(username, username+"-stage")
+			anotherIdlerDev := newIdler("another", "another-dev")
+			anotherIdlerCode := newIdler("another", "another-code")
+			anotherIdlerStage := newIdler("another", "another-stage")
 
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given
@@ -829,7 +830,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 func TestUpdateClusterResources(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"

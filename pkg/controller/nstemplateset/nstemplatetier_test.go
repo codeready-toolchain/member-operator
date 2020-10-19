@@ -16,7 +16,7 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
@@ -162,7 +162,7 @@ func TestGetTierTemplate(t *testing.T) {
 		t.Run("host cluster not available", func(t *testing.T) {
 			// given
 			hostCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
-			defer resetCache()
+			resetCache()
 			// when
 			_, err := getTierTemplate(hostCluster, "advanced-dev-789012")
 			// then
@@ -252,12 +252,8 @@ func TestGetTierTemplate(t *testing.T) {
 	})
 }
 
-func resetCache() func() {
-	reset := func() {
-		tierTemplatesCache = newTierTemplateCache()
-	}
-	reset()
-	return reset
+func resetCache() {
+	tierTemplatesCache = newTierTemplateCache()
 }
 
 func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.TierTemplate, actual *tierTemplate) {

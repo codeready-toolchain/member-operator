@@ -27,12 +27,14 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func TestReconcile(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 	config, err := configuration.LoadConfig(test.NewFakeClient(t))
@@ -840,7 +842,7 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestUpdateStatus(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 	s := scheme.Scheme
@@ -937,7 +939,7 @@ func TestUpdateStatus(t *testing.T) {
 }
 
 func TestDisabledUserAccount(t *testing.T) {
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.Logger(true))
 	username := "johndoe"
 	userID := uuid.NewV4().String()
 	s := scheme.Scheme

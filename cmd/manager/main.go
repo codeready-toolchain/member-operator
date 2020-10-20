@@ -10,18 +10,14 @@ import (
 	"strings"
 
 	api "github.com/codeready-toolchain/api/pkg/apis"
-	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
 	"github.com/codeready-toolchain/member-operator/version"
+	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
+
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
@@ -31,7 +27,12 @@ import (
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	apiutil "sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -108,7 +109,7 @@ func main() {
 
 	// Set default manager options
 	options := manager.Options{
-		Namespace:          "", // Watch all namespaces! Idler needs to watch Pods from all namespaces
+		Namespace:          namespace,
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
 	}
 
@@ -137,7 +138,18 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err := controller.AddToManager(mgr, crtConfig); err != nil {
+	if err := controller.AddControllersToManager(mgr, crtConfig); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	idlerClient, idlerClientCache, err := newClient(cfg)
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
+	if err := controller.AddIdlerControllerToManager(mgr, idlerClient, idlerClientCache); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -150,10 +162,13 @@ func main() {
 	go func() {
 		log.Info("Waiting for cache to sync")
 		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
-			log.Error(fmt.Errorf("timed out waiting for caches to sync"), "")
+			log.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
 			os.Exit(1)
 		}
-
+		if !idlerClientCache.WaitForCacheSync(stopChannel) {
+			log.Error(fmt.Errorf("timed out waiting for idler cache to sync"), "")
+			os.Exit(1)
+		}
 		log.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.GetClusterHealthCheckPeriod())
 
@@ -167,13 +182,53 @@ func main() {
 		log.Info("Created/updated the MemberStatus resource")
 	}()
 
-	log.Info("Starting the Cmd.")
-
 	// Start the Cmd
+	go func() {
+		if err := idlerClientCache.Start(stopChannel); err != nil {
+			log.Error(err, "failed to start idler cache")
+			os.Exit(1)
+		}
+	}()
 	if err := mgr.Start(stopChannel); err != nil {
-		log.Error(err, "Manager exited non-zero")
+		log.Error(err, "Default manager exited non-zero")
 		os.Exit(1)
 	}
+
+	log.Info("Starting the Cmd.")
+}
+
+// newClient creates a new "custom" client for a controller.
+// As opposed to the client used in other controllers, this one watches resources in all namespaces.
+// But since the Idler controller only cares about Idler resources (cluster-wide) and Pods (namespaced),
+// this client will not store all other namespaced resources (secrets, etc.).
+// This will help keeping a reasonable memory usage for this operator.
+func newClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
+	// Create the mapper provider
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create the cache for the cached read client and registering informers
+	cache, err := cache.New(cfg, cache.Options{Scheme: scheme.Scheme, Mapper: mapper, Namespace: ""})
+	if err != nil {
+		return nil, nil, err
+	}
+	// Create the Client for Write operations.
+	c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme, Mapper: mapper})
+	if err != nil {
+		return nil, nil, err
+	}
+	// see https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.6/pkg/manager/manager.go#L374-L389
+	return &client.DelegatingClient{
+		Reader: &client.DelegatingReader{
+			CacheReader:  cache,
+			ClientReader: c,
+		},
+		Writer:       c,
+		StatusClient: c,
+	}, cache, nil
+
 }
 
 // addMetrics will create the Services and Service Monitors to allow the operator export the metrics by using
@@ -238,6 +293,7 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
 		return err
 	}
 
+	log.Info("serving metrics", "GVK", filteredGVK, "namespace", ns)
 	// Generate and serve custom resource specific metrics.
 	return kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
 }

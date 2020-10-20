@@ -9,6 +9,8 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccountstatus"
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -20,11 +22,10 @@ func init() {
 	addToManagerFuncs = append(addToManagerFuncs, useraccount.Add)
 	addToManagerFuncs = append(addToManagerFuncs, useraccountstatus.Add)
 	addToManagerFuncs = append(addToManagerFuncs, nstemplateset.Add)
-	addToManagerFuncs = append(addToManagerFuncs, idler.Add)
 }
 
-// AddToManager adds all Controllers to the Manager
-func AddToManager(m manager.Manager, config *configuration.Config) error {
+// AddControllersToManager adds all Controllers to the Manager
+func AddControllersToManager(m manager.Manager, config *configuration.Config) error {
 	if err := toolchaincluster.Add(m, config.GetToolchainClusterTimeout()); err != nil {
 		return err
 	}
@@ -34,4 +35,8 @@ func AddToManager(m manager.Manager, config *configuration.Config) error {
 		}
 	}
 	return nil
+}
+
+func AddIdlerControllerToManager(m manager.Manager, cl client.Client, cache cache.Cache) error {
+	return idler.Add(m, cl, cache)
 }

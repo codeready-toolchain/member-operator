@@ -60,12 +60,20 @@ func TestLoadFromConfigMap(t *testing.T) {
 
 		// then
 		assert.Equal(t, "rhd", config.GetIdP())
+		assert.Equal(t, "console", config.GetConsoleRouteName())
+		assert.Equal(t, "openshift-console", config.GetConsoleNamespace())
+		assert.Equal(t, "che", config.GetCheRouteName())
+		assert.Equal(t, "toolchain-che", config.GetCheNamespace())
 	})
 	t.Run("env overwrite", func(t *testing.T) {
 		// given
 		restore := test.SetEnvVarsAndRestore(t,
 			test.Env("MEMBER_OPERATOR_CONFIG_MAP_NAME", "test-config"),
 			test.Env("MEMBER_OPERATOR_IDENTITY_PROVIDER", ""),
+			test.Env("MEMBER_OPERATOR_CONSOLE_NAMESPACE", ""),
+			test.Env("MEMBER_OPERATOR_CONSOLE_ROUTE_NAME", ""),
+			test.Env("MEMBER_OPERATOR_CHE_NAMESPACE", ""),
+			test.Env("MEMBER_OPERATOR_CHE_ROUTE_NAME", ""),
 			test.Env("MEMBER_OPERATOR_TEST_TEST", ""))
 		defer restore()
 
@@ -75,8 +83,12 @@ func TestLoadFromConfigMap(t *testing.T) {
 				Namespace: "toolchain-member-operator",
 			},
 			Data: map[string]string{
-				"identity.provider": "test-idp",
-				"test-test":         "test-test",
+				"identity.provider":  "test-idp",
+				"console.namespace":  "test-console-namespace",
+				"console.route.name": "test-console-route-name",
+				"che.namespace":      "test-che-namespace",
+				"che.route.name":     "test-che-route-name",
+				"test-test":          "test-test",
 			},
 		}
 
@@ -88,10 +100,22 @@ func TestLoadFromConfigMap(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, "test-idp", config.GetIdP())
+		assert.Equal(t, "test-console-namespace", config.GetConsoleNamespace())
+		assert.Equal(t, "test-console-route-name", config.GetConsoleRouteName())
+		assert.Equal(t, "test-che-namespace", config.GetCheNamespace())
+		assert.Equal(t, "test-che-route-name", config.GetCheRouteName())
 
 		// test env vars are parsed and created correctly
 		idpName := os.Getenv("MEMBER_OPERATOR_IDENTITY_PROVIDER")
 		assert.Equal(t, idpName, "test-idp")
+		consoleNamespace := os.Getenv("MEMBER_OPERATOR_CONSOLE_NAMESPACE")
+		assert.Equal(t, consoleNamespace, "test-console-namespace")
+		consoleRouteName := os.Getenv("MEMBER_OPERATOR_CONSOLE_ROUTE_NAME")
+		assert.Equal(t, consoleRouteName, "test-console-route-name")
+		cheNamespace := os.Getenv("MEMBER_OPERATOR_CHE_NAMESPACE")
+		assert.Equal(t, cheNamespace, "test-che-namespace")
+		cheRouteName := os.Getenv("MEMBER_OPERATOR_CHE_ROUTE_NAME")
+		assert.Equal(t, cheRouteName, "test-che-route-name")
 		testTest := os.Getenv("MEMBER_OPERATOR_TEST_TEST")
 		assert.Equal(t, testTest, "test-test")
 	})
@@ -219,5 +243,28 @@ func TestGetMemberStatusRefreshTime(t *testing.T) {
 		defer restore()
 		config := getDefaultConfiguration(t)
 		assert.Equal(t, cast.ToDuration("1s"), config.GetMemberStatusRefreshTime())
+	})
+}
+
+func TestIsCheRequired(t *testing.T) {
+	key := MemberEnvPrefix + "_" + "CHE_REQUIRED"
+	resetFunc := test.UnsetEnvVarAndRestore(t, key)
+	defer resetFunc()
+
+	t.Run("default", func(t *testing.T) {
+		resetFunc := test.UnsetEnvVarAndRestore(t, key)
+		defer resetFunc()
+		config := getDefaultConfiguration(t)
+		assert.Equal(t, false, config.IsCheRequired())
+	})
+
+	t.Run("env overwrite", func(t *testing.T) {
+		restore := test.SetEnvVarAndRestore(t, key, "true")
+		defer restore()
+
+		restore = test.SetEnvVarAndRestore(t, MemberEnvPrefix+"_"+"ANY_CONFIG", "20s")
+		defer restore()
+		config := getDefaultConfiguration(t)
+		assert.Equal(t, true, config.IsCheRequired())
 	})
 }

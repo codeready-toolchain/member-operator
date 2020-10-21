@@ -13,6 +13,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	routev1 "github.com/openshift/api/route/v1"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
@@ -38,12 +39,17 @@ const defaultMemberOperatorName = "member-operator"
 const defaultMemberStatusName = configuration.DefaultMemberStatusName
 
 func TestNoMemberStatusFound(t *testing.T) {
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
+	allNamespacesCl := test.NewFakeClient(t)
 
 	t.Run("No memberstatus resource found", func(t *testing.T) {
 		// given
 		requestName := "bad-name"
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, _ := prepareReconcile(t, requestName, getHostClusterFunc)
+		reconciler, req, _ := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -58,7 +64,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		expectedErrMsg := "get failed"
 		requestName := defaultMemberStatusName
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
 		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj runtime.Object) error {
 			return fmt.Errorf(expectedErrMsg)
 		}
@@ -74,6 +80,10 @@ func TestNoMemberStatusFound(t *testing.T) {
 }
 
 func TestOverallStatusCondition(t *testing.T) {
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+
 	restore := test.SetEnvVarsAndRestore(t, test.Env(k8sutil.OperatorNameEnvVar, defaultMemberOperatorName))
 	defer restore()
 	nodeAndMetrics := newNodesAndNodeMetrics(
@@ -83,13 +93,15 @@ func TestOverallStatusCondition(t *testing.T) {
 		forNode("master-123", "master", "4000000Ki", withMemoryUsage("2000000Ki")),
 		forNode("master-456", "master", "5000000Ki", withMemoryUsage("1000000Ki")))
 
+	allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(true))
+
 	t.Run("All components ready", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -99,7 +111,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsReady()).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 
 		t.Run("ignore infra node", func(t *testing.T) {
 			// given
@@ -107,7 +120,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				forNode("worker-123", "worker", "4000000Ki", withMemoryUsage("3000000Ki")),
 				forNode("infra-123", "infra", "4000000Ki", withMemoryUsage("1250000Ki")),
 				forNode("master-123", "master", "6000000Ki", withMemoryUsage("3000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -117,7 +130,8 @@ func TestOverallStatusCondition(t *testing.T) {
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
-				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50))
+				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
+				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 		})
 	})
 
@@ -127,7 +141,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotExist
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -136,9 +150,10 @@ func TestOverallStatusCondition(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-			HasCondition(ComponentsNotReady(string(hostConnectionTag)))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasHostConditionErrorMsg("the cluster connection was not found").
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
+			HasHostConditionErrorMsg("the cluster connection was not found").
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -147,7 +162,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -157,7 +172,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Host connection probe not working", func(t *testing.T) {
@@ -166,7 +182,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterProbeNotWorking
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -176,7 +192,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not found - deployment env var not set", func(t *testing.T) {
@@ -185,7 +202,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -196,8 +213,9 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
-		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).HasMemberOperatorConditionErrorMsg("unable to get the deployment: OPERATOR_NAME must be set")
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasMemberOperatorConditionErrorMsg("unable to get the deployment: OPERATOR_NAME must be set").
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {
@@ -205,7 +223,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -215,7 +233,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
@@ -224,7 +243,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -234,7 +253,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not progressing", func(t *testing.T) {
@@ -243,7 +263,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(req)
@@ -253,7 +273,8 @@ func TestOverallStatusCondition(t *testing.T) {
 		assert.Equal(t, requeueResult, res)
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
-			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("metrics failures", func(t *testing.T) {
@@ -266,7 +287,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("when missing memory item", func(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", "worker", "3000000Ki"))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -276,12 +297,13 @@ func TestOverallStatusCondition(t *testing.T) {
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
-				HasMemoryUsage()
+				HasMemoryUsage().
+				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("when unable to list Nodes", func(t *testing.T) {
 			// given
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 				if _, ok := list.(*corev1.NodeList); ok {
 					return fmt.Errorf("some error")
@@ -297,12 +319,13 @@ func TestOverallStatusCondition(t *testing.T) {
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
-				HasMemoryUsage()
+				HasMemoryUsage().
+				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
 			// given
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
 				if _, ok := list.(*v1beta1.NodeMetricsList); ok {
 					return fmt.Errorf("some error")
@@ -318,13 +341,14 @@ func TestOverallStatusCondition(t *testing.T) {
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
-				HasMemoryUsage()
+				HasMemoryUsage().
+				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("when missing NodeMetrics for Node", func(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", "worker", "3000000Ki"))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, nodeAndMetrics[0], memberOperatorDeployment, memberStatus)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, nodeAndMetrics[0], memberOperatorDeployment, memberStatus)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -334,7 +358,89 @@ func TestOverallStatusCondition(t *testing.T) {
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
-				HasMemoryUsage()
+				HasMemoryUsage().
+				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+		})
+	})
+
+	t.Run("routes", func(t *testing.T) {
+		// given
+		requestName := defaultMemberStatusName
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterReady
+
+		t.Run("che not using tls", func(t *testing.T) {
+			// given
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("https://console.member-cluster/console/", "http://che-toolchain-che.member-cluster/che/", routesAvailable())
+		})
+
+		t.Run("console route unavailable", func(t *testing.T) {
+			// given
+			allNamespacesCl := test.NewFakeClient(t, cheRoute(false))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsNotReady(string("routes"))).
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("", "", consoleRouteUnavailable("routes.route.openshift.io \"console\" not found"))
+		})
+
+		t.Run("console route unavailable", func(t *testing.T) {
+			// given
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
+
+			t.Run("when not required", func(t *testing.T) {
+				// given
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+				// when
+				res, err := reconciler.Reconcile(req)
+
+				// then
+				require.NoError(t, err)
+				assert.Equal(t, requeueResult, res)
+				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+					HasCondition(ComponentsReady()).
+					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+					HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
+			})
+
+			t.Run("when required", func(t *testing.T) {
+				// given
+				reset := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_CHE_REQUIRED", "true")
+				defer reset()
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+				// when
+				res, err := reconciler.Reconcile(req)
+
+				// then
+				require.NoError(t, err)
+				assert.Equal(t, requeueResult, res)
+				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+					HasCondition(ComponentsNotReady(string("routes"))).
+					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+					HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable("routes.route.openshift.io \"che\" not found"))
+			})
 		})
 	})
 }
@@ -391,20 +497,17 @@ func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterF
 	return NewGetHostClusterWithProbe(fakeClient, false, corev1.ConditionFalse, metav1.Now())
 }
 
-func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initObjs ...runtime.Object) (*ReconcileMemberStatus, reconcile.Request, *test.FakeClient) {
-	s := scheme.Scheme
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
+func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*ReconcileMemberStatus, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.Logger(true))
-
 	fakeClient := test.NewFakeClient(t, initObjs...)
 	config, err := configuration.LoadConfig(fakeClient)
 	require.NoError(t, err)
 	r := &ReconcileMemberStatus{
-		client:         fakeClient,
-		scheme:         s,
-		getHostCluster: getHostClusterFunc(fakeClient),
-		config:         config,
+		client:              fakeClient,
+		allNamespacesClient: allNamespacesClient,
+		scheme:              scheme.Scheme,
+		getHostCluster:      getHostClusterFunc(fakeClient),
+		config:              config,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }
@@ -463,4 +566,48 @@ func newNodesAndNodeMetrics(nodeAndMetricsCreators ...nodeAndMetricsCreator) []r
 		objects = append(objects, node, nodeMetrics)
 	}
 	return objects
+}
+
+func consoleRouteUnavailable(msg string) toolchainv1alpha1.Condition {
+	return *status.NewComponentErrorCondition("ConsoleRouteUnavailable", msg)
+}
+
+func cheRouteUnavailable(msg string) toolchainv1alpha1.Condition {
+	return *status.NewComponentErrorCondition("CheRouteUnavailable", msg)
+}
+
+func routesAvailable() toolchainv1alpha1.Condition {
+	return *status.NewComponentReadyCondition("RoutesAvailable")
+}
+
+func consoleRoute() *routev1.Route {
+	return &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "console",
+			Namespace: "openshift-console",
+		},
+		Spec: routev1.RouteSpec{
+			Host: fmt.Sprintf("console.%s", test.MemberClusterName),
+			Path: "console/",
+		},
+	}
+}
+
+func cheRoute(tls bool) *routev1.Route {
+	r := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "che",
+			Namespace: "toolchain-che",
+		},
+		Spec: routev1.RouteSpec{
+			Host: fmt.Sprintf("che-toolchain-che.%s", test.MemberClusterName),
+			Path: "che/",
+		},
+	}
+	if tls {
+		r.Spec.TLS = &routev1.TLSConfig{
+			Termination: "edge",
+		}
+	}
+	return r
 }

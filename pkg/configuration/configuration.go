@@ -46,7 +46,9 @@ const (
 	defaultConsoleRouteName = "console"
 
 	// varCheRequired is set to true if Che/CRW operator is expected to be installed on the cluster. May be used in monitoring.
-	varCheRequired     = "che.required"
+	varCheRequired = "che.required"
+
+	// defaultCheRequired is the default value for che.required param
 	defaultCheRequired = false
 
 	// varCheNamespace is the che route namespace
@@ -60,12 +62,6 @@ const (
 
 	// defaultCheRouteName is the default che dashboard route
 	defaultCheRouteName = "che"
-
-	// varEnvironment specifies the member-operator environment such as prod, stage, unit-tests, e2e-tests, dev, etc
-	varEnvironment = "environment"
-
-	// defaultEnvironment is the default member-operator environment
-	defaultEnvironment = "prod"
 )
 
 // ToolchainCluster configuration constants
@@ -121,7 +117,6 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
 	c.member.SetDefault(varCheRequired, defaultCheRequired)
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
-	c.member.SetDefault(varEnvironment, defaultEnvironment)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
@@ -189,9 +184,4 @@ func (c *Config) GetCheNamespace() string {
 // GetCheRouteName returns the name of the Che dashboard route
 func (c *Config) GetCheRouteName() string {
 	return c.member.GetString(varCheRouteName)
-}
-
-// GetEnvironment returns the member-operator environment such as prod, stage, unit-tests, e2e-tests, dev, etc
-func (c *Config) GetEnvironment() string {
-	return c.member.GetString(varEnvironment)
 }

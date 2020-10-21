@@ -48,17 +48,18 @@ const (
 
 // Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, crtConfig *crtCfg.Config, _ client.Client) error {
-	return add(mgr, newReconciler(mgr, crtConfig))
+func Add(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesClient client.Client) error {
+	return add(mgr, newReconciler(mgr, crtConfig, allNamespacesClient))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config) *ReconcileMemberStatus {
+func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesClient client.Client) *ReconcileMemberStatus {
 	return &ReconcileMemberStatus{
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		getHostCluster: cluster.GetHostCluster,
-		config:         crtConfig,
+		client:              mgr.GetClient(),
+		scheme:              mgr.GetScheme(),
+		getHostCluster:      cluster.GetHostCluster,
+		config:              crtConfig,
+		allNamespacesClient: allNamespacesClient,
 	}
 }
 
@@ -86,10 +87,11 @@ var _ reconcile.Reconciler = &ReconcileMemberStatus{}
 type ReconcileMemberStatus struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client         client.Client
-	scheme         *runtime.Scheme
-	getHostCluster func() (*cluster.CachedToolchainCluster, bool)
-	config         *crtCfg.Config
+	client              client.Client
+	scheme              *runtime.Scheme
+	getHostCluster      func() (*cluster.CachedToolchainCluster, bool)
+	config              *crtCfg.Config
+	allNamespacesClient client.Client
 }
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
@@ -364,8 +366,7 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 func (r *ReconcileMemberStatus) consoleURL() (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: r.config.GetConsoleNamespace(), Name: r.config.GetConsoleRouteName()}
-	// TODO User proper client with All Namespaces cache
-	if err := r.client.Get(context.TODO(), namespacedName, route); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
@@ -374,8 +375,7 @@ func (r *ReconcileMemberStatus) consoleURL() (string, error) {
 func (r *ReconcileMemberStatus) cheDashboardURL() (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: r.config.GetCheNamespace(), Name: r.config.GetCheRouteName()}
-	// TODO User proper client with All Namespaces cache
-	err := r.client.Get(context.TODO(), namespacedName, route)
+	err := r.allNamespacesClient.Get(context.TODO(), namespacedName, route)
 	if err != nil {
 		return "", err
 	}

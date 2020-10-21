@@ -5,6 +5,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	crtconfig "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 
 	"github.com/go-logr/logr"
@@ -19,7 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -33,15 +33,15 @@ var log = logf.Log.WithName("controller_idler")
 
 // Add creates a new Idler Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, cl client.Client, cache cache.Cache) error {
-	return add(mgr, newReconciler(mgr, cl, cache))
+func Add(mgr manager.Manager, _ *crtconfig.Config, allNamespacesClient client.Client) error {
+	return add(mgr, newReconciler(mgr, allNamespacesClient))
 }
 
-func newReconciler(mgr manager.Manager, cl client.Client, cache cache.Cache) *ReconcileIdler {
+func newReconciler(mgr manager.Manager, allNamespacesClient client.Client) *ReconcileIdler {
 	return &ReconcileIdler{
-		client: cl,
-		cache:  cache,
-		scheme: mgr.GetScheme(),
+		client:              mgr.GetClient(),
+		allNamespacesClient: allNamespacesClient,
+		scheme:              mgr.GetScheme(),
 	}
 }
 
@@ -53,7 +53,7 @@ func add(mgr manager.Manager, r *ReconcileIdler) error {
 
 	// Watch for changes to primary resource Idler
 	if err := c.Watch(
-		source.NewKindWithCache(&toolchainv1alpha1.Idler{}, r.cache),
+		&source.Kind{Type: &toolchainv1alpha1.Idler{}},
 		&handler.EnqueueRequestForObject{},
 		predicate.GenerationChangedPredicate{}); err != nil {
 		return err
@@ -68,9 +68,9 @@ var _ reconcile.Reconciler = &ReconcileIdler{}
 type ReconcileIdler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	cache  cache.Cache
-	scheme *runtime.Scheme
+	client              client.Client
+	allNamespacesClient client.Client
+	scheme              *runtime.Scheme
 }
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
@@ -127,7 +127,7 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
-	if err := r.client.List(context.TODO(), podList, client.InNamespace(idler.Name)); err != nil {
+	if err := r.allNamespacesClient.List(context.TODO(), podList, client.InNamespace(idler.Name)); err != nil {
 		return err
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
@@ -145,7 +145,7 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 				}
 				if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
 					logger.Info("Deleting pod without controller")
-					if err := r.client.Delete(context.TODO(), &pod); err != nil {
+					if err := r.allNamespacesClient.Delete(context.TODO(), &pod); err != nil {
 						return err
 					}
 					podLogger.Info("Pod deleted")
@@ -197,7 +197,7 @@ func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.O
 func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	logger.Info("Scaling deployment to zero", "name", owner.Name)
 	d := &appsv1.Deployment{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}
@@ -205,7 +205,7 @@ func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace str
 	}
 	var zero int32 = 0
 	d.Spec.Replicas = &zero
-	if err := r.client.Update(context.TODO(), d); err != nil {
+	if err := r.allNamespacesClient.Update(context.TODO(), d); err != nil {
 		return false, err
 	}
 	logger.Info("Deployment scaled to zero", "name", d.Name)
@@ -215,7 +215,7 @@ func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace str
 func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	logger.Info("Scaling replica set to zero", "name", owner.Name)
 	rs := &appsv1.ReplicaSet{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			log.Error(err, "replica set is not found; ignoring: it might be already deleted")
 			return true, nil
@@ -231,7 +231,7 @@ func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace str
 		// There is no controller that owns the ReplicaSet. Scale the ReplicaSet to zero.
 		var zero int32 = 0
 		rs.Spec.Replicas = &zero
-		if err := r.client.Update(context.TODO(), rs); err != nil {
+		if err := r.allNamespacesClient.Update(context.TODO(), rs); err != nil {
 			return false, err
 		}
 		logger.Info("ReplicaSet scaled to zero", "name", rs.Name)
@@ -241,13 +241,13 @@ func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace str
 
 func (r *ReconcileIdler) deleteDaemonSet(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	ds := &appsv1.DaemonSet{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}
 		return false, err
 	}
-	if err := r.client.Delete(context.TODO(), ds); err != nil {
+	if err := r.allNamespacesClient.Delete(context.TODO(), ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}
@@ -259,7 +259,7 @@ func (r *ReconcileIdler) deleteDaemonSet(logger logr.Logger, namespace string, o
 
 func (r *ReconcileIdler) scaleStatefulSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	s := &appsv1.StatefulSet{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, s); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, s); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}
@@ -267,7 +267,7 @@ func (r *ReconcileIdler) scaleStatefulSetToZero(logger logr.Logger, namespace st
 	}
 	var zero int32 = 0
 	s.Spec.Replicas = &zero
-	if err := r.client.Update(context.TODO(), s); err != nil {
+	if err := r.allNamespacesClient.Update(context.TODO(), s); err != nil {
 		return false, err
 	}
 	logger.Info("StatefulSet scaled to zero", "name", s.Name)
@@ -276,14 +276,14 @@ func (r *ReconcileIdler) scaleStatefulSetToZero(logger logr.Logger, namespace st
 
 func (r *ReconcileIdler) scaleDeploymentConfigToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	dc := &openshiftappsv1.DeploymentConfig{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, dc); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, dc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}
 		return false, err
 	}
 	dc.Spec.Replicas = 0
-	if err := r.client.Update(context.TODO(), dc); err != nil {
+	if err := r.allNamespacesClient.Update(context.TODO(), dc); err != nil {
 		return false, err
 	}
 	logger.Info("DeploymentConfig scaled to zero", "name", dc.Name)
@@ -292,7 +292,7 @@ func (r *ReconcileIdler) scaleDeploymentConfigToZero(logger logr.Logger, namespa
 
 func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	rc := &corev1.ReplicationController{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rc); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			return true, nil
 		}
@@ -306,7 +306,7 @@ func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, na
 		// There is no controller who owns the ReplicationController. Scale the ReplicationController to zero.
 		var zero int32 = 0
 		rc.Spec.Replicas = &zero
-		if err := r.client.Update(context.TODO(), rc); err != nil {
+		if err := r.allNamespacesClient.Update(context.TODO(), rc); err != nil {
 			return false, err
 		}
 		logger.Info("ReplicationController scaled to zero", "name", rc.Name)
@@ -316,7 +316,7 @@ func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, na
 
 func (r *ReconcileIdler) deleteJob(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	j := &batchv1.Job{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
+	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			logger.Info("job not found")
 			return true, nil
@@ -328,7 +328,7 @@ func (r *ReconcileIdler) deleteJob(logger logr.Logger, namespace string, owner m
 	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
 	propagationPolicy := metav1.DeletePropagationBackground
 
-	if err := r.client.Delete(context.TODO(), j, &client.DeleteOptions{
+	if err := r.allNamespacesClient.Delete(context.TODO(), j, &client.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	}); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.

@@ -27,7 +27,7 @@ var log = logf.Log.WithName("controller_useraccount_status")
 
 // Add creates a new UserAccountStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, _ *configuration.Config) error {
+func Add(mgr manager.Manager, _ *configuration.Config, _ client.Client) error {
 	metricsClient, err := versioned.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return err

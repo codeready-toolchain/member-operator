@@ -47,7 +47,7 @@ const (
 
 // Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, crtConfig *crtCfg.Config) error {
+func Add(mgr manager.Manager, crtConfig *crtCfg.Config, _ client.Client) error {
 	return add(mgr, newReconciler(mgr, crtConfig))
 }
 

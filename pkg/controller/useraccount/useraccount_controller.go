@@ -39,7 +39,7 @@ type IdentityProvider interface {
 
 // Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, config *configuration.Config) error {
+func Add(mgr manager.Manager, config *configuration.Config, _ client.Client) error {
 	return add(mgr, newReconciler(mgr, config))
 }
 

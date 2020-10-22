@@ -30,7 +30,7 @@ import (
 var log = logf.Log.WithName("controller_nstemplateset")
 
 // Add creates a new NSTemplateSetReconciler and starts it (ie, watches resources and reconciles the cluster state)
-func Add(mgr manager.Manager, _ *configuration.Config) error {
+func Add(mgr manager.Manager, _ *configuration.Config, _ client.Client) error {
 	return add(mgr, newReconciler(&apiClient{
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),

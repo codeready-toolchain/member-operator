@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	apiutil "sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -137,19 +137,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup all Controllers
-	if err := controller.AddControllersToManager(mgr, crtConfig); err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
-	idlerClient, idlerClientCache, err := newClient(cfg)
+	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
 
-	if err := controller.AddIdlerControllerToManager(mgr, idlerClient, idlerClientCache); err != nil {
+	// Setup all Controllers
+	if err := controller.AddControllersToManager(mgr, crtConfig, allNamespacesClient); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -163,10 +158,6 @@ func main() {
 		log.Info("Waiting for cache to sync")
 		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
 			log.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
-			os.Exit(1)
-		}
-		if !idlerClientCache.WaitForCacheSync(stopChannel) {
-			log.Error(fmt.Errorf("timed out waiting for idler cache to sync"), "")
 			os.Exit(1)
 		}
 		log.Info("Starting ToolchainCluster health checks.")
@@ -184,8 +175,8 @@ func main() {
 
 	// Start the Cmd
 	go func() {
-		if err := idlerClientCache.Start(stopChannel); err != nil {
-			log.Error(err, "failed to start idler cache")
+		if err := allNamespacesCache.Start(stopChannel); err != nil {
+			log.Error(err, "failed to start all-namespaces cache")
 			os.Exit(1)
 		}
 	}()
@@ -197,12 +188,11 @@ func main() {
 	log.Info("Starting the Cmd.")
 }
 
-// newClient creates a new "custom" client for a controller.
-// As opposed to the client used in other controllers, this one watches resources in all namespaces.
-// But since the Idler controller only cares about Idler resources (cluster-wide) and Pods (namespaced),
-// this client will not store all other namespaced resources (secrets, etc.).
-// This will help keeping a reasonable memory usage for this operator.
-func newClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
+// newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.
+// This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one.
+// This will help keeping a reasonable memory usage for this operator since the cache won't store all other namespace scoped
+// resources (secrets, etc.).
+func newAllNamespacesClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
 	// Create the mapper provider
 	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
 	if err != nil {
@@ -210,7 +200,7 @@ func newClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
 	}
 
 	// Create the cache for the cached read client and registering informers
-	cache, err := cache.New(cfg, cache.Options{Scheme: scheme.Scheme, Mapper: mapper, Namespace: ""})
+	allNamespacesCache, err := cache.New(cfg, cache.Options{Scheme: scheme.Scheme, Mapper: mapper, Namespace: ""})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -222,12 +212,12 @@ func newClient(cfg *rest.Config) (client.Client, cache.Cache, error) {
 	// see https://github.com/kubernetes-sigs/controller-runtime/blob/release-0.6/pkg/manager/manager.go#L374-L389
 	return &client.DelegatingClient{
 		Reader: &client.DelegatingReader{
-			CacheReader:  cache,
+			CacheReader:  allNamespacesCache,
 			ClientReader: c,
 		},
 		Writer:       c,
 		StatusClient: c,
-	}, cache, nil
+	}, allNamespacesCache, nil
 
 }
 

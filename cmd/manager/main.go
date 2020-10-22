@@ -189,7 +189,7 @@ func main() {
 }
 
 // newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.
-// This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one is.
+// This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one.
 // This will help keeping a reasonable memory usage for this operator since the cache won't store all other namespace scoped
 // resources (secrets, etc.).
 func newAllNamespacesClient(cfg *rest.Config) (client.Client, cache.Cache, error) {

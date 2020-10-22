@@ -12,6 +12,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	"github.com/stretchr/testify/assert"
@@ -27,8 +28,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
 func TestReconcile(t *testing.T) {
@@ -87,7 +88,7 @@ func TestReconcile(t *testing.T) {
 
 func TestEnsureIdling(t *testing.T) {
 
-	logf.SetLogger(logf.ZapLogger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	t.Run("No pods in namespace managed by idler", func(t *testing.T) {
 		// given
@@ -605,8 +606,7 @@ func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	var fakeClient *test.FakeClient
-	fakeClient = test.NewFakeClient(t, initIdlerObjs...)
+	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
 	r := &ReconcileIdler{
 		client:              fakeClient,

@@ -32,6 +32,36 @@ const (
 
 	// defaultMemberStatusRefreshTime is the default refresh period for MemberStatus
 	defaultMemberStatusRefreshTime = "5s"
+
+	// varConsoleNamespace is the console route namespace
+	varConsoleNamespace = "console.namespace"
+
+	// defaultConsoleNamespace is the default console route namespace
+	defaultConsoleNamespace = "openshift-console"
+
+	// varConsoleRouteName is the console route name
+	varConsoleRouteName = "console.route.name"
+
+	// defaultConsoleRouteName is the default console route name
+	defaultConsoleRouteName = "console"
+
+	// varCheRequired is set to true if Che/CRW operator is expected to be installed on the cluster. May be used in monitoring.
+	varCheRequired = "che.required"
+
+	// defaultCheRequired is the default value for che.required param
+	defaultCheRequired = false
+
+	// varCheNamespace is the che route namespace
+	varCheNamespace = "che.namespace"
+
+	// defaultCheNamespace is the default che route namespace
+	defaultCheNamespace = "toolchain-che"
+
+	// varCheRouteName is the che dashboard route
+	varCheRouteName = "che.route.name"
+
+	// defaultCheRouteName is the default che dashboard route
+	defaultCheRouteName = "che"
 )
 
 // ToolchainCluster configuration constants
@@ -82,6 +112,11 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(toolchainClusterTimeout, defaultClusterHealthCheckTimeout)
 	c.member.SetDefault(identityProviderName, defaultIdentityProviderName)
 	c.member.SetDefault(varMemberStatusRefreshTime, defaultMemberStatusRefreshTime)
+	c.member.SetDefault(varConsoleNamespace, defaultConsoleNamespace)
+	c.member.SetDefault(varConsoleRouteName, defaultConsoleRouteName)
+	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
+	c.member.SetDefault(varCheRequired, defaultCheRequired)
+	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
@@ -124,4 +159,29 @@ func (c *Config) GetToolchainClusterTimeout() time.Duration {
 // GetMemberStatusRefreshTime returns the time how often the MemberStatus should load and refresh the current hosted-toolchain status
 func (c *Config) GetMemberStatusRefreshTime() time.Duration {
 	return c.member.GetDuration(varMemberStatusRefreshTime)
+}
+
+// GetConsoleNamespace returns the console route namespace
+func (c *Config) GetConsoleNamespace() string {
+	return c.member.GetString(varConsoleNamespace)
+}
+
+// GetConsoleRouteName returns the console route name
+func (c *Config) GetConsoleRouteName() string {
+	return c.member.GetString(varConsoleRouteName)
+}
+
+// GetCheRequired returns true if the Che operator is expected to be installed. May be used in monitoring.
+func (c *Config) IsCheRequired() bool {
+	return c.member.GetBool(varCheRequired)
+}
+
+// GetCheNamespace returns the Che route namespace
+func (c *Config) GetCheNamespace() string {
+	return c.member.GetString(varCheNamespace)
+}
+
+// GetCheRouteName returns the name of the Che dashboard route
+func (c *Config) GetCheRouteName() string {
+	return c.member.GetString(varCheRouteName)
 }

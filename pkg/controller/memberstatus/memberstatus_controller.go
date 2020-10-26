@@ -4,23 +4,23 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 
 	"github.com/go-logr/logr"
+	routev1 "github.com/openshift/api/route/v1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	errs "github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -40,6 +40,7 @@ const (
 	memberOperatorTag statusComponentTag = "memberOperator"
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"
+	routesTag         statusComponentTag = "routes"
 
 	labelNodeRoleMaster = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
@@ -47,17 +48,18 @@ const (
 
 // Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, crtConfig *crtCfg.Config, _ client.Client) error {
-	return add(mgr, newReconciler(mgr, crtConfig))
+func Add(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesClient client.Client) error {
+	return add(mgr, newReconciler(mgr, crtConfig, allNamespacesClient))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config) *ReconcileMemberStatus {
+func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesClient client.Client) *ReconcileMemberStatus {
 	return &ReconcileMemberStatus{
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		getHostCluster: cluster.GetHostCluster,
-		config:         crtConfig,
+		client:              mgr.GetClient(),
+		scheme:              mgr.GetScheme(),
+		getHostCluster:      cluster.GetHostCluster,
+		config:              crtConfig,
+		allNamespacesClient: allNamespacesClient,
 	}
 }
 
@@ -85,10 +87,11 @@ var _ reconcile.Reconciler = &ReconcileMemberStatus{}
 type ReconcileMemberStatus struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client         client.Client
-	scheme         *runtime.Scheme
-	getHostCluster func() (*cluster.CachedToolchainCluster, bool)
-	config         *crtCfg.Config
+	client              client.Client
+	scheme              *runtime.Scheme
+	getHostCluster      func() (*cluster.CachedToolchainCluster, bool)
+	config              *crtCfg.Config
+	allNamespacesClient client.Client
 }
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
@@ -129,11 +132,12 @@ type statusHandler struct {
 // component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
 func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 
-	memberOperatorStatusHandler := statusHandler{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus}
-	hostConnectionStatusHandler := statusHandler{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus}
-	resourceUsageStatusHandler := statusHandler{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage}
-
-	statusHandlers := []statusHandler{memberOperatorStatusHandler, hostConnectionStatusHandler, resourceUsageStatusHandler}
+	statusHandlers := []statusHandler{
+		{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus},
+		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
+		{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage},
+		{name: routesTag, handleStatus: r.routesHandleStatus},
+	}
 
 	// track components that are not ready
 	var unreadyComponents []string
@@ -168,7 +172,7 @@ func (r *ReconcileMemberStatus) hostConnectionHandleStatus(reqLogger logr.Logger
 	// look up host connection status
 	connectionConditions := status.GetToolchainClusterConditions(reqLogger, attributes)
 	err := status.ValidateComponentConditionReady(connectionConditions...)
-	memberStatus.Status.Host = &v1alpha1.HostStatus{
+	memberStatus.Status.Host = &toolchainv1alpha1.HostStatus{
 		Conditions: connectionConditions,
 	}
 
@@ -256,6 +260,37 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 	return nil
 }
 
+// routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
+// Returns an error if at least one of the required routes are not available.
+func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+	if memberStatus.Status.Routes == nil {
+		memberStatus.Status.Routes = &toolchainv1alpha1.Routes{}
+	}
+	consoleURL, err := r.consoleURL()
+	if err != nil {
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusConsoleRouteUnavailableReason, err.Error())
+		memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		return err
+	}
+	memberStatus.Status.Routes.ConsoleURL = consoleURL
+
+	cheURL, err := r.cheDashboardURL()
+	if err != nil {
+		if r.config.IsCheRequired() {
+			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
+			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+			return err
+		}
+		reqLogger.Info("Che route is not available but not required. Ignoring.", "err", err.Error())
+	}
+	memberStatus.Status.Routes.CheDashboardURL = cheURL
+
+	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusRoutesAvailableReason)
+	memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
+
+	return nil
+}
+
 func (r *ReconcileMemberStatus) getAllocatableValues(reqLogger logr.Logger) (map[string]nodeInfo, error) {
 	nodes := &corev1.NodeList{}
 	err := r.client.List(context.TODO(), nodes)
@@ -326,4 +361,27 @@ func (r *ReconcileMemberStatus) setStatusNotReady(memberStatus *toolchainv1alpha
 			Reason:  toolchainv1alpha1.ToolchainStatusComponentsNotReadyReason,
 			Message: message,
 		})
+}
+
+func (r *ReconcileMemberStatus) consoleURL() (string, error) {
+	route := &routev1.Route{}
+	namespacedName := types.NamespacedName{Namespace: r.config.GetConsoleNamespace(), Name: r.config.GetConsoleRouteName()}
+	if err := r.allNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
+}
+
+func (r *ReconcileMemberStatus) cheDashboardURL() (string, error) {
+	route := &routev1.Route{}
+	namespacedName := types.NamespacedName{Namespace: r.config.GetCheNamespace(), Name: r.config.GetCheRouteName()}
+	err := r.allNamespacesClient.Get(context.TODO(), namespacedName, route)
+	if err != nil {
+		return "", err
+	}
+	scheme := "https"
+	if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path), nil
 }

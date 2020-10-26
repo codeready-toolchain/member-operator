@@ -95,6 +95,16 @@ func (a *MemberStatusAssertion) HasMemoryUsage(usages ...AddUsage) *MemberStatus
 	return a
 }
 
+func (a *MemberStatusAssertion) HasRoutes(consoleUrl, cheUrl string, expCondition toolchainv1alpha1.Condition) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	require.NotNil(a.t, a.memberStatus.Status.Routes)
+	require.Equal(a.t, consoleUrl, a.memberStatus.Status.Routes.ConsoleURL)
+	require.Equal(a.t, cheUrl, a.memberStatus.Status.Routes.CheDashboardURL)
+	test.AssertConditionsMatch(a.t, a.memberStatus.Status.Routes.Conditions, expCondition)
+	return a
+}
+
 func ComponentsReady() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,

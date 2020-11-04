@@ -8,8 +8,8 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/spf13/cast"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -28,6 +28,65 @@ func getDefaultConfiguration(t *testing.T) *Config {
 func TestLoadConfig(t *testing.T) {
 	t.Run("default configuration", func(t *testing.T) {
 		getDefaultConfiguration(t)
+	})
+}
+
+func TestLoadFromSecret(t *testing.T) {
+	namespaceName := "toolchain-member"
+	restore := test.SetEnvVarAndRestore(t, "WATCH_NAMESPACE", namespaceName)
+	defer restore()
+
+	t.Run("default", func(t *testing.T) {
+		// when
+		config := getDefaultConfiguration(t)
+
+		// then
+		assert.Equal(t, "", config.GetCheAdminUsername())
+		assert.Equal(t, "", config.GetCheAdminPassword())
+	})
+
+	t.Run("env overwrite", func(t *testing.T) {
+		// given
+		restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_SECRET_NAME", "test-secret")
+		defer restore()
+
+		testSecret := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-secret",
+				Namespace: namespaceName,
+			},
+			Data: map[string][]byte{
+				"che.admin.username": []byte("test-che-user"),
+				"che.admin.password": []byte("test-che-password"),
+			},
+		}
+
+		cl := test.NewFakeClient(t, testSecret)
+
+		// when
+		config, err := LoadConfig(cl)
+
+		// then
+		require.NoError(t, err)
+		require.Equal(t, "test-che-user", config.GetCheAdminUsername())
+		require.Equal(t, "test-che-password", config.GetCheAdminPassword())
+	})
+
+	t.Run("secret not found", func(t *testing.T) {
+		// given
+		restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_SECRET_NAME", "test-secret")
+		defer restore()
+
+		cl := test.NewFakeClient(t)
+
+		// when
+		config, err := LoadConfig(cl)
+
+		// then
+		require.NoError(t, err)
+		assert.NotNil(t, config)
+		require.Empty(t, config.GetCheAdminUsername())
+		require.Empty(t, config.GetCheAdminPassword())
 	})
 }
 

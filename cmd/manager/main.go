@@ -91,7 +91,7 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
-	printConfig(crtConfig)
+	crtConfig.Print()
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
@@ -286,14 +286,6 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error {
 	log.Info("serving metrics", "GVK", filteredGVK, "namespace", ns)
 	// Generate and serve custom resource specific metrics.
 	return kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
-}
-
-func printConfig(cfg *configuration.Config) {
-	logWithValuesMemberOperator := log
-	for key, value := range cfg.GetAllMemberParameters() {
-		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues(key, value)
-	}
-	logWithValuesMemberOperator.Info("Member operator configuration variables:")
 }
 
 // getCRTConfiguration creates the client used for configuration and

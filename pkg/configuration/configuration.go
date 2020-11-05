@@ -11,7 +11,10 @@ import (
 
 	"github.com/spf13/viper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var log = logf.Log.WithName("configuration")
 
 // prefixes
 const (
@@ -62,6 +65,12 @@ const (
 
 	// defaultCheRouteName is the default che dashboard route
 	defaultCheRouteName = "che"
+
+	// varCheAdminUsername is the che admin user username
+	varCheAdminUsername = "che.admin.username"
+
+	// varCheAdminPassword is the che admin user password
+	varCheAdminPassword = "che.admin.password"
 )
 
 // ToolchainCluster configuration constants
@@ -81,13 +90,15 @@ const (
 // Config encapsulates the Viper configuration registry which stores the
 // configuration data in-memory.
 type Config struct {
-	member *viper.Viper
+	member       *viper.Viper
+	secretValues map[string]string
 }
 
 // initConfig creates an initial, empty registry.
-func initConfig() *Config {
+func initConfig(secret map[string]string) *Config {
 	c := Config{
-		member: viper.New(),
+		member:       viper.New(),
+		secretValues: secret,
 	}
 	c.member.SetEnvPrefix(MemberEnvPrefix)
 	c.member.AutomaticEnv()
@@ -97,12 +108,18 @@ func initConfig() *Config {
 }
 
 func LoadConfig(cl client.Client) (*Config, error) {
-	err := configuration.LoadFromConfigMap(MemberEnvPrefix, "MEMBER_OPERATOR_CONFIG_MAP_NAME", cl)
+
+	secret, err := configuration.LoadFromSecret("MEMBER_OPERATOR_SECRET_NAME", cl)
 	if err != nil {
 		return nil, err
 	}
 
-	return initConfig(), nil
+	err = configuration.LoadFromConfigMap(MemberEnvPrefix, "MEMBER_OPERATOR_CONFIG_MAP_NAME", cl)
+	if err != nil {
+		return nil, err
+	}
+
+	return initConfig(secret), nil
 }
 
 func (c *Config) setConfigDefaults() {
@@ -117,6 +134,14 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
 	c.member.SetDefault(varCheRequired, defaultCheRequired)
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
+}
+
+func (c *Config) Print() {
+	logWithValuesMemberOperator := log
+	for key, value := range c.GetAllMemberParameters() {
+		logWithValuesMemberOperator = logWithValuesMemberOperator.WithValues(key, value)
+	}
+	logWithValuesMemberOperator.Info("Member operator configuration variables:")
 }
 
 // GetAllMemberParameters returns the map with key-values pairs of parameters that have MEMBER_OPERATOR prefix
@@ -171,7 +196,7 @@ func (c *Config) GetConsoleRouteName() string {
 	return c.member.GetString(varConsoleRouteName)
 }
 
-// GetCheRequired returns true if the Che operator is expected to be installed. May be used in monitoring.
+// IsCheRequired returns true if the Che operator is expected to be installed. May be used in monitoring.
 func (c *Config) IsCheRequired() bool {
 	return c.member.GetBool(varCheRequired)
 }
@@ -184,4 +209,14 @@ func (c *Config) GetCheNamespace() string {
 // GetCheRouteName returns the name of the Che dashboard route
 func (c *Config) GetCheRouteName() string {
 	return c.member.GetString(varCheRouteName)
+}
+
+// GetCheAdminUsername returns the member cluster's che admin username
+func (c *Config) GetCheAdminUsername() string {
+	return c.secretValues[varCheAdminUsername]
+}
+
+// GetCheAdminPassword returns the member cluster's che admin password
+func (c *Config) GetCheAdminPassword() string {
+	return c.secretValues[varCheAdminPassword]
 }

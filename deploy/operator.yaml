@@ -31,3 +31,10 @@ spec:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
           value: "member-operator"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "500M"
+          limits:
+            cpu: "1000m"
+            memory: "1000M"

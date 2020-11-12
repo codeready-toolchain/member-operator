@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, *crtCfg.Config) {
+func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, *crtcfg.Config) {
 	logf.SetLogger(zap.Logger(true))
 
 	s := scheme.Scheme
@@ -31,7 +31,7 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := crtCfg.LoadConfig(fakeClient)
+	config, err := crtcfg.LoadConfig(fakeClient)
 	require.NoError(t, err)
 
 	return fakeClient, config

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	crtConfig "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,13 +19,13 @@ var DefaultClient *Client
 
 // Client is a client for interacting with Che services
 type Client struct {
-	config     *crtConfig.Config
+	config     *crtcfg.Config
 	k8sClient  client.Client
 	tokenCache *tokenCache
 }
 
 // InitDefaultCheClient initializes the default Che service instance
-func InitDefaultCheClient(cfg *crtConfig.Config, cl client.Client) {
+func InitDefaultCheClient(cfg *crtcfg.Config, cl client.Client) {
 	DefaultClient = &Client{
 		config:     cfg,
 		k8sClient:  cl,

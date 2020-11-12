@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -36,7 +36,7 @@ func newTokenCache() *tokenCache {
 }
 
 // getToken returns the token needed to use Che user APIs, or an error if there was a problem getting the token
-func (tc *tokenCache) getToken(cl client.Client, cfg *crtCfg.Config) (TokenSet, error) {
+func (tc *tokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
 	defer tc.RUnlock()
 	tc.RLock()
 	// use the cached credentials if they are still valid

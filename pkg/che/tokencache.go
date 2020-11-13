@@ -47,6 +47,20 @@ func (tc *tokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, 
 	}
 	tc.RUnlock()
 
+	// token is no good, get a new one and update the cache
+	return tc.obtainAndCacheNewToken(cl, cfg)
+}
+
+// obtainAndCacheNewToken obtains an access token, updates the cache and returns the token. Returns an error if there was a failure at any point
+func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
+	defer tc.Unlock()
+	tc.Lock()
+
+	// do a token check here because if multiple go routines were blocking waiting for the lock above, there may be a newly cached token they can use and can skip obtaining a new one
+	if !tokenExpired(tc.token) {
+		return *tc.token, nil
+	}
+
 	// no valid token, retrieve a new one
 	// get the credentials
 	user, pass := cfg.GetCheAdminUsername(), cfg.GetCheAdminPassword()
@@ -61,20 +75,13 @@ func (tc *tokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, 
 	}
 	log.Info("Che Keycloak Route", "URL", cheKeycloakURL)
 
-	return tc.obtainNewToken(cheKeycloakURL+tokenPath, user, pass)
-}
-
-// obtainNewToken obtains an access token from the provided authentication URL, updates the cache and returns the token, otherwise returns an error
-func (tc *tokenCache) obtainNewToken(authURL, user, pass string) (TokenSet, error) {
-	defer tc.Unlock()
-	tc.Lock()
-
 	reqData := url.Values{}
 	reqData.Set("username", user)
 	reqData.Set("password", pass)
 	reqData.Set("grant_type", "password")
 	reqData.Set("client_id", "che-public")
 
+	authURL := cheKeycloakURL + tokenPath
 	log.Info("Obtaining new token", "URL", authURL)
 	res, err := tc.httpClient.PostForm(authURL, reqData)
 	if err != nil {

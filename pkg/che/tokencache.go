@@ -37,14 +37,17 @@ func newTokenCache() *tokenCache {
 
 // getToken returns the token needed to use Che user APIs, or an error if there was a problem getting the token
 func (tc *tokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
-	defer tc.RUnlock()
 	tc.RLock()
 	// use the cached credentials if they are still valid
 	if !tokenExpired(tc.token) {
+		defer tc.RUnlock()
 		log.Info("Reusing token")
 		return *tc.token, nil
 	}
 
+	tc.RUnlock()
+	defer tc.Unlock()
+	tc.Lock()
 	// get the credentials
 	user, pass := cfg.GetCheAdminUsername(), cfg.GetCheAdminPassword()
 	if user == "" || pass == "" {

@@ -340,7 +340,7 @@ func TestTokenExpired(t *testing.T) {
 
 	t.Run("expired", func(t *testing.T) {
 		// given
-		offset := 59 * time.Second
+		offset := 29 * time.Second
 		token := &TokenSet{
 			Expiration: time.Now().Add(offset).Unix(),
 		}

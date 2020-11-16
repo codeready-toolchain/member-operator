@@ -141,9 +141,9 @@ func readTokenSetFromJSON(jsonString string) (*TokenSet, error) {
 	return &token, nil
 }
 
-// tokenExpired return false if the token is not nil and good for at least one more minute
+// tokenExpired return false if the token is not nil and good for at least thirty more seconds
 func tokenExpired(token *TokenSet) bool {
-	return token == nil || time.Now().After(time.Unix(token.Expiration-60, 0))
+	return token == nil || time.Now().After(time.Unix(token.Expiration-30, 0))
 }
 
 // newHTTPClient returns a new HTTP client with some timeout and TLS values configured

@@ -11,6 +11,7 @@ import (
 
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
@@ -142,6 +143,9 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
+
+	// initialize che client
+	che.InitDefaultCheClient(crtConfig, allNamespacesClient)
 
 	// Setup all Controllers
 	if err := controller.AddControllersToManager(mgr, crtConfig, allNamespacesClient); err != nil {

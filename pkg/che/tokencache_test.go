@@ -39,7 +39,7 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 
 func TestGetToken(t *testing.T) {
 	// given
-	url := "https://keycloak-toolchain-che.member-cluster"
+	url := "https://keycloak-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -357,10 +357,10 @@ func keycloackRoute(tls bool) *routev1.Route {
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "keycloak",
-			Namespace: "toolchain-che",
+			Namespace: "codeready-workspaces-operator",
 		},
 		Spec: routev1.RouteSpec{
-			Host: fmt.Sprintf("keycloak-toolchain-che.%s", test.MemberClusterName),
+			Host: fmt.Sprintf("keycloak-codeready-workspaces-operator.%s", test.MemberClusterName),
 			Path: "",
 		},
 	}

@@ -66,6 +66,12 @@ const (
 	// defaultCheRouteName is the default che dashboard route
 	defaultCheRouteName = "codeready"
 
+	// varCheKeycloakRouteName is the che keycloak route
+	varCheKeycloakRouteName = "che.keycloak.route.name"
+
+	// defaultCheKeycloakRouteName is the default che keycloak route
+	defaultCheKeycloakRouteName = "keycloak"
+
 	// varCheAdminUsername is the che admin user username
 	varCheAdminUsername = "che.admin.username"
 
@@ -134,6 +140,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
 	c.member.SetDefault(varCheRequired, defaultCheRequired)
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
+	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
 }
 
 func (c *Config) Print() {
@@ -211,12 +218,17 @@ func (c *Config) GetCheRouteName() string {
 	return c.member.GetString(varCheRouteName)
 }
 
-// GetCheAdminUsername returns the member cluster's che admin username
+// GetCheKeycloakRouteName returns the name of Che's keycloak route
+func (c *Config) GetCheKeycloakRouteName() string {
+	return c.member.GetString(varCheKeycloakRouteName)
+}
+
+// GetCheAdminUsername returns the member cluster's Che admin username
 func (c *Config) GetCheAdminUsername() string {
 	return c.secretValues[varCheAdminUsername]
 }
 
-// GetCheAdminPassword returns the member cluster's che admin password
+// GetCheAdminPassword returns the member cluster's Che admin password
 func (c *Config) GetCheAdminPassword() string {
 	return c.secretValues[varCheAdminPassword]
 }

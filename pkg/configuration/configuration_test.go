@@ -121,8 +121,8 @@ func TestLoadFromConfigMap(t *testing.T) {
 		assert.Equal(t, "rhd", config.GetIdP())
 		assert.Equal(t, "console", config.GetConsoleRouteName())
 		assert.Equal(t, "openshift-console", config.GetConsoleNamespace())
-		assert.Equal(t, "che", config.GetCheRouteName())
-		assert.Equal(t, "toolchain-che", config.GetCheNamespace())
+		assert.Equal(t, "codeready", config.GetCheRouteName())
+		assert.Equal(t, "codeready-workspaces-operator", config.GetCheNamespace())
 	})
 	t.Run("env overwrite", func(t *testing.T) {
 		// given

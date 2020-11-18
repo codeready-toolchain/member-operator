@@ -112,7 +112,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsReady()).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 
 		t.Run("ignore infra node", func(t *testing.T) {
 			// given
@@ -131,7 +131,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
-				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 	})
 
@@ -153,7 +153,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
 			HasHostConditionErrorMsg("the cluster connection was not found").
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -173,7 +173,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Host connection probe not working", func(t *testing.T) {
@@ -193,7 +193,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not found - deployment env var not set", func(t *testing.T) {
@@ -215,7 +215,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 			HasMemberOperatorConditionErrorMsg("unable to get the deployment: OPERATOR_NAME must be set").
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
@@ -254,7 +254,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not progressing", func(t *testing.T) {
@@ -274,7 +274,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
 	t.Run("metrics failures", func(t *testing.T) {
@@ -298,7 +298,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("when unable to list Nodes", func(t *testing.T) {
@@ -320,7 +320,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
@@ -342,7 +342,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("when missing NodeMetrics for Node", func(t *testing.T) {
@@ -359,7 +359,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://che-toolchain-che.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 	})
 
@@ -384,7 +384,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://che-toolchain-che.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
 		t.Run("console route unavailable", func(t *testing.T) {
@@ -439,7 +439,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 					HasCondition(ComponentsNotReady(string("routes"))).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable("routes.route.openshift.io \"che\" not found"))
+					HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable("routes.route.openshift.io \"codeready\" not found"))
 			})
 		})
 	})
@@ -596,11 +596,11 @@ func consoleRoute() *routev1.Route {
 func cheRoute(tls bool) *routev1.Route {
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "che",
-			Namespace: "toolchain-che",
+			Name:      "codeready",
+			Namespace: "codeready-workspaces-operator",
 		},
 		Spec: routev1.RouteSpec{
-			Host: fmt.Sprintf("che-toolchain-che.%s", test.MemberClusterName),
+			Host: fmt.Sprintf("codeready-codeready-workspaces-operator.%s", test.MemberClusterName),
 			Path: "che/",
 		},
 	}

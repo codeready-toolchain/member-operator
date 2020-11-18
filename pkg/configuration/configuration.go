@@ -58,13 +58,13 @@ const (
 	varCheNamespace = "che.namespace"
 
 	// defaultCheNamespace is the default che route namespace
-	defaultCheNamespace = "toolchain-che"
+	defaultCheNamespace = "codeready-workspaces-operator"
 
 	// varCheRouteName is the che dashboard route
 	varCheRouteName = "che.route.name"
 
 	// defaultCheRouteName is the default che dashboard route
-	defaultCheRouteName = "che"
+	defaultCheRouteName = "codeready"
 
 	// varCheKeycloakRouteName is the che keycloak route
 	varCheKeycloakRouteName = "che.keycloak.route.name"

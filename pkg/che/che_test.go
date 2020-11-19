@@ -16,9 +16,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	testCheURL = "https://codeready-codeready-workspaces-operator.member-cluster"
+)
+
 func TestUserExists(t *testing.T) {
 	// given
-	testCheURL := "https://codeready-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -132,7 +135,6 @@ func TestUserExists(t *testing.T) {
 
 func TestGetUserIDByUsername(t *testing.T) {
 	// given
-	testCheURL := "https://codeready-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -270,7 +272,6 @@ func TestGetUserIDByUsername(t *testing.T) {
 
 func TestDeleteUser(t *testing.T) {
 	// given
-	testCheURL := "https://codeready-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -379,7 +380,6 @@ func TestDeleteUser(t *testing.T) {
 
 func TestCheRequest(t *testing.T) {
 	// given
-	testCheURL := "https://codeready-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -518,24 +518,6 @@ func tokenCacheWithValidToken() *tokenCache {
 		},
 	}
 }
-
-// func prepareKeycloakMockResponse() {
-// 	gock.New(keycloakURL).
-// 		Post(tokenPath).
-// 		MatchHeader("Content-Type", "application/x-www-form-urlencoded").
-// 		Persist().
-// 		Reply(200).
-// 		BodyString(`{
-// 					"access_token":"aaa.bbb.ccc",
-// 					"expires_in":300,
-// 					"refresh_expires_in":1800,
-// 					"refresh_token":"111.222.333",
-// 					"token_type":"bearer",
-// 					"not-before-policy":0,
-// 					"session_state":"a2fa1448-687a-414f-af40-3b6b3f5a873a",
-// 					"scope":"profile email"
-// 					}`)
-// }
 
 func cheRoute(tls bool) *routev1.Route {
 	r := &routev1.Route{

@@ -23,6 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
+const (
+	testKeycloakURL = "https://keycloak-codeready-workspaces-operator.member-cluster"
+)
+
 func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, *crtcfg.Config) {
 	logf.SetLogger(zap.Logger(true))
 
@@ -39,7 +43,6 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 
 func TestGetToken(t *testing.T) {
 	// given
-	keycloakURL := "https://keycloak-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -92,7 +95,7 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(keycloakURL).
+			gock.New(testKeycloakURL).
 				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
@@ -122,7 +125,7 @@ func TestGetToken(t *testing.T) {
 			tokenCache.token = expiredToken
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(keycloakURL).
+			gock.New(testKeycloakURL).
 				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
@@ -161,7 +164,7 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(keycloakURL).
+			gock.New(testKeycloakURL).
 				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
@@ -182,7 +185,7 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(keycloakURL).
+			gock.New(testKeycloakURL).
 				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
@@ -211,7 +214,7 @@ func TestGetToken(t *testing.T) {
 			tokenCache.token = noAccessToken
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(keycloakURL).
+			gock.New(testKeycloakURL).
 				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
@@ -242,7 +245,7 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(keycloakURL).
+			gock.New(testKeycloakURL).
 				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().

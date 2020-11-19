@@ -39,7 +39,7 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 
 func TestGetToken(t *testing.T) {
 	// given
-	url := "https://keycloak-codeready-workspaces-operator.member-cluster"
+	keycloakURL := "https://keycloak-codeready-workspaces-operator.member-cluster"
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
@@ -87,14 +87,23 @@ func TestGetToken(t *testing.T) {
 
 		t.Run("keycloak route returns error", func(t *testing.T) {
 			// given
-			tokenCache := newTokenCache()
-			cl, cfg := prepareClientAndConfig(t, testSecret)
+			tokenCache := &tokenCache{
+				httpClient: http.DefaultClient,
+			}
+			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
+			defer gock.OffAll()
+			gock.New(keycloakURL).
+				Post(tokenPath).
+				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
+				Persist().
+				Reply(500).
+				BodyString(`{"error":"fake error"}`)
 
 			// when
 			tok, err := tokenCache.getToken(cl, cfg)
 
 			// then
-			require.EqualError(t, err, `routes.route.openshift.io "keycloak" not found`)
+			require.EqualError(t, err, `unable to obtain access token for che, Response status: 500 Internal Server Error. Response body: {"error":"fake error"}`)
 			require.Empty(t, tok)
 		})
 
@@ -113,8 +122,8 @@ func TestGetToken(t *testing.T) {
 			tokenCache.token = expiredToken
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(url).
-				Post("auth/realms/che/protocol/openid-connect/token").
+			gock.New(keycloakURL).
+				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
 				Reply(200).
@@ -152,8 +161,8 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(url).
-				Post("auth/realms/che/protocol/openid-connect/token").
+			gock.New(keycloakURL).
+				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
 				Reply(404)
@@ -173,8 +182,8 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(url).
-				Post("auth/realms/che/protocol/openid-connect/token").
+			gock.New(keycloakURL).
+				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
 				Reply(200).
@@ -202,8 +211,8 @@ func TestGetToken(t *testing.T) {
 			tokenCache.token = noAccessToken
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(url).
-				Post("auth/realms/che/protocol/openid-connect/token").
+			gock.New(keycloakURL).
+				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
 				Reply(200).
@@ -233,8 +242,8 @@ func TestGetToken(t *testing.T) {
 			}
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
-			gock.New(url).
-				Post("auth/realms/che/protocol/openid-connect/token").
+			gock.New(keycloakURL).
+				Post(tokenPath).
 				MatchHeader("Content-Type", "application/x-www-form-urlencoded").
 				Persist().
 				Reply(200).

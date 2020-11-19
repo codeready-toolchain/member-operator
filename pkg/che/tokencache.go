@@ -14,8 +14,8 @@ import (
 	"time"
 
 	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
-	"github.com/codeready-toolchain/member-operator/pkg/rest"
-	"github.com/codeready-toolchain/member-operator/pkg/utils"
+	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
+	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/pkg/errors"
@@ -69,7 +69,7 @@ func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 	}
 
 	// get keycloak URL
-	cheKeycloakURL, err := utils.GetRouteURL(cl, cfg.GetCheNamespace(), cfg.GetCheKeycloakRouteName())
+	cheKeycloakURL, err := route.GetRouteURL(cl, cfg.GetCheNamespace(), cfg.GetCheKeycloakRouteName())
 	if err != nil {
 		return TokenSet{}, err
 	}

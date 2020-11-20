@@ -90,7 +90,10 @@ func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 
 	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK {
-		bodyString, _ := rest.ReadBody(res.Body)
+		bodyString, readError := rest.ReadBody(res.Body)
+		if readError != nil {
+			log.Error(readError, "error while reading body of the get token response")
+		}
 		return TokenSet{}, errors.Errorf("unable to obtain access token for che, Response status: %s. Response body: %s", res.Status, bodyString)
 	}
 	tokenSet, err := readTokenSet(res)

@@ -78,7 +78,7 @@ func TestUserExists(t *testing.T) {
 		exists, err := cheClient.UserExists("test-user")
 
 		// then
-		require.EqualError(t, err, `request to find Che user 'test-user' failed, Response status: '400 Bad Request'`)
+		require.EqualError(t, err, `request to find Che user 'test-user' failed, Response status: '400 Bad Request' Body: '{"error":"che error"}'`)
 		require.False(t, exists)
 	})
 

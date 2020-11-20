@@ -60,10 +60,14 @@ func (c *Client) UserExists(username string) (bool, error) {
 	} else if res.StatusCode == http.StatusNotFound {
 		return false, nil
 	}
-	return false, errors.Errorf("request to find Che user '%s' failed, Response status: '%s'", username, res.Status)
+	resBody, readError := rest.ReadBody(res.Body)
+	if readError != nil {
+		log.Error(readError, "error while reading body of the find Che user response")
+	}
+	return false, errors.Errorf("request to find Che user '%s' failed, Response status: '%s' Body: '%s'", username, res.Status, resBody)
 }
 
-// GetUserIDByUsername returns the user ID that maps to the given username
+// GetUserIDByUsername returns the user ID that maps to the given username or an error if the user was not found or there was a problem with the request
 func (c *Client) GetUserIDByUsername(username string) (string, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
@@ -73,7 +77,10 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 	}
 	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK {
-		resBody, _ := rest.ReadBody(res.Body)
+		resBody, readError := rest.ReadBody(res.Body)
+		if readError != nil {
+			log.Error(readError, "error while reading body of the get Che user ID response")
+		}
 		err = errors.Errorf("unable to get Che user ID for user '%s', Response status: '%s' Body: '%s'", username, res.Status, resBody)
 		return "", err
 	}
@@ -86,15 +93,20 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 
 // DeleteUser deletes the Che user with the given user ID
 func (c *Client) DeleteUser(userID string) error {
-	log.Info("Deleteing user", "userID", userID)
+	log.Info("Deleting user", "userID", userID)
 	res, err := c.cheRequest(http.MethodDelete, path.Join(cheUserPath, userID), nil)
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Che user with ID '%s'", userID)
 	}
 	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusNotFound {
-		resBody, _ := rest.ReadBody(res.Body)
+		resBody, readError := rest.ReadBody(res.Body)
+		if readError != nil {
+			log.Error(readError, "error while reading body of the delete Che user response")
+		}
 		err = errors.Errorf("unable to delete Che user with ID '%s', Response status: '%s' Body: '%s'", userID, res.Status, resBody)
+	} else if res.StatusCode == http.StatusNotFound {
+		log.Info("The user was not deleted because they were not found", "userID", userID)
 	}
 	return err
 }

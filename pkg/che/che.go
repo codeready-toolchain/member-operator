@@ -106,7 +106,7 @@ func (c *Client) DeleteUser(userID string) error {
 		}
 		err = errors.Errorf("unable to delete Che user with ID '%s', Response status: '%s' Body: '%s'", userID, res.Status, resBody)
 	} else if res.StatusCode == http.StatusNotFound {
-		log.Info("The user was not deleted because they were not found", "userID", userID)
+		log.Info("The user was not deleted because it wasn't found", "userID", userID)
 	}
 	return err
 }

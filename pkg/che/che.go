@@ -111,7 +111,7 @@ func (c *Client) DeleteUser(userID string) error {
 	return err
 }
 
-func (c *Client) cheRequest(rmethod, endpoint string, queryParams url.Values) (*http.Response, error) {
+func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*http.Response, error) {
 	// get Che route URL
 	cheURL, err := route.GetRouteURL(c.k8sClient, c.config.GetCheNamespace(), c.config.GetCheRouteName())
 	if err != nil {
@@ -119,7 +119,7 @@ func (c *Client) cheRequest(rmethod, endpoint string, queryParams url.Values) (*
 	}
 
 	// create request
-	req, err := http.NewRequest(rmethod, cheURL+endpoint, nil)
+	req, err := http.NewRequest(method, cheURL+endpoint, nil)
 	if err != nil {
 		return nil, err
 	}

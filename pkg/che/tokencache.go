@@ -14,8 +14,8 @@ import (
 	"time"
 
 	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
-	"github.com/codeready-toolchain/member-operator/pkg/rest"
-	"github.com/codeready-toolchain/member-operator/pkg/utils"
+	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
+	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/pkg/errors"
@@ -69,7 +69,7 @@ func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 	}
 
 	// get keycloak URL
-	cheKeycloakURL, err := utils.GetRouteURL(cl, cfg.GetCheNamespace(), cfg.GetCheKeycloakRouteName())
+	cheKeycloakURL, err := route.GetRouteURL(cl, cfg.GetCheNamespace(), cfg.GetCheKeycloakRouteName())
 	if err != nil {
 		return TokenSet{}, err
 	}
@@ -90,7 +90,10 @@ func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 
 	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK {
-		bodyString, _ := rest.ReadBody(res.Body)
+		bodyString, readError := rest.ReadBody(res.Body)
+		if readError != nil {
+			log.Error(readError, "error while reading body of the get token response")
+		}
 		return TokenSet{}, errors.Errorf("unable to obtain access token for che, Response status: %s. Response body: %s", res.Status, bodyString)
 	}
 	tokenSet, err := readTokenSet(res)

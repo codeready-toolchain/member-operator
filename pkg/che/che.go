@@ -33,16 +33,27 @@ type Client struct {
 	config     *crtcfg.Config
 	httpClient *http.Client
 	k8sClient  client.Client
-	tokenCache *tokenCache
+	tokenCache *TokenCache
 }
 
-// InitDefaultCheClient initializes the default Che service instance
+// InitDefaultCheClient initializes the default Che client instance
 func InitDefaultCheClient(cfg *crtcfg.Config, cl client.Client) {
+	defaultHTTPClient := newHTTPClient()
 	DefaultClient = &Client{
 		config:     cfg,
-		httpClient: newHTTPClient(),
+		httpClient: defaultHTTPClient,
 		k8sClient:  cl,
-		tokenCache: newTokenCache(),
+		tokenCache: NewTokenCache(defaultHTTPClient),
+	}
+}
+
+// NewCheClient creates a new instance of a Che client
+func NewCheClient(cfg *crtcfg.Config, httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
+	return &Client{
+		config:     cfg,
+		httpClient: httpCl,
+		k8sClient:  cl,
+		tokenCache: tc,
 	}
 }
 

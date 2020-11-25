@@ -1,0 +1,4 @@
+member-operator:
+  cluster-healthcheck-period: '5s'
+  memberstatus-refresh-time: '1s'
+  secret-name: 'member-operator-secret'

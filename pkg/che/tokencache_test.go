@@ -56,7 +56,7 @@ func TestGetToken(t *testing.T) {
 
 	t.Run("missing configuration", func(t *testing.T) {
 		// given
-		tokenCache := newTokenCache()
+		tokenCache := testTokenCache()
 		cl, cfg := prepareClientAndConfig(t)
 
 		// when
@@ -68,16 +68,16 @@ func TestGetToken(t *testing.T) {
 	})
 
 	t.Run("with configuration", func(t *testing.T) {
-
 		restore := test.SetEnvVarsAndRestore(t,
 			test.Env("WATCH_NAMESPACE", "toolchain-member"),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			test.Env(crtcfg.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
 		)
 		defer restore()
 
 		t.Run("no keycloak route", func(t *testing.T) {
 			// given
-			tokenCache := newTokenCache()
+			tokenCache := testTokenCache()
 			cl, cfg := prepareClientAndConfig(t, testSecret)
 
 			// when
@@ -90,9 +90,7 @@ func TestGetToken(t *testing.T) {
 
 		t.Run("keycloak route returns error", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
 			gock.New(testKeycloakURL).
@@ -106,15 +104,13 @@ func TestGetToken(t *testing.T) {
 			tok, err := tokenCache.getToken(cl, cfg)
 
 			// then
-			require.EqualError(t, err, `unable to obtain access token for che, Response status: 500 Internal Server Error. Response body: {"error":"fake error"}`)
+			require.EqualError(t, err, `unable to obtain access token for che, Response status: '500 Internal Server Error'. Response body: '{"error":"fake error"}'`)
 			require.Empty(t, tok)
 		})
 
 		t.Run("expired token received", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			expiredToken := &TokenSet{
 				AccessToken:  "abc.123.xyz",
 				Expiration:   time.Now().Unix(),
@@ -159,9 +155,7 @@ func TestGetToken(t *testing.T) {
 
 		t.Run("keycloak route returns bad status code", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
 			gock.New(testKeycloakURL).
@@ -174,15 +168,13 @@ func TestGetToken(t *testing.T) {
 			tok, err := tokenCache.getToken(cl, cfg)
 
 			// then
-			require.EqualError(t, err, "unable to obtain access token for che, Response status: 404 Not Found. Response body: ")
+			require.EqualError(t, err, "unable to obtain access token for che, Response status: '404 Not Found'. Response body: ''")
 			require.Empty(t, tok)
 		})
 
 		t.Run("bad token received", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
 			gock.New(testKeycloakURL).
@@ -202,9 +194,7 @@ func TestGetToken(t *testing.T) {
 
 		t.Run("missing access token", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			noAccessToken := &TokenSet{
 				Expiration:   time.Now().Unix(),
 				ExpiresIn:    300,
@@ -240,9 +230,7 @@ func TestGetToken(t *testing.T) {
 
 		t.Run("new valid token returned", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 			defer gock.OffAll()
 			gock.New(testKeycloakURL).
@@ -277,9 +265,7 @@ func TestGetToken(t *testing.T) {
 
 		t.Run("token is valid so it is reused", func(t *testing.T) {
 			// given
-			tokenCache := &tokenCache{
-				httpClient: http.DefaultClient,
-			}
+			tokenCache := testTokenCache()
 			cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 
 			expTime := time.Now().Add(120 * time.Second).Unix()
@@ -389,4 +375,10 @@ func expectToken(t *testing.T, expected, actual TokenSet) {
 	require.Equal(t, expected.ExpiresIn, actual.ExpiresIn)
 	require.Equal(t, expected.RefreshToken, actual.RefreshToken)
 	require.Equal(t, expected.TokenType, actual.TokenType)
+}
+
+func testTokenCache() *TokenCache {
+	return &TokenCache{
+		httpClient: http.DefaultClient,
+	}
 }

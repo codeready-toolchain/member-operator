@@ -31,6 +31,8 @@ spec:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
           value: "member-operator"
+        - name: MEMBER_OPERATOR_WEBHOOK_IMAGE
+          value: REPLACE_MEMBER_OPERATOR_WEBHOOK_IMAGE
         resources:
           requests:
             cpu: "500m"

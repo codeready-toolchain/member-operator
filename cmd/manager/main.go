@@ -15,6 +15,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
 
@@ -164,6 +165,14 @@ func main() {
 			log.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
 			os.Exit(1)
 		}
+
+		log.Info("(Red)Deploying users' pods webhook")
+		if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetMemberOperatorWebhookImage()); err != nil {
+			log.Error(err, "cannot deploy mutating users' pods webhook")
+			os.Exit(1)
+		}
+		log.Info("(Red)Deployed users' pods webhook")
+
 		log.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.GetClusterHealthCheckPeriod())
 

@@ -10,4 +10,6 @@ var (
 	Commit string = "unknown"
 	// BuildTime the time of build of the binary
 	BuildTime string = "unknown"
+	// ImageTag the tag of the build container image
+	ImageTag string = "unknown"
 )

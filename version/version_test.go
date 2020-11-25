@@ -12,4 +12,5 @@ func TestVars(t *testing.T) {
 	// They will be populated by the `-ldflags="-X ..."` at build time
 	assert.Equal(t, "unknown", version.Commit)
 	assert.Equal(t, "unknown", version.BuildTime)
+	assert.Equal(t, "unknown", version.ImageTag)
 }

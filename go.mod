@@ -17,7 +17,6 @@ require (
 	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
 	gopkg.in/h2non/gock.v1 v1.0.14
-	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.3
 	k8s.io/apiextensions-apiserver v0.18.3
 	k8s.io/apimachinery v0.18.3

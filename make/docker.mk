@@ -3,11 +3,13 @@ TARGET_REGISTRY := quay.io
 IMAGE_TAG ?= ${GIT_COMMIT_ID_SHORT}
 IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${IMAGE_TAG}
 QUAY_USERNAME ?= ${QUAY_NAMESPACE}
+WEBHOOK_IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}-webhook:${IMAGE_TAG}
 
 .PHONY: docker-image
 ## Build the docker image locally that can be deployed (only contains bare operator)
 docker-image: build
 	$(Q)docker build -f build/Dockerfile -t ${IMAGE} .
+	$(Q)docker build -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
 
 .PHONY: docker-push
 ## Push the docker image to quay.io registry
@@ -18,6 +20,7 @@ ifeq ($(QUAY_NAMESPACE),${GO_PACKAGE_ORG_NAME})
 	@echo "#################################################################################################################"
 endif
 	$(Q)docker push ${IMAGE}
+	$(Q)docker push ${WEBHOOK_IMAGE}
 
 .PHONY: docker-push-to-local
 ## Push the docker image to the local docker.io registry

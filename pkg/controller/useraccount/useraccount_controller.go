@@ -576,20 +576,13 @@ func (r *ReconcileUserAccount) setStatusCheUserDeletionInProgress(userAcc *toolc
 }
 
 func (r *ReconcileUserAccount) removeStatusCondition(userAcc *toolchainv1alpha1.UserAccount, cType toolchainv1alpha1.ConditionType) error {
-	var updated bool
-	conditions := userAcc.Status.Conditions
-	for i := len(userAcc.Status.Conditions) - 1; i >= 0; i-- {
-		if conditions[i].Type == cType {
-			conditions = append(conditions[:i], conditions[i+1:]...)
-			updated = true
+	for i, cond := range userAcc.Status.Conditions {
+		if cond.Type == cType {
+			userAcc.Status.Conditions = append(userAcc.Status.Conditions[:i], userAcc.Status.Conditions[i+1:]...)
+			return r.client.Status().Update(context.TODO(), userAcc)
 		}
 	}
-	if !updated {
-		// Nothing changed
-		return nil
-	}
-	userAcc.Status.Conditions = conditions
-	return r.client.Status().Update(context.TODO(), userAcc)
+	return nil
 }
 
 // updateStatusConditions updates user account status conditions with the new conditions

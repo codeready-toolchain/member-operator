@@ -611,7 +611,7 @@ func TestReconcile(t *testing.T) {
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
 		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", "toolchain-member"),
+			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
 			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
 			// For tests we'll assume they're two different routes.
@@ -783,7 +783,7 @@ func TestReconcile(t *testing.T) {
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
 		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", "toolchain-member"),
+			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
 			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
 			// For tests we'll assume they're two different routes.
@@ -1240,7 +1240,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 	t.Run("che user deletion is enabled", func(t *testing.T) {
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", "toolchain-member"),
+			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
 			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
 			// For tests we'll assume they're two different routes.
@@ -1636,7 +1636,7 @@ func newSecretWithCheAdminCreds() *v1.Secret {
 	return &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 		},
 		Data: map[string][]byte{
 			"che.admin.username": []byte("test-che-user"),

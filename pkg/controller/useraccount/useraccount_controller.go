@@ -182,12 +182,6 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
-
-		// Clean up Che resources by deleting the Che user (required for GDPR and reactivation of users)
-		if err := r.lookupAndDeleteCheUser(userAcc); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusDisabling, err, "failed to delete Che user data")
-		}
-
 		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")

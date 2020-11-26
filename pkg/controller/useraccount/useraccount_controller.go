@@ -690,7 +690,7 @@ func (r *ReconcileUserAccount) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1
 
 	// Delete the Che user. It is common for this call to return an error multiple times before succeeding
 	if err := r.cheClient.DeleteUser(cheUserID); err != nil {
-		return err
+		return errs.Wrapf(err, "this error is expected if deletion is still in progress")
 	}
 
 	// Remove the Che user deletion condition when done

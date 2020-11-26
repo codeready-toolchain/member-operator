@@ -683,10 +683,8 @@ func (r *ReconcileUserAccount) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1
 
 		// Set the Che user deletion status (store the Che user ID in the status for subsequent retries if needed)
 		// This is required because the deletion API will return an error until the user is successfully removed.
-		if !condition.HasConditionReason(userAcc.Status.Conditions, toolchainv1alpha1.UserAccountCheCleanup, toolchainv1alpha1.UserAccountDeletingCheDataReason) {
-			if err := r.setStatusCheUserDeletionInProgress(userAcc, cheUserID); err != nil {
-				return err
-			}
+		if err := r.setStatusCheUserDeletionInProgress(userAcc, cheUserID); err != nil {
+			return err
 		}
 	}
 

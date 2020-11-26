@@ -420,24 +420,6 @@ func TestCheRequest(t *testing.T) {
 			require.Nil(t, res)
 		})
 
-		// t.Run("no query params", func(t *testing.T) {
-		// 	// given
-		// 	cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
-		// 	cheClient := &Client{
-		// 		config:     cfg,
-		// 		httpClient: http.DefaultClient,
-		// 		k8sClient:  cl,
-		// 		tokenCache: testTokenCache(),
-		// 	}
-
-		// 	// when
-		// 	res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{})
-
-		// 	// then
-		// 	require.EqualError(t, err, `routes.route.openshift.io "keycloak" not found`)
-		// 	require.Nil(t, res)
-		// })
-
 		t.Run("che returns error", func(t *testing.T) {
 			// given
 			cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))

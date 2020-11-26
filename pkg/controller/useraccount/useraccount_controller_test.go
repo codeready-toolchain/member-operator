@@ -778,7 +778,7 @@ func TestReconcile(t *testing.T) {
 		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
 	// delete Che user fails
-	t.Run("delete che user fails", func(t *testing.T) {
+	t.Run("delete che user fails because che user ID request failed", func(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
@@ -793,7 +793,7 @@ func TestReconcile(t *testing.T) {
 
 		defer gock.OffAll()
 		gockTokenSuccess()
-		gockFindUserNoBody("johnsmith", 400)
+		gockFindUserNoBody("johnsmith", 400) // respond with 400 error to simulate user ID request failure
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID, false)

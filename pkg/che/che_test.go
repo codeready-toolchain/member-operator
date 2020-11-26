@@ -420,6 +420,31 @@ func TestCheRequest(t *testing.T) {
 			require.Nil(t, res)
 		})
 
+		t.Run("nil query params", func(t *testing.T) {
+			// given
+			cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+			cheClient := &Client{
+				config:     cfg,
+				httpClient: http.DefaultClient,
+				k8sClient:  cl,
+				tokenCache: tokenCacheWithValidToken(),
+			}
+
+			// when
+			defer gock.OffAll()
+			gock.New(testCheURL).
+				Get(cheUserFindPath).
+				MatchHeader("Authorization", "Bearer abc.123.xyz").
+				Persist().
+				Reply(400).
+				BodyString(`{"error":"che error"}`)
+			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, nil)
+
+			// then
+			require.NoError(t, err)
+			require.Equal(t, 400, res.StatusCode)
+		})
+
 		t.Run("che returns error", func(t *testing.T) {
 			// given
 			cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))

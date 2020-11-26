@@ -653,8 +653,6 @@ func (r *ReconcileUserAccount) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1
 		return nil
 	}
 
-	var userExists bool
-
 	userExists, err := r.cheClient.UserExists(userAcc.Name)
 	if err != nil {
 		return err

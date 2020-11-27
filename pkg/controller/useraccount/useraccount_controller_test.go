@@ -623,7 +623,8 @@ func TestReconcile(t *testing.T) {
 		defer gock.OffAll()
 		gockTokenSuccess(mockCallsCounter)
 		gockFindUserSuccess("johnsmith", mockCallsCounter)
-		gockUserExists(username, 200, mockCallsCounter)
+		gockUserExistsOnce(username, mockCallsCounter)
+		gockUserNotFound(username, mockCallsCounter)
 		gockDeleteUser(204, mockCallsCounter)
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
@@ -686,7 +687,7 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
-		require.Equal(t, 3, *mockCallsCounter)
+		require.Equal(t, 6, *mockCallsCounter) // Only 1 reconcile will do the delete (4 calls) followed by 2 reconciles with user exists check only
 	})
 	// Add finalizer fails
 	t.Run("add finalizer fails", func(t *testing.T) {
@@ -798,7 +799,8 @@ func TestReconcile(t *testing.T) {
 		defer gock.OffAll()
 		gockTokenSuccess(mockCallsCounter)
 		gockFindUserNoBody("johnsmith", 400, mockCallsCounter) // respond with 400 error to simulate user ID request failure
-		gockUserExists(username, 200, mockCallsCounter)
+		gockUserExistsOnce(username, mockCallsCounter)
+		gockUserNotFound(username, mockCallsCounter)
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID, false)
@@ -1278,7 +1280,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			mockCallsCounter := new(int)
 			defer gock.OffAll()
 			gockTokenSuccess(mockCallsCounter)
-			gockUserExists(username, 404, mockCallsCounter)
+			gockUserNotFound(username, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
 			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
@@ -1299,7 +1301,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			defer gock.OffAll()
 			gockTokenSuccess(mockCallsCounter)
 			gockFindUserNoBody(username, 400, mockCallsCounter)
-			gockUserExists(username, 200, mockCallsCounter)
+			gockUserExistsOnce(username, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
 			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
@@ -1320,7 +1322,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			defer gock.OffAll()
 			gockTokenSuccess(mockCallsCounter)
 			gockFindUserSuccess(username, mockCallsCounter)
-			gockUserExists(username, 200, mockCallsCounter)
+			gockUserExistsOnce(username, mockCallsCounter)
 			gockDeleteUser(400, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
 			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
@@ -1342,7 +1344,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			mockCallsCounter := new(int)
 			defer gock.OffAll()
 			gockTokenSuccess(mockCallsCounter)
-			gockUserExists(username, 200, mockCallsCounter)
+			gockUserExistsOnce(username, mockCallsCounter)
 			gockFindUserNoBody(username, 404, mockCallsCounter)
 			gockDeleteUser(204, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
@@ -1374,7 +1376,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			defer gock.OffAll()
 			gockTokenSuccess(mockCallsCounter)
 			gockFindUserSuccess(username, mockCallsCounter)
-			gockUserExists(username, 200, mockCallsCounter)
+			gockUserExistsOnce(username, mockCallsCounter)
 			gockDeleteUser(204, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
 			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
@@ -1701,13 +1703,22 @@ func gockFindUserSuccess(name string, calls *int) {
 		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
 }
 
-func gockUserExists(name string, code int, calls *int) {
+func gockUserExistsOnce(name string, calls *int) {
+	gock.New(testCheURL).
+		Get("api/user").
+		SetMatcher(SpyOnGockCalls(calls)).
+		MatchHeader("Authorization", "Bearer abc.123.xyz").
+		Times(1).
+		Reply(200)
+}
+
+func gockUserNotFound(name string, calls *int) {
 	gock.New(testCheURL).
 		Get("api/user").
 		SetMatcher(SpyOnGockCalls(calls)).
 		MatchHeader("Authorization", "Bearer abc.123.xyz").
 		Persist().
-		Reply(code)
+		Reply(404)
 }
 
 func gockFindUserNoBody(name string, code int, calls *int) {

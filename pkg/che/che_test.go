@@ -61,7 +61,7 @@ func TestUserExists(t *testing.T) {
 		// when
 		defer gock.OffAll()
 		gock.New(testCheURL).
-			Get(cheUserFindPath).
+			Get(cheUserPath).
 			MatchHeader("Authorization", "Bearer abc.123.xyz").
 			Persist().
 			Reply(400).
@@ -86,7 +86,7 @@ func TestUserExists(t *testing.T) {
 		// when
 		defer gock.OffAll()
 		gock.New(testCheURL).
-			Get(cheUserFindPath).
+			Get(cheUserPath).
 			MatchHeader("Authorization", "Bearer abc.123.xyz").
 			Persist().
 			Reply(404).
@@ -111,7 +111,7 @@ func TestUserExists(t *testing.T) {
 		// when
 		defer gock.OffAll()
 		gock.New(testCheURL).
-			Get(cheUserFindPath).
+			Get(cheUserPath).
 			MatchHeader("Authorization", "Bearer abc.123.xyz").
 			Persist().
 			Reply(200).

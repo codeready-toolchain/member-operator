@@ -1272,6 +1272,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			userAcc = &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 1, *mockCallsCounter)
 		})
 
@@ -1292,6 +1293,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			userAcc = &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 2, *mockCallsCounter)
 		})
 
@@ -1313,6 +1315,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			userAcc = &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 3, *mockCallsCounter)
 		})
 

@@ -57,14 +57,16 @@ func NewCheClient(cfg *crtcfg.Config, httpCl *http.Client, cl client.Client, tc 
 func (c *Client) UserExists(username string) (bool, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
-	res, err := c.cheRequest(http.MethodGet, cheUserPath, reqData)
+	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData)
 	if err != nil {
 		return false, errors.Wrapf(err, "request to find Che user '%s' failed", username)
 	}
 	defer rest.CloseResponse(res)
 	if res.StatusCode == http.StatusOK {
+		log.Info("User found", "name", username)
 		return true, nil
 	} else if res.StatusCode == http.StatusNotFound {
+		log.Info("User not found", "name", username)
 		return false, nil
 	}
 	resBody, readError := rest.ReadBody(res.Body)

@@ -102,6 +102,6 @@ parameters:
 - name: NAMESPACE
   value: 'toolchain-member-operator'
 - name: IMAGE
-  value: quay.io/matousjobanek/member-operator-webhook:latest
+  required: true
 - name: CA_BUNDLE
   required: true

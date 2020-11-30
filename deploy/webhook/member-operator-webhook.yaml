@@ -53,10 +53,10 @@ objects:
           imagePullPolicy: IfNotPresent
           resources:
             limits:
-              cpu: 500m
+              cpu: 300m
               memory: 500Mi
             requests:
-              cpu: 250m
+              cpu: 75m
               memory: 128Mi
           volumeMounts:
           - name: webhook-certs

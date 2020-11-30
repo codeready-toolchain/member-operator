@@ -4,22 +4,27 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
+	routev1 "github.com/openshift/api/route/v1"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/h2non/gock.v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,10 +38,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	testCheURL      = "https://codeready-codeready-workspaces-operator.member-cluster"
+	testKeycloakURL = "https://keycloak-codeready-workspaces-operator.member-cluster"
+)
+
 func TestReconcile(t *testing.T) {
 	logf.SetLogger(zap.Logger(true))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
+
 	config, err := configuration.LoadConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 
@@ -597,8 +608,27 @@ func TestReconcile(t *testing.T) {
 	// Delete useraccount and ensure related resources are also removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
 		// given
+
+		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
+			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
+			// For tests we'll assume they're two different routes.
+			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
+		)
+		defer restore()
+
+		mockCallsCounter := new(int)
+		defer gock.OffAll()
+		gockTokenSuccess(mockCallsCounter)
+		gockFindUserTimes(username, 2, mockCallsCounter)
+		gockFindUserNoBody(username, 404, mockCallsCounter)
+		gockDeleteUser(204, mockCallsCounter)
+
+		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID, false)
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 		//when
 		res, err := r.Reconcile(req)
@@ -656,6 +686,7 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+		require.Equal(t, 6, *mockCallsCounter) // Only 1 reconcile will do the delete (4 calls) followed by 2 reconciles with user exists check only
 	})
 	// Add finalizer fails
 	t.Run("add finalizer fails", func(t *testing.T) {
@@ -748,6 +779,67 @@ func TestReconcile(t *testing.T) {
 		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+	})
+	// delete Che user fails
+	t.Run("delete che user fails because find che user request failed", func(t *testing.T) {
+		// given
+
+		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
+			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
+			// For tests we'll assume they're two different routes.
+			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
+		)
+		defer restore()
+
+		mockCallsCounter := new(int)
+		defer gock.OffAll()
+		gockTokenSuccess(mockCallsCounter)
+		gockFindUserNoBody("johnsmith", 400, mockCallsCounter) // respond with 400 error to simulate find user request failure
+
+		memberOperatorSecret := newSecretWithCheAdminCreds()
+		userAcc := newUserAccount(username, userID, false)
+		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+		// when
+		res, err := r.Reconcile(req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		// then
+		userAcc = &toolchainv1alpha1.UserAccount{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		require.NoError(t, err)
+
+		// Check that the finalizer is present
+		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+
+		// Set the deletionTimestamp
+		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+		err = r.client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		res, err = r.Reconcile(req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, `failed to delete Che user data: request to find Che user 'johnsmith' failed, Response status: '400 Bad Request' Body: ''`)
+
+		// Check that the associated identity has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		identity := &userv1.Identity{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		require.NoError(t, err)
+
+		// Check that the associated user has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		user := &userv1.User{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		require.NoError(t, err)
+		require.Equal(t, 2, *mockCallsCounter)
+
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(failed("Terminating", `request to find Che user 'johnsmith' failed, Response status: '400 Bad Request' Body: ''`))
 	})
 	// delete identity fails
 	t.Run("delete identity fails", func(t *testing.T) {
@@ -1133,6 +1225,176 @@ func TestDisabledUserAccount(t *testing.T) {
 	})
 }
 
+func TestLookupAndDeleteCheUser(t *testing.T) {
+	// given
+	username := "sugar"
+	userID := uuid.NewV4().String()
+
+	t.Run("che user deletion is not enabled", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		r, _, _ := prepareReconcile(t, username, userAcc, cheRoute(true), keycloackRoute(true))
+
+		// when
+		err := r.lookupAndDeleteCheUser(userAcc)
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("che user deletion is enabled", func(t *testing.T) {
+		memberOperatorSecret := newSecretWithCheAdminCreds()
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
+			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
+			// For tests we'll assume they're two different routes.
+			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
+		)
+		defer restore()
+
+		t.Run("get token error", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenFail(mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			//when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.EqualError(t, err, `request to find Che user 'sugar' failed: unable to obtain access token for che, Response status: '400 Bad Request'. Response body: ''`)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 1, *mockCallsCounter)
+		})
+
+		t.Run("user not found", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserNoBody(username, 404, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.NoError(t, err)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 2, *mockCallsCounter)
+		})
+
+		t.Run("find user error", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserNoBody(username, 400, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.EqualError(t, err, `request to find Che user 'sugar' failed, Response status: '400 Bad Request' Body: ''`)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 2, *mockCallsCounter)
+		})
+
+		t.Run("delete error", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserTimes(username, 2, mockCallsCounter)
+			gockDeleteUser(400, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.EqualError(t, err, `this error is expected if deletion is still in progress: unable to delete Che user with ID 'abc1234', Response status: '400 Bad Request' Body: ''`)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			test.AssertConditionsMatch(t, userAcc.Status.Conditions, cheCleanupCondition("abc1234"))
+			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
+		})
+
+		t.Run("successful deletion reusing user ID from condition", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserTimes(username, 1, mockCallsCounter)
+			gockFindUserNoBody(username, 404, mockCallsCounter)
+			gockDeleteUser(204, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+
+			// The Che user deletion status type is used to store the Che user ID in the status for subsequent retries if needed.
+			// This is required because the Che deletion API will return an error until the user is successfully removed but a user's ID
+			// may not be retrievable at some point during the deletion process but should still be used to complete the deletion.
+			userAcc.Status.Conditions = []toolchainv1alpha1.Condition{cheCleanupCondition("abc123")}
+
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.NoError(t, err)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+
+			// the condition should be removed after successful deletion
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. check user exists 3. delete user (user ID is reused from condition)
+		})
+
+		t.Run("successful lookup and delete", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserTimes(username, 2, mockCallsCounter)
+			gockDeleteUser(204, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.NoError(t, err)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
+		})
+
+	})
+
+}
+
 func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
 	// Check that the associated user has been deleted
 	// since disabled has been set to true
@@ -1295,10 +1557,14 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	config, err := configuration.LoadConfig(fakeClient)
 	require.NoError(t, err)
 
+	tc := che.NewTokenCache(http.DefaultClient)
+	cheClient := che.NewCheClient(config, http.DefaultClient, fakeClient, tc)
+
 	r := &ReconcileUserAccount{
-		client: fakeClient,
-		scheme: s,
-		config: config,
+		client:    fakeClient,
+		scheme:    s,
+		config:    config,
+		cheClient: cheClient,
 	}
 	return r, newReconcileRequest(username), fakeClient
 }
@@ -1334,4 +1600,129 @@ func provisioning() toolchainv1alpha1.Condition {
 		Status: corev1.ConditionFalse,
 		Reason: "Provisioning",
 	}
+}
+
+func cheCleanupCondition(msg string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.UserAccountCheCleanup,
+		Status:  corev1.ConditionFalse,
+		Reason:  toolchainv1alpha1.UserAccountDeletingCheDataReason,
+		Message: msg,
+	}
+}
+
+func cheRoute(tls bool) *routev1.Route {
+	r := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "codeready",
+			Namespace: "codeready-workspaces-operator",
+		},
+		Spec: routev1.RouteSpec{
+			Host: fmt.Sprintf("codeready-codeready-workspaces-operator.%s", test.MemberClusterName),
+			Path: "",
+		},
+	}
+	if tls {
+		r.Spec.TLS = &routev1.TLSConfig{
+			Termination: "edge",
+		}
+	}
+	return r
+}
+
+func keycloackRoute(tls bool) *routev1.Route {
+	r := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "keycloak",
+			Namespace: "codeready-workspaces-operator",
+		},
+		Spec: routev1.RouteSpec{
+			Host: fmt.Sprintf("keycloak-codeready-workspaces-operator.%s", test.MemberClusterName),
+			Path: "",
+		},
+	}
+	if tls {
+		r.Spec.TLS = &routev1.TLSConfig{
+			Termination: "edge",
+		}
+	}
+	return r
+}
+
+func newSecretWithCheAdminCreds() *v1.Secret {
+	return &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-secret",
+			Namespace: test.MemberOperatorNs,
+		},
+		Data: map[string][]byte{
+			"che.admin.username": []byte("test-che-user"),
+			"che.admin.password": []byte("test-che-password"),
+		},
+	}
+}
+
+func gockTokenSuccess(calls *int) {
+	gock.New(testKeycloakURL).
+		Post("auth/realms/codeready/protocol/openid-connect/token").
+		SetMatcher(SpyOnGockCalls(calls)).
+		MatchHeader("Content-Type", "application/x-www-form-urlencoded").
+		Persist().
+		Reply(200).
+		BodyString(`{
+				"access_token":"abc.123.xyz",
+				"expires_in":300,
+				"refresh_expires_in":1800,
+				"refresh_token":"111.222.333",
+				"token_type":"bearer",
+				"not-before-policy":0,
+				"session_state":"a2fa1448-687a-414f-af40-3b6b3f5a873a",
+				"scope":"profile email"
+				}`)
+}
+
+func gockTokenFail(calls *int) {
+	gock.New(testKeycloakURL).
+		Post("auth/realms/codeready/protocol/openid-connect/token").
+		SetMatcher(SpyOnGockCalls(calls)).
+		MatchHeader("Content-Type", "application/x-www-form-urlencoded").
+		Persist().
+		Reply(400)
+}
+
+func gockFindUserTimes(name string, times int, calls *int) {
+	gock.New(testCheURL).
+		Get("api/user/find").
+		SetMatcher(SpyOnGockCalls(calls)).
+		MatchHeader("Authorization", "Bearer abc.123.xyz").
+		Times(times).
+		Reply(200).
+		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
+}
+
+func gockFindUserNoBody(name string, code int, calls *int) {
+	gock.New(testCheURL).
+		Get("api/user/find").
+		SetMatcher(SpyOnGockCalls(calls)).
+		MatchHeader("Authorization", "Bearer abc.123.xyz").
+		Persist().
+		Reply(code)
+}
+
+func gockDeleteUser(code int, calls *int) {
+	gock.New(testCheURL).
+		Delete("api/user").
+		SetMatcher(SpyOnGockCalls(calls)).
+		MatchHeader("Authorization", "Bearer abc.123.xyz").
+		Persist().
+		Reply(code)
+}
+
+func SpyOnGockCalls(counter *int) gock.Matcher {
+	matcher := gock.NewBasicMatcher()
+	matcher.Add(func(_ *http.Request, _ *gock.Request) (bool, error) {
+		*counter++
+		return true, nil
+	})
+	return matcher
 }

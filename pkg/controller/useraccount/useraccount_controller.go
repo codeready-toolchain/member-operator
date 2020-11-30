@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
@@ -44,7 +45,7 @@ func Add(mgr manager.Manager, config *configuration.Config, _ client.Client) err
 }
 
 func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
-	return &ReconcileUserAccount{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config}
+	return &ReconcileUserAccount{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config, cheClient: che.DefaultClient}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -85,9 +86,10 @@ var _ reconcile.Reconciler = &ReconcileUserAccount{}
 type ReconcileUserAccount struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-	config *configuration.Config
+	client    client.Client
+	scheme    *runtime.Scheme
+	config    *configuration.Config
+	cheClient *che.Client
 }
 
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
@@ -153,6 +155,12 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
+
+		// Clean up Che resources by deleting the Che user (required for GDPR and reactivation of users)
+		if err := r.lookupAndDeleteCheUser(userAcc); err != nil {
+			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete Che user data")
+		}
+
 		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
@@ -556,6 +564,27 @@ func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.U
 		})
 }
 
+func (r *ReconcileUserAccount) setStatusCheUserDeletionInProgress(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+	return r.updateStatusConditions(
+		userAcc,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.UserAccountCheCleanup,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.UserAccountDeletingCheDataReason,
+			Message: message,
+		})
+}
+
+func (r *ReconcileUserAccount) removeStatusCondition(userAcc *toolchainv1alpha1.UserAccount, cType toolchainv1alpha1.ConditionType) error {
+	for i, cond := range userAcc.Status.Conditions {
+		if cond.Type == cType {
+			userAcc.Status.Conditions = append(userAcc.Status.Conditions[:i], userAcc.Status.Conditions[i+1:]...)
+			return r.client.Status().Update(context.TODO(), userAcc)
+		}
+	}
+	return nil
+}
+
 // updateStatusConditions updates user account status conditions with the new conditions
 func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool
@@ -607,4 +636,56 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 // ToIdentityName converts the given `userID` into an identity
 func ToIdentityName(userID string, identityProvider IdentityProvider) string {
 	return fmt.Sprintf("%s:%s", identityProvider.GetIdP(), userID)
+}
+
+func (r *ReconcileUserAccount) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1.UserAccount) error {
+
+	// If the admin username is not set then Che user deletion is not configured, just return
+	if r.config.GetCheAdminUsername() == "" {
+		log.Info("Che user deletion is not configured, configure the Che admin credentials to enable it")
+		return nil
+	}
+
+	userExists, err := r.cheClient.UserExists(userAcc.Name)
+	if err != nil {
+		return err
+	}
+
+	// If the user doesn't exist and there's no deletion in progress then there's nothing left to do.
+	// We need to check whether the deletion is in progress because in some cases the user could be reported as non-existent while the deletion is still in progress.
+	if !userExists && !condition.HasConditionReason(userAcc.Status.Conditions, toolchainv1alpha1.UserAccountCheCleanup, toolchainv1alpha1.UserAccountDeletingCheDataReason) {
+		return nil
+	}
+
+	var cheUserID string
+
+	// Get the user ID from the status condition if it's there
+	if condition.HasConditionReason(userAcc.Status.Conditions, toolchainv1alpha1.UserAccountCheCleanup, toolchainv1alpha1.UserAccountDeletingCheDataReason) {
+		cond, found := condition.FindConditionByType(userAcc.Status.Conditions, toolchainv1alpha1.UserAccountCheCleanup)
+		if found {
+			cheUserID = cond.Message
+		}
+	}
+
+	// If the user ID is not in the status then look it up and set it in the status
+	if cheUserID == "" {
+		cheUserID, err = r.cheClient.GetUserIDByUsername(userAcc.Name)
+		if err != nil {
+			return err
+		}
+
+		// Set the Che user deletion status (store the Che user ID in the status for subsequent retries if needed)
+		// This is required because the deletion API will return an error until the user is successfully removed.
+		if err := r.setStatusCheUserDeletionInProgress(userAcc, cheUserID); err != nil {
+			return err
+		}
+	}
+
+	// Delete the Che user. It is common for this call to return an error multiple times before succeeding
+	if err := r.cheClient.DeleteUser(cheUserID); err != nil {
+		return errs.Wrapf(err, "this error is expected if deletion is still in progress")
+	}
+
+	// Remove the Che user deletion condition when done
+	return r.removeStatusCondition(userAcc, toolchainv1alpha1.UserAccountCheCleanup)
 }

@@ -1,5 +1,3 @@
 member-operator:
-  config-map:
-    name: member-operator-config
   secret:
     name: member-operator-secret

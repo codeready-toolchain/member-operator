@@ -21,23 +21,24 @@ import (
 	"github.com/pkg/errors"
 )
 
-const tokenPath = "auth/realms/che/protocol/openid-connect/token"
+const tokenPath = "auth/realms/codeready/protocol/openid-connect/token"
 
-// tokenCache manages retrieving, caching and renewing the authentication token required for invoking Che APIs
-type tokenCache struct {
+// TokenCache manages retrieving, caching and renewing the authentication token required for invoking Che APIs
+type TokenCache struct {
 	sync.RWMutex
 	httpClient *http.Client
 	token      *TokenSet
 }
 
-func newTokenCache() *tokenCache {
-	return &tokenCache{
-		httpClient: newHTTPClient(),
+// NewTokenCache creates a new instance of a TokenCache
+func NewTokenCache(cl *http.Client) *TokenCache {
+	return &TokenCache{
+		httpClient: cl,
 	}
 }
 
 // getToken returns the token needed to use Che user APIs, or an error if there was a problem getting the token
-func (tc *tokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
+func (tc *TokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
 	tc.RLock()
 	// use the cached credentials if they are still valid
 	if !tokenExpired(tc.token) {
@@ -52,7 +53,7 @@ func (tc *tokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, 
 }
 
 // obtainAndCacheNewToken obtains an access token, updates the cache and returns the token. Returns an error if there was a failure at any point
-func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
+func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
 	defer tc.Unlock()
 	tc.Lock()
 
@@ -79,7 +80,7 @@ func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 	reqData.Set("username", user)
 	reqData.Set("password", pass)
 	reqData.Set("grant_type", "password")
-	reqData.Set("client_id", "che-public")
+	reqData.Set("client_id", "codeready-public")
 
 	authURL := cheKeycloakURL + tokenPath
 	log.Info("Obtaining new token", "URL", authURL)
@@ -94,7 +95,7 @@ func (tc *tokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 		if readError != nil {
 			log.Error(readError, "error while reading body of the get token response")
 		}
-		return TokenSet{}, errors.Errorf("unable to obtain access token for che, Response status: %s. Response body: %s", res.Status, bodyString)
+		return TokenSet{}, errors.Errorf("unable to obtain access token for che, Response status: '%s'. Response body: '%s'", res.Status, bodyString)
 	}
 	tokenSet, err := readTokenSet(res)
 	if err != nil {

@@ -77,6 +77,7 @@ rules:
   verbs:
   - "get"
   - "list"
+  - "watch"
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -117,3 +118,23 @@ rules:
   - jobs
   verbs:
   - "*"
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+  - "create"
+  - "update"
+- apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+  - "create"
+  - "update"

@@ -77,6 +77,9 @@ const (
 
 	// varCheAdminPassword is the che admin user password
 	varCheAdminPassword = "che.admin.password"
+
+	// varWebhookImage contains the image location of the member-operator-webhook
+	varWebhookImage = "webhook.image"
 )
 
 // ToolchainCluster configuration constants
@@ -231,4 +234,9 @@ func (c *Config) GetCheAdminUsername() string {
 // GetCheAdminPassword returns the member cluster's Che admin password
 func (c *Config) GetCheAdminPassword() string {
 	return c.secretValues[varCheAdminPassword]
+}
+
+// GetMemberOperatorWebhookImage returns the member operator webhook image location
+func (c *Config) GetMemberOperatorWebhookImage() string {
+	return c.member.GetString(varWebhookImage)
 }

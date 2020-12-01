@@ -82,3 +82,6 @@ tags
 out/
 
 tmp/
+
+# generated files
+*_assets.go

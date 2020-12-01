@@ -327,3 +327,24 @@ func TestIsCheRequired(t *testing.T) {
 		assert.Equal(t, true, config.IsCheRequired())
 	})
 }
+
+func TestGetMemberOperatorWebhookImage(t *testing.T) {
+	key := MemberEnvPrefix + "_WEBHOOK_IMAGE"
+	resetFunc := test.UnsetEnvVarAndRestore(t, key)
+	defer resetFunc()
+
+	t.Run("default", func(t *testing.T) {
+		resetFunc := test.UnsetEnvVarAndRestore(t, key)
+		defer resetFunc()
+		config := getDefaultConfiguration(t)
+		assert.Empty(t, config.GetMemberOperatorWebhookImage())
+	})
+
+	t.Run("from var", func(t *testing.T) {
+		restore := test.SetEnvVarsAndRestore(t,
+			test.Env(key, "quay.io/cool/member-operator-webhook:123"))
+		defer restore()
+		config := getDefaultConfiguration(t)
+		assert.Equal(t, "quay.io/cool/member-operator-webhook:123", config.GetMemberOperatorWebhookImage())
+	})
+}

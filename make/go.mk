@@ -8,7 +8,7 @@ export GO111MODULE
 
 .PHONY: build
 ## Build the operator
-build: $(OUT_DIR)/operator
+build: generate-assets $(OUT_DIR)/operator
 
 $(OUT_DIR)/operator:
 	$(Q)CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
@@ -25,3 +25,11 @@ $(OUT_DIR)/operator:
 .PHONY: vendor
 vendor:
 	$(Q)go mod vendor
+
+.PHONY: generate-assets
+generate-assets:
+	@go install github.com/go-bindata/go-bindata/...
+	@echo "generating users pods mutating webhook template data..."
+	@rm ./pkg/webhook/deploy/userspodswebhook/template_assets.go 2>/dev/null || true
+	@$(GOPATH)/bin/go-bindata -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
+

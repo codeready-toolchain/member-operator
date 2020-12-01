@@ -2,6 +2,8 @@ package apis
 
 import (
 	"github.com/codeready-toolchain/api/pkg/apis"
+	"k8s.io/api/admissionregistration/v1"
+	v12 "k8s.io/api/scheduling/v1"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	authv1 "github.com/openshift/api/authorization/v1"
@@ -34,7 +36,9 @@ func AddToScheme(s *runtime.Scheme) error {
 		openshiftappsv1.Install,
 		batchv1.AddToScheme,
 		metrics.AddToScheme,
-		routev1.Install)
+		routev1.Install,
+		v1.AddToScheme,
+		v12.AddToScheme)
 
 	return addToSchemes.AddToScheme(s)
 }

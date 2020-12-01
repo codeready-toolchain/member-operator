@@ -70,7 +70,7 @@ const (
 	varCheKeycloakRouteName = "che.keycloak.route.name"
 
 	// defaultCheKeycloakRouteName is the default che keycloak route
-	defaultCheKeycloakRouteName = "keycloak"
+	defaultCheKeycloakRouteName = "codeready"
 
 	// varCheAdminUsername is the che admin user username
 	varCheAdminUsername = "che.admin.username"

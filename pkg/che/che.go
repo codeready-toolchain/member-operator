@@ -33,16 +33,23 @@ type Client struct {
 	config     *crtcfg.Config
 	httpClient *http.Client
 	k8sClient  client.Client
-	tokenCache *tokenCache
+	tokenCache *TokenCache
 }
 
-// InitDefaultCheClient initializes the default Che service instance
+// InitDefaultCheClient initializes the default Che client instance
 func InitDefaultCheClient(cfg *crtcfg.Config, cl client.Client) {
-	DefaultClient = &Client{
+	defaultHTTPClient := newHTTPClient()
+	tc := NewTokenCache(defaultHTTPClient)
+	DefaultClient = NewCheClient(cfg, defaultHTTPClient, cl, tc)
+}
+
+// NewCheClient creates a new instance of a Che client
+func NewCheClient(cfg *crtcfg.Config, httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
+	return &Client{
 		config:     cfg,
-		httpClient: newHTTPClient(),
+		httpClient: httpCl,
 		k8sClient:  cl,
-		tokenCache: newTokenCache(),
+		tokenCache: tc,
 	}
 }
 
@@ -56,8 +63,10 @@ func (c *Client) UserExists(username string) (bool, error) {
 	}
 	defer rest.CloseResponse(res)
 	if res.StatusCode == http.StatusOK {
+		log.Info("User found", "name", username)
 		return true, nil
 	} else if res.StatusCode == http.StatusNotFound {
+		log.Info("User not found", "name", username)
 		return false, nil
 	}
 	resBody, readError := rest.ReadBody(res.Body)

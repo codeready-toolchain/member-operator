@@ -1033,6 +1033,7 @@ data:
                 verbs:
                 - get
                 - list
+                - watch
               - apiGroups:
                 - networking.k8s.io
                 resources:
@@ -1073,6 +1074,26 @@ data:
                 - jobs
                 verbs:
                 - '*'
+              - apiGroups:
+                - admissionregistration.k8s.io
+                resources:
+                - mutatingwebhookconfigurations
+                verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+              - apiGroups:
+                - scheduling.k8s.io
+                resources:
+                - priorityclasses
+                verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
               serviceAccountName: member-operator
             deployments:
             - name: member-operator
@@ -1101,6 +1122,8 @@ data:
                             fieldPath: metadata.name
                       - name: OPERATOR_NAME
                         value: member-operator
+                      - name: MEMBER_OPERATOR_WEBHOOK_IMAGE
+                        value: REPLACE_MEMBER_OPERATOR_WEBHOOK_IMAGE
                       image: REPLACE_IMAGE
                       imagePullPolicy: IfNotPresent
                       name: member-operator

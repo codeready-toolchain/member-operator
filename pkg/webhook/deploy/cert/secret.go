@@ -1,26 +1,18 @@
-/*
-Copyright 2019 The Knative Authors
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// this code was inspired by https://github.com/knative/pkg
 
 package cert
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -31,11 +23,62 @@ const (
 	// CACert is the name of the key associated with the certificate of the CA for
 	// the keypair.
 	CACert = "ca-cert.pem"
+
+	// certSecretName is a name of the secret
+	certSecretName = "webhook-certs"
+
+	// Time used for updating a certificate before it expires.
+	oneWeek = 7 * 24 * time.Hour
+
+	// serviceName is the name of webhook service
+	serviceName = "member-operator-webhook"
 )
 
-// CreateSecret creates a secret containing certificate data
-func CreateSecret(name, namespace, serviceName string) (*corev1.Secret, error) {
-	serverKey, serverCert, caCert, err := CreateCerts(serviceName, namespace, time.Now().AddDate(1, 0, 0))
+func EnsureSecret(cl client.Client, namespace string, expiration time.Time) ([]byte, error) {
+	certSecret := &corev1.Secret{}
+	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: certSecretName}, certSecret); err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	} else if err != nil {
+		// does not exist, so let's create it
+		certSecret, err := newSecret(certSecretName, namespace, serviceName, expiration)
+		if err != nil {
+			return nil, err
+		}
+		if err := cl.Create(context.TODO(), certSecret); err != nil {
+			return nil, err
+		}
+		return certSecret.Data[CACert], nil
+	}
+
+	// already exists - check the expiration date of the certificate to see if it needs to be updated
+	cert, err := tls.X509KeyPair(certSecret.Data[ServerCert], certSecret.Data[ServerKey])
+	if err != nil {
+		log.Error(err, "creating pem from certificate and key failed")
+	} else {
+		certData, err := x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			log.Error(err, "parsing certificate failed")
+		} else if time.Now().Add(oneWeek).Before(certData.NotAfter) {
+			// expiration is fine
+			return certSecret.Data[CACert], nil
+		}
+	}
+
+	// let's update the secret with certificates
+	newSecret, err := newSecret(certSecretName, namespace, serviceName, expiration)
+	if err != nil {
+		return nil, err
+	}
+	newSecret.SetResourceVersion(certSecret.GetResourceVersion())
+	if err := cl.Update(context.TODO(), newSecret); err != nil {
+		return nil, err
+	}
+	return newSecret.Data[CACert], nil
+}
+
+// newSecret creates a secret containing certificate data
+func newSecret(name, namespace, serviceName string, expiration time.Time) (*corev1.Secret, error) {
+	serverKey, serverCert, caCert, err := CreateCerts(serviceName, namespace, expiration)
 	if err != nil {
 		return nil, err
 	}

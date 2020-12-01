@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
+	. "github.com/codeready-toolchain/member-operator/test"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
@@ -18,8 +18,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -42,90 +40,6 @@ func TestGetTemplateObjects(t *testing.T) {
 	contains(t, toolchainObjects, service(test.MemberOperatorNs))
 	contains(t, toolchainObjects, deployment(test.MemberOperatorNs, imgLoc))
 	contains(t, toolchainObjects, mutatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
-}
-
-func TestEnsureCertSecret(t *testing.T) {
-	// given
-	setScheme(t)
-	t.Run("when secret doesn't exist yet", func(t *testing.T) {
-		// given
-		fakeClient := test.NewFakeClient(t)
-
-		// when
-		caCert, err := ensureCertSecret(fakeClient, test.MemberOperatorNs)
-
-		// then
-		require.NoError(t, err)
-		assert.NotEmpty(t, caCert)
-		actualSecret := &v1.Secret{}
-		assertMemberObject(t, fakeClient, "webhook-certs", actualSecret, func() {
-			assert.NotEmpty(t, actualSecret.Data[cert.ServerKey])
-			assert.NotEmpty(t, actualSecret.Data[cert.ServerCert])
-			assert.Equal(t, caCert, actualSecret.Data[cert.CACert])
-		})
-	})
-
-	t.Run("when secret already exists", func(t *testing.T) {
-		// given
-		secret := &v1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: test.MemberOperatorNs,
-				Name:      "webhook-certs",
-			},
-			Data: map[string][]byte{
-				"some":        []byte("data"),
-				"ca-cert.pem": []byte("ca-cert-data"),
-			},
-		}
-		fakeClient := test.NewFakeClient(t, secret)
-
-		// when
-		caCert, err := ensureCertSecret(fakeClient, test.MemberOperatorNs)
-
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, "ca-cert-data", string(caCert))
-		actualSecret := &v1.Secret{}
-		assertMemberObject(t, fakeClient, "webhook-certs", actualSecret, func() {
-			assert.Equal(t, secret.Data, actualSecret.Data)
-		})
-	})
-
-	t.Run("when cannot get the secret", func(t *testing.T) {
-		// given
-		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
-			return fmt.Errorf("some error")
-		}
-
-		// when
-		caCert, err := ensureCertSecret(fakeClient, test.MemberOperatorNs)
-		fmt.Println()
-
-		// then
-		fakeClient.MockGet = nil
-		require.Error(t, err)
-		assert.Empty(t, caCert)
-		actualSecret := &v1.Secret{}
-		assertMemberObject(t, fakeClient, "webhook-certs", actualSecret, nil)
-	})
-
-	t.Run("when cannot create the secret", func(t *testing.T) {
-		// given
-		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
-			return fmt.Errorf("some error")
-		}
-
-		// when
-		caCert, err := ensureCertSecret(fakeClient, test.MemberOperatorNs)
-
-		// then
-		require.Error(t, err)
-		assert.Empty(t, caCert)
-		actualSecret := &v1.Secret{}
-		assertMemberObject(t, fakeClient, "webhook-certs", actualSecret, nil)
-	})
 }
 
 func TestDeployWebhook(t *testing.T) {
@@ -193,7 +107,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expPrioClass := &schedulingv1.PriorityClass{}
 	unmarshalObj(t, priorityClass(), expPrioClass)
 	actualPrioClass := &schedulingv1.PriorityClass{}
-	assertObject(t, fakeClient, "", "sandbox-users-pods", actualPrioClass, func() {
+	AssertObject(t, fakeClient, "", "sandbox-users-pods", actualPrioClass, func() {
 		assert.Equal(t, expPrioClass.Labels, actualPrioClass.Labels)
 		assert.Equal(t, expPrioClass.Value, actualPrioClass.Value)
 		assert.False(t, actualPrioClass.GlobalDefault)
@@ -203,7 +117,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expService := &v1.Service{}
 	unmarshalObj(t, service(test.MemberOperatorNs), expService)
 	actualService := &v1.Service{}
-	assertMemberObject(t, fakeClient, "member-operator-webhook", actualService, func() {
+	AssertMemberObject(t, fakeClient, "member-operator-webhook", actualService, func() {
 		assert.Equal(t, expService.Labels, actualService.Labels)
 		assert.Equal(t, expService.Spec, actualService.Spec)
 	})
@@ -211,7 +125,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expDeployment := &appsv1.Deployment{}
 	unmarshalObj(t, deployment(test.MemberOperatorNs, imgLoc), expDeployment)
 	actualDeployment := &appsv1.Deployment{}
-	assertMemberObject(t, fakeClient, "member-operator-webhook", actualDeployment, func() {
+	AssertMemberObject(t, fakeClient, "member-operator-webhook", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
 		assert.Equal(t, expDeployment.Spec, actualDeployment.Spec)
 	})
@@ -223,7 +137,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expMutWbhConf := &admv1.MutatingWebhookConfiguration{}
 	unmarshalObj(t, mutatingWebhookConfig(test.MemberOperatorNs, base64.StdEncoding.EncodeToString(secret.Data["ca-cert.pem"])), expMutWbhConf)
 	actualMutWbhConf := &admv1.MutatingWebhookConfiguration{}
-	assertObject(t, fakeClient, "", "member-operator-webhook", actualMutWbhConf, func() {
+	AssertObject(t, fakeClient, "", "member-operator-webhook", actualMutWbhConf, func() {
 		assert.Equal(t, expMutWbhConf.Labels, actualMutWbhConf.Labels)
 		assert.Equal(t, expMutWbhConf.Webhooks, actualMutWbhConf.Webhooks)
 	})
@@ -271,19 +185,4 @@ func deployment(namespace, image string) string {
 
 func mutatingWebhookConfig(namespace, caBundle string) string {
 	return fmt.Sprintf(`{"apiVersion":"admissionregistration.k8s.io/v1","kind":"MutatingWebhookConfiguration","metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"webhooks":[{"name":"users.pods.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%s","service":{"name":"member-operator-webhook","namespace":"%s","path":"/mutate-users-pods","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE","UPDATE"],"apiGroups":[""],"apiVersions":["v1"],"resources":["pods"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Ignore","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}}]}`, caBundle, namespace)
-}
-
-func assertMemberObject(t *testing.T, fakeClient *test.FakeClient, name string, actualResource runtime.Object, assertContent func()) {
-	assertObject(t, fakeClient, test.MemberOperatorNs, name, actualResource, assertContent)
-}
-
-func assertObject(t *testing.T, fakeClient *test.FakeClient, namespace, name string, actualResource runtime.Object, assertContent func()) {
-	err := fakeClient.Get(context.TODO(), test.NamespacedName(namespace, name), actualResource)
-	if assertContent == nil {
-		require.Error(t, err)
-		require.True(t, errors.IsNotFound(err))
-	} else {
-		require.NoError(t, err)
-		assertContent()
-	}
 }

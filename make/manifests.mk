@@ -20,7 +20,7 @@ push-to-quay-staging: generate-cd-release-manifests push-bundle-and-index-image 
 .PHONY: generate-cd-release-manifests
 ## Generates a new version of operator manifests
 generate-cd-release-manifests:
-	$(eval CD_GENERATE_PARAMS = -pr ../member-operator/ -qn ${QUAY_NAMESPACE} -td ${TMP_DIR})
+	$(eval CD_GENERATE_PARAMS = -pr ../member-operator/ -qn ${QUAY_NAMESPACE} -td ${TMP_DIR} -ci member-operator-webhook)
 ifneq ("$(wildcard ../api/$(PATH_TO_CD_GENERATE_FILE))","")
 	@echo "generating manifests for CD using script from local api repo..."
 	../api/${PATH_TO_CD_GENERATE_FILE} ${CD_GENERATE_PARAMS}

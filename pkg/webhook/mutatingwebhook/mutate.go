@@ -76,8 +76,6 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 }
 
 func mutate(body []byte) []byte {
-	log.Info("received", "body", string(body))
-
 	admReview := v1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", body)
@@ -111,7 +109,7 @@ func createAdmissionReviewResponse(admReview v1.AdmissionReview) *v1.AdmissionRe
 	var pod *corev1.Pod
 	if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
 		log.Error(err, "unable unmarshal pod json object", "AdmissionReview", admReview)
-		return responseWithError(errors.Wrapf(err, "unable unmarshal pod json object"))
+		return responseWithError(errors.Wrapf(err, "unable unmarshal pod json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 
 	patchType := v1.PatchTypeJSONPatch

@@ -2,7 +2,6 @@ package deploy
 
 import (
 	"encoding/base64"
-	"time"
 
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/userspodswebhook"
@@ -16,7 +15,7 @@ import (
 )
 
 func Webhook(cl client.Client, s *runtime.Scheme, namespace, image string) error {
-	caBundle, err := cert.EnsureSecret(cl, namespace, time.Now().AddDate(1, 0, 0))
+	caBundle, err := cert.EnsureSecret(cl, namespace, cert.Expiration)
 	if err != nil {
 		return err
 	}

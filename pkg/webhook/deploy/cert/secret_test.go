@@ -20,11 +20,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var eightDays = time.Now().AddDate(0, 0, 8)
-
 func TestCreateSecret(t *testing.T) {
 	// when
-	secret, err := newSecret("foo", "ns", "bar", eightDays)
+	secret, err := newSecret("foo", "ns", "bar", Expiration)
 
 	// then
 	require.NoError(t, err)
@@ -44,7 +42,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, eightDays)
+		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, Expiration)
 
 		// then
 		require.NoError(t, err)
@@ -72,7 +70,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		fakeClient := test.NewFakeClient(t, secret)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, eightDays)
+		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, Expiration)
 
 		// then
 		require.NoError(t, err)
@@ -91,12 +89,14 @@ func TestEnsureCertSecret(t *testing.T) {
 
 	t.Run("when secret already exists but has expired", func(t *testing.T) {
 		// given
-		secret, err := newSecret(certSecretName, test.MemberOperatorNs, serviceName, time.Now().AddDate(0, 0, 7))
+		shortExpiration := time.Duration(time.Second)
+		secret, err := newSecret(certSecretName, test.MemberOperatorNs, serviceName, shortExpiration)
 		require.NoError(t, err)
 		fakeClient := test.NewFakeClient(t, secret)
+		time.Sleep(shortExpiration / 2)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, eightDays)
+		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, shortExpiration)
 
 		// then
 		require.NoError(t, err)
@@ -115,12 +115,12 @@ func TestEnsureCertSecret(t *testing.T) {
 
 	t.Run("when secret already exists and is not yet expired", func(t *testing.T) {
 		// given
-		secret, err := newSecret(certSecretName, test.MemberOperatorNs, serviceName, eightDays)
+		secret, err := newSecret(certSecretName, test.MemberOperatorNs, serviceName, Expiration)
 		require.NoError(t, err)
 		fakeClient := test.NewFakeClient(t, secret)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, eightDays)
+		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, Expiration)
 
 		// then
 		require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		}
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, eightDays)
+		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, Expiration)
 		fmt.Println()
 
 		// then
@@ -160,7 +160,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		}
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, eightDays)
+		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, Expiration)
 
 		// then
 		require.Error(t, err)

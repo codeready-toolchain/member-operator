@@ -27,14 +27,14 @@ const (
 	// certSecretName is a name of the secret
 	certSecretName = "webhook-certs"
 
-	// Time used for updating a certificate before it expires.
-	oneWeek = 7 * 24 * time.Hour
+	// Expiration is a default duration after which the certificates should expire
+	Expiration = 365 * 24 * time.Hour
 
 	// serviceName is the name of webhook service
 	serviceName = "member-operator-webhook"
 )
 
-func EnsureSecret(cl client.Client, namespace string, expiration time.Time) ([]byte, error) {
+func EnsureSecret(cl client.Client, namespace string, expiration time.Duration) ([]byte, error) {
 	certSecret := &corev1.Secret{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: certSecretName}, certSecret); err != nil && !errors.IsNotFound(err) {
 		return nil, err
@@ -58,7 +58,7 @@ func EnsureSecret(cl client.Client, namespace string, expiration time.Time) ([]b
 		certData, err := x509.ParseCertificate(cert.Certificate[0])
 		if err != nil {
 			log.Error(err, "parsing certificate failed; will update the secret with a freshly generated cert")
-		} else if time.Now().Add(oneWeek).Before(certData.NotAfter) {
+		} else if time.Now().Add(expiration/2).Before(certData.NotAfter) {
 			// expiration is fine
 			return certSecret.Data[CACert], nil
 		}
@@ -77,8 +77,8 @@ func EnsureSecret(cl client.Client, namespace string, expiration time.Time) ([]b
 }
 
 // newSecret creates a secret containing certificate data
-func newSecret(name, namespace, serviceName string, expiration time.Time) (*corev1.Secret, error) {
-	serverKey, serverCert, caCert, err := CreateCerts(serviceName, namespace, expiration)
+func newSecret(name, namespace, serviceName string, expiration time.Duration) (*corev1.Secret, error) {
+	serverKey, serverCert, caCert, err := CreateCerts(serviceName, namespace, time.Now().Add(expiration))
 	if err != nil {
 		return nil, err
 	}

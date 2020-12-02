@@ -57,7 +57,7 @@ func EnsureSecret(cl client.Client, namespace string, expiration time.Time) ([]b
 	} else {
 		certData, err := x509.ParseCertificate(cert.Certificate[0])
 		if err != nil {
-			log.Error(err, "parsing certificate failed")
+			log.Error(err, "parsing certificate failed; will update the secret with a freshly generated cert")
 		} else if time.Now().Add(oneWeek).Before(certData.NotAfter) {
 			// expiration is fine
 			return certSecret.Data[CACert], nil

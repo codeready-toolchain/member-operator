@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -180,7 +180,7 @@ func service(namespace string) string {
 }
 
 func deployment(namespace, image string) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"member-operator-webhook"}},"template":{"metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook"}},"spec":{"containers":[{"name":"mutator","image":"%s","command":["member-operator-webhook"],"imagePullPolicy":"IfNotPresent","resources":{"limits":{"cpu":"300m","memory":"500Mi"},"requests":{"cpu":"75m","memory":"128Mi"}},"volumeMounts":[{"name":"webhook-certs","mountPath":"/etc/webhook/certs","readOnly":true}]}],"volumes":[{"name":"webhook-certs","secret":{"secretName":"webhook-certs"}}]}}}}`, namespace, image)
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"member-operator-webhook"}},"template":{"metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook"}},"spec":{"containers":[{"name":"mutator","image":"%s","command":["member-operator-webhook"],"imagePullPolicy":"IfNotPresent","resources":{"requests":{"cpu":"75m","memory":"128Mi"}},"volumeMounts":[{"name":"webhook-certs","mountPath":"/etc/webhook/certs","readOnly":true}]}],"volumes":[{"name":"webhook-certs","secret":{"secretName":"webhook-certs"}}]}}}}`, namespace, image)
 }
 
 func mutatingWebhookConfig(namespace, caBundle string) string {

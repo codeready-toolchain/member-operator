@@ -52,9 +52,6 @@ objects:
           - member-operator-webhook
           imagePullPolicy: IfNotPresent
           resources:
-            limits:
-              cpu: 300m
-              memory: 500Mi
             requests:
               cpu: 75m
               memory: 128Mi

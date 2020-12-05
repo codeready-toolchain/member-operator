@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/che"
 	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -41,6 +42,7 @@ const (
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"
 	routesTag         statusComponentTag = "routes"
+	cheTag            statusComponentTag = "che"
 
 	labelNodeRoleMaster = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
@@ -60,18 +62,19 @@ func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesC
 		getHostCluster:      cluster.GetHostCluster,
 		config:              crtConfig,
 		allNamespacesClient: allNamespacesClient,
+		cheClient:           che.DefaultClient,
 	}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r *ReconcileMemberStatus) error {
-	// create a new controller
+	// Create a new controller
 	c, err := controller.New("memberstatus-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// watch for changes to primary resource MemberStatus
+	// Watch for changes to primary resource MemberStatus
 	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.MemberStatus{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
 	if err != nil {
 		return err
@@ -92,6 +95,7 @@ type ReconcileMemberStatus struct {
 	getHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 	config              *crtCfg.Config
 	allNamespacesClient client.Client
+	cheClient           *che.Client
 }
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
@@ -100,7 +104,7 @@ func (r *ReconcileMemberStatus) Reconcile(request reconcile.Request) (reconcile.
 	reqLogger.Info("Reconciling MemberStatus")
 	requeueTime := r.config.GetMemberStatusRefreshTime()
 
-	// fetch the MemberStatus
+	// Fetch the MemberStatus
 	memberStatus := &toolchainv1alpha1.MemberStatus{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, memberStatus)
 
@@ -137,12 +141,13 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
 		{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage},
 		{name: routesTag, handleStatus: r.routesHandleStatus},
+		{name: cheTag, handleStatus: r.cheHandleStatus},
 	}
 
-	// track components that are not ready
+	// Track components that are not ready
 	var unreadyComponents []string
 
-	// retrieve component statuses eg. toolchainCluster, member deployment
+	// Retrieve component statuses eg. toolchainCluster, member deployment
 	for _, statusHandler := range statusHandlers {
 		err := statusHandler.handleStatus(reqLogger, memberStatus)
 		if err != nil {
@@ -151,7 +156,7 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 		}
 	}
 
-	// if any components were not ready then set the overall status to not ready
+	// If any components were not ready then set the overall status to not ready
 	if len(unreadyComponents) > 0 {
 		return r.setStatusNotReady(memberStatus, fmt.Sprintf("components not ready: %v", unreadyComponents))
 	}
@@ -188,7 +193,7 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 		BuildTimestamp: version.BuildTime,
 	}
 
-	// look up status of member deployment
+	// Look up status of member deployment
 	memberOperatorDeploymentName, err := k8sutil.GetOperatorName()
 	if err != nil {
 		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
@@ -199,11 +204,11 @@ func (r *ReconcileMemberStatus) memberOperatorHandleStatus(reqLogger logr.Logger
 	}
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
-	// check member operator deployment status
+	// Check member operator deployment status
 	deploymentConditions := status.GetDeploymentStatusConditions(r.client, memberOperatorDeploymentName, memberStatus.Namespace)
 	err = status.ValidateComponentConditionReady(deploymentConditions...)
 
-	// update memberstatus
+	// Update memberstatus
 	operatorStatus.Conditions = deploymentConditions
 	memberStatus.Status.MemberOperator = operatorStatus
 	return err
@@ -241,7 +246,7 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 		return fmt.Errorf("memory item not found in NodeMetrics: %v", nodeMetric)
 	}
 
-	// let's check if all allocatable values were used or if there is some value that the NodeMetrics resource wasn't found for.
+	// Check if all allocatable values were used or if there is some value that the NodeMetrics resource wasn't found for.
 	// In such a case we need to return an error, because the metrics are not complete
 	if len(allocatableValues) > 0 {
 		var nodeNames []string
@@ -274,20 +279,38 @@ func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, member
 	}
 	memberStatus.Status.Routes.ConsoleURL = consoleURL
 
-	cheURL, err := r.cheDashboardURL()
-	if err != nil {
-		if r.config.IsCheRequired() {
-			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
-			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-			return err
-		}
-		reqLogger.Info("Che route is not available but not required. Ignoring.", "err", err.Error())
-	}
-	memberStatus.Status.Routes.CheDashboardURL = cheURL
-
 	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusRoutesAvailableReason)
 	memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
 
+	return nil
+}
+
+// cheHandleStatus checks if Che is required and checks that the Che user API is accessible.
+// Returns an error if any problems are discovered.
+func (r *ReconcileMemberStatus) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+	// Is che required check
+	if !r.config.IsCheRequired() {
+		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheNotRequiredReason)
+		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
+		return nil
+	}
+
+	// Route check
+	if _, err := r.cheDashboardURL(); err != nil {
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
+		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		return err
+	}
+
+	// User API check
+	if err := r.cheClient.UserAPICheck(); err != nil {
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserAPICheckFailedReason, err.Error())
+		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		return err
+	}
+
+	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheReadyReason)
+	memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
 	return nil
 }
 

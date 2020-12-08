@@ -42,7 +42,7 @@ const (
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"
 	routesTag         statusComponentTag = "routes"
-	cheTag            statusComponentTag = "che"
+	cheIntegrationTag statusComponentTag = "cheIntegration"
 
 	labelNodeRoleMaster = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
@@ -141,7 +141,7 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
 		{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage},
 		{name: routesTag, handleStatus: r.routesHandleStatus},
-		{name: cheTag, handleStatus: r.cheHandleStatus},
+		{name: cheIntegrationTag, handleStatus: r.cheIntegrationHandleStatus},
 	}
 
 	// Track components that are not ready
@@ -285,11 +285,16 @@ func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, member
 	return nil
 }
 
-// cheHandleStatus checks if Che is required and checks that the Che user API is accessible.
+// cheIntegrationHandleStatus checks all necessary aspects related integration between the member operator and Che
 // Returns an error if any problems are discovered.
-func (r *ReconcileMemberStatus) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
-	// Is che required check
-	if !r.config.IsCheRequired() {
+func (r *ReconcileMemberStatus) cheIntegrationHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+	if memberStatus.Status.Che == nil {
+		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
+	}
+
+	// Is che integration enabled
+	if !r.cheClient.IsCheIntegrationEnabled() {
+		// Che integration is not enabled, set condition to Ready. No further checks required
 		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheNotRequiredReason)
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
 		return nil

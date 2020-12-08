@@ -166,6 +166,12 @@ func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*h
 	return c.httpClient.Do(req)
 }
 
+// IsCheIntegrationEnabled if the Che required configuration is set to 'true' and the Che admin username is set
+// then the member operator's che integration is enabled. Returns false otherwise
+func (c *Client) IsCheIntegrationEnabled() bool {
+	return c.config.IsCheRequired() && c.config.GetCheAdminUsername() != ""
+}
+
 // User holds the user data retrieved from the Che user API
 type User struct {
 	Name string `json:"name"`

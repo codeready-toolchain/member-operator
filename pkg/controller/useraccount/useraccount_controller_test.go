@@ -1611,7 +1611,7 @@ func cheCleanupCondition(msg string) toolchainv1alpha1.Condition {
 	}
 }
 
-func cheRoute(tls bool) *routev1.Route {
+func cheRoute(tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "codeready",
@@ -1630,7 +1630,7 @@ func cheRoute(tls bool) *routev1.Route {
 	return r
 }
 
-func keycloackRoute(tls bool) *routev1.Route {
+func keycloackRoute(tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "keycloak",
@@ -1700,7 +1700,7 @@ func gockFindUserTimes(name string, times int, calls *int) {
 		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
 }
 
-func gockFindUserNoBody(name string, code int, calls *int) {
+func gockFindUserNoBody(name string, code int, calls *int) { //nolint: unparam
 	gock.New(testCheURL).
 		Get("api/user/find").
 		SetMatcher(SpyOnGockCalls(calls)).

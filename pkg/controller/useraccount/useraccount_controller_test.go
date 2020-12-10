@@ -1333,39 +1333,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			userAcc = &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
-			test.AssertConditionsMatch(t, userAcc.Status.Conditions, cheCleanupCondition("abc1234"))
 			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
-		})
-
-		t.Run("successful deletion reusing user ID from condition", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserTimes(username, 1, mockCallsCounter)
-			gockFindUserNoBody(username, 404, mockCallsCounter)
-			gockDeleteUser(204, mockCallsCounter)
-			userAcc := newUserAccount(username, userID, false)
-
-			// The Che user deletion status type is used to store the Che user ID in the status for subsequent retries if needed.
-			// This is required because the Che deletion API will return an error until the user is successfully removed but a user's ID
-			// may not be retrievable at some point during the deletion process but should still be used to complete the deletion.
-			userAcc.Status.Conditions = []toolchainv1alpha1.Condition{cheCleanupCondition("abc123")}
-
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
-
-			// when
-			err := r.lookupAndDeleteCheUser(userAcc)
-
-			// then
-			require.NoError(t, err)
-			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
-			require.NoError(t, err)
-
-			// the condition should be removed after successful deletion
-			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. check user exists 3. delete user (user ID is reused from condition)
 		})
 
 		t.Run("successful lookup and delete", func(t *testing.T) {
@@ -1599,15 +1567,6 @@ func provisioning() toolchainv1alpha1.Condition {
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionFalse,
 		Reason: "Provisioning",
-	}
-}
-
-func cheCleanupCondition(msg string) toolchainv1alpha1.Condition {
-	return toolchainv1alpha1.Condition{
-		Type:    toolchainv1alpha1.UserAccountCheCleanup,
-		Status:  corev1.ConditionFalse,
-		Reason:  toolchainv1alpha1.UserAccountDeletingCheDataReason,
-		Message: msg,
 	}
 }
 

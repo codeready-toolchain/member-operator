@@ -485,7 +485,7 @@ func tokenCacheWithValidToken() *TokenCache {
 	}
 }
 
-func cheRoute(tls bool) *routev1.Route {
+func cheRoute(tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "codeready",

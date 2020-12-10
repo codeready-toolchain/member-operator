@@ -351,7 +351,7 @@ func TestTokenExpired(t *testing.T) {
 	})
 }
 
-func keycloackRoute(tls bool) *routev1.Route {
+func keycloackRoute(tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "keycloak",

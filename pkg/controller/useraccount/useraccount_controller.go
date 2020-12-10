@@ -564,27 +564,6 @@ func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.U
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusCheUserDeletionInProgress(userAcc *toolchainv1alpha1.UserAccount, message string) error {
-	return r.updateStatusConditions(
-		userAcc,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.UserAccountCheCleanup,
-			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UserAccountDeletingCheDataReason,
-			Message: message,
-		})
-}
-
-func (r *ReconcileUserAccount) removeStatusCondition(userAcc *toolchainv1alpha1.UserAccount, cType toolchainv1alpha1.ConditionType) error {
-	for i, cond := range userAcc.Status.Conditions {
-		if cond.Type == cType {
-			userAcc.Status.Conditions = append(userAcc.Status.Conditions[:i], userAcc.Status.Conditions[i+1:]...)
-			return r.client.Status().Update(context.TODO(), userAcc)
-		}
-	}
-	return nil
-}
-
 // updateStatusConditions updates user account status conditions with the new conditions
 func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool

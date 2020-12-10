@@ -1270,7 +1270,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 1, *mockCallsCounter)
+			require.Equal(t, 1, *mockCallsCounter) // 1. get token
 		})
 
 		t.Run("user not found", func(t *testing.T) {
@@ -1291,7 +1291,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 2, *mockCallsCounter)
+			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
 		})
 
 		t.Run("find user error", func(t *testing.T) {
@@ -1312,7 +1312,28 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 2, *mockCallsCounter)
+			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
+		})
+
+		t.Run("find user ID parse error", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserNoBody(username, 200, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.EqualError(t, err, `unable to get Che user ID for user 'sugar': error unmarshalling Che user json  : unexpected end of JSON input`)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. user exists check 3. get user ID
 		})
 
 		t.Run("delete error", func(t *testing.T) {

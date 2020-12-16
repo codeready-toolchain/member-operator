@@ -1169,9 +1169,6 @@ data:
                       imagePullPolicy: IfNotPresent
                       name: member-operator
                       resources:
-                        limits:
-                          cpu: "1"
-                          memory: 1G
                         requests:
                           cpu: 500m
                           memory: 500M

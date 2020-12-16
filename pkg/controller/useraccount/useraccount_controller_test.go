@@ -1270,7 +1270,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 1, *mockCallsCounter)
+			require.Equal(t, 1, *mockCallsCounter) // 1. get token
 		})
 
 		t.Run("user not found", func(t *testing.T) {
@@ -1291,7 +1291,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 2, *mockCallsCounter)
+			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
 		})
 
 		t.Run("find user error", func(t *testing.T) {
@@ -1312,7 +1312,28 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 2, *mockCallsCounter)
+			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
+		})
+
+		t.Run("find user ID parse error", func(t *testing.T) {
+			// given
+			mockCallsCounter := new(int)
+			defer gock.OffAll()
+			gockTokenSuccess(mockCallsCounter)
+			gockFindUserNoBody(username, 200, mockCallsCounter)
+			userAcc := newUserAccount(username, userID, false)
+			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+			// when
+			err := r.lookupAndDeleteCheUser(userAcc)
+
+			// then
+			require.EqualError(t, err, `unable to get Che user ID for user 'sugar': error unmarshalling Che user json  : unexpected end of JSON input`)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			require.Empty(t, userAcc.Status.Conditions)
+			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. user exists check 3. get user ID
 		})
 
 		t.Run("delete error", func(t *testing.T) {
@@ -1333,39 +1354,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			userAcc = &toolchainv1alpha1.UserAccount{}
 			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
-			test.AssertConditionsMatch(t, userAcc.Status.Conditions, cheCleanupCondition("abc1234"))
 			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
-		})
-
-		t.Run("successful deletion reusing user ID from condition", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserTimes(username, 1, mockCallsCounter)
-			gockFindUserNoBody(username, 404, mockCallsCounter)
-			gockDeleteUser(204, mockCallsCounter)
-			userAcc := newUserAccount(username, userID, false)
-
-			// The Che user deletion status type is used to store the Che user ID in the status for subsequent retries if needed.
-			// This is required because the Che deletion API will return an error until the user is successfully removed but a user's ID
-			// may not be retrievable at some point during the deletion process but should still be used to complete the deletion.
-			userAcc.Status.Conditions = []toolchainv1alpha1.Condition{cheCleanupCondition("abc123")}
-
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
-
-			// when
-			err := r.lookupAndDeleteCheUser(userAcc)
-
-			// then
-			require.NoError(t, err)
-			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
-			require.NoError(t, err)
-
-			// the condition should be removed after successful deletion
-			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. check user exists 3. delete user (user ID is reused from condition)
 		})
 
 		t.Run("successful lookup and delete", func(t *testing.T) {
@@ -1602,16 +1591,7 @@ func provisioning() toolchainv1alpha1.Condition {
 	}
 }
 
-func cheCleanupCondition(msg string) toolchainv1alpha1.Condition {
-	return toolchainv1alpha1.Condition{
-		Type:    toolchainv1alpha1.UserAccountCheCleanup,
-		Status:  corev1.ConditionFalse,
-		Reason:  toolchainv1alpha1.UserAccountDeletingCheDataReason,
-		Message: msg,
-	}
-}
-
-func cheRoute(tls bool) *routev1.Route {
+func cheRoute(tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "codeready",
@@ -1630,7 +1610,7 @@ func cheRoute(tls bool) *routev1.Route {
 	return r
 }
 
-func keycloackRoute(tls bool) *routev1.Route {
+func keycloackRoute(tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "keycloak",
@@ -1700,7 +1680,7 @@ func gockFindUserTimes(name string, times int, calls *int) {
 		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
 }
 
-func gockFindUserNoBody(name string, code int, calls *int) {
+func gockFindUserNoBody(name string, code int, calls *int) { //nolint: unparam
 	gock.New(testCheURL).
 		Get("api/user/find").
 		SetMatcher(SpyOnGockCalls(calls)).

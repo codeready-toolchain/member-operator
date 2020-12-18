@@ -432,9 +432,8 @@ func (r *ReconcileMemberStatus) cheDashboardURL() (string, error) {
 	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path), nil
 }
 
-// IsCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
-// Returns false otherwise. This is a way to disable the Che user deletion logic since
-// it's meant to be a temporary measure until Che is updated to handle user deletion on its own.
+// isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
+// Returns false otherwise.
 func (r *ReconcileMemberStatus) isCheAdminUserConfigured() bool {
 	return r.config.GetCheAdminUsername() != "" && r.config.GetCheAdminPassword() != ""
 }

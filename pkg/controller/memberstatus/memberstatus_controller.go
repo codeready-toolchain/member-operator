@@ -279,6 +279,17 @@ func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, member
 	}
 	memberStatus.Status.Routes.ConsoleURL = consoleURL
 
+	cheURL, err := r.cheDashboardURL()
+	if err != nil {
+		if r.config.IsCheRequired() {
+			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
+			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+			return err
+		}
+		reqLogger.Info("Che route is not available but not required. Ignoring.", "err", err.Error())
+	}
+	memberStatus.Status.Routes.CheDashboardURL = cheURL
+
 	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusRoutesAvailableReason)
 	memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
 
@@ -292,15 +303,22 @@ func (r *ReconcileMemberStatus) cheIntegrationHandleStatus(reqLogger logr.Logger
 		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
 	}
 
-	// Is che integration enabled
-	if !r.cheClient.IsCheIntegrationEnabled() {
-		// Che integration is not enabled, set condition to Ready. No further checks required
-		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheNotRequiredReason)
+	// Is che user deletion enabled
+	if !r.config.IsCheUserDeletionEnabled() {
+		// Che user deletion is not enabled, set condition to Ready. No further checks required
+		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserDeletionNotEnabledReason)
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
 		return nil
 	}
 
-	// Route check
+	if r.config.GetCheAdminUsername() == "" || r.config.GetCheAdminPassword() == "" {
+		err := fmt.Errorf("Che admin user credentials are not configured")
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheAdminUserNotConfiguredReason, err.Error())
+		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+		return err
+	}
+
+	// Get che route for testing user API
 	if _, err := r.cheDashboardURL(); err != nil {
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
@@ -412,4 +430,11 @@ func (r *ReconcileMemberStatus) cheDashboardURL() (string, error) {
 		scheme = "http"
 	}
 	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path), nil
+}
+
+// IsCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
+// Returns false otherwise. This is a way to disable the Che user deletion logic since
+// it's meant to be a temporary measure until Che is updated to handle user deletion on its own.
+func (r *ReconcileMemberStatus) isCheAdminUserConfigured() bool {
+	return r.config.GetCheAdminUsername() != "" && r.config.GetCheAdminPassword() != ""
 }

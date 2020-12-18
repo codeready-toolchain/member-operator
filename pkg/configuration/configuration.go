@@ -54,6 +54,12 @@ const (
 	// defaultCheRequired is the default value for che.required param
 	defaultCheRequired = false
 
+	// varCheUserDeletionEnabled is a way to turn the Che user deletion logic on/off
+	varCheUserDeletionEnabled = "che.user.deletion.enabled"
+
+	// defaultCheUserDeletionEnabled is the default value for che.required param
+	defaultCheUserDeletionEnabled = false
+
 	// varCheNamespace is the che route namespace
 	varCheNamespace = "che.namespace"
 
@@ -142,6 +148,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varConsoleRouteName, defaultConsoleRouteName)
 	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
 	c.member.SetDefault(varCheRequired, defaultCheRequired)
+	c.member.SetDefault(varCheUserDeletionEnabled, defaultCheUserDeletionEnabled)
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
 }
@@ -209,6 +216,11 @@ func (c *Config) GetConsoleRouteName() string {
 // IsCheRequired returns true if the Che operator is expected to be installed. May be used in monitoring.
 func (c *Config) IsCheRequired() bool {
 	return c.member.GetBool(varCheRequired)
+}
+
+// IsCheUserDeletionEnabled returns true if Che user deletion should be handled by the member operator
+func (c *Config) IsCheUserDeletionEnabled() bool {
+	return c.member.GetBool(varCheUserDeletionEnabled)
 }
 
 // GetCheNamespace returns the Che route namespace

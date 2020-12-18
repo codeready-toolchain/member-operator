@@ -16,6 +16,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	routev1 "github.com/openshift/api/route/v1"
+	"gopkg.in/h2non/gock.v1"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
@@ -39,6 +40,12 @@ var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 const defaultMemberOperatorName = "member-operator"
 
 const defaultMemberStatusName = configuration.DefaultMemberStatusName
+
+// che test constants
+const (
+	testCheURL  = "http://codeready-codeready-workspaces-operator.member-cluster/che/"
+	cheUserPath = "api/user"
+)
 
 func TestNoMemberStatusFound(t *testing.T) {
 	s := scheme.Scheme
@@ -454,16 +461,48 @@ func TestOverallStatusCondition(t *testing.T) {
 		getHostClusterFunc := newGetHostClusterReady
 		memberSecret := newMemberSecret("test-che-user", "test-che-password")
 
-		t.Run("che integration green", func(t *testing.T) {
+		t.Run("success", func(t *testing.T) {
+			// given
+			restore := test.SetEnvVarsAndRestore(t,
+				test.Env("WATCH_NAMESPACE", "toolchain-member"),
+				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
+				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			)
+			defer restore()
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+
+			defer gock.OffAll()
+			gock.New(testCheURL).
+				Get(cheUserPath).
+				MatchHeader("Authorization", "Bearer abc.123.xyz").
+				Persist().
+				Reply(200)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
+				HasCheConditions(cheIntegrationReady())
+		})
+
+		t.Run("che admin user not configured (no member secret)", func(t *testing.T) {
 			// given
 			restore := test.SetEnvVarsAndRestore(t,
 				test.Env("WATCH_NAMESPACE", "toolchain-member"),
 				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "true"),
+				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
 				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
 			)
 			defer restore()
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -472,16 +511,43 @@ func TestOverallStatusCondition(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsReady()).
+				HasCondition(ComponentsNotReady("cheIntegration")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
+				HasCheConditions(cheAdminUserNotConfigured("Che admin user credentials are not configured"))
 		})
 
-		t.Run("che not required", func(t *testing.T) {
+		t.Run("no che route", func(t *testing.T) {
 			// given
 			restore := test.SetEnvVarsAndRestore(t,
 				test.Env("WATCH_NAMESPACE", "toolchain-member"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "false"),
+				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "true"),
+				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
+				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			)
+			defer restore()
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsNotReady("routes", "cheIntegration")).
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`)).
+				HasCheConditions(cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`))
+		})
+
+		t.Run("che API check failure", func(t *testing.T) {
+			// given
+			restore := test.SetEnvVarsAndRestore(t,
+				test.Env("WATCH_NAMESPACE", "toolchain-member"),
+				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "true"),
+				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
 				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
 			)
 			defer restore()
@@ -495,9 +561,10 @@ func TestOverallStatusCondition(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsReady()).
+				HasCondition(ComponentsNotReady("cheIntegration")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
+				HasCheConditions(cheIntegrationAPICheckError(`che user API check failed: Get "http://codeready-codeready-workspaces-operator.member-cluster/che/api/user": dial tcp: lookup codeready-codeready-workspaces-operator.member-cluster: no such host`))
 		})
 	})
 }
@@ -578,7 +645,7 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		scheme:              scheme.Scheme,
 		getHostCluster:      getHostClusterFunc(fakeClient),
 		config:              config,
-		cheClient:           cheTestClient(config, http.DefaultClient, fakeClient),
+		cheClient:           cheTestClient(config, http.DefaultClient, allNamespacesClient),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }
@@ -694,4 +761,16 @@ func cheTestClient(cfg *configuration.Config, httpCl *http.Client, cl client.Cli
 			TokenType:    "bearer",
 		})
 	return che.NewCheClient(cfg, http.DefaultClient, cl, tokenCache)
+}
+
+func cheIntegrationReady() toolchainv1alpha1.Condition {
+	return *status.NewComponentReadyCondition("CheReady")
+}
+
+func cheAdminUserNotConfigured(msg string) toolchainv1alpha1.Condition {
+	return *status.NewComponentErrorCondition("CheAdminUserNotConfigured", msg)
+}
+
+func cheIntegrationAPICheckError(msg string) toolchainv1alpha1.Condition {
+	return *status.NewComponentErrorCondition("CheUserAPICheckFailed", msg)
 }

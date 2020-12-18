@@ -42,7 +42,7 @@ const (
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"
 	routesTag         statusComponentTag = "routes"
-	cheIntegrationTag statusComponentTag = "cheIntegration"
+	cheTag            statusComponentTag = "che"
 
 	labelNodeRoleMaster = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
@@ -141,7 +141,7 @@ func (r *ReconcileMemberStatus) aggregateAndUpdateStatus(reqLogger logr.Logger, 
 		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
 		{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage},
 		{name: routesTag, handleStatus: r.routesHandleStatus},
-		{name: cheIntegrationTag, handleStatus: r.cheIntegrationHandleStatus},
+		{name: cheTag, handleStatus: r.cheHandleStatus},
 	}
 
 	// Track components that are not ready
@@ -296,9 +296,9 @@ func (r *ReconcileMemberStatus) routesHandleStatus(reqLogger logr.Logger, member
 	return nil
 }
 
-// cheIntegrationHandleStatus checks all necessary aspects related integration between the member operator and Che
+// cheHandleStatus checks all necessary aspects related integration between the member operator and Che
 // Returns an error if any problems are discovered.
-func (r *ReconcileMemberStatus) cheIntegrationHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *ReconcileMemberStatus) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 	if memberStatus.Status.Che == nil {
 		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
 	}

@@ -489,7 +489,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheIntegrationReady())
+				HasCheConditions(cheReady())
 		})
 
 		t.Run("che admin user not configured (no member secret)", func(t *testing.T) {
@@ -511,7 +511,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("cheIntegration")).
+				HasCondition(ComponentsNotReady("che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
 				HasCheConditions(cheAdminUserNotConfigured("Che admin user credentials are not configured"))
@@ -536,7 +536,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("routes", "cheIntegration")).
+				HasCondition(ComponentsNotReady("routes", "che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`)).
 				HasCheConditions(cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`))
@@ -561,7 +561,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, requeueResult, res)
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("cheIntegration")).
+				HasCondition(ComponentsNotReady("che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
 				HasCheConditions(cheUserAPICheckError(`che user API check failed: Get "http://codeready-codeready-workspaces-operator.member-cluster/che/api/user": dial tcp: lookup codeready-codeready-workspaces-operator.member-cluster: no such host`))
@@ -763,7 +763,7 @@ func cheTestClient(cfg *configuration.Config, httpCl *http.Client, cl client.Cli
 	return che.NewCheClient(cfg, http.DefaultClient, cl, tokenCache)
 }
 
-func cheIntegrationReady() toolchainv1alpha1.Condition {
+func cheReady() toolchainv1alpha1.Condition {
 	return *status.NewComponentReadyCondition("CheReady")
 }
 

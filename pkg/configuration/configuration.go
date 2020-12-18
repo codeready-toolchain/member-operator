@@ -55,7 +55,7 @@ const (
 	defaultCheRequired = false
 
 	// varCheUserDeletionEnabled is a way to turn the Che user deletion logic on/off
-	varCheUserDeletionEnabled = "che.user.deletion.enabled"
+	varCheUserDeletionEnabled = "che.user_deletion_enabled"
 
 	// defaultCheUserDeletionEnabled is the default value for che.required param
 	defaultCheUserDeletionEnabled = false

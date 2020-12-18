@@ -169,7 +169,7 @@ data:
                   properties:
                     che:
                       description: Che is the status of Che/CRW, such as installed and whether
-                        the member configuration for Che is correct
+                        the member configuration is correct
                       properties:
                         conditions:
                           description: 'Conditions is an array of current member operator

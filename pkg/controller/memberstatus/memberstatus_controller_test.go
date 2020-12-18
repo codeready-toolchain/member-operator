@@ -553,6 +553,13 @@ func TestOverallStatusCondition(t *testing.T) {
 			defer restore()
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+			defer gock.OffAll()
+			gock.New(testCheURL).
+				Get(cheUserPath).
+				MatchHeader("Authorization", "Bearer abc.123.xyz").
+				Persist().
+				Reply(400).
+				BodyString(`{"error":"che error"}`)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -564,7 +571,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsNotReady("che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheUserAPICheckError(`che user API check failed: Get "http://codeready-codeready-workspaces-operator.member-cluster/che/api/user": dial tcp: lookup codeready-codeready-workspaces-operator.member-cluster: no such host`))
+				HasCheConditions(cheUserAPICheckError(`che user API check failed, Response status: '400 Bad Request' Body: '{"error":"che error"}'`))
 		})
 	})
 }

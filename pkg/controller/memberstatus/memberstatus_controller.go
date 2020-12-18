@@ -311,7 +311,7 @@ func (r *ReconcileMemberStatus) cheIntegrationHandleStatus(reqLogger logr.Logger
 		return nil
 	}
 
-	if r.config.GetCheAdminUsername() == "" || r.config.GetCheAdminPassword() == "" {
+	if !r.isCheAdminUserConfigured() {
 		err := fmt.Errorf("Che admin user credentials are not configured")
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheAdminUserNotConfiguredReason, err.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}

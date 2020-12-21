@@ -94,10 +94,14 @@ The pipeline triggers Makefile targets located in this repository.
 
 === Broken release
 
-If there is any broken release that cannot be built & pushed through the pipeline and has to be done/fixed manually then do the following steps:
+If there is any broken release that cannot be built & pushed through the pipeline - for example because of this error:
+```
+Invalid bundle toolchain-member-operator.v0.0.204-commit-a765b6a, bundle specifies a non-existent replacement toolchain-member-operator.v0.0.203-commit-d24cbac
+```
+then the release has to be fixed manually. In such a case, please follow these steps:
 
 1. Log in to quay.io using an account that has the write permissions in quay.io/codeready-toolchain/member-operator repo.
-2. Checkout to the problematic commit that failed in the pipeline and that has to be manually released.
+2. Checkout to the problematic (missing) commit that failed in the pipeline and that has to be manually released.
 3. Run `make docker-push QUAY_NAMESPACE=codeready-toolchain`
 4. Run `make push-to-quay-staging QUAY_NAMESPACE=codeready-toolchain`
 

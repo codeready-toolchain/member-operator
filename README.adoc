@@ -85,6 +85,26 @@ That Makefile target takes care of several steps that can be executed separately
 * create `CatalogSource` and `ConfigMap` with `ClusterServiceVersion` and all CRDs in the `openshift-marketplace`: `$ make deploy-csv`
 * and as the last step the actual installation via creating `OperatorGroup` and `Subscription` in the test namespace.
 
+== Releasing operator
+
+The releases of the operator are automatically managed via Tekton pipeline running under `codeready-toolchain` user account in CRT cluster.
+
+The definition of the CD pipeline can be found here https://github.com/codeready-toolchain/toolchain-cicd.
+The pipeline triggers Makefile targets located in this repository.
+
+=== Broken release
+
+If there is any broken release that cannot be built & pushed through the pipeline - for example because of this error:
+```
+Invalid bundle toolchain-member-operator.v0.0.204-commit-a765b6a, bundle specifies a non-existent replacement toolchain-member-operator.v0.0.203-commit-d24cbac
+```
+then the release has to be fixed manually. In such a case, please follow these steps:
+
+1. Log in to quay.io using an account that has the write permissions in quay.io/codeready-toolchain/member-operator repo.
+2. Checkout to the problematic (missing) commit that failed in the pipeline and that has to be manually released.
+3. Run `make docker-push QUAY_NAMESPACE=codeready-toolchain`
+4. Run `make push-to-quay-staging QUAY_NAMESPACE=codeready-toolchain`
+
 === OpenShift internal docker registry
 
 In case you want to use the OpenShift internal docker registry instead of quay, you can achieve the same thing via running:

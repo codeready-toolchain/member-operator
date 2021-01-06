@@ -619,9 +619,10 @@ func ToIdentityName(userID string, identityProvider IdentityProvider) string {
 
 func (r *ReconcileUserAccount) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1.UserAccount) error {
 
-	// If the admin username is not set then Che user deletion is not configured, just return
-	if r.config.GetCheAdminUsername() == "" {
-		log.Info("Che user deletion is not configured, configure the Che admin credentials to enable it")
+	// If Che user deletion is not required then just return, this is a way to disable this Che user deletion logic since
+	// it's meant to be a temporary measure until Che is updated to handle user deletion on its own
+	if !r.config.IsCheUserDeletionEnabled() {
+		log.Info("Che user deletion is not enabled, skipping it")
 		return nil
 	}
 

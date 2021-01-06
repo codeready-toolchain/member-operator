@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20201126155707-1094c3e32973
+	github.com/codeready-toolchain/api v0.0.0-20210106162323-f9e542b70ee3
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20201014231429-a44cccb4b2b5
 	github.com/go-logr/logr v0.1.0
 	github.com/gofrs/uuid v3.3.0+incompatible

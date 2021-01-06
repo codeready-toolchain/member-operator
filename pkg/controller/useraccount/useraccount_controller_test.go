@@ -613,6 +613,7 @@ func TestReconcile(t *testing.T) {
 		restore := test.SetEnvVarsAndRestore(t,
 			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
 			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
 			// For tests we'll assume they're two different routes.
 			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
@@ -788,6 +789,7 @@ func TestReconcile(t *testing.T) {
 		restore := test.SetEnvVarsAndRestore(t,
 			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
 			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
 			// For tests we'll assume they're two different routes.
 			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
@@ -1247,6 +1249,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 		restore := test.SetEnvVarsAndRestore(t,
 			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
 			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+			test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
 			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
 			// For tests we'll assume they're two different routes.
 			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),

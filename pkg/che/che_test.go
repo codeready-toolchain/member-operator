@@ -350,6 +350,97 @@ func TestDeleteUser(t *testing.T) {
 	})
 }
 
+func TestUserAPICheck(t *testing.T) {
+	// given
+	testSecret := newTestSecret()
+	restore := test.SetEnvVarsAndRestore(t,
+		test.Env("WATCH_NAMESPACE", "toolchain-member"),
+		test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
+	)
+	defer restore()
+
+	t.Run("missing che admin credentials", func(t *testing.T) {
+		// given
+		cl, cfg := prepareClientAndConfig(t, cheRoute(true), keycloackRoute(true))
+		cheClient := &Client{
+			config:     cfg,
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+			tokenCache: testTokenCache(),
+		}
+
+		// when
+		err := cheClient.UserAPICheck()
+
+		// then
+		require.EqualError(t, err, `che user API check failed: the che admin username and/or password are not configured`)
+	})
+
+	t.Run("missing che route", func(t *testing.T) {
+		// given
+		cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
+		cheClient := &Client{
+			config:     cfg,
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+			tokenCache: tokenCacheWithValidToken(),
+		}
+
+		// when
+		err := cheClient.UserAPICheck()
+
+		// then
+		require.EqualError(t, err, `che user API check failed: routes.route.openshift.io "codeready" not found`)
+	})
+
+	t.Run("error code", func(t *testing.T) {
+		// given
+		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cheClient := &Client{
+			config:     cfg,
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+			tokenCache: tokenCacheWithValidToken(),
+		}
+
+		// when
+		defer gock.OffAll()
+		gock.New(testCheURL).
+			Get(cheUserPath).
+			MatchHeader("Authorization", "Bearer abc.123.xyz").
+			Persist().
+			Reply(400).
+			BodyString(`{"error":"che error"}`)
+		err := cheClient.UserAPICheck()
+
+		// then
+		require.EqualError(t, err, `che user API check failed, Response status: '400 Bad Request' Body: '{"error":"che error"}'`)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		// given
+		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cheClient := &Client{
+			config:     cfg,
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+			tokenCache: tokenCacheWithValidToken(),
+		}
+
+		// when
+		defer gock.OffAll()
+		gock.New(testCheURL).
+			Get(cheUserPath).
+			MatchHeader("Authorization", "Bearer abc.123.xyz").
+			Persist().
+			Reply(200)
+		err := cheClient.UserAPICheck()
+
+		// then
+		require.NoError(t, err)
+	})
+}
+
 func TestCheRequest(t *testing.T) {
 	// given
 	testSecret := newTestSecret()

@@ -32,8 +32,14 @@ type TokenCache struct {
 
 // NewTokenCache creates a new instance of a TokenCache
 func NewTokenCache(cl *http.Client) *TokenCache {
+	return NewTokenCacheWithToken(cl, nil)
+}
+
+// NewTokenCacheWithToken creates a new instance of a TokenCache
+func NewTokenCacheWithToken(cl *http.Client, t *TokenSet) *TokenCache {
 	return &TokenCache{
 		httpClient: cl,
+		token:      t,
 	}
 }
 

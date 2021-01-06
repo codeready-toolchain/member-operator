@@ -120,6 +120,24 @@ func (c *Client) DeleteUser(userID string) error {
 	return err
 }
 
+// UserAPICheck returns an error if the Che user API cannot be reached successfully, returns nil otherwise
+func (c *Client) UserAPICheck() error {
+	reqData := url.Values{}
+	res, err := c.cheRequest(http.MethodGet, cheUserPath, reqData)
+	if err != nil {
+		return errors.Wrapf(err, "che user API check failed")
+	}
+	defer rest.CloseResponse(res)
+	if res.StatusCode == http.StatusOK {
+		return nil
+	}
+	resBody, readError := rest.ReadBody(res.Body)
+	if readError != nil {
+		log.Error(readError, "error while reading body of the che user API check response")
+	}
+	return errors.Errorf("che user API check failed, Response status: '%s' Body: '%s'", res.Status, resBody)
+}
+
 func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*http.Response, error) {
 	// get Che route URL
 	cheURL, err := route.GetRouteURL(c.k8sClient, c.config.GetCheNamespace(), c.config.GetCheRouteName())

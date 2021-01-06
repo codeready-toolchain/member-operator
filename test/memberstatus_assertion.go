@@ -105,6 +105,14 @@ func (a *MemberStatusAssertion) HasRoutes(consoleUrl, cheUrl string, expConditio
 	return a
 }
 
+func (a *MemberStatusAssertion) HasCheConditions(expCondition toolchainv1alpha1.Condition) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	require.NotNil(a.t, a.memberStatus.Status.Che)
+	test.AssertConditionsMatch(a.t, a.memberStatus.Status.Che.Conditions, expCondition)
+	return a
+}
+
 func ComponentsReady() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.ConditionReady,

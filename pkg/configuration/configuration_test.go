@@ -348,3 +348,23 @@ func TestGetMemberOperatorWebhookImage(t *testing.T) {
 		assert.Equal(t, "quay.io/cool/member-operator-webhook:123", config.GetMemberOperatorWebhookImage())
 	})
 }
+
+func TestDoDeployWebhook(t *testing.T) {
+	key := MemberEnvPrefix + "_DEPLOY_WEBHOOK"
+	resetFunc := test.UnsetEnvVarAndRestore(t, key)
+	defer resetFunc()
+
+	t.Run("default", func(t *testing.T) {
+		resetFunc := test.UnsetEnvVarAndRestore(t, key)
+		defer resetFunc()
+		config := getDefaultConfiguration(t)
+		assert.True(t, config.DoDeployWebhook())
+	})
+
+	t.Run("from var", func(t *testing.T) {
+		restore := test.SetEnvVarsAndRestore(t, test.Env(key, "false"))
+		defer restore()
+		config := getDefaultConfiguration(t)
+		assert.False(t, config.DoDeployWebhook())
+	})
+}

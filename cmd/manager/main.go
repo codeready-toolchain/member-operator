@@ -166,12 +166,18 @@ func main() {
 			os.Exit(1)
 		}
 
-		log.Info("(Re)Deploying users' pods webhook")
-		if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetMemberOperatorWebhookImage()); err != nil {
-			log.Error(err, "cannot deploy mutating users' pods webhook")
-			os.Exit(1)
+		// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
+		// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource.
+		if crtConfig.DoDeployWebhook() {
+			log.Info("(Re)Deploying users' pods webhook")
+			if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetMemberOperatorWebhookImage()); err != nil {
+				log.Error(err, "cannot deploy mutating users' pods webhook")
+				os.Exit(1)
+			}
+			log.Info("(Re)Deployed users' pods webhook")
+		} else {
+			log.Info("Skipping deployment of users' pods webhook")
 		}
-		log.Info("(Re)Deployed users' pods webhook")
 
 		log.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.GetClusterHealthCheckPeriod())

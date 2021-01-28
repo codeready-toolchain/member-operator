@@ -86,6 +86,12 @@ const (
 
 	// varWebhookImage contains the image location of the member-operator-webhook
 	varWebhookImage = "webhook.image"
+
+	// varDeployWebhook determines whether a webhook deployment will be created
+	varDeployWebhook = "deploy.webhook"
+
+	// defaultDeployWebhook is true by default
+	defaultDeployWebhook = true
 )
 
 // ToolchainCluster configuration constants
@@ -151,6 +157,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheUserDeletionEnabled, defaultCheUserDeletionEnabled)
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
+	c.member.SetDefault(varDeployWebhook, defaultDeployWebhook)
 }
 
 func (c *Config) Print() {
@@ -251,4 +258,9 @@ func (c *Config) GetCheAdminPassword() string {
 // GetMemberOperatorWebhookImage returns the member operator webhook image location
 func (c *Config) GetMemberOperatorWebhookImage() string {
 	return c.member.GetString(varWebhookImage)
+}
+
+// DoDeployWebhook returns true if the Webhook should be deployed
+func (c *Config) DoDeployWebhook() bool {
+	return c.member.GetBool(varDeployWebhook)
 }

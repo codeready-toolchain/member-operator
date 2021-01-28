@@ -167,7 +167,7 @@ func main() {
 		}
 
 		// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
-		// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource.
+		// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
 		if crtConfig.DoDeployWebhook() {
 			log.Info("(Re)Deploying users' pods webhook")
 			if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetMemberOperatorWebhookImage()); err != nil {

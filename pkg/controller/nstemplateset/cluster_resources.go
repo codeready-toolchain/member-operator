@@ -193,7 +193,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	// see https://issues.redhat.com/browse/CRT-429
 
 	logger.Info("applying cluster resource", "gvk", toApply.GetGvk())
-	if _, err := applycl.NewApplyClient(r.client, r.scheme).Apply([]applycl.ToolchainObject{toApply}, labels); err != nil {
+	if _, err := applycl.NewApplyClient(r.client, r.scheme).ApplyToolchainObjects([]applycl.ToolchainObject{toApply}, labels); err != nil {
 		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", toApply.GetGvk())
 	}
 	return true, nil

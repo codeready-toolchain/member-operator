@@ -19,6 +19,6 @@ func CreateOrUpdateResources(client client.Client, s *runtime.Scheme, namespace,
 		Spec: v1alpha1.MemberStatusSpec{},
 	}
 	cl := commonclient.NewApplyClient(client, s)
-	_, err := cl.CreateOrUpdateObject(memberStatus, false, nil)
+	_, err := cl.ApplyObject(memberStatus)
 	return err
 }

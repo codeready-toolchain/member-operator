@@ -312,7 +312,7 @@ func (r *ReconcileMemberStatus) cheHandleStatus(reqLogger logr.Logger, memberSta
 	}
 
 	if !r.isCheAdminUserConfigured() {
-		err := fmt.Errorf("Che admin user credentials are not configured")
+		err := fmt.Errorf("Che admin user credentials are not configured but Che user deletion is enabled")
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheAdminUserNotConfiguredReason, err.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		return err

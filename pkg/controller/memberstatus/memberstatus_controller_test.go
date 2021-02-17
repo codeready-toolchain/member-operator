@@ -514,7 +514,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsNotReady("che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheAdminUserNotConfigured("Che admin user credentials are not configured"))
+				HasCheConditions(cheAdminUserNotConfigured("Che admin user credentials are not configured but Che user deletion is enabled"))
 		})
 
 		t.Run("no che route", func(t *testing.T) {

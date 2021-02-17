@@ -539,7 +539,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsNotReady("routes", "che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`)).
-				HasCheConditions(cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`))
+				HasCheConditions(cheRouteUnavailable(`Che dashboard URL unavailable but Che user deletion is enabled: routes.route.openshift.io "codeready" not found`))
 		})
 
 		t.Run("che API check failure", func(t *testing.T) {

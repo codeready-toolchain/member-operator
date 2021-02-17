@@ -96,11 +96,11 @@ func TestOverallStatusCondition(t *testing.T) {
 	restore := test.SetEnvVarsAndRestore(t, test.Env(k8sutil.OperatorNameEnvVar, defaultMemberOperatorName))
 	defer restore()
 	nodeAndMetrics := newNodesAndNodeMetrics(
-		forNode("worker-123", "worker", "4000000Ki", withMemoryUsage("1250000Ki")),
-		forNode("worker-345", "worker", "6000000Ki", withMemoryUsage("2250000Ki")),
-		forNode("worker-567", "worker", "6000000Ki", withMemoryUsage("500000Ki")),
-		forNode("master-123", "master", "4000000Ki", withMemoryUsage("2000000Ki")),
-		forNode("master-456", "master", "5000000Ki", withMemoryUsage("1000000Ki")))
+		forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("1250000Ki")),
+		forNode("worker-345", []string{"worker"}, "6000000Ki", withMemoryUsage("2250000Ki")),
+		forNode("worker-567", []string{"worker"}, "6000000Ki", withMemoryUsage("500000Ki")),
+		forNode("master-123", []string{"master"}, "4000000Ki", withMemoryUsage("2000000Ki")),
+		forNode("master-456", []string{"master"}, "5000000Ki", withMemoryUsage("1000000Ki")))
 
 	allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(true))
 
@@ -123,12 +123,32 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 
+
+		t.Run("when node has multiple roles", func(t *testing.T) {
+			// given
+			nodeAndMetrics := newNodesAndNodeMetrics(
+				forNode("combined-123", []string{"master", "worker"}, "5000000Ki", withMemoryUsage("1000000Ki")))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).
+				HasMemoryUsage(OfNodeRole("worker", 20), OfNodeRole("master", 20)).
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+		})
+
+
 		t.Run("ignore infra node", func(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(
-				forNode("worker-123", "worker", "4000000Ki", withMemoryUsage("3000000Ki")),
-				forNode("infra-123", "infra", "4000000Ki", withMemoryUsage("1250000Ki")),
-				forNode("master-123", "master", "6000000Ki", withMemoryUsage("3000000Ki")))
+				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
+				forNode("infra-123", []string{"infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
+				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
@@ -295,7 +315,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when missing memory item", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", "worker", "3000000Ki"))
+			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
@@ -356,7 +376,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when missing NodeMetrics for Node", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", "worker", "3000000Ki"))
+			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, nodeAndMetrics[0], memberOperatorDeployment, memberStatus)
 
 			// when
@@ -659,14 +679,13 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 
 type nodeAndMetricsCreator func() (node *corev1.Node, nodeMetric *v1beta1.NodeMetrics)
 
-func forNode(name, role string, allocatableMemory string, metricsModifiers ...nodeMetricsModifier) nodeAndMetricsCreator {
+func forNode(name string, roles []string, allocatableMemory string, metricsModifiers ...nodeMetricsModifier) nodeAndMetricsCreator {
 	return func() (*corev1.Node, *v1beta1.NodeMetrics) {
 		node := &corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 				Labels: map[string]string{
 					"beta.kubernetes.io/os":           "linux",
-					"node-role.kubernetes.io/" + role: "",
 					"kubernetes.io/arch":              "amd64",
 					"kubernetes.io/hostname":          "ip-10-0-140-242",
 				},
@@ -678,6 +697,9 @@ func forNode(name, role string, allocatableMemory string, metricsModifiers ...no
 					"pods":   resource.MustParse("250"),
 				},
 			},
+		}
+		for _, role := range roles {
+			node.ObjectMeta.Labels["node-role.kubernetes.io/" + role] = ""
 		}
 		nodeMetrics := &v1beta1.NodeMetrics{
 			ObjectMeta: metav1.ObjectMeta{

@@ -534,7 +534,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsNotReady("che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheAdminUserNotConfigured("Che admin user credentials are not configured"))
+				HasCheConditions(cheAdminUserNotConfigured("Che admin user credentials are not configured but Che user deletion is enabled"))
 		})
 
 		t.Run("no che route", func(t *testing.T) {
@@ -559,7 +559,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsNotReady("routes", "che")).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`)).
-				HasCheConditions(cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`))
+				HasCheConditions(cheRouteUnavailable(`Che dashboard URL unavailable but Che user deletion is enabled: routes.route.openshift.io "codeready" not found`))
 		})
 
 		t.Run("che API check failure", func(t *testing.T) {

@@ -232,9 +232,12 @@ func (r *ReconcileMemberStatus) loadCurrentResourceUsage(reqLogger logr.Logger, 
 	for _, nodeMetric := range nodeMetricsList.Items {
 		if memoryUsage, usageFound := nodeMetric.Usage["memory"]; usageFound {
 			if nodeInfo, nodeFound := allocatableValues[nodeMetric.Name]; nodeFound {
-				// let's do the sum of usages and the allocatable capacity fer node role
-				usagePerRole[nodeInfo.role] += float32(memoryUsage.Value())
-				allocatablePerRole[nodeInfo.role] += float32(nodeInfo.allocatable.Value())
+
+				for _, role := range nodeInfo.roles {
+					// let's do the sum of usages and the allocatable capacity for each of the node roles
+					usagePerRole[role] += float32(memoryUsage.Value())
+					allocatablePerRole[role] += float32(nodeInfo.allocatable.Value())
+				}
 
 				// let's remove the used allocatable value from the map so we can later check if all values were used
 				delete(allocatableValues, nodeMetric.Name)
@@ -346,14 +349,14 @@ func (r *ReconcileMemberStatus) getAllocatableValues(reqLogger logr.Logger) (map
 	}
 	allocatableValues := map[string]nodeInfo{}
 	for _, node := range nodes.Items {
-		role := getNodeRole(node)
-		if role == "" {
+		roles := getNodeRoles(node)
+		if len(roles) == 0 {
 			reqLogger.Info("The node doesn't have role worker nor master - is ignored in resource consumption computing", "nodeName", node.Name)
 			continue
 		}
 		if memoryCapacity, found := node.Status.Allocatable["memory"]; found {
 			allocatableValues[node.Name] = nodeInfo{
-				role:        role,
+				roles:        roles,
 				allocatable: memoryCapacity,
 			}
 		}
@@ -362,17 +365,20 @@ func (r *ReconcileMemberStatus) getAllocatableValues(reqLogger logr.Logger) (map
 }
 
 type nodeInfo struct {
-	role        string
+	roles       []string
 	allocatable resource.Quantity
 }
 
-func getNodeRole(node corev1.Node) string {
+// getNodeRoles returns an array containing the roles (i.e. worker, master) fulfilled by the specified node
+func getNodeRoles(node corev1.Node) (roles []string) {
 	if _, isWorker := node.Labels[labelNodeRoleWorker]; isWorker {
-		return "worker"
-	} else if _, isMaster := node.Labels[labelNodeRoleMaster]; isMaster {
-		return "master"
+		roles = append(roles, "worker")
 	}
-	return ""
+
+	if _, isMaster := node.Labels[labelNodeRoleMaster]; isMaster {
+		roles = append(roles, "master")
+	}
+	return
 }
 
 // updateStatusConditions updates Member status conditions with the new conditions

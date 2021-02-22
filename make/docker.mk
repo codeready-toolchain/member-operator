@@ -6,21 +6,36 @@ QUAY_USERNAME ?= ${QUAY_NAMESPACE}
 WEBHOOK_IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}-webhook:${IMAGE_TAG}
 
 .PHONY: docker-image
-## Build the docker image locally that can be deployed (only contains bare operator)
+## Build the binary image
 docker-image: build
 	$(Q)docker build -f build/Dockerfile -t ${IMAGE} .
 	$(Q)docker build -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
 
 .PHONY: docker-push
-## Push the docker image to quay.io registry
-docker-push: docker-image
+## Push the binary image to quay.io registry
+docker-push: check-namespace docker-image
+	$(Q)docker push ${IMAGE}
+	$(Q)docker push ${WEBHOOK_IMAGE}
+
+.PHONY: podman-image
+## Build the binary image
+podman-image: build
+	$(Q)podman build -f build/Dockerfile -t ${IMAGE} .
+	$(Q)podman build -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
+
+.PHONY: podman-push
+## Push the binary image to quay.io registry
+podman-push: check-namespace podman-image
+	$(Q)podman push ${IMAGE}
+	$(Q)podman push ${WEBHOOK_IMAGE}
+
+.PHONY: check-namespace
+check-namespace:
 ifeq ($(QUAY_NAMESPACE),${GO_PACKAGE_ORG_NAME})
 	@echo "#################################################### WARNING ####################################################"
 	@echo you are going to push to $(QUAY_NAMESPACE) namespace, make sure you have set QUAY_NAMESPACE variable appropriately
 	@echo "#################################################################################################################"
 endif
-	$(Q)docker push ${IMAGE}
-	$(Q)docker push ${WEBHOOK_IMAGE}
 
 .PHONY: docker-push-to-local
 ## Push the docker image to the local docker.io registry

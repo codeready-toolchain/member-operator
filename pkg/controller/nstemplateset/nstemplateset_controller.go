@@ -8,10 +8,10 @@ import (
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
+	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
-	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -71,9 +72,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
 		return err
 	}
+
+	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
-		// watch for all cluster resource kinds associated with an NSTemplateSet
-		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
+		// only reconcile generation changes for cluster resources
+		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey), commonpredicates.LabelsAndGenerationPredicate{}); err != nil {
 			return err
 		}
 	}

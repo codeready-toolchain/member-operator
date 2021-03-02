@@ -2,13 +2,13 @@ package nstemplateset
 
 import (
 	"context"
-	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
+	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -77,7 +76,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources
-		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey), labelsAndGenerationPredicate{}); err != nil {
+		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey), commonpredicates.LabelsAndGenerationPredicate{}); err != nil {
 			return err
 		}
 	}
@@ -237,38 +236,4 @@ func listByOwnerLabel(username string) client.ListOption {
 func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {
 	return obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
 		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
-}
-
-type labelsAndGenerationPredicate struct {
-	predicate.Funcs
-}
-
-func (labelsAndGenerationPredicate) Update(e event.UpdateEvent) bool {
-
-	if e.MetaOld == nil {
-		log.Error(nil, "Update event has no old metadata", "event", e)
-		return false
-	}
-	if e.ObjectOld == nil {
-		log.Error(nil, "Update event has no old runtime object to update", "event", e)
-		return false
-	}
-	if e.ObjectNew == nil {
-		log.Error(nil, "Update event has no new runtime object for update", "event", e)
-		return false
-	}
-	if e.MetaNew == nil {
-		log.Error(nil, "Update event has no new metadata", "event", e)
-		return false
-	}
-
-	// reconcile if the labels have changed
-	if !reflect.DeepEqual(e.MetaOld.GetLabels(), e.MetaNew.GetLabels()) {
-		return true
-	}
-
-	if e.MetaNew.GetGeneration() == e.MetaOld.GetGeneration() && e.MetaNew.GetGeneration() != 0 {
-		return false
-	}
-	return true
 }

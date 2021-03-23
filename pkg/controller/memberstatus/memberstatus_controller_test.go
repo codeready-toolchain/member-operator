@@ -162,6 +162,26 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
+
+		t.Run("ignore infra node when node is shared", func(t *testing.T) {
+			// given
+			nodeAndMetrics := newNodesAndNodeMetrics(
+				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
+				forNode("infra-123", []string{"worker","infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
+				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).
+				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+		})
 	})
 
 	t.Run("Host connection not found", func(t *testing.T) {

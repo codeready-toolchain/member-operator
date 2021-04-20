@@ -5,18 +5,19 @@ GO_PACKAGE_PATH ?= github.com/${GO_PACKAGE_ORG_NAME}/${GO_PACKAGE_REPO_NAME}
 
 GO111MODULE?=on
 export GO111MODULE
+goarch=$(shell go env GOARCH)
 
 .PHONY: build
 ## Build the operator
 build: generate-assets $(OUT_DIR)/operator
 
 $(OUT_DIR)/operator:
-	$(Q)CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
+	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
 		go build ${V_FLAG} \
 		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
 		-o $(OUT_DIR)/bin/member-operator \
 		cmd/manager/main.go
-	$(Q)CGO_ENABLED=0 GOARCH=amd64 GOOS=linux \
+	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
 		go build ${V_FLAG} \
 		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
 		-o $(OUT_DIR)/bin/member-operator-webhook \

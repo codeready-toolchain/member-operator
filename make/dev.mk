@@ -9,18 +9,6 @@ APP_NAMESPACE ?= $(LOCAL_TEST_NAMESPACE)
 LOCAL_TEST_NAMESPACE ?= "toolchain-member-operator"
 ADD_CLUSTER_SCRIPT_PATH?=../toolchain-common/scripts/add-cluster.sh
 
-.PHONY: up-local
-## Run Operator locally
-up-local: login-as-admin create-namespace deploy-rbac build deploy-crd
-	$(Q)-oc new-project $(LOCAL_TEST_NAMESPACE) || true
-	$(Q)operator-sdk up local --namespace=$(APP_NAMESPACE) --verbose
-
-.PHONY: login-as-admin
-## Log in as system:admin
-login-as-admin:
-	$(Q)-echo "Logging using system:admin..."
-	$(Q)-oc login -u system:admin
-
 .PHONY: create-namespace
 ## Create the test namespace
 create-namespace:
@@ -31,7 +19,7 @@ create-namespace:
 
 .PHONY: use-namespace
 ## Log in as system:admin and enter the test namespace
-use-namespace: login-as-admin
+use-namespace:
 	$(Q)-echo "Using to the namespace $(LOCAL_TEST_NAMESPACE)"
 	$(Q)-oc project $(LOCAL_TEST_NAMESPACE)
 
@@ -43,7 +31,7 @@ clean-namespace:
 
 .PHONY: reset-namespace
 ## Delete an create the test namespace and deploy rbac there
-reset-namespace: login-as-admin clean-namespace create-namespace deploy-rbac
+reset-namespace: clean-namespace create-namespace deploy-rbac
 
 .PHONY: deploy-rbac
 ## Setup service account and deploy RBAC

@@ -18,6 +18,9 @@ This repository uses https://github.com/golang/go/wiki/Modules[Go modules]. You 
 
 toolchain-e2e repo makefile can be used as a starting point for setting up host and member operators for development.
 
+Following Makefile target takes care of additional several steps which can be executed separately:
+* building the project: `$ make build`
+
 == OLM catalog files
 
 There is one operator bundle stored in link:./deploy/olm-catalog/toolchain-member-operator/[] directory that is used as a base template for generating all new versions of the operator bundle.

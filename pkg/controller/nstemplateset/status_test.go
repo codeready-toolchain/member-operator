@@ -22,7 +22,7 @@ import (
 )
 
 func TestUpdateStatus(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -166,7 +166,7 @@ func TestUpdateStatus(t *testing.T) {
 	})
 }
 func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)

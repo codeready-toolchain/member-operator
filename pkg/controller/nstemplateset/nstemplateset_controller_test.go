@@ -35,7 +35,7 @@ import (
 
 func TestReconcileAddFinalizer(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -80,7 +80,7 @@ func TestReconcileAddFinalizer(t *testing.T) {
 
 func TestReconcileProvisionOK(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -183,7 +183,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 
 func TestProvisionTwoUsers(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "john"
 	namespaceName := "toolchain-member"
@@ -450,7 +450,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 func TestReconcilePromotion(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -630,7 +630,7 @@ func TestReconcilePromotion(t *testing.T) {
 
 func TestReconcileUpdate(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -810,7 +810,7 @@ func TestReconcileUpdate(t *testing.T) {
 }
 
 func TestReconcileProvisionFail(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	// given
 	username := "johnsmith"
@@ -970,12 +970,12 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	})
 }
 
-func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*NSTemplateSetReconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	r, fakeClient := prepareController(t, initObjs...)
 	return r, newReconcileRequest(namespaceName, name), fakeClient
 }
 
-func prepareApiClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *test.FakeClient) {
+func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1017,7 +1017,7 @@ func prepareApiClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *te
 }
 
 func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {
-	apiClient, fakeClient := prepareApiClient(t, initObjs...)
+	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return &statusManager{
 		apiClient: apiClient,
 	}, fakeClient
@@ -1037,8 +1037,8 @@ func prepareClusterResourcesManager(t *testing.T, initObjs ...runtime.Object) (*
 	}, fakeClient
 }
 
-func prepareController(t *testing.T, initObjs ...runtime.Object) (*NSTemplateSetReconciler, *test.FakeClient) {
-	apiClient, fakeClient := prepareApiClient(t, initObjs...)
+func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *test.FakeClient) {
+	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return newReconciler(apiClient), fakeClient
 }
 

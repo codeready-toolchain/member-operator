@@ -28,7 +28,7 @@ const (
 )
 
 func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, *crtcfg.Config) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)

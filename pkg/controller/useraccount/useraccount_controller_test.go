@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake" //nolint: staticcheck // not deprecated anymore: see https://github.com/kubernetes-sigs/controller-runtime/pull/1101
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -44,7 +44,7 @@ const (
 )
 
 func TestReconcile(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 
@@ -936,7 +936,7 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestUpdateStatus(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 	s := scheme.Scheme
@@ -1033,7 +1033,7 @@ func TestUpdateStatus(t *testing.T) {
 }
 
 func TestDisabledUserAccount(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johndoe"
 	userID := uuid.NewV4().String()
 	s := scheme.Scheme

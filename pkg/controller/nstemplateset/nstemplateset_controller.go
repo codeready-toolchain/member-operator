@@ -39,11 +39,11 @@ func Add(mgr manager.Manager, _ *configuration.Config, _ client.Client) error {
 	}))
 }
 
-func newReconciler(apiClient *apiClient) *NSTemplateSetReconciler {
+func newReconciler(apiClient *apiClient) *Reconciler {
 	status := &statusManager{
 		apiClient: apiClient,
 	}
-	return &NSTemplateSetReconciler{
+	return &Reconciler{
 		apiClient: apiClient,
 		status:    status,
 		namespaces: &namespacesManager{
@@ -84,7 +84,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &NSTemplateSetReconciler{}
+var _ reconcile.Reconciler = &Reconciler{}
 
 type apiClient struct {
 	client         client.Client
@@ -92,8 +92,8 @@ type apiClient struct {
 	getHostCluster cluster.GetHostClusterFunc
 }
 
-// NSTemplateSetReconciler the NSTemplateSet reconciler
-type NSTemplateSetReconciler struct {
+// Reconciler the NSTemplateSet reconciler
+type Reconciler struct {
 	*apiClient
 	namespaces       *namespacesManager
 	clusterResources *clusterResourcesManager
@@ -102,7 +102,7 @@ type NSTemplateSetReconciler struct {
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec
-func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("reconciling NSTemplateSet")
 
@@ -152,7 +152,7 @@ func (r *NSTemplateSetReconciler) Reconcile(request reconcile.Request) (reconcil
 }
 
 // addFinalizer sets the finalizers for NSTemplateSet
-func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *Reconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		util.AddFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
@@ -163,7 +163,7 @@ func (r *NSTemplateSetReconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTe
 	return nil
 }
 
-func (r *NSTemplateSetReconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
+func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
 	// if the NSTemplateSet has no finalizer, then we don't have anything to do
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		logger.Info("NSTemplateSet resource is terminated")

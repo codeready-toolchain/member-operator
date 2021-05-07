@@ -291,7 +291,7 @@ func TestGetNamespaceName(t *testing.T) {
 
 func TestEnsureNamespacesOK(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -406,7 +406,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 }
 
 func TestEnsureNamespacesFail(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	// given
 	username := "johnsmith"
@@ -636,7 +636,7 @@ func TestDeleteNamespsace(t *testing.T) {
 
 func TestPromoteNamespaces(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -819,7 +819,7 @@ func TestPromoteNamespaces(t *testing.T) {
 
 func TestUpdateNamespaces(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"

@@ -46,7 +46,7 @@ const (
 
 	labelNodeRoleMaster = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
-	labelNodeRoleInfra = "node-role.kubernetes.io/infra"
+	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
 )
 
 // Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -357,7 +357,7 @@ func (r *ReconcileMemberStatus) getAllocatableValues(reqLogger logr.Logger) (map
 		}
 		if memoryCapacity, found := node.Status.Allocatable["memory"]; found {
 			allocatableValues[node.Name] = nodeInfo{
-				roles:        roles,
+				roles:       roles,
 				allocatable: memoryCapacity,
 			}
 		}

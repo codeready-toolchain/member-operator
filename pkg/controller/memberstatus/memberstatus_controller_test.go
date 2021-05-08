@@ -123,7 +123,6 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 
-
 		t.Run("when node has multiple roles", func(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(
@@ -141,7 +140,6 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasMemoryUsage(OfNodeRole("worker", 20), OfNodeRole("master", 20)).
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
-
 
 		t.Run("ignore infra node", func(t *testing.T) {
 			// given
@@ -167,7 +165,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(
 				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
-				forNode("infra-123", []string{"worker","infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
+				forNode("infra-123", []string{"worker", "infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
 				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
@@ -682,7 +680,7 @@ func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterF
 }
 
 func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*ReconcileMemberStatus, reconcile.Request, *test.FakeClient) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	fakeClient := test.NewFakeClient(t, initObjs...)
 	config, err := configuration.LoadConfig(fakeClient)
 	require.NoError(t, err)
@@ -692,7 +690,7 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		scheme:              scheme.Scheme,
 		getHostCluster:      getHostClusterFunc(fakeClient),
 		config:              config,
-		cheClient:           cheTestClient(config, http.DefaultClient, allNamespacesClient),
+		cheClient:           cheTestClient(config, allNamespacesClient),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }
@@ -705,9 +703,9 @@ func forNode(name string, roles []string, allocatableMemory string, metricsModif
 			ObjectMeta: metav1.ObjectMeta{
 				Name: name,
 				Labels: map[string]string{
-					"beta.kubernetes.io/os":           "linux",
-					"kubernetes.io/arch":              "amd64",
-					"kubernetes.io/hostname":          "ip-10-0-140-242",
+					"beta.kubernetes.io/os":  "linux",
+					"kubernetes.io/arch":     "amd64",
+					"kubernetes.io/hostname": "ip-10-0-140-242",
 				},
 			},
 			Status: corev1.NodeStatus{
@@ -719,7 +717,7 @@ func forNode(name string, roles []string, allocatableMemory string, metricsModif
 			},
 		}
 		for _, role := range roles {
-			node.ObjectMeta.Labels["node-role.kubernetes.io/" + role] = ""
+			node.ObjectMeta.Labels["node-role.kubernetes.io/"+role] = ""
 		}
 		nodeMetrics := &v1beta1.NodeMetrics{
 			ObjectMeta: metav1.ObjectMeta{
@@ -799,7 +797,7 @@ func cheRoute(tls bool) *routev1.Route {
 	return r
 }
 
-func cheTestClient(cfg *configuration.Config, httpCl *http.Client, cl client.Client) *che.Client {
+func cheTestClient(cfg *configuration.Config, cl client.Client) *che.Client {
 	tokenCache := che.NewTokenCacheWithToken(
 		http.DefaultClient,
 		&che.TokenSet{

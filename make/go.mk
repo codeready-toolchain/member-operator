@@ -32,5 +32,5 @@ generate-assets:
 	@go install github.com/go-bindata/go-bindata/...
 	@echo "generating users pods mutating webhook template data..."
 	@rm ./pkg/webhook/deploy/userspodswebhook/template_assets.go 2>/dev/null || true
-	@$(GOPATH)/bin/go-bindata -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
+	@$(shell go env GOPATH)/bin/go-bindata -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
 

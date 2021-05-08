@@ -186,7 +186,7 @@ func (c *Config) GetAllMemberParameters() map[string]string {
 
 // GetIdP returns the configured Identity Provider (IdP) for the member operator
 // Openshift clusters can be configured with multiple IdPs. This config option allows admins to specify which IdP should be used by the toolchain operator.
-func (c *Config) GetIdP() string {
+func (c *Config) GetIdP() string { //nolint: golint
 	return c.member.GetString(identityProviderName)
 }
 

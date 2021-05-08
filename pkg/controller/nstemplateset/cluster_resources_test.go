@@ -136,9 +136,8 @@ func TestClusterResourceKinds(t *testing.T) {
 }
 
 func TestEnsureClusterResourcesOK(t *testing.T) {
-
-	logf.SetLogger(zap.Logger(true))
 	// given
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -259,7 +258,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 }
 
 func TestEnsureClusterResourcesFail(t *testing.T) {
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	// given
 	username := "johnsmith"
@@ -446,7 +445,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 func TestPromoteClusterResources(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -830,7 +829,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 func TestUpdateClusterResources(t *testing.T) {
 
-	logf.SetLogger(zap.Logger(true))
+	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"

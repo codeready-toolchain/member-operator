@@ -21,9 +21,8 @@ func (r *statusManager) wrapErrorWithStatusUpdateForClusterResourceFailure(logge
 	readyCondition, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
 	if found && readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdatingReason || readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdateFailedReason {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, format, args...)
-	} else {
-		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, format, args...)
 	}
+	return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, format, args...)
 }
 
 func (r *statusManager) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, updateStatus statusUpdater, err error, format string, args ...interface{}) error {

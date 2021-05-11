@@ -19,17 +19,12 @@ var log = logf.Log.WithName("configuration")
 // prefixes
 const (
 	// MemberEnvPrefix will be used for member environment variable name prefixing.
-	MemberEnvPrefix = "MEMBER_OPERATOR"
+	MemberEnvPrefix  = "MEMBER_OPERATOR"
+	MemberStatusName = "toolchain-member-status"
 )
 
 // Configuration constants
 const (
-	// MemberStatusName specifies the name of the toolchain member status resource that provides information about the toolchain components in this cluster
-	MemberStatusName = "member.status"
-
-	// DefaultMemberStatusName the default name for the member status resource created during initialization of the operator
-	DefaultMemberStatusName = "toolchain-member-status"
-
 	// varMemberStatusRefreshTime specifies how often the MemberStatus should load and refresh the current member cluster status
 	varMemberStatusRefreshTime = "memberstatus.refresh.time"
 
@@ -145,7 +140,6 @@ func LoadConfig(cl client.Client) (*Config, error) {
 
 func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
-	c.member.SetDefault(MemberStatusName, DefaultMemberStatusName)
 	c.member.SetDefault(clusterHealthCheckPeriod, defaultClusterHealthCheckPeriod)
 	c.member.SetDefault(toolchainClusterTimeout, defaultClusterHealthCheckTimeout)
 	c.member.SetDefault(identityProviderName, defaultIdentityProviderName)
@@ -188,11 +182,6 @@ func (c *Config) GetAllMemberParameters() map[string]string {
 // Openshift clusters can be configured with multiple IdPs. This config option allows admins to specify which IdP should be used by the toolchain operator.
 func (c *Config) GetIdP() string { //nolint: golint
 	return c.member.GetString(identityProviderName)
-}
-
-// GetMemberStatusName returns the configured name of the member status resource
-func (c *Config) GetMemberStatusName() string {
-	return c.member.GetString(MemberStatusName)
 }
 
 // GetClusterHealthCheckPeriod returns the configured cluster health check period

@@ -217,27 +217,6 @@ func TestGetIdP(t *testing.T) {
 	})
 }
 
-func TestGetMemberClusterName(t *testing.T) {
-	key := MemberEnvPrefix + "_MEMBER_STATUS"
-	resetFunc := test.UnsetEnvVarAndRestore(t, key)
-	defer resetFunc()
-
-	t.Run("default", func(t *testing.T) {
-		resetFunc := test.UnsetEnvVarAndRestore(t, key)
-		defer resetFunc()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, "toolchain-member-status", config.GetMemberStatusName())
-	})
-
-	t.Run("env overwrite", func(t *testing.T) {
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env(key, "testingMemberStatusName"))
-		defer restore()
-		config := getDefaultConfiguration(t)
-		assert.Equal(t, "testingMemberStatusName", config.GetMemberStatusName())
-	})
-}
-
 func TestGetClusterHealthCheckPeriod(t *testing.T) {
 	key := MemberEnvPrefix + "_CLUSTER_HEALTHCHECK_PERIOD"
 	resetFunc := test.UnsetEnvVarAndRestore(t, key)

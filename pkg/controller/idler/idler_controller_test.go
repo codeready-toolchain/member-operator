@@ -467,7 +467,7 @@ type payloads struct {
 	job                   *batchv1.Job
 }
 
-func preparePayloads(t *testing.T, r *ReconcileIdler, namespace, namePrefix string, startTime time.Time) payloads {
+func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time) payloads {
 	sTime := metav1.NewTime(startTime)
 	replicas := int32(3)
 
@@ -586,7 +586,7 @@ func preparePayloads(t *testing.T, r *ReconcileIdler, namespace, namePrefix stri
 	}
 }
 
-func createPods(t *testing.T, r *ReconcileIdler, owner v1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
+func createPods(t *testing.T, r *Reconciler, owner v1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
@@ -601,14 +601,14 @@ func createPods(t *testing.T, r *ReconcileIdler, owner v1.Object, startTime meta
 	return podsToTrack
 }
 
-func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object) (*ReconcileIdler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
+func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
-	r := &ReconcileIdler{
+	r := &Reconciler{
 		client:              fakeClient,
 		allNamespacesClient: allNamespacesClient,
 		scheme:              s,
@@ -617,7 +617,7 @@ func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object
 }
 
 // prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
-func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler v1alpha1.Idler) (*ReconcileIdler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
+func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler v1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
 	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, &idler)
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)

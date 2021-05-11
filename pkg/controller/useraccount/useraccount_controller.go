@@ -45,7 +45,7 @@ func Add(mgr manager.Manager, config *configuration.Config, _ client.Client) err
 }
 
 func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
-	return &ReconcileUserAccount{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config, cheClient: che.DefaultClient}
+	return &Reconciler{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config, cheClient: che.DefaultClient}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -80,10 +80,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileUserAccount{}
+var _ reconcile.Reconciler = &Reconciler{}
 
-// ReconcileUserAccount reconciles a UserAccount object
-type ReconcileUserAccount struct {
+// Reconciler reconciles a UserAccount object
+type Reconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client    client.Client
@@ -97,7 +97,7 @@ type ReconcileUserAccount struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("reconciling UserAccount")
 	var err error
@@ -195,7 +195,7 @@ func (r *ReconcileUserAccount) Reconcile(request reconcile.Request) (reconcile.R
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
 
-func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
+func (r *Reconciler) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
 	user := &userv1.User{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
 		if errors.IsNotFound(err) {
@@ -237,7 +237,7 @@ func (r *ReconcileUserAccount) ensureUser(logger logr.Logger, userAcc *toolchain
 	return user, false, nil
 }
 
-func (r *ReconcileUserAccount) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
+func (r *Reconciler) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 	name := ToIdentityName(userAcc.Spec.UserID, r.config)
 	identity := &userv1.Identity{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
@@ -293,7 +293,7 @@ func setOwnerLabel(object metav1.Object, owner string) {
 	object.SetLabels(labels)
 }
 
-func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
+func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
 	name := userAcc.Name
 
 	// create if not found
@@ -340,7 +340,7 @@ func (r *ReconcileUserAccount) ensureNSTemplateSet(logger logr.Logger, userAcc *
 	return nsTmplSet, false, nil
 }
 
-func (r *ReconcileUserAccount) updateNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
+func (r *Reconciler) updateNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
 	if err := r.setStatusUpdating(userAcc); err != nil {
 		return nil, false, err
 	}
@@ -356,7 +356,7 @@ func (r *ReconcileUserAccount) updateNSTemplateSet(logger logr.Logger, userAcc *
 }
 
 // setFinalizers sets the finalizers for UserAccount
-func (r *ReconcileUserAccount) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
 		logger.Info("adding finalizer on UserAccount")
@@ -371,7 +371,7 @@ func (r *ReconcileUserAccount) addFinalizer(logger logr.Logger, userAcc *toolcha
 
 // deleteIdentityAndUser deletes the identity and user. Returns bool and error indicating that
 // whether the user/identity were deleted.
-func (r *ReconcileUserAccount) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	if deleted, err := r.deleteIdentity(logger, userAcc); err != nil || deleted {
 		return deleted, err
 	}
@@ -384,7 +384,7 @@ func (r *ReconcileUserAccount) deleteIdentityAndUser(logger logr.Logger, userAcc
 // deleteUser deletes the user resource. Returns `true` if the user was deleted, `false` otherwise,
 // with the underlying error if the user existed and something wrong happened. If the user did not
 // exist, this func returns `false, nil`
-func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the User associated with the UserAccount
 	user := &userv1.User{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
@@ -405,7 +405,7 @@ func (r *ReconcileUserAccount) deleteUser(logger logr.Logger, userAcc *toolchain
 // deleteIdentity deletes the identity resource. Returns `true` if the identity was deleted, `false` otherwise,
 // with the underlying error if the identity existed and something wrong happened. If the identity did not
 // exist, this func returns `false, nil`
-func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
 	identityName := ToIdentityName(userAcc.Spec.UserID, r.config)
@@ -426,7 +426,7 @@ func (r *ReconcileUserAccount) deleteIdentity(logger logr.Logger, userAcc *toolc
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
-func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, statusUpdater func(userAcc *toolchainv1alpha1.UserAccount, message string) error, err error, format string, args ...interface{}) error {
+func (r *Reconciler) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, statusUpdater func(userAcc *toolchainv1alpha1.UserAccount, message string) error, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}
@@ -436,7 +436,7 @@ func (r *ReconcileUserAccount) wrapErrorWithStatusUpdate(logger logr.Logger, use
 	return errs.Wrapf(err, format, args...)
 }
 
-func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusUserCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -447,7 +447,7 @@ func (r *ReconcileUserAccount) setStatusUserCreationFailed(userAcc *toolchainv1a
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusIdentityCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -458,7 +458,7 @@ func (r *ReconcileUserAccount) setStatusIdentityCreationFailed(userAcc *toolchai
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusMappingCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -469,7 +469,7 @@ func (r *ReconcileUserAccount) setStatusMappingCreationFailed(userAcc *toolchain
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusNSTemplateSetCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -480,7 +480,7 @@ func (r *ReconcileUserAccount) setStatusNSTemplateSetCreationFailed(userAcc *too
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusFromNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount, reason, message string) error {
+func (r *Reconciler) setStatusFromNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount, reason, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -491,7 +491,7 @@ func (r *ReconcileUserAccount) setStatusFromNSTemplateSet(userAcc *toolchainv1al
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) setStatusProvisioning(userAcc *toolchainv1alpha1.UserAccount) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -501,7 +501,7 @@ func (r *ReconcileUserAccount) setStatusProvisioning(userAcc *toolchainv1alpha1.
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) setStatusReady(userAcc *toolchainv1alpha1.UserAccount) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -511,7 +511,7 @@ func (r *ReconcileUserAccount) setStatusReady(userAcc *toolchainv1alpha1.UserAcc
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusDisabling(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusDisabling(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -522,7 +522,7 @@ func (r *ReconcileUserAccount) setStatusDisabling(userAcc *toolchainv1alpha1.Use
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) setStatusDisabled(userAcc *toolchainv1alpha1.UserAccount) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -532,7 +532,7 @@ func (r *ReconcileUserAccount) setStatusDisabled(userAcc *toolchainv1alpha1.User
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusUpdating(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) setStatusUpdating(userAcc *toolchainv1alpha1.UserAccount) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -542,7 +542,7 @@ func (r *ReconcileUserAccount) setStatusUpdating(userAcc *toolchainv1alpha1.User
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusUpdateFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusUpdateFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -553,7 +553,7 @@ func (r *ReconcileUserAccount) setStatusUpdateFailed(userAcc *toolchainv1alpha1.
 		})
 }
 
-func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+func (r *Reconciler) setStatusTerminating(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
 		toolchainv1alpha1.Condition{
@@ -565,7 +565,7 @@ func (r *ReconcileUserAccount) setStatusTerminating(userAcc *toolchainv1alpha1.U
 }
 
 // updateStatusConditions updates user account status conditions with the new conditions
-func (r *ReconcileUserAccount) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
+func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccount, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool
 	userAcc.Status.Conditions, updated = condition.AddOrUpdateStatusConditions(userAcc.Status.Conditions, newConditions...)
 	if !updated {
@@ -617,7 +617,7 @@ func ToIdentityName(userID string, identityProvider IdentityProvider) string {
 	return fmt.Sprintf("%s:%s", identityProvider.GetIdP(), userID)
 }
 
-func (r *ReconcileUserAccount) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1.UserAccount) error {
 
 	// If Che user deletion is not required then just return, this is a way to disable this Che user deletion logic since
 	// it's meant to be a temporary measure until Che is updated to handle user deletion on its own

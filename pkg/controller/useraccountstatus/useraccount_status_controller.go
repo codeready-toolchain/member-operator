@@ -37,7 +37,7 @@ func Add(mgr manager.Manager, _ *configuration.Config, _ client.Client) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, metricsClient *versioned.Clientset) reconcile.Reconciler {
-	return &ReconcileUserAccountStatus{
+	return &Reconciler{
 		client:         mgr.GetClient(),
 		scheme:         mgr.GetScheme(),
 		getHostCluster: cluster.GetHostCluster,
@@ -62,11 +62,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that ReconcileUserAccountStatus implements reconcile.Reconciler
-var _ reconcile.Reconciler = &ReconcileUserAccountStatus{}
+// blank assignment to verify that Reconciler implements reconcile.Reconciler
+var _ reconcile.Reconciler = &Reconciler{}
 
-// ReconcileUserAccountStatus reconciles a UserAccount object
-type ReconcileUserAccountStatus struct {
+// Reconciler reconciles a UserAccount object
+type Reconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client         client.Client
@@ -79,7 +79,7 @@ type ReconcileUserAccountStatus struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("reconciling UserAccountStatus")
 
@@ -109,7 +109,7 @@ func (r *ReconcileUserAccountStatus) Reconcile(request reconcile.Request) (recon
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileUserAccountStatus) updateMasterUserRecord(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.MasterUserRecord, error) {
+func (r *Reconciler) updateMasterUserRecord(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.MasterUserRecord, error) {
 	if userAcc.DeletionTimestamp != nil {
 		logger.Info("Updating MUR after UserAccount deletion")
 	} else {

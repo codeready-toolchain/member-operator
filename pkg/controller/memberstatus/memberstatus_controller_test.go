@@ -39,7 +39,7 @@ var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 
 const defaultMemberOperatorName = "member-operator"
 
-const defaultMemberStatusName = configuration.DefaultMemberStatusName
+const defaultMemberStatusName = configuration.MemberStatusName
 
 // che test constants
 const (

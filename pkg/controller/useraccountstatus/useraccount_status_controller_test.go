@@ -161,7 +161,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 func newReconcileStatus(t *testing.T,
 	userAcc *toolchainv1alpha1.UserAccount,
 	mur *toolchainv1alpha1.MasterUserRecord,
-	ok bool, status v1.ConditionStatus) (ReconcileUserAccountStatus, client.Client) {
+	ok bool, status v1.ConditionStatus) (Reconciler, client.Client) {
 
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
@@ -170,7 +170,7 @@ func newReconcileStatus(t *testing.T,
 	memberClient := fake.NewFakeClientWithScheme(s, userAcc)
 	hostClient := fake.NewFakeClientWithScheme(s, mur)
 
-	return ReconcileUserAccountStatus{
+	return Reconciler{
 		client:         memberClient,
 		getHostCluster: test.NewGetHostCluster(hostClient, ok, status),
 		scheme:         s,

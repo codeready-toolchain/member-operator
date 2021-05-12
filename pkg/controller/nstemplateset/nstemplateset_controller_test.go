@@ -994,7 +994,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *te
 		if err != nil {
 			return err
 		}
-		if err := test.Create(fakeClient, ctx, o, opts...); err != nil {
+		if err := test.Create(ctx, fakeClient, o, opts...); err != nil {
 			return err
 		}
 		return passGeneration(o, obj)
@@ -1004,7 +1004,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *te
 		if err != nil {
 			return err
 		}
-		if err := test.Update(fakeClient, ctx, o, opts...); err != nil {
+		if err := test.Update(ctx, fakeClient, o, opts...); err != nil {
 			return err
 		}
 		return passGeneration(o, obj)

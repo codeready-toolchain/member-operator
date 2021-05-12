@@ -37,15 +37,15 @@ func Add(mgr manager.Manager, _ *crtconfig.Config, allNamespacesClient client.Cl
 	return add(mgr, newReconciler(mgr, allNamespacesClient))
 }
 
-func newReconciler(mgr manager.Manager, allNamespacesClient client.Client) *ReconcileIdler {
-	return &ReconcileIdler{
+func newReconciler(mgr manager.Manager, allNamespacesClient client.Client) *Reconciler {
+	return &Reconciler{
 		client:              mgr.GetClient(),
 		allNamespacesClient: allNamespacesClient,
 		scheme:              mgr.GetScheme(),
 	}
 }
 
-func add(mgr manager.Manager, r *ReconcileIdler) error {
+func add(mgr manager.Manager, r *Reconciler) error {
 	c, err := controller.New("idler-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
@@ -62,10 +62,10 @@ func add(mgr manager.Manager, r *ReconcileIdler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileIdler{}
+var _ reconcile.Reconciler = &Reconciler{}
 
-// ReconcileIdler reconciles an Idler object
-type ReconcileIdler struct {
+// Reconciler reconciles an Idler object
+type Reconciler struct {
 	// This client, initialized using mgr.Client() above, is a split client
 	// that reads objects from the cache and writes to the apiserver
 	client              client.Client
@@ -78,7 +78,7 @@ type ReconcileIdler struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("new reconcile loop")
 	// Fetch the Idler instance
@@ -124,7 +124,7 @@ func (r *ReconcileIdler) Reconcile(request reconcile.Request) (reconcile.Result,
 	}, r.setStatusReady(idler)
 }
 
-func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
 	if err := r.allNamespacesClient.List(context.TODO(), podList, client.InNamespace(idler.Name)); err != nil {
@@ -168,7 +168,7 @@ func (r *ReconcileIdler) ensureIdling(logger logr.Logger, idler *toolchainv1alph
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
 // Otherwise returns "false".
-func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (bool, error) {
+func (r *Reconciler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (bool, error) {
 	logger.Info("Scaling controller to zero", "name", meta.Name)
 	owners := meta.GetOwnerReferences()
 	for _, owner := range owners {
@@ -194,7 +194,7 @@ func (r *ReconcileIdler) scaleControllerToZero(logger logr.Logger, meta metav1.O
 	return false, nil
 }
 
-func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	logger.Info("Scaling deployment to zero", "name", owner.Name)
 	d := &appsv1.Deployment{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
@@ -212,7 +212,7 @@ func (r *ReconcileIdler) scaleDeploymentToZero(logger logr.Logger, namespace str
 	return true, nil
 }
 
-func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	logger.Info("Scaling replica set to zero", "name", owner.Name)
 	rs := &appsv1.ReplicaSet{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
@@ -239,7 +239,7 @@ func (r *ReconcileIdler) scaleReplicaSetToZero(logger logr.Logger, namespace str
 	return true, nil
 }
 
-func (r *ReconcileIdler) deleteDaemonSet(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) deleteDaemonSet(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	ds := &appsv1.DaemonSet{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -257,7 +257,7 @@ func (r *ReconcileIdler) deleteDaemonSet(logger logr.Logger, namespace string, o
 	return true, nil
 }
 
-func (r *ReconcileIdler) scaleStatefulSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleStatefulSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	s := &appsv1.StatefulSet{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, s); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -274,7 +274,7 @@ func (r *ReconcileIdler) scaleStatefulSetToZero(logger logr.Logger, namespace st
 	return true, nil
 }
 
-func (r *ReconcileIdler) scaleDeploymentConfigToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleDeploymentConfigToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	dc := &openshiftappsv1.DeploymentConfig{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, dc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -290,7 +290,7 @@ func (r *ReconcileIdler) scaleDeploymentConfigToZero(logger logr.Logger, namespa
 	return true, nil
 }
 
-func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleReplicationControllerToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	rc := &corev1.ReplicationController{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -314,7 +314,7 @@ func (r *ReconcileIdler) scaleReplicationControllerToZero(logger logr.Logger, na
 	return true, nil
 }
 
-func (r *ReconcileIdler) deleteJob(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) deleteJob(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
 	j := &batchv1.Job{}
 	if err := r.allNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -373,7 +373,7 @@ func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 }
 
 // updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.
-func (r *ReconcileIdler) updateStatusPods(idler *toolchainv1alpha1.Idler, newPods []toolchainv1alpha1.Pod) error {
+func (r *Reconciler) updateStatusPods(idler *toolchainv1alpha1.Idler, newPods []toolchainv1alpha1.Pod) error {
 	nothingChanged := len(idler.Status.Pods) == len(newPods)
 	if nothingChanged {
 		for _, newPod := range newPods {
@@ -393,7 +393,7 @@ func (r *ReconcileIdler) updateStatusPods(idler *toolchainv1alpha1.Idler, newPod
 
 type statusUpdater func(idler *toolchainv1alpha1.Idler, message string) error
 
-func (r *ReconcileIdler) updateStatusConditions(idler *toolchainv1alpha1.Idler, newConditions ...toolchainv1alpha1.Condition) error {
+func (r *Reconciler) updateStatusConditions(idler *toolchainv1alpha1.Idler, newConditions ...toolchainv1alpha1.Condition) error {
 	var updated bool
 	idler.Status.Conditions, updated = condition.AddOrUpdateStatusConditions(idler.Status.Conditions, newConditions...)
 	if !updated {
@@ -403,7 +403,7 @@ func (r *ReconcileIdler) updateStatusConditions(idler *toolchainv1alpha1.Idler, 
 	return r.client.Status().Update(context.TODO(), idler)
 }
 
-func (r *ReconcileIdler) setStatusFailed(idler *toolchainv1alpha1.Idler, message string) error {
+func (r *Reconciler) setStatusFailed(idler *toolchainv1alpha1.Idler, message string) error {
 	return r.updateStatusConditions(
 		idler,
 		toolchainv1alpha1.Condition{
@@ -414,7 +414,7 @@ func (r *ReconcileIdler) setStatusFailed(idler *toolchainv1alpha1.Idler, message
 		})
 }
 
-func (r *ReconcileIdler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 	return r.updateStatusConditions(
 		idler,
 		toolchainv1alpha1.Condition{
@@ -425,7 +425,7 @@ func (r *ReconcileIdler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 }
 
 // wrapErrorWithStatusUpdate wraps the error and update the idler status. If the update failed then logs the error.
-func (r *ReconcileIdler) wrapErrorWithStatusUpdate(logger logr.Logger, idler *toolchainv1alpha1.Idler, statusUpdater statusUpdater, err error, format string, args ...interface{}) error {
+func (r *Reconciler) wrapErrorWithStatusUpdate(logger logr.Logger, idler *toolchainv1alpha1.Idler, statusUpdater statusUpdater, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
 	}

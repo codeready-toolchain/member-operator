@@ -107,7 +107,7 @@ func TestReconcile(t *testing.T) {
 
 	// First cycle of reconcile. Freshly created UserAccount.
 	t.Run("create or update user OK", func(t *testing.T) {
-		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
+		reconcile := func(r *Reconciler, req reconcile.Request) {
 			//when
 			res, err := r.Reconcile(req)
 
@@ -211,7 +211,7 @@ func TestReconcile(t *testing.T) {
 
 	// Second cycle of reconcile. User already created.
 	t.Run("create or update identity OK", func(t *testing.T) {
-		reconcile := func(r *ReconcileUserAccount, req reconcile.Request) {
+		reconcile := func(r *Reconciler, req reconcile.Request) {
 			//when
 			res, err := r.Reconcile(req)
 
@@ -947,7 +947,7 @@ func TestUpdateStatus(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
-		reconciler := &ReconcileUserAccount{
+		reconciler := &Reconciler{
 			client: fakeClient,
 			scheme: s,
 		}
@@ -971,7 +971,7 @@ func TestUpdateStatus(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
-		reconciler := &ReconcileUserAccount{
+		reconciler := &Reconciler{
 			client: fakeClient,
 			scheme: s,
 		}
@@ -997,7 +997,7 @@ func TestUpdateStatus(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
-		reconciler := &ReconcileUserAccount{
+		reconciler := &Reconciler{
 			client: fakeClient,
 			scheme: s,
 		}
@@ -1387,7 +1387,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 
 }
 
-func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
+func assertUserNotFound(t *testing.T, r *Reconciler, account *toolchainv1alpha1.UserAccount) {
 	// Check that the associated user has been deleted
 	// since disabled has been set to true
 	user := &userv1.User{}
@@ -1396,7 +1396,7 @@ func assertUserNotFound(t *testing.T, r *ReconcileUserAccount, account *toolchai
 	assert.True(t, apierros.IsNotFound(err))
 }
 
-func assertIdentityNotFound(t *testing.T, r *ReconcileUserAccount, identityName string) {
+func assertIdentityNotFound(t *testing.T, r *Reconciler, identityName string) {
 	// Check that the associated identity has been deleted
 	// since disabled has been set to true
 	identity := &userv1.Identity{}
@@ -1405,7 +1405,7 @@ func assertIdentityNotFound(t *testing.T, r *ReconcileUserAccount, identityName 
 	assert.True(t, apierros.IsNotFound(err))
 }
 
-func assertNSTemplateFound(t *testing.T, r *ReconcileUserAccount, account *toolchainv1alpha1.UserAccount) {
+func assertNSTemplateFound(t *testing.T, r *Reconciler, account *toolchainv1alpha1.UserAccount) {
 	// Get NSTemplate
 	tmplTier := &toolchainv1alpha1.NSTemplateSet{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: test.MemberOperatorNs}, tmplTier)
@@ -1541,7 +1541,7 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, identity.Name, user.Identities[0])
 }
 
-func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*ReconcileUserAccount, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1552,7 +1552,7 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	tc := che.NewTokenCache(http.DefaultClient)
 	cheClient := che.NewCheClient(config, http.DefaultClient, fakeClient, tc)
 
-	r := &ReconcileUserAccount{
+	r := &Reconciler{
 		client:    fakeClient,
 		scheme:    s,
 		config:    config,

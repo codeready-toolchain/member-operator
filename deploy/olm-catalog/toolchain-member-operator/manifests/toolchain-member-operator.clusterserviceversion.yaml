@@ -93,6 +93,9 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: MemberOperatorConfig
+      name: MemberOperatorConfigs.toolchain.dev.openshift.com
+      version: v1alpha1
     - description: Idler enables automatic idling of payloads in a user namespaces
         where the name of the Idler matches the name of the corresponding namespace.
         For example an Idler with "foo" name will be managing pods in namespace "foo".

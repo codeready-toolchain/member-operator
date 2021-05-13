@@ -126,6 +126,66 @@ data:
     - apiVersion: apiextensions.k8s.io/v1
       kind: CustomResourceDefinition
       metadata:
+        name: MemberOperatorConfigs.toolchain.dev.openshift.com
+      spec:
+        group: toolchain.dev.openshift.com
+        names:
+          kind: MemberOperatorConfig
+          listKind: MemberOperatorConfigList
+          plural: MemberOperatorConfigs
+          singular: memberoperatorconfig
+        scope: Namespaced
+        versions:
+        - additionalPrinterColumns:
+          - jsonPath: .spec.automaticApproval.enabled
+            name: AutomaticApproval
+            type: boolean
+          name: v1alpha1
+          schema:
+            openAPIV3Schema:
+              description: MemberOperatorConfig keeps all configuration parameters needed
+                in host operator
+              properties:
+                apiVersion:
+                  description: 'APIVersion defines the versioned schema of this representation
+                    of an object. Servers should convert recognized schemas to the latest
+                    internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                  type: string
+                kind:
+                  description: 'Kind is a string value representing the REST resource this
+                    object represents. Servers may infer this from the endpoint the client
+                    submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                  type: string
+                metadata:
+                  type: object
+                spec:
+                  description: MemberOperatorConfigSpec contains all configuration parameters
+                    of the host operator
+                  properties:
+                    status:
+                      description: Keeps parameters concerned with member status
+                      properties:
+                        refreshPeriod:
+                          description: Defines the period between refreshes of the member
+                            status
+                          type: string
+                      required:
+                      - refreshPeriod
+                      type: object
+                  type: object
+                status:
+                  description: MemberOperatorConfigStatus defines the observed state of
+                    MemberOperatorConfig
+                  type: object
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+          served: true
+          storage: true
+          subresources:
+            status: {}
+    - apiVersion: apiextensions.k8s.io/v1
+      kind: CustomResourceDefinition
+      metadata:
         name: memberstatuses.toolchain.dev.openshift.com
       spec:
         group: toolchain.dev.openshift.com
@@ -961,6 +1021,9 @@ data:
         apiservicedefinitions: {}
         customresourcedefinitions:
           owned:
+          - kind: MemberOperatorConfig
+            name: MemberOperatorConfigs.toolchain.dev.openshift.com
+            version: v1alpha1
           - description: Idler enables automatic idling of payloads in a user namespaces
               where the name of the Idler matches the name of the corresponding namespace.
               For example an Idler with "foo" name will be managing pods in namespace "foo".

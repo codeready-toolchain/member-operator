@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake" //nolint: staticcheck // not deprecated anymore: see https://github.com/kubernetes-sigs/controller-runtime/pull/1101
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -171,9 +172,10 @@ func newReconcileStatus(t *testing.T,
 	hostClient := fake.NewFakeClientWithScheme(s, mur)
 
 	return Reconciler{
-		client:         memberClient,
-		getHostCluster: test.NewGetHostCluster(hostClient, ok, status),
-		scheme:         s,
+		Client:         memberClient,
+		GetHostCluster: test.NewGetHostCluster(hostClient, ok, status),
+		Scheme:         s,
+		Log:            ctrl.Log.WithName("controllers").WithName("UserAccountStatus"),
 	}, hostClient
 }
 

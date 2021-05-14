@@ -11,7 +11,7 @@ import (
 )
 
 type statusManager struct {
-	*apiClient
+	*ApiClient
 }
 
 // error handling methods
@@ -42,7 +42,7 @@ func (r *statusManager) updateStatusConditions(nsTmplSet *toolchainv1alpha1.NSTe
 		// Nothing changed
 		return nil
 	}
-	return r.client.Status().Update(context.TODO(), nsTmplSet)
+	return r.Client.Status().Update(context.TODO(), nsTmplSet)
 }
 
 func (r *statusManager) setStatusReady(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

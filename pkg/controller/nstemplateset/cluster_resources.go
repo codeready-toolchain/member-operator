@@ -118,7 +118,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		tierTemplate, err = getTierTemplate(r.getHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
+		tierTemplate, err = getTierTemplate(r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierLogger, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
@@ -132,7 +132,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 
 		// get all objects of the resource kind from the template (if the template is specified)
 		if tierTemplate != nil {
-			newObjs, err = tierTemplate.process(r.scheme, username, retainObjectsOfSameGVK(clusterResourceKind.gvk))
+			newObjs, err = tierTemplate.process(r.Scheme, username, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
 				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 					"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
@@ -140,7 +140,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		}
 
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResources(r.client, username)
+		currentObjects, err := clusterResourceKind.listExistingResources(r.Client, username)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
@@ -193,7 +193,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	// see https://issues.redhat.com/browse/CRT-429
 
 	logger.Info("applying cluster resource", "gvk", toApply.GetGvk())
-	if _, err := applycl.NewApplyClient(r.client, r.scheme).ApplyToolchainObjects([]applycl.ToolchainObject{toApply}, labels); err != nil {
+	if _, err := applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects([]applycl.ToolchainObject{toApply}, labels); err != nil {
 		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", toApply.GetGvk())
 	}
 	return true, nil
@@ -242,7 +242,7 @@ func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1al
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 		return false, err
 	}
-	if err := r.client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil {
+	if err := r.Client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
 			toDelete.GetName(), toDelete.GetGvk())
 	}
@@ -265,7 +265,7 @@ NewObjects:
 			}
 		}
 		// if there was no existing object found that would match with the new one, then set the status appropriately
-		namespaces, err := fetchNamespaces(r.client, nsTmplSet.Name)
+		namespaces, err := fetchNamespaces(r.Client, nsTmplSet.Name)
 		if err != nil {
 			return false, errs.Wrapf(err, "unable to fetch user's namespaces")
 		}
@@ -294,14 +294,14 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 	}
 	for _, clusterResourceKind := range clusterResourceKinds {
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResources(r.client, nsTmplSet.Name)
+		currentObjects, err := clusterResourceKind.listExistingResources(r.Client, nsTmplSet.Name)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 		}
 
 		for _, toDelete := range currentObjects {
-			if err := r.client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) {
+			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err,
 					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetGvk())
 			}
@@ -311,7 +311,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 			}
 
 			logger.Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetGvk().Kind)
-			if err := r.client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil && errors.IsNotFound(err) {
+			if err := r.Client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue
 			} else if err != nil {

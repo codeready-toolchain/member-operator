@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -476,15 +477,15 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deployment", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
 	}
-	err := r.allNamespacesClient.Create(context.TODO(), d)
+	err := r.AllNamespacesClient.Create(context.TODO(), d)
 	require.NoError(t, err)
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", d.Name), Namespace: namespace},
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
 	}
-	err = controllerutil.SetControllerReference(d, rs, r.scheme)
+	err = controllerutil.SetControllerReference(d, rs, r.Scheme)
 	require.NoError(t, err)
-	err = r.allNamespacesClient.Create(context.TODO(), rs)
+	err = r.AllNamespacesClient.Create(context.TODO(), rs)
 	require.NoError(t, err)
 	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
 
@@ -493,7 +494,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-replicaset", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
 	}
-	err = r.allNamespacesClient.Create(context.TODO(), standaloneRs)
+	err = r.AllNamespacesClient.Create(context.TODO(), standaloneRs)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, standaloneRs, sTime, controlledPods)
 
@@ -501,7 +502,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-daemonset", namePrefix, namespace), Namespace: namespace},
 	}
-	err = r.allNamespacesClient.Create(context.TODO(), ds)
+	err = r.AllNamespacesClient.Create(context.TODO(), ds)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, ds, sTime, controlledPods)
 
@@ -509,7 +510,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-job", namePrefix, namespace), Namespace: namespace},
 	}
-	err = r.allNamespacesClient.Create(context.TODO(), job)
+	err = r.AllNamespacesClient.Create(context.TODO(), job)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, job, sTime, controlledPods)
 
@@ -518,7 +519,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-statefulset", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	err = r.allNamespacesClient.Create(context.TODO(), sts)
+	err = r.AllNamespacesClient.Create(context.TODO(), sts)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, sts, sTime, controlledPods)
 
@@ -527,15 +528,15 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deploymentconfig", namePrefix, namespace), Namespace: namespace},
 		Spec:       openshiftappsv1.DeploymentConfigSpec{Replicas: replicas},
 	}
-	err = r.allNamespacesClient.Create(context.TODO(), dc)
+	err = r.AllNamespacesClient.Create(context.TODO(), dc)
 	require.NoError(t, err)
 	rc := &corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicationcontroller", dc.Name), Namespace: namespace},
 		Spec:       corev1.ReplicationControllerSpec{Replicas: &replicas},
 	}
-	err = controllerutil.SetControllerReference(dc, rc, r.scheme)
+	err = controllerutil.SetControllerReference(dc, rc, r.Scheme)
 	require.NoError(t, err)
-	err = r.allNamespacesClient.Create(context.TODO(), rc)
+	err = r.AllNamespacesClient.Create(context.TODO(), rc)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, rc, sTime, controlledPods)
 
@@ -544,7 +545,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-replicationcontroller", namePrefix, namespace), Namespace: namespace},
 		Spec:       corev1.ReplicationControllerSpec{Replicas: &replicas},
 	}
-	err = r.allNamespacesClient.Create(context.TODO(), standaloneRC)
+	err = r.AllNamespacesClient.Create(context.TODO(), standaloneRC)
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, standaloneRC, sTime, controlledPods)
 
@@ -568,7 +569,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		}
 		require.NoError(t, err)
 		standalonePods = append(standalonePods, pod)
-		err = r.allNamespacesClient.Create(context.TODO(), pod)
+		err = r.AllNamespacesClient.Create(context.TODO(), pod)
 		require.NoError(t, err)
 	}
 
@@ -592,10 +593,10 @@ func createPods(t *testing.T, r *Reconciler, owner v1.Object, startTime metav1.T
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
 			Status:     corev1.PodStatus{StartTime: &startTime},
 		}
-		err := controllerutil.SetControllerReference(owner, pod, r.scheme)
+		err := controllerutil.SetControllerReference(owner, pod, r.Scheme)
 		require.NoError(t, err)
 		podsToTrack = append(podsToTrack, pod)
-		err = r.allNamespacesClient.Create(context.TODO(), pod)
+		err = r.AllNamespacesClient.Create(context.TODO(), pod)
 		require.NoError(t, err)
 	}
 	return podsToTrack
@@ -609,9 +610,10 @@ func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
 	r := &Reconciler{
-		client:              fakeClient,
-		allNamespacesClient: allNamespacesClient,
-		scheme:              s,
+		Client:              fakeClient,
+		AllNamespacesClient: allNamespacesClient,
+		Scheme:              s,
+		Log:                 ctrl.Log.WithName("controllers").WithName("Idler"),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient
 }

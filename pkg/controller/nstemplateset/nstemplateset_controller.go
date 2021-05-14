@@ -4,47 +4,33 @@ import (
 	"context"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/go-logr/logr"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_nstemplateset")
-
-// Add creates a new NSTemplateSetReconciler and starts it (ie, watches resources and reconciles the cluster state)
-func Add(mgr manager.Manager, _ *configuration.Config, _ client.Client) error {
-	return add(mgr, newReconciler(&apiClient{
-		client:         mgr.GetClient(),
-		scheme:         mgr.GetScheme(),
-		getHostCluster: cluster.GetHostCluster,
-	}))
-}
-
-func newReconciler(apiClient *apiClient) *Reconciler {
+func NewReconciler(apiClient *ApiClient) *Reconciler {
 	status := &statusManager{
-		apiClient: apiClient,
+		ApiClient: apiClient,
 	}
 	return &Reconciler{
-		apiClient: apiClient,
+		ApiClient: apiClient,
 		status:    status,
 		namespaces: &namespacesManager{
 			statusManager: status,
@@ -84,17 +70,21 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &Reconciler{}
+// SetupWithManager sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+	return add(mgr, r)
+}
 
-type apiClient struct {
-	client         client.Client
-	scheme         *runtime.Scheme
-	getHostCluster cluster.GetHostClusterFunc
+type ApiClient struct {
+	Client         client.Client
+	Scheme         *runtime.Scheme
+	Log            logr.Logger
+	GetHostCluster cluster.GetHostClusterFunc
 }
 
 // Reconciler the NSTemplateSet reconciler
 type Reconciler struct {
-	*apiClient
+	*ApiClient
 	namespaces       *namespacesManager
 	clusterResources *clusterResourcesManager
 	status           *statusManager
@@ -103,7 +93,7 @@ type Reconciler struct {
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	logger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("reconciling NSTemplateSet")
 
 	var err error
@@ -115,7 +105,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 	// Fetch the NSTemplateSet instance
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -156,7 +146,7 @@ func (r *Reconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) er
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		util.AddFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
-		if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+		if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
 			return err
 		}
 	}
@@ -191,7 +181,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	// if nothing was to be deleted, then we can remove the finalizer and we're done
 	logger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
 	util.RemoveFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
-	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+	if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
 		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err,
 			"failed to remove finalizer on NSTemplateSet '%s'", username)
 	}

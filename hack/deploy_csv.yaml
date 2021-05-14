@@ -126,13 +126,13 @@ data:
     - apiVersion: apiextensions.k8s.io/v1
       kind: CustomResourceDefinition
       metadata:
-        name: MemberOperatorConfigs.toolchain.dev.openshift.com
+        name: memberoperatorconfigs.toolchain.dev.openshift.com
       spec:
         group: toolchain.dev.openshift.com
         names:
           kind: MemberOperatorConfig
           listKind: MemberOperatorConfigList
-          plural: MemberOperatorConfigs
+          plural: memberoperatorconfigs
           singular: memberoperatorconfig
         scope: Namespaced
         versions:
@@ -144,7 +144,7 @@ data:
           schema:
             openAPIV3Schema:
               description: MemberOperatorConfig keeps all configuration parameters needed
-                in host operator
+                in member operator
               properties:
                 apiVersion:
                   description: 'APIVersion defines the versioned schema of this representation
@@ -160,7 +160,7 @@ data:
                   type: object
                 spec:
                   description: MemberOperatorConfigSpec contains all configuration parameters
-                    of the host operator
+                    of the member operator
                   properties:
                     status:
                       description: Keeps parameters concerned with member status
@@ -1021,15 +1021,18 @@ data:
         apiservicedefinitions: {}
         customresourcedefinitions:
           owned:
-          - kind: MemberOperatorConfig
-            name: MemberOperatorConfigs.toolchain.dev.openshift.com
-            version: v1alpha1
           - description: Idler enables automatic idling of payloads in a user namespaces
               where the name of the Idler matches the name of the corresponding namespace.
               For example an Idler with "foo" name will be managing pods in namespace "foo".
             displayName: Idler
             kind: Idler
             name: idlers.toolchain.dev.openshift.com
+            version: v1alpha1
+          - description: MemberOperatorConfig keeps all configuration parameters needed
+              in member operator
+            displayName: Member Operator Config
+            kind: MemberOperatorConfig
+            name: memberoperatorconfigs.toolchain.dev.openshift.com
             version: v1alpha1
           - description: MemberStatus is used to track toolchain member status
             displayName: CodeReady Toolchain Member Status

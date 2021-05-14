@@ -1,13 +1,13 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: MemberOperatorConfigs.toolchain.dev.openshift.com
+  name: memberoperatorconfigs.toolchain.dev.openshift.com
 spec:
   group: toolchain.dev.openshift.com
   names:
     kind: MemberOperatorConfig
     listKind: MemberOperatorConfigList
-    plural: MemberOperatorConfigs
+    plural: memberoperatorconfigs
     singular: memberoperatorconfig
   scope: Namespaced
   versions:
@@ -19,7 +19,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: MemberOperatorConfig keeps all configuration parameters needed
-          in host operator
+          in member operator
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -35,7 +35,7 @@ spec:
             type: object
           spec:
             description: MemberOperatorConfigSpec contains all configuration parameters
-              of the host operator
+              of the member operator
             properties:
               status:
                 description: Keeps parameters concerned with member status

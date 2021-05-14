@@ -44,9 +44,9 @@ const (
 	routesTag         statusComponentTag = "routes"
 	cheTag            statusComponentTag = "che"
 
-	labelNodeRoleMaster = "node-role.kubernetes.io/master"
-	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
-	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
+	LabelNodeRoleMaster = "node-role.kubernetes.io/master"
+	LabelNodeRoleWorker = "node-role.kubernetes.io/worker"
+	LabelNodeRoleInfra  = "node-role.kubernetes.io/infra"
 )
 
 // Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -373,15 +373,15 @@ type nodeInfo struct {
 // getNodeRoles returns an array containing the roles (i.e. worker, master) fulfilled by the specified node
 // for nodes fulfilling also the infra role it returns only an empty array
 func getNodeRoles(node corev1.Node) (roles []string) {
-	if _, isWorker := node.Labels[labelNodeRoleInfra]; isWorker {
+	if _, isWorker := node.Labels[LabelNodeRoleInfra]; isWorker {
 		return
 	}
 
-	if _, isWorker := node.Labels[labelNodeRoleWorker]; isWorker {
+	if _, isWorker := node.Labels[LabelNodeRoleWorker]; isWorker {
 		roles = append(roles, "worker")
 	}
 
-	if _, isMaster := node.Labels[labelNodeRoleMaster]; isMaster {
+	if _, isMaster := node.Labels[LabelNodeRoleMaster]; isMaster {
 		roles = append(roles, "master")
 	}
 	return

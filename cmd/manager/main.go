@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
+
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
@@ -177,6 +179,17 @@ func main() {
 			log.Info("(Re)Deployed users' pods webhook")
 		} else {
 			log.Info("Skipping deployment of users' pods webhook")
+		}
+
+		if crtConfig.DoDeployAutoscalingBuffer() {
+			log.Info("(Re)Deploying autoscaling buffer")
+			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetAutoscalerBufferSizeNodeSizeRatio()); err != nil {
+				log.Error(err, "cannot deploy autoscaling buffer")
+				os.Exit(1)
+			}
+			log.Info("(Re)Deployed autoscaling buffer")
+		} else {
+			log.Info("Skipping deployment of autoscaling buffer")
 		}
 
 		log.Info("Starting ToolchainCluster health checks.")

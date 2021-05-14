@@ -1,0 +1,48 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: member-operator-autoscaler
+objects:
+  - apiVersion: scheduling.k8s.io/v1
+    kind: PriorityClass
+    metadata:
+      name: member-operator-autoscaling-buffer
+      labels:
+        toolchain.dev.openshift.com/provider: codeready-toolchain
+    value: -100
+    globalDefault: false
+    description: "This priority class is to be used by the autoscaling buffer pod only"
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: autoscaling-buffer
+      namespace: ${NAMESPACE}
+      labels:
+        app: autoscaling-buffer
+        toolchain.dev.openshift.com/provider: codeready-toolchain
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: autoscaling-buffer
+      template:
+        metadata:
+          labels:
+            app: autoscaling-buffer
+        spec:
+          priorityClassName: member-operator-autoscaling-buffer
+          terminationGracePeriodSeconds: 0
+          containers:
+            - name: autoscaling-buffer
+              image: gcr.io/google_containers/pause-amd64:3.0
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  memory: ${MEMORY}
+                limits:
+                  memory: ${MEMORY}
+parameters:
+  - name: NAMESPACE
+    value: 'toolchain-member-operator'
+  - name: MEMORY
+    required: true

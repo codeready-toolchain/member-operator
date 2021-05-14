@@ -87,6 +87,20 @@ const (
 
 	// defaultDeployWebhook is true by default
 	defaultDeployWebhook = true
+
+	// varDeployAutoscalingBuffer is to be used to disable or enable cluster autoscaling support by the member operator
+	// If the cluster autoscaling is enabled in the cluster then this property can be set to true.
+	// In this case the member operator will deploy a special buffer app which can reserve compute resources
+	// for user payloads in the cluster.
+	varDeployAutoscalingBuffer = "deploy.buffer"
+
+	// defaultDeployAutoscalingBuffer is false by default
+	defaultDeployAutoscalingBuffer = false
+
+	// varAutoscalerBufferSizeNodeSizeRatio represents how much memory should be required by the autoscaler buffer relatively to allocatable memory of a worker node
+	varAutoscalerBufferSizeNodeSizeRatio = "deploy.buffer-ratio"
+
+	defaultAutoscalerBufferSizeNodeSizeRatio = 0.8
 )
 
 // ToolchainCluster configuration constants
@@ -152,6 +166,8 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
 	c.member.SetDefault(varDeployWebhook, defaultDeployWebhook)
+	c.member.SetDefault(varDeployAutoscalingBuffer, defaultDeployAutoscalingBuffer)
+	c.member.SetDefault(varAutoscalerBufferSizeNodeSizeRatio, defaultAutoscalerBufferSizeNodeSizeRatio)
 }
 
 func (c *Config) Print() {
@@ -252,4 +268,15 @@ func (c *Config) GetMemberOperatorWebhookImage() string {
 // DoDeployWebhook returns true if the Webhook should be deployed
 func (c *Config) DoDeployWebhook() bool {
 	return c.member.GetBool(varDeployWebhook)
+}
+
+// DoDeployAutoscalingBuffer returns true if the autoscaler buffer app should be deployed
+func (c *Config) DoDeployAutoscalingBuffer() bool {
+	return c.member.GetBool(varDeployAutoscalingBuffer)
+}
+
+// GetAutoscalerBufferSizeNodeSizeRatio returns how much memory should be required by the autoscaler buffer relatively to allocatable memory of a worker node
+// For example "0.8" will require 80% of the allocatable memory of a node
+func (c *Config) GetAutoscalerBufferSizeNodeSizeRatio() float64 {
+	return c.member.GetFloat64(varAutoscalerBufferSizeNodeSizeRatio)
 }

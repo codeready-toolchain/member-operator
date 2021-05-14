@@ -976,7 +976,7 @@ func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runt
 	return r, newReconcileRequest(namespaceName, name), fakeClient
 }
 
-func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*ApiClient, *test.FakeClient) {
+func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1010,7 +1010,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*ApiClient, *te
 		}
 		return passGeneration(o, obj)
 	}
-	return &ApiClient{
+	return &APIClient{
 		Client:         fakeClient,
 		Scheme:         s,
 		GetHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
@@ -1021,7 +1021,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*ApiClient, *te
 func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return &statusManager{
-		ApiClient: apiClient,
+		APIClient: apiClient,
 	}, fakeClient
 }
 

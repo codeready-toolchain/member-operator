@@ -183,7 +183,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberStatus")
 		os.Exit(1)
 	}
-	if err = (nstemplateset.NewReconciler(&nstemplateset.ApiClient{
+	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
 		Client:         mgr.GetClient(),
 		Log:            ctrl.Log.WithName("controllers").WithName("NSTemplateSet"),
 		Scheme:         mgr.GetScheme(),

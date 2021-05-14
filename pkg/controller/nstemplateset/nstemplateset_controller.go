@@ -25,12 +25,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-func NewReconciler(apiClient *ApiClient) *Reconciler {
+func NewReconciler(apiClient *APIClient) *Reconciler {
 	status := &statusManager{
-		ApiClient: apiClient,
+		APIClient: apiClient,
 	}
 	return &Reconciler{
-		ApiClient: apiClient,
+		APIClient: apiClient,
 		status:    status,
 		namespaces: &namespacesManager{
 			statusManager: status,
@@ -75,7 +75,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return add(mgr, r)
 }
 
-type ApiClient struct {
+type APIClient struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
@@ -84,7 +84,7 @@ type ApiClient struct {
 
 // Reconciler the NSTemplateSet reconciler
 type Reconciler struct {
-	*ApiClient
+	*APIClient
 	namespaces       *namespacesManager
 	clusterResources *clusterResourcesManager
 	status           *statusManager

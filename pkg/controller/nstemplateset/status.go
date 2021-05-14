@@ -11,7 +11,7 @@ import (
 )
 
 type statusManager struct {
-	*ApiClient
+	*APIClient
 }
 
 // error handling methods

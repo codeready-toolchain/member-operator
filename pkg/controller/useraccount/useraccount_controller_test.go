@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake" //nolint: staticcheck // not deprecated anymore: see https://github.com/kubernetes-sigs/controller-runtime/pull/1101
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -91,17 +92,17 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 
 		// Check the user is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &userv1.User{})
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, &userv1.User{})
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check the NSTmplSet is not created
-		AssertThatNSTemplateSet(t, req.Namespace, userAcc.Name, r.client).
+		AssertThatNSTemplateSet(t, req.Namespace, userAcc.Name, r.Client).
 			DoesNotExist()
 	})
 
@@ -117,7 +118,7 @@ func TestReconcile(t *testing.T) {
 
 			// Check that the user account status has been updated
 			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
@@ -128,7 +129,7 @@ func TestReconcile(t *testing.T) {
 
 			// Check the created/updated user
 			user := &userv1.User{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 			require.NoError(t, err)
 			assert.Equal(t, userAcc.Name, user.Name)
 			require.Equal(t, userAcc.Name, user.Labels["toolchain.dev.openshift.com/owner"])
@@ -139,12 +140,12 @@ func TestReconcile(t *testing.T) {
 			checkMapping(t, user, preexistingIdentity)
 
 			// Check the identity is not created yet
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
 			require.Error(t, err)
 			assert.True(t, apierros.IsNotFound(err))
 
 			// Check the NSTmplSet is not created yet
-			AssertThatNSTemplateSet(t, req.Namespace, userAcc.Name, r.client).
+			AssertThatNSTemplateSet(t, req.Namespace, userAcc.Name, r.Client).
 				DoesNotExist()
 		}
 
@@ -221,7 +222,7 @@ func TestReconcile(t *testing.T) {
 
 			// Check that the user account status is now "provisioning"
 			updatedAcc := &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
 			require.NoError(t, err)
 			test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
 				toolchainv1alpha1.Condition{
@@ -232,9 +233,9 @@ func TestReconcile(t *testing.T) {
 
 			// Check the created/updated identity
 			identity := &userv1.Identity{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 			require.NoError(t, err)
-			assert.Equal(t, fmt.Sprintf("%s:%s", r.config.GetIdP(), userAcc.Spec.UserID), identity.Name)
+			assert.Equal(t, fmt.Sprintf("%s:%s", r.Config.GetIdP(), userAcc.Spec.UserID), identity.Name)
 			require.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])
 			assert.Empty(t, identity.OwnerReferences) // Identity has no explicit owner reference.
 
@@ -638,7 +639,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -646,7 +647,7 @@ func TestReconcile(t *testing.T) {
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
-		err = r.client.Update(context.TODO(), userAcc)
+		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		res, err = r.Reconcile(req)
@@ -659,7 +660,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -673,7 +674,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -684,7 +685,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the user account finalizer has been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 		require.Equal(t, 6, *mockCallsCounter) // Only 1 reconcile will do the delete (4 calls) followed by 2 reconciles with user exists check only
@@ -720,7 +721,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -728,7 +729,7 @@ func TestReconcile(t *testing.T) {
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
-		err = r.client.Update(context.TODO(), userAcc)
+		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock finalizer removal failure
@@ -763,21 +764,21 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check that the associated user has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check that the user account finalizer has not been removed
 		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 	})
@@ -812,7 +813,7 @@ func TestReconcile(t *testing.T) {
 
 		// then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -820,7 +821,7 @@ func TestReconcile(t *testing.T) {
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
-		err = r.client.Update(context.TODO(), userAcc)
+		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		res, err = r.Reconcile(req)
@@ -830,13 +831,13 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
 		require.Equal(t, 2, *mockCallsCounter)
 
@@ -856,7 +857,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -864,7 +865,7 @@ func TestReconcile(t *testing.T) {
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
-		err = r.client.Update(context.TODO(), userAcc)
+		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock deleting identity failure
@@ -879,7 +880,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.NoError(t, err)
 
 		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
@@ -898,7 +899,7 @@ func TestReconcile(t *testing.T) {
 
 		//then
 		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 
 		// Check that the finalizer is present
@@ -906,7 +907,7 @@ func TestReconcile(t *testing.T) {
 
 		// Set the deletionTimestamp
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
-		err = r.client.Update(context.TODO(), userAcc)
+		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock deleting user failure
@@ -924,13 +925,13 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
 		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		user := &userv1.User{}
-		err = r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
 	})
 }
@@ -948,8 +949,8 @@ func TestUpdateStatus(t *testing.T) {
 		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &Reconciler{
-			client: fakeClient,
-			scheme: s,
+			Client: fakeClient,
+			Scheme: s,
 		}
 		condition := toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -962,7 +963,7 @@ func TestUpdateStatus(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: test.MemberOperatorNs, Name: userAcc.Name}, updatedAcc)
+		err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Namespace: test.MemberOperatorNs, Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
 		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions, condition)
 	})
@@ -972,8 +973,8 @@ func TestUpdateStatus(t *testing.T) {
 		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &Reconciler{
-			client: fakeClient,
-			scheme: s,
+			Client: fakeClient,
+			Scheme: s,
 		}
 		conditions := []toolchainv1alpha1.Condition{{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -987,7 +988,7 @@ func TestUpdateStatus(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		updatedAcc := &toolchainv1alpha1.UserAccount{}
-		err = reconciler.client.Get(context.TODO(), types.NamespacedName{Namespace: test.MemberOperatorNs, Name: userAcc.Name}, updatedAcc)
+		err = reconciler.Client.Get(context.TODO(), types.NamespacedName{Namespace: test.MemberOperatorNs, Name: userAcc.Name}, updatedAcc)
 		require.NoError(t, err)
 		// Status is not updated
 		test.AssertConditionsMatch(t, updatedAcc.Status.Conditions)
@@ -998,8 +999,8 @@ func TestUpdateStatus(t *testing.T) {
 		userAcc := newUserAccount(username, userID, false)
 		fakeClient := fake.NewFakeClient(userAcc)
 		reconciler := &Reconciler{
-			client: fakeClient,
-			scheme: s,
+			Client: fakeClient,
+			Scheme: s,
 		}
 		log := logf.Log.WithName("test")
 
@@ -1075,7 +1076,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// when
 		userAcc.Spec.Disabled = true
-		err = r.client.Update(context.TODO(), userAcc)
+		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		res, err := r.Reconcile(req)
@@ -1219,7 +1220,7 @@ func TestDisabledUserAccount(t *testing.T) {
 				// then
 				require.NoError(t, err)
 				userAcc = &toolchainv1alpha1.UserAccount{}
-				err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 				require.NoError(t, err)
 				require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
 			})
@@ -1270,7 +1271,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			// then
 			require.EqualError(t, err, `request to find Che user 'sugar' failed: unable to obtain access token for che, Response status: '400 Bad Request'. Response body: ''`)
 			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 1, *mockCallsCounter) // 1. get token
@@ -1291,7 +1292,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
@@ -1312,7 +1313,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			// then
 			require.EqualError(t, err, `request to find Che user 'sugar' failed, Response status: '400 Bad Request' Body: ''`)
 			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
@@ -1333,7 +1334,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			// then
 			require.EqualError(t, err, `unable to get Che user ID for user 'sugar': error unmarshalling Che user json  : unexpected end of JSON input`)
 			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Empty(t, userAcc.Status.Conditions)
 			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. user exists check 3. get user ID
@@ -1355,7 +1356,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			// then
 			require.EqualError(t, err, `this error is expected if deletion is still in progress: unable to delete Che user with ID 'abc1234', Response status: '400 Bad Request' Body: ''`)
 			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
 		})
@@ -1376,7 +1377,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			userAcc = &toolchainv1alpha1.UserAccount{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 			require.NoError(t, err)
 
 			require.Empty(t, userAcc.Status.Conditions)
@@ -1391,7 +1392,7 @@ func assertUserNotFound(t *testing.T, r *Reconciler, account *toolchainv1alpha1.
 	// Check that the associated user has been deleted
 	// since disabled has been set to true
 	user := &userv1.User{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name}, user)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: account.Name}, user)
 	require.Error(t, err)
 	assert.True(t, apierros.IsNotFound(err))
 }
@@ -1400,7 +1401,7 @@ func assertIdentityNotFound(t *testing.T, r *Reconciler, identityName string) {
 	// Check that the associated identity has been deleted
 	// since disabled has been set to true
 	identity := &userv1.Identity{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	require.Error(t, err)
 	assert.True(t, apierros.IsNotFound(err))
 }
@@ -1408,7 +1409,7 @@ func assertIdentityNotFound(t *testing.T, r *Reconciler, identityName string) {
 func assertNSTemplateFound(t *testing.T, r *Reconciler, account *toolchainv1alpha1.UserAccount) {
 	// Get NSTemplate
 	tmplTier := &toolchainv1alpha1.NSTemplateSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: test.MemberOperatorNs}, tmplTier)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: account.Name, Namespace: test.MemberOperatorNs}, tmplTier)
 	require.NoError(t, err)
 }
 
@@ -1553,10 +1554,11 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	cheClient := che.NewCheClient(config, http.DefaultClient, fakeClient, tc)
 
 	r := &Reconciler{
-		client:    fakeClient,
-		scheme:    s,
-		config:    config,
-		cheClient: cheClient,
+		Client:    fakeClient,
+		Scheme:    s,
+		Config:    config,
+		CheClient: cheClient,
+		Log:       ctrl.Log.WithName("controllers").WithName("UserAccount"),
 	}
 	return r, newReconcileRequest(username), fakeClient
 }

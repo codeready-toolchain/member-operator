@@ -40,8 +40,6 @@ spec:
                     description: Defines the period between refreshes of the member
                       status
                     type: string
-                required:
-                - refreshPeriod
                 type: object
             type: object
           status:

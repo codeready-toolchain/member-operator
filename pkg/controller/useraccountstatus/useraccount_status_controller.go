@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/metrics/pkg/client/clientset/versioned"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -48,7 +47,6 @@ type Reconciler struct {
 	Client         client.Client
 	Log            logr.Logger
 	Scheme         *runtime.Scheme
-	MetricsClient  *versioned.Clientset
 	GetHostCluster func() (*cluster.CachedToolchainCluster, bool)
 }
 

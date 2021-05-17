@@ -193,17 +193,20 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&useraccount.Reconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("UserAccount"),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controllers").WithName("UserAccount"),
+		Scheme:    mgr.GetScheme(),
+		Config:    crtConfig,
+		CheClient: che.DefaultClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccount")
 		os.Exit(1)
 	}
 	if err = (&useraccountstatus.Reconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("UserAccountStatus"),
-		Scheme: mgr.GetScheme(),
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("UserAccountStatus"),
+		Scheme:         mgr.GetScheme(),
+		GetHostCluster: cluster.GetHostCluster,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccountStatus")
 		os.Exit(1)

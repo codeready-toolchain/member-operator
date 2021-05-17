@@ -7,19 +7,19 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
+	"github.com/gofrs/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -43,16 +43,13 @@ func TestGetTemplateObjects(t *testing.T) {
 func TestDeploy(t *testing.T) {
 	// given
 	s := setScheme(t)
-	node := &corev1.Node{
-		Status: corev1.NodeStatus{
-			// TODO
-			Allocatable: map[corev1.ResourceName]resource.Quantity{},
-		},
-	}
+	master := node(31000, "node-role.kubernetes.io/master")
+	infra := node(20000, "node-role.kubernetes.io/infra", "node-role.kubernetes.io/worker")
+	worker := node(10300, "node-role.kubernetes.io/worker")
 
 	t.Run("when unable to obtain allocatable memory of a worker node", func(t *testing.T) {
 		// given
-		fakeClient := test.NewFakeClient(t)
+		fakeClient := test.NewFakeClient(t, infra, master)
 
 		// when
 		err := Deploy(fakeClient, s, test.MemberOperatorNs, 0.8)
@@ -63,14 +60,14 @@ func TestDeploy(t *testing.T) {
 
 	t.Run("when created", func(t *testing.T) {
 		// given
-		fakeClient := test.NewFakeClient(t)
+		fakeClient := test.NewFakeClient(t, master, infra, worker)
 
 		// when
 		err := Deploy(fakeClient, s, test.MemberOperatorNs, 0.8)
 
 		// then
 		require.NoError(t, err)
-		verifyAutoscalerDeployment(t, fakeClient)
+		verifyAutoscalerDeployment(t, fakeClient, 8)
 	})
 
 	t.Run("when updated", func(t *testing.T) {
@@ -81,35 +78,35 @@ func TestDeploy(t *testing.T) {
 		prioClass.Value = 100
 
 		deploymentObj := &appsv1.Deployment{}
-		unmarshalObj(t, deployment(test.MemberOperatorNs, 3), deploymentObj)
+		unmarshalObj(t, deployment(test.MemberOperatorNs, 40), deploymentObj)
 		deploymentObj.Spec.Template.Spec.Containers[0].Image = "some-dummy"
 
-		fakeClient := test.NewFakeClient(t, prioClass, deploymentObj)
+		fakeClient := test.NewFakeClient(t, prioClass, deploymentObj, master, infra, worker)
 
 		// when
-		err := Deploy(fakeClient, s, test.MemberOperatorNs, 0.8)
+		err := Deploy(fakeClient, s, test.MemberOperatorNs, 0.5)
 
 		// then
 		require.NoError(t, err)
-		verifyAutoscalerDeployment(t, fakeClient)
+		verifyAutoscalerDeployment(t, fakeClient, 5)
 	})
 
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
-		fakeClient := test.NewFakeClient(t)
+		fakeClient := test.NewFakeClient(t, master, infra, worker)
 		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 
 		// when
-		err := Deploy(fakeClient, s, test.MemberOperatorNs, 3)
+		err := Deploy(fakeClient, s, test.MemberOperatorNs, 1)
 
 		// then
-		assert.EqualError(t, err, "some error")
+		assert.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")
 	})
 }
 
-func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient) {
+func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient, bufferSizeGi int64) {
 	expPrioClass := &schedulingv1.PriorityClass{}
 	unmarshalObj(t, priorityClass(), expPrioClass)
 	actualPrioClass := &schedulingv1.PriorityClass{}
@@ -121,7 +118,7 @@ func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	})
 
 	expDeployment := &appsv1.Deployment{}
-	unmarshalObj(t, deployment(test.MemberOperatorNs, 3), expDeployment)
+	unmarshalObj(t, deployment(test.MemberOperatorNs, bufferSizeGi), expDeployment)
 	actualDeployment := &appsv1.Deployment{}
 	AssertMemberObject(t, fakeClient, "autoscaling-buffer", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
@@ -163,4 +160,22 @@ func priorityClass() string {
 
 func deployment(namespace string, bufferSizeGi int64) string {
 	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.0","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%dGi"},"limits":{"memory":"%dGi"}}}]}}}}`, namespace, bufferSizeGi, bufferSizeGi)
+}
+
+func node(allocatableMi int64, labels ...string) *corev1.Node {
+	name, _ := uuid.NewV4()
+	n := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name.String(),
+			Labels: map[string]string{},
+		},
+		Status: corev1.NodeStatus{
+			Allocatable: map[corev1.ResourceName]resource.Quantity{"memory": *resource.NewQuantity(allocatableMi*1024*1024, resource.BinarySI)},
+		},
+	}
+	for _, l := range labels {
+		n.Labels[l] = "true"
+	}
+
+	return n
 }

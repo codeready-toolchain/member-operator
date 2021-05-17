@@ -13,7 +13,6 @@ import (
 	tmplv1 "github.com/openshift/api/template/v1"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,7 +63,7 @@ func bufferSizeGi(cl client.Client, bufferSizeNodeSizeRatio float64) (int64, err
 	for _, node := range nodes.Items {
 		if worker(node) {
 			if memoryCapacity, found := node.Status.Allocatable["memory"]; found {
-				allocatableGi := memoryCapacity.ScaledValue(resource.Giga)
+				allocatableGi := int64(memoryCapacity.Value() / (1024 * 1024 * 1024))
 				bufferSizeGi := int64(math.Round(bufferSizeNodeSizeRatio * float64(allocatableGi)))
 				return bufferSizeGi, nil
 			}

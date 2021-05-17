@@ -136,11 +136,7 @@ data:
           singular: memberoperatorconfig
         scope: Namespaced
         versions:
-        - additionalPrinterColumns:
-          - jsonPath: .spec.automaticApproval.enabled
-            name: AutomaticApproval
-            type: boolean
-          name: v1alpha1
+        - name: v1alpha1
           schema:
             openAPIV3Schema:
               description: MemberOperatorConfig keeps all configuration parameters needed

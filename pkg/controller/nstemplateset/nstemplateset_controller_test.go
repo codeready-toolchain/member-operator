@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -159,7 +160,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasFinalizer().
 			HasSpecNamespaces("dev", "code").
 			HasConditions(Provisioning())
-		AssertThatNamespace(t, username+"-dev", r.client).
+		AssertThatNamespace(t, username+"-dev", r.Client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
@@ -288,7 +289,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 					t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
-						r.getHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+						r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 						// when
 						res, err := r.Reconcile(req)
@@ -414,7 +415,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 										t.Run("provision inner resources of joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
 											// given - when host cluster is not ready, then it should use the cache
-											r.getHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+											r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 											// when
 											res, err := r.Reconcile(joeReq)
@@ -485,7 +486,7 @@ func TestReconcilePromotion(t *testing.T) {
 				HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			for _, nsType := range []string{"code", "dev"} {
-				AssertThatNamespace(t, username+"-"+nsType, r.client).
+				AssertThatNamespace(t, username+"-"+nsType, r.Client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11"). // not upgraded yet
@@ -510,7 +511,7 @@ func TestReconcilePromotion(t *testing.T) {
 						WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 				for _, nsType := range []string{"code", "dev"} {
-					AssertThatNamespace(t, username+"-"+nsType, r.client).
+					AssertThatNamespace(t, username+"-"+nsType, r.Client).
 						HasNoOwnerReference().
 						HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11"). // not upgraded yet
 						HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -561,9 +562,9 @@ func TestReconcilePromotion(t *testing.T) {
 							HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 								WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
-						AssertThatNamespace(t, codeNS.Name, r.client).
+						AssertThatNamespace(t, codeNS.Name, r.Client).
 							DoesNotExist() // namespace was deleted
-						AssertThatNamespace(t, devNS.Name, r.client).
+						AssertThatNamespace(t, devNS.Name, r.Client).
 							HasNoOwnerReference().
 							HasLabel("toolchain.dev.openshift.com/owner", username).
 							HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
@@ -585,9 +586,9 @@ func TestReconcilePromotion(t *testing.T) {
 								HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 									WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 									WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
-							AssertThatNamespace(t, codeNS.Name, r.client).
+							AssertThatNamespace(t, codeNS.Name, r.Client).
 								DoesNotExist()
-							AssertThatNamespace(t, username+"-dev", r.client).
+							AssertThatNamespace(t, username+"-dev", r.Client).
 								HasNoOwnerReference().
 								HasLabel("toolchain.dev.openshift.com/owner", username).
 								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
@@ -597,7 +598,7 @@ func TestReconcilePromotion(t *testing.T) {
 
 							t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
 								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-								r.getHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+								r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 								// when - should check if everything is OK and set status to provisioned
 								_, err = r.Reconcile(req)
@@ -611,7 +612,7 @@ func TestReconcilePromotion(t *testing.T) {
 								AssertThatCluster(t, fakeClient).
 									HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
 										WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
-								AssertThatNamespace(t, username+"-dev", r.client).
+								AssertThatNamespace(t, username+"-dev", r.Client).
 									HasNoOwnerReference().
 									HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
 									HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -676,7 +677,7 @@ func TestReconcileUpdate(t *testing.T) {
 					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 
 			for _, nsType := range []string{"code", "dev"} {
-				AssertThatNamespace(t, username+"-"+nsType, r.client).
+				AssertThatNamespace(t, username+"-"+nsType, r.Client).
 					HasNoOwnerReference().
 					HasLabel("toolchain.dev.openshift.com/owner", username).
 					HasLabel("toolchain.dev.openshift.com/templateref", "advanced-"+nsType+"-abcde11"). // not upgraded yet
@@ -703,7 +704,7 @@ func TestReconcileUpdate(t *testing.T) {
 														WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 					HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}) // deleted
 				for _, nsType := range []string{"code", "dev"} {
-					AssertThatNamespace(t, username+"-"+nsType, r.client).
+					AssertThatNamespace(t, username+"-"+nsType, r.Client).
 						HasNoOwnerReference().
 						HasLabel("toolchain.dev.openshift.com/owner", username).
 						HasLabel("toolchain.dev.openshift.com/templateref", "advanced-"+nsType+"-abcde11"). // not upgraded yet
@@ -730,9 +731,9 @@ func TestReconcileUpdate(t *testing.T) {
 							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
 							WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 						HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
-					AssertThatNamespace(t, codeNS.Name, r.client).
+					AssertThatNamespace(t, codeNS.Name, r.Client).
 						DoesNotExist() // namespace was deleted
-					AssertThatNamespace(t, devNS.Name, r.client).
+					AssertThatNamespace(t, devNS.Name, r.Client).
 						HasNoOwnerReference().
 						HasLabel("toolchain.dev.openshift.com/owner", username).
 						HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // not upgraded yet
@@ -758,9 +759,9 @@ func TestReconcileUpdate(t *testing.T) {
 								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
 								WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 							HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
-						AssertThatNamespace(t, codeNS.Name, r.client).
+						AssertThatNamespace(t, codeNS.Name, r.Client).
 							DoesNotExist()
-						AssertThatNamespace(t, devNS.Name, r.client).
+						AssertThatNamespace(t, devNS.Name, r.Client).
 							HasNoOwnerReference().
 							HasLabel("toolchain.dev.openshift.com/owner", username).
 							HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde12"). // upgraded
@@ -773,7 +774,7 @@ func TestReconcileUpdate(t *testing.T) {
 
 						t.Run("when nothing to update, then it should be provisioned", func(t *testing.T) {
 							// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-							r.getHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+							r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 							// when - should check if everything is OK and set status to provisioned
 							_, err = r.Reconcile(req)
@@ -789,9 +790,9 @@ func TestReconcileUpdate(t *testing.T) {
 									WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
 									WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
 								HasNoResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
-							AssertThatNamespace(t, codeNS.Name, r.client).
+							AssertThatNamespace(t, codeNS.Name, r.Client).
 								DoesNotExist()
-							AssertThatNamespace(t, devNS.Name, r.client).
+							AssertThatNamespace(t, devNS.Name, r.Client).
 								HasNoOwnerReference().
 								HasLabel("toolchain.dev.openshift.com/owner", username).
 								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde12"). // upgraded
@@ -888,9 +889,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			require.NoError(t, err)
 			// get the first namespace and check its deletion timestamp
 			firstNSName := fmt.Sprintf("%s-dev", username)
-			AssertThatNamespace(t, firstNSName, r.client).DoesNotExist()
+			AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()
 			// get the NSTemplateSet resource again and check its status
-			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+			AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 				HasFinalizer(). // the finalizer should NOT have been removed yet
 				HasConditions(Terminating())
 
@@ -902,9 +903,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 				require.NoError(t, err)
 				// get the second namespace and check its deletion timestamp
 				secondtNSName := fmt.Sprintf("%s-code", username)
-				AssertThatNamespace(t, secondtNSName, r.client).DoesNotExist()
+				AssertThatNamespace(t, secondtNSName, r.Client).DoesNotExist()
 				// get the NSTemplateSet resource again and check its finalizers and status
-				AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+				AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 					HasFinalizer(). // the finalizer should not have been removed either
 					HasConditions(Terminating())
 
@@ -914,15 +915,15 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 					// then
 					require.NoError(t, err)
-					AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+					AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 						HasFinalizer(). // the finalizer should NOT have been removed yet
 						HasConditions(Terminating())
-					AssertThatCluster(t, r.client).
+					AssertThatCluster(t, r.Client).
 						HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}) // resource was deleted
 
 					t.Run("reconcile after cluster resource quota deletion triggers removal of the finalizer", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
-						r.getHostCluster = NewGetHostCluster(r.client, true, v1.ConditionFalse)
+						r.GetHostCluster = NewGetHostCluster(r.Client, true, v1.ConditionFalse)
 
 						// when a last reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
 						_, err := r.Reconcile(req)
@@ -930,10 +931,10 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 						// then
 						require.NoError(t, err)
 						// get the NSTemplateSet resource again and check its finalizers and status
-						AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+						AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 							DoesNotHaveFinalizer(). // the finalizer should have been removed now
 							HasConditions(Terminating())
-						AssertThatCluster(t, r.client).HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
+						AssertThatCluster(t, r.Client).HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
 
 						t.Run("final reconcile after successful deletion", func(t *testing.T) {
 							// given
@@ -945,7 +946,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 							// then
 							require.NoError(t, err)
 							// get the NSTemplateSet resource again and check its finalizers and status
-							AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+							AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 								DoesNotHaveFinalizer(). // the finalizer should have been removed now
 								HasConditions(Terminating())
 						})
@@ -965,7 +966,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
 	})
 }
@@ -975,7 +976,7 @@ func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runt
 	return r, newReconcileRequest(namespaceName, name), fakeClient
 }
 
-func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *test.FakeClient) {
+func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1009,17 +1010,18 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*apiClient, *te
 		}
 		return passGeneration(o, obj)
 	}
-	return &apiClient{
-		client:         fakeClient,
-		scheme:         s,
-		getHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
+	return &APIClient{
+		Client:         fakeClient,
+		Scheme:         s,
+		GetHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
+		Log:            ctrl.Log.WithName("controllers").WithName("NSTemplateSet"),
 	}, fakeClient
 }
 
 func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return &statusManager{
-		apiClient: apiClient,
+		APIClient: apiClient,
 	}, fakeClient
 }
 
@@ -1039,7 +1041,7 @@ func prepareClusterResourcesManager(t *testing.T, initObjs ...runtime.Object) (*
 
 func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
-	return newReconciler(apiClient), fakeClient
+	return NewReconciler(apiClient), fakeClient
 }
 
 func passGeneration(from, to runtime.Object) error {

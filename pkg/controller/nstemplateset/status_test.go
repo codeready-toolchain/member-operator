@@ -119,7 +119,7 @@ func TestUpdateStatus(t *testing.T) {
 			// then
 			require.Error(t, err)
 			assert.Equal(t, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet: status update mock error", err.Error())
-			AssertThatNSTemplateSet(t, namespaceName, username, r.client).
+			AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 				HasFinalizer(). // finalizer was not added and nothing else was done
 				HasConditions() // no condition was set to status update error
 		})

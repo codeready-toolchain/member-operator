@@ -25,14 +25,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-var log = logf.Log.WithName("controller_memberstatus")
 
 // statusComponentTags are used in the overall condition to point out which components are not ready
 type statusComponentTag string
@@ -48,24 +45,6 @@ const (
 	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
 	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
 )
-
-// Add creates a new MemberStatus Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesClient client.Client) error {
-	return add(mgr, newReconciler(mgr, crtConfig, allNamespacesClient))
-}
-
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager, crtConfig *crtCfg.Config, allNamespacesClient client.Client) *Reconciler {
-	return &Reconciler{
-		client:              mgr.GetClient(),
-		scheme:              mgr.GetScheme(),
-		getHostCluster:      cluster.GetHostCluster,
-		config:              crtConfig,
-		allNamespacesClient: allNamespacesClient,
-		cheClient:           che.DefaultClient,
-	}
-}
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r *Reconciler) error {
@@ -84,30 +63,31 @@ func add(mgr manager.Manager, r *Reconciler) error {
 	return nil
 }
 
-// blank assignment to verify that Reconciler implements reconcile.Reconciler
-var _ reconcile.Reconciler = &Reconciler{}
+// SetupWithManager sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+	return add(mgr, r)
+}
 
 // Reconciler reconciles a MemberStatus object
 type Reconciler struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
-	client              client.Client
-	scheme              *runtime.Scheme
-	getHostCluster      func() (*cluster.CachedToolchainCluster, bool)
-	config              *crtCfg.Config
-	allNamespacesClient client.Client
-	cheClient           *che.Client
+	Client              client.Client
+	Log                 logr.Logger
+	Scheme              *runtime.Scheme
+	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
+	Config              *crtCfg.Config
+	AllNamespacesClient client.Client
+	CheClient           *che.Client
 }
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	reqLogger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling MemberStatus")
-	requeueTime := r.config.GetMemberStatusRefreshTime()
+	requeueTime := r.Config.GetMemberStatusRefreshTime()
 
 	// Fetch the MemberStatus
 	memberStatus := &toolchainv1alpha1.MemberStatus{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, memberStatus)
+	err := r.Client.Get(context.TODO(), request.NamespacedName, memberStatus)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -170,9 +150,9 @@ func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatu
 func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
 
 	attributes := status.ToolchainClusterAttributes{
-		GetClusterFunc: r.getHostCluster,
-		Period:         r.config.GetClusterHealthCheckPeriod(),
-		Timeout:        r.config.GetToolchainClusterTimeout(),
+		GetClusterFunc: r.GetHostCluster,
+		Period:         r.Config.GetClusterHealthCheckPeriod(),
+		Timeout:        r.Config.GetToolchainClusterTimeout(),
 	}
 
 	// look up host connection status
@@ -206,7 +186,7 @@ func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberSta
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// Check member operator deployment status
-	deploymentConditions := status.GetDeploymentStatusConditions(r.client, memberOperatorDeploymentName, memberStatus.Namespace)
+	deploymentConditions := status.GetDeploymentStatusConditions(r.Client, memberOperatorDeploymentName, memberStatus.Namespace)
 	err = status.ValidateComponentConditionReady(deploymentConditions...)
 
 	// Update memberstatus
@@ -224,7 +204,7 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 	}
 
 	nodeMetricsList := &v1beta1.NodeMetricsList{}
-	if err := r.client.List(context.TODO(), nodeMetricsList); err != nil {
+	if err := r.Client.List(context.TODO(), nodeMetricsList); err != nil {
 		return err
 	}
 
@@ -285,7 +265,7 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 
 	cheURL, err := r.cheDashboardURL()
 	if err != nil {
-		if r.config.IsCheRequired() {
+		if r.Config.IsCheRequired() {
 			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
 			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 			return err
@@ -308,7 +288,7 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 	}
 
 	// Is che user deletion enabled
-	if !r.config.IsCheUserDeletionEnabled() {
+	if !r.Config.IsCheUserDeletionEnabled() {
 		// Che user deletion is not enabled, set condition to Ready. No further checks required
 		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserDeletionNotEnabledReason)
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
@@ -331,7 +311,7 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 	}
 
 	// User API check
-	if err := r.cheClient.UserAPICheck(); err != nil {
+	if err := r.CheClient.UserAPICheck(); err != nil {
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserAPICheckFailedReason, err.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		return err
@@ -344,7 +324,7 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 
 func (r *Reconciler) getAllocatableValues(reqLogger logr.Logger) (map[string]nodeInfo, error) {
 	nodes := &corev1.NodeList{}
-	err := r.client.List(context.TODO(), nodes)
+	err := r.Client.List(context.TODO(), nodes)
 	if err != nil {
 		return nil, errs.Wrapf(err, "unable to list Nodes")
 	}
@@ -398,7 +378,7 @@ func (r *Reconciler) updateStatusConditions(memberStatus *toolchainv1alpha1.Memb
 		conditionsWithTimestamps = append(conditionsWithTimestamps, condition)
 	}
 	memberStatus.Status.Conditions = conditionsWithTimestamps
-	return r.client.Status().Update(context.TODO(), memberStatus)
+	return r.Client.Status().Update(context.TODO(), memberStatus)
 }
 
 func (r *Reconciler) setStatusReady(memberStatus *toolchainv1alpha1.MemberStatus) error {
@@ -424,8 +404,8 @@ func (r *Reconciler) setStatusNotReady(memberStatus *toolchainv1alpha1.MemberSta
 
 func (r *Reconciler) consoleURL() (string, error) {
 	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: r.config.GetConsoleNamespace(), Name: r.config.GetConsoleRouteName()}
-	if err := r.allNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
+	namespacedName := types.NamespacedName{Namespace: r.Config.GetConsoleNamespace(), Name: r.Config.GetConsoleRouteName()}
+	if err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
@@ -433,8 +413,8 @@ func (r *Reconciler) consoleURL() (string, error) {
 
 func (r *Reconciler) cheDashboardURL() (string, error) {
 	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: r.config.GetCheNamespace(), Name: r.config.GetCheRouteName()}
-	err := r.allNamespacesClient.Get(context.TODO(), namespacedName, route)
+	namespacedName := types.NamespacedName{Namespace: r.Config.GetCheNamespace(), Name: r.Config.GetCheRouteName()}
+	err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route)
 	if err != nil {
 		return "", err
 	}
@@ -448,5 +428,5 @@ func (r *Reconciler) cheDashboardURL() (string, error) {
 // isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
 // Returns false otherwise.
 func (r *Reconciler) isCheAdminUserConfigured() bool {
-	return r.config.GetCheAdminUsername() != "" && r.config.GetCheAdminPassword() != ""
+	return r.Config.GetCheAdminUsername() != "" && r.Config.GetCheAdminPassword() != ""
 }

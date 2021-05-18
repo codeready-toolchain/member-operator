@@ -33,7 +33,7 @@ spec:
             description: MemberOperatorConfigSpec contains all configuration parameters
               of the member operator
             properties:
-              status:
+              memberStatus:
                 description: Keeps parameters concerned with member status
                 properties:
                   refreshPeriod:

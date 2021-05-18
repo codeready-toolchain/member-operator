@@ -23,7 +23,7 @@ type namespacesManager struct {
 // return `true, nil` when something changed, `false, nil` or `false, err` otherwise
 func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (createdOrUpdated bool, err error) {
 	username := nsTmplSet.GetName()
-	userNamespaces, err := fetchNamespaces(r.client, username)
+	userNamespaces, err := fetchNamespaces(r.Client, username)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespaces with label owner '%s'", username)
 	}
@@ -38,7 +38,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return false, err
 		}
-		if err := r.client.Delete(context.TODO(), toDeprovision); err != nil {
+		if err := r.Client.Delete(context.TODO(), toDeprovision); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete namespace %s", toDeprovision.Name)
 		}
 		logger.Info("deleted namespace as part of NSTemplateSet update", "namespace", toDeprovision.Name)
@@ -80,7 +80,7 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate) error {
 	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 
-	objs, err := tierTemplate.process(r.scheme, nsTmplSet.GetName(), template.RetainNamespaces)
+	objs, err := tierTemplate.process(r.Scheme, nsTmplSet.GetName(), template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tierTemplate.typeName)
 	}
@@ -96,7 +96,7 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	_, err = applycl.NewApplyClient(r.client, r.scheme).ApplyToolchainObjects(objs, labels)
+	_, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(objs, labels)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tierTemplate.typeName)
 	}
@@ -109,7 +109,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	logger.Info("ensuring namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 	nsName := namespace.GetName()
 	username := nsTmplSet.GetName()
-	newObjs, err := tierTemplate.process(r.scheme, username, template.RetainAllButNamespaces)
+	newObjs, err := tierTemplate.process(r.Scheme, username, template.RetainAllButNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
@@ -118,15 +118,15 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return err
 		}
-		currentTierTemplate, err := getTierTemplate(r.getHostCluster, currentRef)
+		currentTierTemplate, err := getTierTemplate(r.GetHostCluster, currentRef)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
 		}
-		currentObjs, err := currentTierTemplate.process(r.scheme, username, template.RetainAllButNamespaces)
+		currentObjs, err := currentTierTemplate.process(r.Scheme, username, template.RetainAllButNamespaces)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to process template for TierTemplate with name '%s'", currentRef)
 		}
-		if _, err := deleteRedundantObjects(logger, r.client, false, currentObjs, newObjs); err != nil {
+		if _, err := deleteRedundantObjects(logger, r.Client, false, currentObjs, newObjs); err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
 		}
 	}
@@ -134,7 +134,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
-	if _, err = applycl.NewApplyClient(r.client, r.scheme).ApplyToolchainObjects(newObjs, labels); err != nil {
+	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 
@@ -145,7 +145,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	// Adding label indicating that the namespace is up-to-date with TierTemplate
 	namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] = tierTemplate.templateRef
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = tierTemplate.tierName
-	if err := r.client.Update(context.TODO(), namespace); err != nil {
+	if err := r.Client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
 
@@ -163,7 +163,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// now, we can delete all "child" namespaces explicitly
 	username := nsTmplSet.Name
-	userNamespaces, err := fetchNamespaces(r.client, username)
+	userNamespaces, err := fetchNamespaces(r.Client, username)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
@@ -172,7 +172,7 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 	for _, ns := range userNamespaces {
 		if !util.IsBeingDeleted(&ns) {
 			logger.Info("deleting a user namepace associated with the deleted NSTemplateSet", "namespace", ns.Name)
-			if err := r.client.Delete(context.TODO(), &ns); err != nil {
+			if err := r.Client.Delete(context.TODO(), &ns); err != nil {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", ns.Name)
 			}
 			return true, nil
@@ -184,7 +184,7 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
 	var tmpls []*tierTemplate
 	for _, ns := range nsTmplSet.Spec.Namespaces {
-		nsTmpl, err := getTierTemplate(r.getHostCluster, ns.TemplateRef)
+		nsTmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef)
 		if err != nil {
 			return nil, err
 		}

@@ -10,15 +10,18 @@ import (
 	"strings"
 
 	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
-
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
-	"github.com/codeready-toolchain/member-operator/pkg/controller"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/idler"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/memberstatus"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/nstemplateset"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccount"
+	"github.com/codeready-toolchain/member-operator/pkg/controller/useraccountstatus"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/codeready-toolchain/member-operator/version"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -34,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -49,15 +53,15 @@ var (
 	metricsPort         int32 = 8383
 	operatorMetricsPort int32 = 8686
 )
-var log = logf.Log.WithName("cmd")
+var setupLog = ctrl.Log.WithName("setup")
 
 func printVersion() {
-	log.Info(fmt.Sprintf("Operator Version: %s", version.Version))
-	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
-	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
-	log.Info(fmt.Sprintf("Version of operator-sdk: %v", sdkVersion.Version))
-	log.Info(fmt.Sprintf("Commit: %s", version.Commit))
-	log.Info(fmt.Sprintf("BuildTime: %s", version.BuildTime))
+	setupLog.Info(fmt.Sprintf("Operator Version: %s", version.Version))
+	setupLog.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
+	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s/%s", runtime.GOOS, runtime.GOARCH))
+	setupLog.Info(fmt.Sprintf("Version of operator-sdk: %v", sdkVersion.Version))
+	setupLog.Info(fmt.Sprintf("Commit: %s", version.Commit))
+	setupLog.Info(fmt.Sprintf("BuildTime: %s", version.BuildTime))
 }
 
 func main() {
@@ -86,20 +90,20 @@ func main() {
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
 	crtConfig, err := getCRTConfiguration(cfg)
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 	crtConfig.Print()
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
-		log.Error(err, "Failed to get watch namespace")
+		setupLog.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
 	}
 
@@ -107,7 +111,7 @@ func main() {
 	// Become the leader before proceeding
 	err = leader.Become(ctx, "member-operator-lock")
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
@@ -129,21 +133,21 @@ func main() {
 	// Create a new manager to provide shared dependencies and start components
 	mgr, err := manager.New(cfg, options)
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
-	log.Info("Registering Components.")
+	setupLog.Info("Registering Components.")
 
 	// Setup Scheme for all resources
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
-		log.Error(err, "")
+		setupLog.Error(err, "")
 		os.Exit(1)
 	}
 
@@ -151,8 +155,62 @@ func main() {
 	che.InitDefaultCheClient(crtConfig, allNamespacesClient)
 
 	// Setup all Controllers
-	if err := controller.AddControllersToManager(mgr, crtConfig, allNamespacesClient); err != nil {
-		log.Error(err, "")
+	if err = toolchaincluster.NewReconciler(
+		mgr,
+		ctrl.Log.WithName("controllers").WithName("ToolchainCluster"),
+		namespace,
+		crtConfig.GetToolchainClusterTimeout(),
+	).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
+		os.Exit(1)
+	}
+	if err := (&idler.Reconciler{
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("controllers").WithName("Idler"),
+		Scheme:              mgr.GetScheme(),
+		AllNamespacesClient: allNamespacesClient,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Idler")
+		os.Exit(1)
+	}
+	if err = (&memberstatus.Reconciler{
+		Client:              mgr.GetClient(),
+		Log:                 ctrl.Log.WithName("controllers").WithName("MemberStatus"),
+		Scheme:              mgr.GetScheme(),
+		GetHostCluster:      cluster.GetHostCluster,
+		Config:              crtConfig,
+		AllNamespacesClient: allNamespacesClient,
+		CheClient:           che.DefaultClient,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MemberStatus")
+		os.Exit(1)
+	}
+	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("NSTemplateSet"),
+		Scheme:         mgr.GetScheme(),
+		GetHostCluster: cluster.GetHostCluster,
+	})).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
+		os.Exit(1)
+	}
+	if err = (&useraccount.Reconciler{
+		Client:    mgr.GetClient(),
+		Log:       ctrl.Log.WithName("controllers").WithName("UserAccount"),
+		Scheme:    mgr.GetScheme(),
+		Config:    crtConfig,
+		CheClient: che.DefaultClient,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserAccount")
+		os.Exit(1)
+	}
+	if err = (&useraccountstatus.Reconciler{
+		Client:         mgr.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("UserAccountStatus"),
+		Scheme:         mgr.GetScheme(),
+		GetHostCluster: cluster.GetHostCluster,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserAccountStatus")
 		os.Exit(1)
 	}
 
@@ -162,62 +220,62 @@ func main() {
 	stopChannel := signals.SetupSignalHandler()
 
 	go func() {
-		log.Info("Waiting for cache to sync")
+		setupLog.Info("Waiting for cache to sync")
 		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
-			log.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
+			setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
 			os.Exit(1)
 		}
 
 		// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
 		// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
 		if crtConfig.DoDeployWebhook() {
-			log.Info("(Re)Deploying users' pods webhook")
+			setupLog.Info("(Re)Deploying users' pods webhook")
 			if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetMemberOperatorWebhookImage()); err != nil {
-				log.Error(err, "cannot deploy mutating users' pods webhook")
+				setupLog.Error(err, "cannot deploy mutating users' pods webhook")
 				os.Exit(1)
 			}
-			log.Info("(Re)Deployed users' pods webhook")
+			setupLog.Info("(Re)Deployed users' pods webhook")
 		} else {
-			log.Info("Skipping deployment of users' pods webhook")
+			setupLog.Info("Skipping deployment of users' pods webhook")
 		}
 
 		if crtConfig.DoDeployAutoscalingBuffer() {
-			log.Info("(Re)Deploying autoscaling buffer")
+			setupLog.Info("(Re)Deploying autoscaling buffer")
 			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetAutoscalerBufferSizeNodeSizeRatio()); err != nil {
-				log.Error(err, "cannot deploy autoscaling buffer")
+				setupLog.Error(err, "cannot deploy autoscaling buffer")
 				os.Exit(1)
 			}
-			log.Info("(Re)Deployed autoscaling buffer")
+			setupLog.Info("(Re)Deployed autoscaling buffer")
 		} else {
-			log.Info("Skipping deployment of autoscaling buffer")
+			setupLog.Info("Skipping deployment of autoscaling buffer")
 		}
 
-		log.Info("Starting ToolchainCluster health checks.")
+		setupLog.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.GetClusterHealthCheckPeriod())
 
 		// create or update Member status during the operator deployment
-		log.Info("Creating/updating the MemberStatus resource")
+		setupLog.Info("Creating/updating the MemberStatus resource")
 		memberStatusName := configuration.MemberStatusName
 		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), mgr.GetScheme(), namespace, memberStatusName); err != nil {
-			log.Error(err, "cannot create/update MemberStatus resource")
+			setupLog.Error(err, "cannot create/update MemberStatus resource")
 			os.Exit(1)
 		}
-		log.Info("Created/updated the MemberStatus resource")
+		setupLog.Info("Created/updated the MemberStatus resource")
 	}()
 
 	// Start the Cmd
 	go func() {
 		if err := allNamespacesCache.Start(stopChannel); err != nil {
-			log.Error(err, "failed to start all-namespaces cache")
+			setupLog.Error(err, "failed to start all-namespaces cache")
 			os.Exit(1)
 		}
 	}()
 	if err := mgr.Start(stopChannel); err != nil {
-		log.Error(err, "Default manager exited non-zero")
+		setupLog.Error(err, "Default manager exited non-zero")
 		os.Exit(1)
 	}
 
-	log.Info("Starting the Cmd.")
+	setupLog.Info("Starting the Cmd.")
 }
 
 // newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.
@@ -260,7 +318,7 @@ func addMetrics(ctx context.Context, cfg *rest.Config) {
 	operatorNs, err := k8sutil.GetOperatorNamespace()
 	if err != nil {
 		if errors.Is(err, k8sutil.ErrRunLocal) {
-			log.Info("Skipping CR metrics server creation; not running in a cluster.")
+			setupLog.Info("Skipping CR metrics server creation; not running in a cluster.")
 			return
 		}
 	}
@@ -274,7 +332,7 @@ func addMetrics(ctx context.Context, cfg *rest.Config) {
 	// Create Service object to expose the metrics port(s).
 	service, err := metrics.CreateMetricsService(ctx, cfg, servicePorts)
 	if err != nil {
-		log.Info("Could not create metrics Service", "error", err.Error())
+		setupLog.Info("Could not create metrics Service", "error", err.Error())
 	}
 
 	// CreateServiceMonitors will automatically create the prometheus-operator ServiceMonitor resources
@@ -284,11 +342,11 @@ func addMetrics(ctx context.Context, cfg *rest.Config) {
 	// The ServiceMonitor is created in the same namespace where the operator is deployed
 	_, err = metrics.CreateServiceMonitors(cfg, operatorNs, services)
 	if err != nil {
-		log.Info("Could not create ServiceMonitor object", "error", err.Error())
+		setupLog.Info("Could not create ServiceMonitor object", "error", err.Error())
 		// If this operator is deployed to a cluster without the prometheus-operator running, it will return
 		// ErrServiceMonitorNotPresent, which can be used to safely skip ServiceMonitor creation.
 		if err == metrics.ErrServiceMonitorNotPresent {
-			log.Info("Install prometheus-operator in your cluster to create ServiceMonitor objects", "error", err.Error())
+			setupLog.Info("Install prometheus-operator in your cluster to create ServiceMonitor objects", "error", err.Error())
 		}
 	}
 }
@@ -315,7 +373,7 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error { // nolint:unuse
 		return err
 	}
 
-	log.Info("serving metrics", "GVK", filteredGVK, "namespace", ns)
+	setupLog.Info("serving metrics", "GVK", filteredGVK, "namespace", ns)
 	// Generate and serve custom resource specific metrics.
 	return kubemetrics.GenerateAndServeCRMetrics(cfg, ns, filteredGVK, metricsHost, operatorMetricsPort)
 }

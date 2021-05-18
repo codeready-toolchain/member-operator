@@ -311,14 +311,14 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasFinalizer().
 			HasSpecNamespaces("dev", "code").
 			HasConditions(Provisioning())
-		AssertThatNamespace(t, username+"-dev", manager.client).
+		AssertThatNamespace(t, username+"-dev", manager.Client).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
 			HasLabel("toolchain.dev.openshift.com/type", "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasNoLabel("toolchain.dev.openshift.com/templateref").
 			HasNoLabel("toolchain.dev.openshift.com/tier")
-		AssertThatNamespace(t, username+"-code", manager.client).
+		AssertThatNamespace(t, username+"-code", manager.Client).
 			DoesNotExist()
 	})
 
@@ -371,7 +371,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/tier", "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasResource("user-edit", &rbacv1.RoleBinding{})
-		AssertThatNamespace(t, username+"-code", manager.client).
+		AssertThatNamespace(t, username+"-code", manager.Client).
 			DoesNotExist()
 	})
 

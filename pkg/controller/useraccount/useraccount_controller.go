@@ -10,7 +10,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
-
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -26,26 +25,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_useraccount")
-
 type IdentityProvider interface {
 	GetIdP() string
-}
-
-// Add creates a new UserAccount Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager, config *configuration.Config, _ client.Client) error {
-	return add(mgr, newReconciler(mgr, config))
-}
-
-func newReconciler(mgr manager.Manager, config *configuration.Config) reconcile.Reconciler {
-	return &Reconciler{client: mgr.GetClient(), scheme: mgr.GetScheme(), config: config, cheClient: che.DefaultClient}
 }
 
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
@@ -80,16 +66,18 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return nil
 }
 
-var _ reconcile.Reconciler = &Reconciler{}
+// SetupWithManager sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+	return add(mgr, r)
+}
 
 // Reconciler reconciles a UserAccount object
 type Reconciler struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
-	client    client.Client
-	scheme    *runtime.Scheme
-	config    *configuration.Config
-	cheClient *che.Client
+	Client    client.Client
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	Config    *configuration.Config
+	CheClient *che.Client
 }
 
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
@@ -98,7 +86,7 @@ type Reconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	logger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("reconciling UserAccount")
 	var err error
 
@@ -112,7 +100,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 	// Fetch the UserAccount instance
 	userAcc := &toolchainv1alpha1.UserAccount{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, userAcc)
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -169,7 +157,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		// Remove finalizer from UserAccount
 		if !deleted {
 			util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-			if err := r.client.Update(context.Background(), userAcc); err != nil {
+			if err := r.Client.Update(context.Background(), userAcc); err != nil {
 				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
 			}
 
@@ -197,15 +185,15 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 func (r *Reconciler) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
 	user := &userv1.User{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new user", "name", userAcc.Name)
 			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
-			user = newUser(userAcc, r.config)
+			user = newUser(userAcc, r.Config)
 			setOwnerLabel(user, userAcc.Name)
-			if err := r.client.Create(context.TODO(), user); err != nil {
+			if err := r.Client.Create(context.TODO(), user); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to create user '%s'", userAcc.Name)
 			}
 			if err := r.setStatusProvisioning(userAcc); err != nil {
@@ -219,13 +207,13 @@ func (r *Reconciler) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 	logger.Info("user already exists", "name", userAcc.Name)
 
 	// ensure mapping
-	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID, r.config) {
+	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID, r.Config) {
 		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
 		if err := r.setStatusProvisioning(userAcc); err != nil {
 			return nil, false, err
 		}
-		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID, r.config)}
-		if err := r.client.Update(context.TODO(), user); err != nil {
+		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID, r.Config)}
+		if err := r.Client.Update(context.TODO(), user); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update user '%s'", userAcc.Name)
 		}
 		if err := r.setStatusProvisioning(userAcc); err != nil {
@@ -238,17 +226,17 @@ func (r *Reconciler) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 }
 
 func (r *Reconciler) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	name := ToIdentityName(userAcc.Spec.UserID, r.config)
+	name := ToIdentityName(userAcc.Spec.UserID, r.Config)
 	identity := &userv1.Identity{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new identity", "name", name)
 			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(userAcc, user, r.config)
+			identity = newIdentity(userAcc, user, r.Config)
 			setOwnerLabel(identity, userAcc.Name)
-			if err := r.client.Create(context.TODO(), identity); err != nil {
+			if err := r.Client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", name)
 			}
 			if err := r.setStatusProvisioning(userAcc); err != nil {
@@ -271,7 +259,7 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alph
 			Name: user.Name,
 			UID:  user.UID,
 		}
-		if err := r.client.Update(context.TODO(), identity); err != nil {
+		if err := r.Client.Update(context.TODO(), identity); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update identity '%s'", name)
 		}
 		if err := r.setStatusProvisioning(userAcc); err != nil {
@@ -298,18 +286,18 @@ func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 
 	// create if not found
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	if err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: userAcc.Namespace}, nsTmplSet); err != nil {
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: userAcc.Namespace}, nsTmplSet); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new NSTemplateSet", "name", name)
 			if err := r.setStatusProvisioning(userAcc); err != nil {
 				return nil, false, err
 			}
 			nsTmplSet = newNSTemplateSet(userAcc)
-			if err := controllerutil.SetControllerReference(userAcc, nsTmplSet, r.scheme); err != nil {
+			if err := controllerutil.SetControllerReference(userAcc, nsTmplSet, r.Scheme); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
 					"failed to set controller reference for NSTemplateSet '%s'", name)
 			}
-			if err := r.client.Create(context.TODO(), nsTmplSet); err != nil {
+			if err := r.Client.Create(context.TODO(), nsTmplSet); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
 					"failed to create NSTemplateSet '%s'", name)
 			}
@@ -347,7 +335,7 @@ func (r *Reconciler) updateNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 
 	nsTmplSet.Spec = userAcc.Spec.NSTemplateSet
 
-	if err := r.client.Update(context.TODO(), nsTmplSet); err != nil {
+	if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUpdateFailed, err,
 			"failed to update NSTemplateSet '%s'", nsTmplSet.Name)
 	}
@@ -361,7 +349,7 @@ func (r *Reconciler) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1
 	if !util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
 		logger.Info("adding finalizer on UserAccount")
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		if err := r.client.Update(context.TODO(), userAcc); err != nil {
+		if err := r.Client.Update(context.TODO(), userAcc); err != nil {
 			return err
 		}
 	}
@@ -387,7 +375,7 @@ func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchai
 func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the User associated with the UserAccount
 	user := &userv1.User{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return false, err
@@ -396,7 +384,7 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 	}
 	logger.Info("deleting the user resource")
 	// Delete User associated with UserAccount
-	if err := r.client.Delete(context.TODO(), user); err != nil {
+	if err := r.Client.Delete(context.TODO(), user); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -408,8 +396,8 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
-	identityName := ToIdentityName(userAcc.Spec.UserID, r.config)
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+	identityName := ToIdentityName(userAcc.Spec.UserID, r.Config)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return false, err
@@ -418,7 +406,7 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alph
 	}
 	logger.Info("deleting the identity resource")
 	// Delete Identity associated with UserAccount
-	if err := r.client.Delete(context.TODO(), identity); err != nil {
+	if err := r.Client.Delete(context.TODO(), identity); err != nil {
 		return false, err
 	}
 
@@ -572,7 +560,7 @@ func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccou
 		// Nothing changed
 		return nil
 	}
-	return r.client.Status().Update(context.TODO(), userAcc)
+	return r.Client.Status().Update(context.TODO(), userAcc)
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config *configuration.Config) *userv1.User {
@@ -621,30 +609,30 @@ func (r *Reconciler) lookupAndDeleteCheUser(userAcc *toolchainv1alpha1.UserAccou
 
 	// If Che user deletion is not required then just return, this is a way to disable this Che user deletion logic since
 	// it's meant to be a temporary measure until Che is updated to handle user deletion on its own
-	if !r.config.IsCheUserDeletionEnabled() {
-		log.Info("Che user deletion is not enabled, skipping it")
+	if !r.Config.IsCheUserDeletionEnabled() {
+		r.Log.Info("Che user deletion is not enabled, skipping it")
 		return nil
 	}
 
-	userExists, err := r.cheClient.UserExists(userAcc.Name)
+	userExists, err := r.CheClient.UserExists(userAcc.Name)
 	if err != nil {
 		return err
 	}
 
 	// If the user doesn't exist then there's nothing left to do.
 	if !userExists {
-		log.Info("Che user no longer exists")
+		r.Log.Info("Che user no longer exists")
 		return nil
 	}
 
 	// Get the Che user ID to use in the Delete API
-	cheUserID, err := r.cheClient.GetUserIDByUsername(userAcc.Name)
+	cheUserID, err := r.CheClient.GetUserIDByUsername(userAcc.Name)
 	if err != nil {
 		return err
 	}
 
 	// Delete the Che user. It is common for this call to return an error multiple times before succeeding
-	if err := r.cheClient.DeleteUser(cheUserID); err != nil {
+	if err := r.CheClient.DeleteUser(cheUserID); err != nil {
 		return errs.Wrapf(err, "this error is expected if deletion is still in progress")
 	}
 

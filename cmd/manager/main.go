@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	api "github.com/codeready-toolchain/api/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/idler"

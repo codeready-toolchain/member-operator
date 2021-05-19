@@ -21,7 +21,7 @@ objects:
         app: autoscaling-buffer
         toolchain.dev.openshift.com/provider: codeready-toolchain
     spec:
-      replicas: 1
+      replicas: "${{REPLICAS}}"
       selector:
         matchLabels:
           app: autoscaling-buffer
@@ -45,4 +45,6 @@ parameters:
   - name: NAMESPACE
     value: 'toolchain-member-operator'
   - name: MEMORY
+    required: true
+  - name: REPLICAS
     required: true

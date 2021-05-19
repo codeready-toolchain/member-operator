@@ -92,15 +92,18 @@ const (
 	// If the cluster autoscaling is enabled in the cluster then this property can be set to true.
 	// In this case the member operator will deploy a special buffer app which can reserve compute resources
 	// for user payloads in the cluster.
-	varDeployAutoscalingBuffer = "deploy.buffer"
+	varDeployAutoscalingBuffer = "autoscalingbuffer.enable"
 
 	// defaultDeployAutoscalingBuffer is false by default
 	defaultDeployAutoscalingBuffer = false
 
-	// varAutoscalerBufferSizeNodeSizeRatio represents how much memory should be required by the autoscaler buffer relatively to allocatable memory of a worker node
-	varAutoscalerBufferSizeNodeSizeRatio = "deploy.buffer-ratio"
+	// varAutoscalerBufferMemory represents how much memory should be required by the autoscaler buffer
+	varAutoscalerBufferMemory = "autoscalingbuffer.memory"
 
-	defaultAutoscalerBufferSizeNodeSizeRatio = 0.8
+	// varAutoscalerBufferReplicas represents the number of autoscaler buffer pods
+	varAutoscalerBufferReplicas = "autoscalingbuffer.replicas"
+
+	defaultAutoscalerBufferReplicas = 1
 )
 
 // ToolchainCluster configuration constants
@@ -167,7 +170,7 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
 	c.member.SetDefault(varDeployWebhook, defaultDeployWebhook)
 	c.member.SetDefault(varDeployAutoscalingBuffer, defaultDeployAutoscalingBuffer)
-	c.member.SetDefault(varAutoscalerBufferSizeNodeSizeRatio, defaultAutoscalerBufferSizeNodeSizeRatio)
+	c.member.SetDefault(varAutoscalerBufferReplicas, defaultAutoscalerBufferReplicas)
 }
 
 func (c *Config) Print() {
@@ -275,8 +278,12 @@ func (c *Config) DoDeployAutoscalingBuffer() bool {
 	return c.member.GetBool(varDeployAutoscalingBuffer)
 }
 
-// GetAutoscalerBufferSizeNodeSizeRatio returns how much memory should be required by the autoscaler buffer relatively to allocatable memory of a worker node
-// For example "0.8" will require 80% of the allocatable memory of a node
-func (c *Config) GetAutoscalerBufferSizeNodeSizeRatio() float64 {
-	return c.member.GetFloat64(varAutoscalerBufferSizeNodeSizeRatio)
+// GetAutoscalerBufferMemory returns how much memory should be required by the autoscaler buffer
+func (c *Config) GetAutoscalerBufferMemory() string {
+	return c.member.GetString(varAutoscalerBufferMemory)
+}
+
+// GetAutoscalerBufferReplicas returns the number of autoscaler buffer pods
+func (c *Config) GetAutoscalerBufferReplicas() int {
+	return c.member.GetInt(varAutoscalerBufferReplicas)
 }

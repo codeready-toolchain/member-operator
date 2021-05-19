@@ -41,9 +41,9 @@ const (
 	routesTag         statusComponentTag = "routes"
 	cheTag            statusComponentTag = "che"
 
-	LabelNodeRoleMaster = "node-role.kubernetes.io/master"
-	LabelNodeRoleWorker = "node-role.kubernetes.io/worker"
-	LabelNodeRoleInfra  = "node-role.kubernetes.io/infra"
+	labelNodeRoleMaster = "node-role.kubernetes.io/master"
+	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
+	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
 )
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -353,15 +353,15 @@ type nodeInfo struct {
 // getNodeRoles returns an array containing the roles (i.e. worker, master) fulfilled by the specified node
 // for nodes fulfilling also the infra role it returns only an empty array
 func getNodeRoles(node corev1.Node) (roles []string) {
-	if _, isWorker := node.Labels[LabelNodeRoleInfra]; isWorker {
+	if _, isWorker := node.Labels[labelNodeRoleInfra]; isWorker {
 		return
 	}
 
-	if _, isWorker := node.Labels[LabelNodeRoleWorker]; isWorker {
+	if _, isWorker := node.Labels[labelNodeRoleWorker]; isWorker {
 		roles = append(roles, "worker")
 	}
 
-	if _, isMaster := node.Labels[LabelNodeRoleMaster]; isMaster {
+	if _, isMaster := node.Labels[labelNodeRoleMaster]; isMaster {
 		roles = append(roles, "master")
 	}
 	return

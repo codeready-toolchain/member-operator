@@ -241,7 +241,7 @@ func main() {
 
 		if crtConfig.DoDeployAutoscalingBuffer() {
 			setupLog.Info("(Re)Deploying autoscaling buffer")
-			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetAutoscalerBufferSizeNodeSizeRatio()); err != nil {
+			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetAutoscalerBufferMemory(), crtConfig.GetAutoscalerBufferReplicas()); err != nil {
 				setupLog.Error(err, "cannot deploy autoscaling buffer")
 				os.Exit(1)
 			}

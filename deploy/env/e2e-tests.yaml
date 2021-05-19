@@ -1,4 +1,7 @@
 member-operator:
   cluster-healthcheck-period: '5s'
   memberstatus-refresh-time: '1s'
-  deploy-buffer: true
+  autoscalingbuffer:
+    enable: true
+    memory: 1Mi
+    replicas: 2

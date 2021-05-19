@@ -7,7 +7,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 
-	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	"github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"

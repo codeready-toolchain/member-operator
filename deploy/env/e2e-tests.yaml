@@ -3,5 +3,5 @@ member-operator:
   memberstatus-refresh-time: '1s'
   autoscalingbuffer:
     enable: true
-    memory: 1Mi
+    memory: 50Mi
     replicas: 2

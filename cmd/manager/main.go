@@ -11,6 +11,7 @@ import (
 
 	api "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/controller/idler"
@@ -22,6 +23,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	kubemetrics "github.com/operator-framework/operator-sdk/pkg/kube-metrics"
@@ -235,6 +237,17 @@ func main() {
 			setupLog.Info("(Re)Deployed users' pods webhook")
 		} else {
 			setupLog.Info("Skipping deployment of users' pods webhook")
+		}
+
+		if crtConfig.DoDeployAutoscalingBuffer() {
+			setupLog.Info("(Re)Deploying autoscaling buffer")
+			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetAutoscalerBufferMemory(), crtConfig.GetAutoscalerBufferReplicas()); err != nil {
+				setupLog.Error(err, "cannot deploy autoscaling buffer")
+				os.Exit(1)
+			}
+			setupLog.Info("(Re)Deployed autoscaling buffer")
+		} else {
+			setupLog.Info("Skipping deployment of autoscaling buffer")
 		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")

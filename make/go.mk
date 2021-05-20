@@ -33,4 +33,7 @@ generate-assets:
 	@echo "generating users pods mutating webhook template data..."
 	@rm ./pkg/webhook/deploy/userspodswebhook/template_assets.go 2>/dev/null || true
 	@$(shell go env GOPATH)/bin/go-bindata -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
+	@echo "generating autoscaler buffer template data..."
+	@rm ./pkg/autoscaler/template_assets.go 2>/dev/null || true
+	@$(shell go env GOPATH)/bin/go-bindata -pkg autoscaler -o ./pkg/autoscaler/template_assets.go -nocompress -prefix deploy/autoscaler deploy/autoscaler
 

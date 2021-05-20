@@ -87,6 +87,23 @@ const (
 
 	// defaultDeployWebhook is true by default
 	defaultDeployWebhook = true
+
+	// varDeployAutoscalingBuffer is to be used to disable or enable cluster autoscaling support by the member operator
+	// If the cluster autoscaling is enabled in the cluster then this property can be set to true.
+	// In this case the member operator will deploy a special buffer app which can reserve compute resources
+	// for user payloads in the cluster.
+	varDeployAutoscalingBuffer = "autoscalingbuffer.enable"
+
+	// defaultDeployAutoscalingBuffer is false by default
+	defaultDeployAutoscalingBuffer = false
+
+	// varAutoscalerBufferMemory represents how much memory should be required by the autoscaler buffer
+	varAutoscalerBufferMemory = "autoscalingbuffer.memory"
+
+	// varAutoscalerBufferReplicas represents the number of autoscaler buffer pods
+	varAutoscalerBufferReplicas = "autoscalingbuffer.replicas"
+
+	defaultAutoscalerBufferReplicas = 1
 )
 
 // ToolchainCluster configuration constants
@@ -152,6 +169,8 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
 	c.member.SetDefault(varDeployWebhook, defaultDeployWebhook)
+	c.member.SetDefault(varDeployAutoscalingBuffer, defaultDeployAutoscalingBuffer)
+	c.member.SetDefault(varAutoscalerBufferReplicas, defaultAutoscalerBufferReplicas)
 }
 
 func (c *Config) Print() {
@@ -252,4 +271,19 @@ func (c *Config) GetMemberOperatorWebhookImage() string {
 // DoDeployWebhook returns true if the Webhook should be deployed
 func (c *Config) DoDeployWebhook() bool {
 	return c.member.GetBool(varDeployWebhook)
+}
+
+// DoDeployAutoscalingBuffer returns true if the autoscaler buffer app should be deployed
+func (c *Config) DoDeployAutoscalingBuffer() bool {
+	return c.member.GetBool(varDeployAutoscalingBuffer)
+}
+
+// GetAutoscalerBufferMemory returns how much memory should be required by the autoscaler buffer
+func (c *Config) GetAutoscalerBufferMemory() string {
+	return c.member.GetString(varAutoscalerBufferMemory)
+}
+
+// GetAutoscalerBufferReplicas returns the number of autoscaler buffer pods
+func (c *Config) GetAutoscalerBufferReplicas() int {
+	return c.member.GetInt(varAutoscalerBufferReplicas)
 }

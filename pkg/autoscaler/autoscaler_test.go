@@ -6,10 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	v1 "k8s.io/api/core/v1"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -17,7 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,7 +32,7 @@ func TestGetTemplateObjects(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, toolchainObjects, 2)
 	priorityClassEquals(t, priorityClass(), toolchainObjects[0].GetRuntimeObject())
-	deploymentEquals(t, deployment(test.MemberOperatorNs, "8Gi", 3), toolchainObjects[1].GetRuntimeObject())
+	deploymentEquals(t, deployment("8Gi", 3), toolchainObjects[1].GetRuntimeObject())
 }
 
 func TestDeploy(t *testing.T) {
@@ -59,7 +57,7 @@ func TestDeploy(t *testing.T) {
 		priorityClass.Labels = map[string]string{}
 		priorityClass.Value = 100
 
-		deployment := unmarshalDeployment(t, deployment(test.MemberOperatorNs, "1Gi", 5))
+		deployment := unmarshalDeployment(t, deployment("1Gi", 5))
 		deployment.Spec.Template.Spec.Containers[0].Image = "some-dummy"
 
 		fakeClient := test.NewFakeClient(t, priorityClass, deployment)
@@ -91,7 +89,7 @@ func TestDelete(t *testing.T) {
 	// given
 	s := setScheme(t)
 	prioClass := unmarshalPriorityClass(t, priorityClass())
-	dm := unmarshalDeployment(t, deployment(test.MemberOperatorNs, "100Mi", 3))
+	dm := unmarshalDeployment(t, deployment("100Mi", 3))
 	namespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: test.MemberOperatorNs}}
 
 	t.Run("when previously deployed", func(t *testing.T) {
@@ -163,7 +161,7 @@ func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient, memor
 		assert.Equal(t, expPrioClass.Description, actualPrioClass.Description)
 	})
 
-	expDeployment := unmarshalDeployment(t, deployment(test.MemberOperatorNs, memory, replicas))
+	expDeployment := unmarshalDeployment(t, deployment(memory, replicas))
 	actualDeployment := &appsv1.Deployment{}
 	AssertMemberObject(t, fakeClient, "autoscaling-buffer", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
@@ -226,6 +224,6 @@ func priorityClass() string {
 	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"member-operator-autoscaling-buffer","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-100,"globalDefault":false,"description":"This priority class is to be used by the autoscaling buffer pod only"}`
 }
 
-func deployment(namespace string, memory string, replicas int) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":%d,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.2","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%s"},"limits":{"memory":"%s"}}}]}}}}`, namespace, replicas, memory, memory)
+func deployment(memory string, replicas int) string {
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":%d,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.2","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%s"},"limits":{"memory":"%s"}}}]}}}}`, test.MemberOperatorNs, replicas, memory, memory)
 }

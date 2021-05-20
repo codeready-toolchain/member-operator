@@ -247,7 +247,16 @@ func main() {
 			}
 			setupLog.Info("(Re)Deployed autoscaling buffer")
 		} else {
-			setupLog.Info("Skipping deployment of autoscaling buffer")
+			deleted, err := autoscaler.Delete(mgr.GetClient(), mgr.GetScheme(), namespace)
+			if err != nil {
+				setupLog.Error(err, "cannot delete previously deployed autoscaling buffer")
+				os.Exit(1)
+			}
+			if deleted {
+				setupLog.Info("Deleted previously deployed autoscaling buffer")
+			} else {
+				setupLog.Info("Skipping deployment of autoscaling buffer")
+			}
 		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")

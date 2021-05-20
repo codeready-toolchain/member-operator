@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -80,6 +84,72 @@ func TestDeploy(t *testing.T) {
 
 		// then
 		assert.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")
+	})
+}
+
+func TestDelete(t *testing.T) {
+	// given
+	s := setScheme(t)
+	prioClass := unmarshalPriorityClass(t, priorityClass())
+	dm := unmarshalDeployment(t, deployment(test.MemberOperatorNs, "100Mi", 3))
+	namespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: test.MemberOperatorNs}}
+
+	t.Run("when previously deployed", func(t *testing.T) {
+		// given
+		fakeClient := test.NewFakeClient(t, namespace, prioClass, dm)
+		AssertThatCluster(t, fakeClient).HasResource(prioClass.Name, &schedulingv1.PriorityClass{})
+		AssertThatNamespace(t, test.MemberOperatorNs, fakeClient).HasResource(dm.Name, &appsv1.Deployment{})
+
+		// when
+		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, deleted)
+		AssertThatCluster(t, fakeClient).HasNoResource(prioClass.Name, &schedulingv1.PriorityClass{})
+		AssertThatNamespace(t, test.MemberOperatorNs, fakeClient).HasNoResource(dm.Name, &appsv1.Deployment{})
+	})
+
+	t.Run("when previously not deployed", func(t *testing.T) {
+		// given
+		fakeClient := test.NewFakeClient(t)
+
+		// when
+		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		assert.False(t, deleted)
+	})
+
+	t.Run("when loading previously deployed objects fails", func(t *testing.T) {
+		// given
+		fakeClient := test.NewFakeClient(t)
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+			return fmt.Errorf("some error")
+		}
+
+		// when
+		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+
+		// then
+		assert.EqualError(t, err, "cannot get autoscaling buffer object: some error")
+		assert.False(t, deleted)
+	})
+
+	t.Run("when deleting previously deployed objects fails", func(t *testing.T) {
+		// given
+		fakeClient := test.NewFakeClient(t, namespace, prioClass, dm)
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("some error")
+		}
+
+		// when
+		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+
+		// then
+		assert.EqualError(t, err, "cannot delete autoscaling buffer object: some error")
+		assert.False(t, deleted)
 	})
 }
 

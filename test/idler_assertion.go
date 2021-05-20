@@ -7,7 +7,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 
-	"github.com/codeready-toolchain/api/api/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
@@ -22,7 +22,7 @@ import (
 )
 
 type IdlerAssertion struct {
-	idler          *v1alpha1.Idler
+	idler          *toolchainv1alpha1.Idler
 	client         client.Client
 	namespacedName types.NamespacedName
 	t              *testing.T
@@ -32,7 +32,7 @@ func (a *IdlerAssertion) loadIdlerAssertion() error {
 	if a.idler != nil {
 		return nil
 	}
-	idler := &v1alpha1.Idler{}
+	idler := &toolchainv1alpha1.Idler{}
 	err := a.client.Get(context.TODO(), a.namespacedName, idler)
 	a.idler = idler
 	return err
@@ -53,7 +53,7 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 	require.Len(a.t, a.idler.Status.Pods, len(pods))
 	for _, pod := range pods {
 		startTimeNoMilSec := pod.Status.StartTime.Truncate(time.Second)
-		expected := v1alpha1.Pod{
+		expected := toolchainv1alpha1.Pod{
 			Name:      pod.Name,
 			StartTime: v1.NewTime(startTimeNoMilSec),
 		}
@@ -62,27 +62,27 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 	return a
 }
 
-func (a *IdlerAssertion) HasConditions(expected ...v1alpha1.Condition) *IdlerAssertion {
+func (a *IdlerAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) *IdlerAssertion {
 	err := a.loadIdlerAssertion()
 	require.NoError(a.t, err)
 	test.AssertConditionsMatch(a.t, a.idler.Status.Conditions, expected...)
 	return a
 }
 
-func FailedToIdle(message string) v1alpha1.Condition {
-	return v1alpha1.Condition{
-		Type:    v1alpha1.ConditionReady,
+func FailedToIdle(message string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
-		Reason:  v1alpha1.IdlerUnableToEnsureIdlingReason,
+		Reason:  toolchainv1alpha1.IdlerUnableToEnsureIdlingReason,
 		Message: message,
 	}
 }
 
-func Running() v1alpha1.Condition {
-	return v1alpha1.Condition{
-		Type:   v1alpha1.ConditionReady,
+func Running() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
-		Reason: v1alpha1.IdlerRunningReason,
+		Reason: toolchainv1alpha1.IdlerRunningReason,
 	}
 }
 

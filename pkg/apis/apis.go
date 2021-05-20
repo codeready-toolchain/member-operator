@@ -1,7 +1,7 @@
 package apis
 
 import (
-	api "github.com/codeready-toolchain/api/api/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"k8s.io/api/admissionregistration/v1"
 	v12 "k8s.io/api/scheduling/v1"
 
@@ -25,7 +25,7 @@ import (
 func AddToScheme(s *runtime.Scheme) error {
 	// add openshift specific resource
 	var AddToSchemes runtime.SchemeBuilder
-	addToSchemes := append(AddToSchemes, api.AddToScheme,
+	addToSchemes := append(AddToSchemes, toolchainv1alpha1.AddToScheme,
 		userv1.Install,
 		templatev1.Install,
 		projectv1.Install,

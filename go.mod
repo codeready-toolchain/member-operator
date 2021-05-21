@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20210512064851-b871cbf562fd
+	github.com/codeready-toolchain/api v0.0.0-20210520133910-ab0d90c32c0b
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20210517121035-8c0bded20a9d
 	github.com/go-logr/logr v0.1.0
 	github.com/gofrs/uuid v3.3.0+incompatible
@@ -41,7 +41,7 @@ replace (
 
 replace (
 	github.com/codeready-toolchain/api => github.com/rajivnathan/api v0.0.0-20210521051601-43fe69c13d73
-	github.com/codeready-toolchain/toolchain-common => github.com/rajivnathan/toolchain-common v0.0.0-20210521052240-9a1d2b7b592b
+	github.com/codeready-toolchain/toolchain-common => github.com/rajivnathan/toolchain-common v0.0.0-20210521053253-c647f56612e6
 )
 
 go 1.14

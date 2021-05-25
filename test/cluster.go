@@ -1,7 +1,7 @@
 package test
 
 import (
-	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -26,9 +26,9 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 			Type:              cluster.Host,
 			OperatorNamespace: test.HostOperatorNs,
 			OwnerClusterName:  test.MemberClusterName,
-			ClusterStatus: &v1alpha1.ToolchainClusterStatus{
-				Conditions: []v1alpha1.ToolchainClusterCondition{{
-					Type:   v1alpha1.ToolchainClusterReady,
+			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
+				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
+					Type:   toolchainv1alpha1.ToolchainClusterReady,
 					Status: status,
 				}},
 			},
@@ -52,9 +52,9 @@ func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionSt
 			Type:              cluster.Host,
 			OperatorNamespace: test.HostOperatorNs,
 			OwnerClusterName:  test.MemberClusterName,
-			ClusterStatus: &v1alpha1.ToolchainClusterStatus{
-				Conditions: []v1alpha1.ToolchainClusterCondition{{
-					Type:          v1alpha1.ToolchainClusterReady,
+			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
+				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
+					Type:          toolchainv1alpha1.ToolchainClusterReady,
 					Status:        status,
 					LastProbeTime: lastProbeTime,
 				}},

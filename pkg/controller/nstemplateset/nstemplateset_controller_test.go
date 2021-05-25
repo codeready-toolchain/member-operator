@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -1273,7 +1273,7 @@ func newIdler(username, name string) *toolchainv1alpha1.Idler {
 	idler := &toolchainv1alpha1.Idler{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Idler",
-			APIVersion: toolchainv1alpha1.SchemeGroupVersion.String(),
+			APIVersion: toolchainv1alpha1.GroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{

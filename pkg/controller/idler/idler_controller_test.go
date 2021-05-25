@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -69,12 +69,12 @@ func TestReconcile(t *testing.T) {
 	t.Run("Idler being deleted", func(t *testing.T) {
 		// given
 		now := metav1.Now()
-		idler := &v1alpha1.Idler{
+		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "being-deleted",
 				DeletionTimestamp: &now,
 			},
-			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", idler)
 
@@ -93,11 +93,11 @@ func TestEnsureIdling(t *testing.T) {
 
 	t.Run("No pods in namespace managed by idler", func(t *testing.T) {
 		// given
-		idler := &v1alpha1.Idler{
+		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "john-dev",
 			},
-			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
 		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, idler)
@@ -118,11 +118,11 @@ func TestEnsureIdling(t *testing.T) {
 
 	t.Run("Idle pods", func(t *testing.T) {
 		// given
-		idler := &v1alpha1.Idler{
+		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
 			},
-			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 60},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
 		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, idler)
 		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
@@ -263,11 +263,11 @@ func TestEnsureIdlingFailed(t *testing.T) {
 	t.Run("Fail if Idler.Spec.TimeoutSec is invalid", func(t *testing.T) {
 		assertInvalidTimeout := func(timeout int32) {
 			// given
-			idler := &v1alpha1.Idler{
+			idler := &toolchainv1alpha1.Idler{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "john-dev",
 				},
-				Spec: v1alpha1.IdlerSpec{TimeoutSeconds: timeout},
+				Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: timeout},
 			}
 			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, idler)
 
@@ -286,11 +286,11 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 	t.Run("Fail if can't list pods", func(t *testing.T) {
 		// given
-		idler := &v1alpha1.Idler{
+		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "john-dev",
 			},
-			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
 		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, idler)
@@ -312,11 +312,11 @@ func TestEnsureIdlingFailed(t *testing.T) {
 	})
 
 	t.Run("Fail if can't access payloads", func(t *testing.T) {
-		idler := v1alpha1.Idler{
+		idler := toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
 			},
-			Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 60},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
 
 		t.Run("can't get controllers because of general error", func(t *testing.T) {
@@ -552,12 +552,12 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
 	// which is not a tracked controller such as Deployment or ReplicaSet.
-	idler := &v1alpha1.Idler{
+	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-somename", namePrefix, namespace),
 			Namespace: namespace,
 		},
-		Spec: v1alpha1.IdlerSpec{TimeoutSeconds: 30},
+		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 	}
 	standalonePods := createPods(t, r, idler, sTime, make([]*corev1.Pod, 0, 3))
 
@@ -619,7 +619,7 @@ func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object
 }
 
 // prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
-func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler v1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
+func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
 	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, &idler)
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)

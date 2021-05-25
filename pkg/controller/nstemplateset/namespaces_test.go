@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	. "github.com/codeready-toolchain/member-operator/test"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"

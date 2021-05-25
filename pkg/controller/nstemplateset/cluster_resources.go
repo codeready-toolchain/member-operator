@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/pkg/apis/toolchain/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	"github.com/go-logr/logr"
@@ -90,7 +90,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 		}),
 
 	newToolchainObjectKind(
-		toolchainv1alpha1.SchemeGroupVersion.WithKind("Idler"),
+		toolchainv1alpha1.GroupVersion.WithKind("Idler"),
 		&toolchainv1alpha1.Idler{},
 		func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error) {
 			itemList := &toolchainv1alpha1.IdlerList{}

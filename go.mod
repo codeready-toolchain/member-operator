@@ -1,8 +1,8 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20210512064851-b871cbf562fd
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20210517121035-8c0bded20a9d
+	github.com/codeready-toolchain/api v0.0.0-20210525072732-81a688cbd126
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20210525074434-b7d36013dc02
 	github.com/go-logr/logr v0.4.0
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/google/go-cmp v0.5.2
@@ -31,10 +31,6 @@ require (
 	k8s.io/metrics v0.18.2
 	sigs.k8s.io/controller-runtime v0.6.0
 )
-
-replace github.com/codeready-toolchain/api => github.com/matousjobanek/api v0.0.0-20210520100306-bffff6b38043
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/matousjobanek/toolchain-common v0.0.0-20210520100350-fca58f9efe91
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM

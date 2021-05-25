@@ -1081,11 +1081,7 @@ data:
                 resources:
                 - priorityclasses
                 verbs:
-                - get
-                - list
-                - watch
-                - create
-                - update
+                - '*'
               serviceAccountName: member-operator
             deployments:
             - name: member-operator

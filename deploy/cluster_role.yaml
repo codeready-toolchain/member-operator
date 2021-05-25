@@ -133,8 +133,4 @@ rules:
   resources:
   - priorityclasses
   verbs:
-  - "get"
-  - "list"
-  - "watch"
-  - "create"
-  - "update"
+  - "*"

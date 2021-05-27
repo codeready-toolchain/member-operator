@@ -1,9 +1,9 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20210520133910-ab0d90c32c0b
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20210517121035-8c0bded20a9d
-	github.com/go-logr/logr v0.1.0
+	github.com/codeready-toolchain/api v0.0.0-20210525072732-81a688cbd126
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20210525074434-b7d36013dc02
+	github.com/go-logr/logr v0.4.0
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/google/go-cmp v0.5.2
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
@@ -34,8 +34,10 @@ require (
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
+	github.com/go-logr/logr => github.com/go-logr/logr v0.1.0
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20200821140346-b94c46af3f2b // Using 'github.com/openshift/api@release-4.5'
 	k8s.io/client-go => k8s.io/client-go v0.18.3 // Required by prometheus-operator
+	k8s.io/klog/v2 => k8s.io/klog/v2 v2.0.0
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20200410145947-61e04a5be9a6 // avoids case-insensitive import collision: "github.com/googleapis/gnostic/openapiv2" and "github.com/googleapis/gnostic/OpenAPIv2"
 )
 

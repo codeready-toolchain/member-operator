@@ -1,6 +1,10 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: (devel)
+  creationTimestamp: null
   name: memberstatuses.toolchain.dev.openshift.com
 spec:
   group: toolchain.dev.openshift.com
@@ -24,14 +28,10 @@ spec:
         description: MemberStatus is used to track toolchain member status
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
@@ -39,21 +39,17 @@ spec:
             description: MemberStatusSpec defines the desired state of MemberStatus
             type: object
           status:
-            description: MemberStatusStatus defines the observed state of the toolchain
-              member status
+            description: MemberStatusStatus defines the observed state of the toolchain member status
             properties:
               che:
-                description: Che is the status of Che/CRW, such as installed and whether
-                  the member configuration is correct
+                description: Che is the status of Che/CRW, such as installed and whether the member configuration is correct
                 properties:
                   conditions:
-                    description: 'Conditions is an array of current Che status conditions
-                      Supported condition types: ConditionReady'
+                    description: 'Conditions is an array of current Che status conditions Supported condition types: ConditionReady'
                     items:
                       properties:
                         lastTransitionTime:
-                          description: Last time the condition transit from one status
-                            to another.
+                          description: Last time the condition transit from one status to another.
                           format: date-time
                           type: string
                         lastUpdatedTime:
@@ -61,15 +57,13 @@ spec:
                           format: date-time
                           type: string
                         message:
-                          description: Human readable message indicating details about
-                            last transition.
+                          description: Human readable message indicating details about last transition.
                           type: string
                         reason:
                           description: (brief) reason for the condition's last transition.
                           type: string
                         status:
-                          description: Status of the condition, one of True, False,
-                            Unknown.
+                          description: Status of the condition, one of True, False, Unknown.
                           type: string
                         type:
                           description: Type of condition
@@ -84,13 +78,11 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               conditions:
-                description: 'Conditions is an array of current toolchain status conditions
-                  Supported condition types: ConditionReady'
+                description: 'Conditions is an array of current toolchain status conditions Supported condition types: ConditionReady'
                 items:
                   properties:
                     lastTransitionTime:
-                      description: Last time the condition transit from one status
-                        to another.
+                      description: Last time the condition transit from one status to another.
                       format: date-time
                       type: string
                     lastUpdatedTime:
@@ -98,8 +90,7 @@ spec:
                       format: date-time
                       type: string
                     message:
-                      description: Human readable message indicating details about
-                        last transition.
+                      description: Human readable message indicating details about last transition.
                       type: string
                     reason:
                       description: (brief) reason for the condition's last transition.
@@ -122,13 +113,11 @@ spec:
                 description: Host is the status of the connection with the host cluster
                 properties:
                   conditions:
-                    description: 'Conditions is an array of current member operator
-                      status conditions Supported condition types: ConditionReady'
+                    description: 'Conditions is an array of current member operator status conditions Supported condition types: ConditionReady'
                     items:
                       properties:
                         lastTransitionTime:
-                          description: Last time the condition transit from one status
-                            to another.
+                          description: Last time the condition transit from one status to another.
                           format: date-time
                           type: string
                         lastUpdatedTime:
@@ -136,15 +125,13 @@ spec:
                           format: date-time
                           type: string
                         message:
-                          description: Human readable message indicating details about
-                            last transition.
+                          description: Human readable message indicating details about last transition.
                           type: string
                         reason:
                           description: (brief) reason for the condition's last transition.
                           type: string
                         status:
-                          description: Status of the condition, one of True, False,
-                            Unknown.
+                          description: Status of the condition, one of True, False, Unknown.
                           type: string
                         type:
                           description: Type of condition
@@ -159,34 +146,29 @@ spec:
                     x-kubernetes-list-type: map
                 type: object
               hostConnection:
-                description: HostConnection is the status of the connection with the
-                  host cluster
+                description: HostConnection is the status of the connection with the host cluster
                 properties:
                   conditions:
                     description: Conditions is an array of current cluster conditions.
                     items:
-                      description: ToolchainClusterCondition describes current state
-                        of a cluster.
+                      description: ToolchainClusterCondition describes current state of a cluster.
                       properties:
                         lastProbeTime:
                           description: Last time the condition was checked.
                           format: date-time
                           type: string
                         lastTransitionTime:
-                          description: Last time the condition transit from one status
-                            to another.
+                          description: Last time the condition transit from one status to another.
                           format: date-time
                           type: string
                         message:
-                          description: Human readable message indicating details about
-                            last transition.
+                          description: Human readable message indicating details about last transition.
                           type: string
                         reason:
                           description: (brief) reason for the condition's last transition.
                           type: string
                         status:
-                          description: Status of the condition, one of True, False,
-                            Unknown.
+                          description: Status of the condition, one of True, False, Unknown.
                           type: string
                         type:
                           description: Type of cluster condition, Ready or Offline.
@@ -208,13 +190,11 @@ spec:
                     description: The timestamp of the member operator build
                     type: string
                   conditions:
-                    description: 'Conditions is an array of current member operator
-                      status conditions Supported condition types: ConditionReady'
+                    description: 'Conditions is an array of current member operator status conditions Supported condition types: ConditionReady'
                     items:
                       properties:
                         lastTransitionTime:
-                          description: Last time the condition transit from one status
-                            to another.
+                          description: Last time the condition transit from one status to another.
                           format: date-time
                           type: string
                         lastUpdatedTime:
@@ -222,15 +202,13 @@ spec:
                           format: date-time
                           type: string
                         message:
-                          description: Human readable message indicating details about
-                            last transition.
+                          description: Human readable message indicating details about last transition.
                           type: string
                         reason:
                           description: (brief) reason for the condition's last transition.
                           type: string
                         status:
-                          description: Status of the condition, one of True, False,
-                            Unknown.
+                          description: Status of the condition, one of True, False, Unknown.
                           type: string
                         type:
                           description: Type of condition
@@ -247,8 +225,7 @@ spec:
                     description: The status of the member operator's deployment
                     type: string
                   revision:
-                    description: The commit id from the member-operator repository
-                      used to build the operator
+                    description: The commit id from the member-operator repository used to build the operator
                     type: string
                   version:
                     description: The version of the operator
@@ -265,26 +242,21 @@ spec:
                   memoryUsagePerNodeRole:
                     additionalProperties:
                       type: integer
-                    description: How many percent of the available memory is used
-                      per node role (eg. worker, master)
+                    description: How many percent of the available memory is used per node role (eg. worker, master)
                     type: object
                 type: object
               routes:
-                description: Routes/URLs of the cluster, such as Console and Che Dashboard
-                  URLs
+                description: Routes/URLs of the cluster, such as Console and Che Dashboard URLs
                 properties:
                   cheDashboardURL:
-                    description: CheDashboardURL is the Che Dashboard URL of the cluster
-                      if Che is installed
+                    description: CheDashboardURL is the Che Dashboard URL of the cluster if Che is installed
                     type: string
                   conditions:
-                    description: 'Conditions is an array of current member operator
-                      status conditions Supported condition types: ConditionReady'
+                    description: 'Conditions is an array of current member operator status conditions Supported condition types: ConditionReady'
                     items:
                       properties:
                         lastTransitionTime:
-                          description: Last time the condition transit from one status
-                            to another.
+                          description: Last time the condition transit from one status to another.
                           format: date-time
                           type: string
                         lastUpdatedTime:
@@ -292,15 +264,13 @@ spec:
                           format: date-time
                           type: string
                         message:
-                          description: Human readable message indicating details about
-                            last transition.
+                          description: Human readable message indicating details about last transition.
                           type: string
                         reason:
                           description: (brief) reason for the condition's last transition.
                           type: string
                         status:
-                          description: Status of the condition, one of True, False,
-                            Unknown.
+                          description: Status of the condition, one of True, False, Unknown.
                           type: string
                         type:
                           description: Type of condition
@@ -324,3 +294,9 @@ spec:
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

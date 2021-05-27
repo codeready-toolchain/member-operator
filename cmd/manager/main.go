@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	api "github.com/codeready-toolchain/api/pkg/apis"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
@@ -247,7 +247,16 @@ func main() {
 			}
 			setupLog.Info("(Re)Deployed autoscaling buffer")
 		} else {
-			setupLog.Info("Skipping deployment of autoscaling buffer")
+			deleted, err := autoscaler.Delete(mgr.GetClient(), mgr.GetScheme(), namespace)
+			if err != nil {
+				setupLog.Error(err, "cannot delete previously deployed autoscaling buffer")
+				os.Exit(1)
+			}
+			if deleted {
+				setupLog.Info("Deleted previously deployed autoscaling buffer")
+			} else {
+				setupLog.Info("Skipping deployment of autoscaling buffer")
+			}
 		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")
@@ -361,7 +370,7 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error { // nolint:unuse
 	// The function below returns a list of filtered operator/CR specific GVKs. For more control, override the GVK list below
 	// with your own custom logic. Note that if you are adding third party API schemas, probably you will need to
 	// customize this implementation to avoid permissions issues.
-	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(api.AddToScheme)
+	filteredGVK, err := k8sutil.GetGVKsFromAddToScheme(toolchainv1alpha1.AddToScheme)
 	if err != nil {
 		return err
 	}

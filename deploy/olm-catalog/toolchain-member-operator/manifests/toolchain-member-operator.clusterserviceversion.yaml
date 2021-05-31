@@ -100,6 +100,12 @@ spec:
       kind: Idler
       name: idlers.toolchain.dev.openshift.com
       version: v1alpha1
+    - description: MemberOperatorConfig keeps all configuration parameters needed
+        in member operator
+      displayName: Member Operator Config
+      kind: MemberOperatorConfig
+      name: memberoperatorconfigs.toolchain.dev.openshift.com
+      version: v1alpha1
     - description: MemberStatus is used to track toolchain member status
       displayName: CodeReady Toolchain Member Status
       kind: MemberStatus

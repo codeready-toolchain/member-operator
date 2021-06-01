@@ -4,9 +4,9 @@ import (
 	"context"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-	commoncontroller "github.com/codeready-toolchain/toolchain-common/pkg/controller"
 	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
 	"github.com/go-logr/logr"
 	errs "github.com/pkg/errors"

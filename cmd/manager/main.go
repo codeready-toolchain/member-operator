@@ -21,8 +21,8 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/codeready-toolchain/member-operator/version"
+	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-	"github.com/codeready-toolchain/toolchain-common/pkg/controller/toolchaincluster"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"

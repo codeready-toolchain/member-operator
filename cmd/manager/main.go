@@ -34,7 +34,8 @@ import (
 	"github.com/spf13/pflag"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/kubernetes/scheme"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,8 +53,14 @@ var (
 	metricsHost               = "0.0.0.0"
 	metricsPort         int32 = 8383
 	operatorMetricsPort int32 = 8686
+
+	setupLog = ctrl.Log.WithName("setup")
+	scheme   = k8sscheme.Scheme
 )
-var setupLog = ctrl.Log.WithName("setup")
+
+func init() {
+	utilruntime.Must(apis.AddToScheme(scheme))
+}
 
 func printVersion() {
 	setupLog.Info(fmt.Sprintf("Operator Version: %s", version.Version))
@@ -138,12 +145,6 @@ func main() {
 	}
 
 	setupLog.Info("Registering Components.")
-
-	// Setup Scheme for all resources
-	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		setupLog.Error(err, "")
-		os.Exit(1)
-	}
 
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
@@ -299,12 +300,12 @@ func newAllNamespacesClient(cfg *rest.Config) (client.Client, cache.Cache, error
 	}
 
 	// Create the cache for the cached read client and registering informers
-	allNamespacesCache, err := cache.New(cfg, cache.Options{Scheme: scheme.Scheme, Mapper: mapper, Namespace: ""})
+	allNamespacesCache, err := cache.New(cfg, cache.Options{Scheme: scheme, Mapper: mapper, Namespace: ""})
 	if err != nil {
 		return nil, nil, err
 	}
 	// Create the Client for Write operations.
-	c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme, Mapper: mapper})
+	c, err := client.New(cfg, client.Options{Scheme: scheme, Mapper: mapper})
 	if err != nil {
 		return nil, nil, err
 	}

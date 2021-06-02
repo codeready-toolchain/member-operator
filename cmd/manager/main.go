@@ -46,6 +46,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	//+kubebuilder:scaffold:imports
 )
 
 // Change below variables to serve metrics on different host or port.
@@ -60,6 +61,7 @@ var (
 
 func init() {
 	utilruntime.Must(apis.AddToScheme(scheme))
+	//+kubebuilder:scaffold:scheme
 }
 
 func printVersion() {
@@ -70,6 +72,13 @@ func printVersion() {
 	setupLog.Info(fmt.Sprintf("Commit: %s", version.Commit))
 	setupLog.Info(fmt.Sprintf("BuildTime: %s", version.BuildTime))
 }
+
+//+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations,verbs=get;list;watch;update;patch;create
+//+kubebuilder:rbac:groups=scheduling.k8s.io,resources=networkpolicies,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=scheduling.k8s.io,resources=networkpolicies,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=,resources=secrets;configmaps;services,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;update;patch;create;delete
 
 func main() {
 	// Add the zap logger flag set to the CLI. The flag set must
@@ -214,6 +223,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccountStatus")
 		os.Exit(1)
 	}
+	//+kubebuilder:scaffold:builder
 
 	// Add the Metrics Service
 	addMetrics(ctx, cfg)

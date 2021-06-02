@@ -79,6 +79,14 @@ type Reconciler struct {
 	CheClient           *che.Client
 }
 
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=,resources=nodes,verbs=get;list;watch
+//+kubebuilder:rbac:groups=metrics.k8s.io,resources=nodemetrics,verbs=get;list;watch
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
+
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)

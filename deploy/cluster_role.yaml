@@ -1,136 +1,289 @@
-kind: ClusterRole
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
 metadata:
-  name: member-operator
+  creationTimestamp: null
+  name: manager-role
 rules:
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - "get"
-  - "create"
-- apiGroups:
-  - ""
-  resources:
-  - nodes
+- resources:
+  - configmaps
   - secrets
+  - services
   verbs:
-  - list
-  - get
-  - watch
-- apiGroups:
-  - metrics.k8s.io
-  resources:
-  - "*"
-  verbs:
-  - "get"
-  - "list"
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  - limitranges
-  verbs:
-  - get
   - create
+  - delete
+  - get
+  - list
+  - patch
   - update
+  - watch
+- resources:
+  - limitranges
+  - namespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- resources:
+  - nodes
+  verbs:
+  - get
   - list
   - watch
-  - delete
-- apiGroups:
-  - user.openshift.io
-  resources:
-  - identities
-  - users
-  - useridentitymappings
-  - groups
-  verbs:
-  - "*"
-- apiGroups:
-  - toolchain.dev.openshift.com
-  resources:
-  - "*"
-  verbs:
-  - "*"
-- apiGroups:
-  - rbac.authorization.k8s.io
-  - authorization.openshift.io
-  resources:
-  - rolebindings
-  - roles
-  - clusterroles
-  - clusterrolebindings
-  verbs:
-  - "*"
-- apiGroups:
-  - apiextensions.k8s.io
-  resources:
-  - customresourcedefinitions
-  verbs:
-  - "get"
-  - "create"
-- apiGroups:
-  - route.openshift.io
-  resources:
-  - routes
-  verbs:
-  - "get"
-  - "list"
-  - "watch"
-- apiGroups:
-  - networking.k8s.io
-  resources:
-  - networkpolicies
-  verbs:
-  - "*"
-- apiGroups:
-  - quota.openshift.io
-  resources:
-  - clusterresourcequotas
-  verbs:
-  - "*"
-- apiGroups:
-  - ""
-  resources:
+- resources:
   - pods
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- resources:
   - replicationcontrollers
   verbs:
-  - "*"
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
-  verbs:
-  - "*"
-- apiGroups:
-  - apps.openshift.io
-  resources:
-  - deploymentconfigs
-  verbs:
-    - "*"
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - "*"
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
   - mutatingwebhookconfigurations
   verbs:
-  - "get"
-  - "list"
-  - "watch"
-  - "create"
-  - "update"
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  - deployments
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.openshift.io
+  resources:
+  - deploymentconfigs
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - authorization.openshift.io
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - metrics.k8s.io
+  resources:
+  - nodemetrics
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - quota.openshift.io
+  resources:
+  - clusterresourcequotas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - scheduling.k8s.io
   resources:
-  - priorityclasses
+  - networkpolicies
   verbs:
-  - "*"
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - idlers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - idlers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - idlers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - memberstatuses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - memberstatuses/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - memberstatuses/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - useraccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - useraccounts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - useraccounts/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - user.openshift.io
+  resources:
+  - identities
+  - useridentitymappings
+  - users
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

@@ -57,6 +57,16 @@ type Reconciler struct {
 	AllNamespacesClient client.Client
 }
 
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=,resources=pods,verbs=get;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=,resources=replicationcontrollers,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=apps,resources=deployments;daemonsets;replicasets;statefulsets,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;update;patch
+
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
 // Note:

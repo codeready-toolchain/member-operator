@@ -6,7 +6,9 @@ metadata:
   creationTimestamp: null
   name: manager-role
 rules:
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - configmaps
   - secrets
   - serviceaccounts
@@ -19,7 +21,9 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - limitranges
   - namespaces
   verbs:
@@ -30,13 +34,17 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - nodes
   verbs:
   - get
   - list
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - delete
@@ -45,7 +53,9 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - replicationcontrollers
   verbs:
   - get

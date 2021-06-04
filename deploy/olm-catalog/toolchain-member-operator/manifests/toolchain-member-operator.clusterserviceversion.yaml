@@ -138,7 +138,9 @@ spec:
     spec:
       clusterPermissions:
       - rules:
-        - resources:
+        - apiGroups:
+          - ""
+          resources:
           - configmaps
           - secrets
           - serviceaccounts
@@ -151,7 +153,9 @@ spec:
           - patch
           - update
           - watch
-        - resources:
+        - apiGroups:
+          - ""
+          resources:
           - limitranges
           - namespaces
           verbs:
@@ -162,13 +166,17 @@ spec:
           - patch
           - update
           - watch
-        - resources:
+        - apiGroups:
+          - ""
+          resources:
           - nodes
           verbs:
           - get
           - list
           - watch
-        - resources:
+        - apiGroups:
+          - ""
+          resources:
           - pods
           verbs:
           - delete
@@ -177,7 +185,9 @@ spec:
           - patch
           - update
           - watch
-        - resources:
+        - apiGroups:
+          - ""
+          resources:
           - replicationcontrollers
           verbs:
           - get

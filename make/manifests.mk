@@ -51,7 +51,7 @@ endif
 
 .PHONY: generate-olm-files
 ## Regenerates base template CSV and hack files
-generate-olm-files:
+generate-olm-files: generate-rbac
 	$(eval GENERATE_PARAMS = -pr ../member-operator/)
 ifneq ("$(wildcard ../api/$(PATH_TO_OLM_GENERATE_FILE))","")
 	@echo "generating OLM files using script from local api repo..."

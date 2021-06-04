@@ -9,6 +9,7 @@ rules:
 - resources:
   - configmaps
   - secrets
+  - serviceaccounts
   - services
   verbs:
   - create
@@ -243,6 +244,58 @@ rules:
   - toolchain.dev.openshift.com
   resources:
   - memberstatuses/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - nstemplatesets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - nstemplatesets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - nstemplatesets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - toolchainclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - toolchainclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - toolchainclusters/status
   verbs:
   - get
   - patch

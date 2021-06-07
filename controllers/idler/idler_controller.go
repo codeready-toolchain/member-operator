@@ -7,10 +7,12 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
-	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	appsv1 "k8s.io/api/apps/v1"
@@ -19,40 +21,22 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-func add(mgr manager.Manager, r *Reconciler) error {
-	c, err := controller.New("idler-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to primary resource Idler
-	if err := c.Watch(
-		&source.Kind{Type: &toolchainv1alpha1.Idler{}},
-		&handler.EnqueueRequestForObject{},
-		predicate.GenerationChangedPredicate{}); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
-	return add(mgr, r)
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&toolchainv1alpha1.Idler{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Complete(r)
 }
 
 // Reconciler reconciles an Idler object
 type Reconciler struct {
 	Client              client.Client
-	Log                 logr.Logger
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
 }
@@ -71,8 +55,9 @@ type Reconciler struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	logger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+	//logger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("new reconcile loop")
 	// Fetch the Idler instance
 	idler := &toolchainv1alpha1.Idler{}
@@ -100,9 +85,9 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 			"failed to ensure idling '%s'", idler.Name)
 	}
 	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
-	nextTime := nextPodToBeKilledAfter(r.Log, idler)
+	nextTime := nextPodToBeKilledAfter(logger, idler)
 	if nextTime == nil {
-		r.Log.Info("requeueing for next pod to check", "duration", nextTime)
+		logger.Info("requeueing for next pod to check", "duration", nextTime)
 		after := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
 		return reconcile.Result{
 			Requeue:      true,
@@ -110,7 +95,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}, r.setStatusReady(idler)
 
 	}
-	r.Log.Info("requeueing for next pod to kill", "duration", nextTime)
+	logger.Info("requeueing for next pod to kill", "duration", nextTime)
 	return reconcile.Result{
 		Requeue:      true,
 		RequeueAfter: *nextTime,
@@ -210,10 +195,10 @@ func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string,
 	rs := &appsv1.ReplicaSet{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			r.Log.Error(err, "replica set is not found; ignoring: it might be already deleted")
+			logger.Error(err, "replica set is not found; ignoring: it might be already deleted")
 			return true, nil
 		}
-		r.Log.Error(err, "error deleting rs")
+		logger.Error(err, "error deleting rs")
 		return false, err
 	}
 	deletedByController, err := r.scaleControllerToZero(logger, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)

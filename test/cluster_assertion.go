@@ -26,7 +26,7 @@ func AssertThatCluster(t test.T, client client.Client) *ClusterAssertion {
 	}
 }
 
-func (a *ClusterAssertion) HasResource(name string, obj runtime.Object, options ...ResourceOption) *ClusterAssertion {
+func (a *ClusterAssertion) HasResource(name string, obj client.Object, options ...ResourceOption) *ClusterAssertion {
 	err := a.client.Get(context.TODO(), types.NamespacedName{Name: name}, obj)
 	require.NoError(a.t, err)
 	for _, check := range options {
@@ -35,7 +35,7 @@ func (a *ClusterAssertion) HasResource(name string, obj runtime.Object, options 
 	return a
 }
 
-func (a *ClusterAssertion) HasNoResource(name string, obj runtime.Object) *ClusterAssertion {
+func (a *ClusterAssertion) HasNoResource(name string, obj client.Object) *ClusterAssertion {
 	err := a.client.Get(context.TODO(), types.NamespacedName{Name: name}, obj)
 	require.Error(a.t, err, "did not expect resource '%s/%s' to exist", obj.GetObjectKind().GroupVersionKind().Kind, name)
 	assert.True(a.t, errors.IsNotFound(err))

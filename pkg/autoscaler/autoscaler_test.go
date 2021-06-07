@@ -31,8 +31,8 @@ func TestGetTemplateObjects(t *testing.T) {
 	// then
 	require.NoError(t, err)
 	require.Len(t, toolchainObjects, 2)
-	priorityClassEquals(t, priorityClass(), toolchainObjects[0].GetRuntimeObject())
-	deploymentEquals(t, deployment("8Gi", 3), toolchainObjects[1].GetRuntimeObject())
+	priorityClassEquals(t, priorityClass(), toolchainObjects[0].GetClientObject())
+	deploymentEquals(t, deployment("8Gi", 3), toolchainObjects[1].GetClientObject())
 }
 
 func TestDeploy(t *testing.T) {
@@ -73,7 +73,7 @@ func TestDeploy(t *testing.T) {
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -123,7 +123,7 @@ func TestDelete(t *testing.T) {
 	t.Run("when loading previously deployed objects fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -138,7 +138,7 @@ func TestDelete(t *testing.T) {
 	t.Run("when deleting previously deployed objects fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t, namespace, prioClass, dm)
-		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("some error")
 		}
 

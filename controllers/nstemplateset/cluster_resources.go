@@ -33,11 +33,11 @@ type listExistingResources func(cl client.Client, username string) ([]applycl.Co
 // toolchainObjectKind type created in clusterResourceKinds list
 type toolchainObjectKind struct {
 	gvk                   schema.GroupVersionKind
-	objectType            runtime.Object
+	objectType            client.Object
 	listExistingResources listExistingResources
 }
 
-func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject runtime.Object, listExistingResources listExistingResources) toolchainObjectKind {
+func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject client.Object, listExistingResources listExistingResources) toolchainObjectKind {
 	return toolchainObjectKind{
 		gvk:                   gvk,
 		objectType:            emptyObject,
@@ -67,7 +67,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 				}
 				list[index] = toolchainObject
 			}
-			return list, nil
+			return applycl.SortedComparableToolchainObjects(list), nil
 		}),
 
 	newToolchainObjectKind(
@@ -86,7 +86,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 				}
 				list[index] = toolchainObject
 			}
-			return list, nil
+			return applycl.SortedComparableToolchainObjects(list), nil
 		}),
 
 	newToolchainObjectKind(
@@ -105,7 +105,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 				}
 				list[index] = toolchainObject
 			}
-			return list, nil
+			return applycl.SortedComparableToolchainObjects(list), nil
 		}),
 }
 
@@ -242,7 +242,7 @@ func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1al
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 		return false, err
 	}
-	if err := r.Client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil {
+	if err := r.Client.Delete(context.TODO(), toDelete.GetClientObject()); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
 			toDelete.GetName(), toDelete.GetGvk())
 	}
@@ -301,17 +301,17 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 		}
 
 		for _, toDelete := range currentObjects {
-			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) {
+			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetClientObject()); err != nil && !errors.IsNotFound(err) {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err,
 					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetGvk())
 			}
 			// ignore cluster resource that are already flagged for deletion
-			if errors.IsNotFound(err) || util.IsBeingDeleted(toDelete) {
+			if errors.IsNotFound(err) || util.IsBeingDeleted(toDelete.GetClientObject()) {
 				continue
 			}
 
 			logger.Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetGvk().Kind)
-			if err := r.Client.Delete(context.TODO(), toDelete.GetRuntimeObject()); err != nil && errors.IsNotFound(err) {
+			if err := r.Client.Delete(context.TODO(), toDelete.GetClientObject()); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue
 			} else if err != nil {

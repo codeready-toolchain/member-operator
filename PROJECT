@@ -1,0 +1,57 @@
+layout:
+- go.kubebuilder.io/v3
+plugins:
+  manifests.sdk.operatorframework.io/v2: {}
+  scorecard.sdk.operatorframework.io/v2: {}
+projectName: member-operator
+repo: github.com/toolchain/member-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: false
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: Idler
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: MemberStatus
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: NSTemplateSet
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: ToolchainCluster
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: UserAccount
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: MemberOperatorConfig
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
+version: "3"

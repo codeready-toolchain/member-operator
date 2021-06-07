@@ -201,6 +201,7 @@ spec:
           - mutatingwebhookconfigurations
           verbs:
           - create
+          - delete
           - get
           - list
           - patch
@@ -329,7 +330,7 @@ spec:
         - apiGroups:
           - scheduling.k8s.io
           resources:
-          - networkpolicies
+          - priorityclasses
           verbs:
           - create
           - delete

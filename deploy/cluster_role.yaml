@@ -69,6 +69,7 @@ rules:
   - mutatingwebhookconfigurations
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -197,7 +198,7 @@ rules:
 - apiGroups:
   - scheduling.k8s.io
   resources:
-  - networkpolicies
+  - priorityclasses
   verbs:
   - create
   - delete

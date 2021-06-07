@@ -64,5 +64,5 @@ endif
 .PHONY: generate-rbac
 generate-rbac: controller-gen
 	@echo "Re-generating the deepcopy go file & the Toolchain CRD files... "
-	$(Q)$(CONTROLLER_GEN) rbac:roleName=manager-role paths=./...
+	$(Q)$(CONTROLLER_GEN) rbac:roleName=member-operator paths=./...
 	mv config/rbac/role.yaml deploy/cluster_role.yaml

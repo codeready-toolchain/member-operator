@@ -1458,7 +1458,7 @@ data:
                 - patch
                 - update
                 - watch
-              serviceAccountName: manager-role
+              serviceAccountName: member-operator
             deployments:
             - name: member-operator
               spec:

@@ -271,7 +271,7 @@ spec:
         - apiGroups:
           - metrics.k8s.io
           resources:
-          - nodemetrics
+          - '*'
           verbs:
           - get
           - list

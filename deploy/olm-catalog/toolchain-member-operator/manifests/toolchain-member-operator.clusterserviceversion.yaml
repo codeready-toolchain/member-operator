@@ -179,18 +179,10 @@ spec:
           - ""
           resources:
           - pods
-          verbs:
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - ""
-          resources:
           - replicationcontrollers
           verbs:
+          - create
+          - delete
           - get
           - list
           - patch
@@ -216,6 +208,8 @@ spec:
           - replicasets
           - statefulsets
           verbs:
+          - create
+          - delete
           - get
           - list
           - patch
@@ -240,6 +234,8 @@ spec:
           resources:
           - deploymentconfigs
           verbs:
+          - create
+          - delete
           - get
           - list
           - patch
@@ -260,6 +256,8 @@ spec:
           resources:
           - jobs
           verbs:
+          - create
+          - delete
           - get
           - list
           - patch

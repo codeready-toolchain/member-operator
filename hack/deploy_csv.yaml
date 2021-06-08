@@ -1155,18 +1155,10 @@ data:
                 - ""
                 resources:
                 - pods
-                verbs:
-                - delete
-                - get
-                - list
-                - patch
-                - update
-                - watch
-              - apiGroups:
-                - ""
-                resources:
                 - replicationcontrollers
                 verbs:
+                - create
+                - delete
                 - get
                 - list
                 - patch
@@ -1192,6 +1184,8 @@ data:
                 - replicasets
                 - statefulsets
                 verbs:
+                - create
+                - delete
                 - get
                 - list
                 - patch
@@ -1216,6 +1210,8 @@ data:
                 resources:
                 - deploymentconfigs
                 verbs:
+                - create
+                - delete
                 - get
                 - list
                 - patch
@@ -1236,6 +1232,8 @@ data:
                 resources:
                 - jobs
                 verbs:
+                - create
+                - delete
                 - get
                 - list
                 - patch

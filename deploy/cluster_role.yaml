@@ -47,18 +47,10 @@ rules:
   - ""
   resources:
   - pods
-  verbs:
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - replicationcontrollers
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -84,6 +76,8 @@ rules:
   - replicasets
   - statefulsets
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -108,6 +102,8 @@ rules:
   resources:
   - deploymentconfigs
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -128,6 +124,8 @@ rules:
   resources:
   - jobs
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch

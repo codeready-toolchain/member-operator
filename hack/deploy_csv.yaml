@@ -1121,6 +1121,7 @@ data:
                 - secrets
                 - serviceaccounts
                 - services
+                - services/finalizers
                 verbs:
                 - create
                 - delete
@@ -1200,6 +1201,7 @@ data:
                 - apps
                 resources:
                 - deployments
+                - deployments/finalizers
                 verbs:
                 - create
                 - delete

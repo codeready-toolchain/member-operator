@@ -145,6 +145,7 @@ spec:
           - secrets
           - serviceaccounts
           - services
+          - services/finalizers
           verbs:
           - create
           - delete
@@ -224,6 +225,7 @@ spec:
           - apps
           resources:
           - deployments
+          - deployments/finalizers
           verbs:
           - create
           - delete

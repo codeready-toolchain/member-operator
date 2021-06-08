@@ -253,13 +253,7 @@ spec:
           - rolebindings
           - roles
           verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
+          - '*'
         - apiGroups:
           - batch
           resources:
@@ -282,21 +276,6 @@ spec:
           - monitoring.coreos.com
           resources:
           - servicemonitors
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - networking.k8s.io
-          resources:
-          - clusterrolebindings
-          - clusterroles
-          - rolebindings
-          - roles
           verbs:
           - create
           - delete

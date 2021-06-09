@@ -80,6 +80,13 @@ type Reconciler struct {
 	CheClient *che.Client
 }
 
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=useraccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=useraccounts/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=useraccounts/finalizers,verbs=update
+
+//+kubebuilder:rbac:groups=user.openshift.io,resources=identities;users;useridentitymappings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;update;patch;create;delete
+
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
 // and what is in the UserAccount.Spec
 // Note:

@@ -19,17 +19,12 @@ var log = logf.Log.WithName("configuration")
 // prefixes
 const (
 	// MemberEnvPrefix will be used for member environment variable name prefixing.
-	MemberEnvPrefix = "MEMBER_OPERATOR"
+	MemberEnvPrefix  = "MEMBER_OPERATOR"
+	MemberStatusName = "toolchain-member-status"
 )
 
 // Configuration constants
 const (
-	// MemberStatusName specifies the name of the toolchain member status resource that provides information about the toolchain components in this cluster
-	MemberStatusName = "member.status"
-
-	// DefaultMemberStatusName the default name for the member status resource created during initialization of the operator
-	DefaultMemberStatusName = "toolchain-member-status"
-
 	// varMemberStatusRefreshTime specifies how often the MemberStatus should load and refresh the current member cluster status
 	varMemberStatusRefreshTime = "memberstatus.refresh.time"
 
@@ -92,6 +87,23 @@ const (
 
 	// defaultDeployWebhook is true by default
 	defaultDeployWebhook = true
+
+	// varDeployAutoscalingBuffer is to be used to disable or enable cluster autoscaling support by the member operator
+	// If the cluster autoscaling is enabled in the cluster then this property can be set to true.
+	// In this case the member operator will deploy a special buffer app which can reserve compute resources
+	// for user payloads in the cluster.
+	varDeployAutoscalingBuffer = "autoscalingbuffer.enable"
+
+	// defaultDeployAutoscalingBuffer is false by default
+	defaultDeployAutoscalingBuffer = false
+
+	// varAutoscalerBufferMemory represents how much memory should be required by the autoscaler buffer
+	varAutoscalerBufferMemory = "autoscalingbuffer.memory"
+
+	// varAutoscalerBufferReplicas represents the number of autoscaler buffer pods
+	varAutoscalerBufferReplicas = "autoscalingbuffer.replicas"
+
+	defaultAutoscalerBufferReplicas = 1
 )
 
 // ToolchainCluster configuration constants
@@ -145,7 +157,6 @@ func LoadConfig(cl client.Client) (*Config, error) {
 
 func (c *Config) setConfigDefaults() {
 	c.member.SetTypeByDefaultValue(true)
-	c.member.SetDefault(MemberStatusName, DefaultMemberStatusName)
 	c.member.SetDefault(clusterHealthCheckPeriod, defaultClusterHealthCheckPeriod)
 	c.member.SetDefault(toolchainClusterTimeout, defaultClusterHealthCheckTimeout)
 	c.member.SetDefault(identityProviderName, defaultIdentityProviderName)
@@ -158,6 +169,8 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(varCheRouteName, defaultCheRouteName)
 	c.member.SetDefault(varCheKeycloakRouteName, defaultCheKeycloakRouteName)
 	c.member.SetDefault(varDeployWebhook, defaultDeployWebhook)
+	c.member.SetDefault(varDeployAutoscalingBuffer, defaultDeployAutoscalingBuffer)
+	c.member.SetDefault(varAutoscalerBufferReplicas, defaultAutoscalerBufferReplicas)
 }
 
 func (c *Config) Print() {
@@ -188,11 +201,6 @@ func (c *Config) GetAllMemberParameters() map[string]string {
 // Openshift clusters can be configured with multiple IdPs. This config option allows admins to specify which IdP should be used by the toolchain operator.
 func (c *Config) GetIdP() string { //nolint: golint
 	return c.member.GetString(identityProviderName)
-}
-
-// GetMemberStatusName returns the configured name of the member status resource
-func (c *Config) GetMemberStatusName() string {
-	return c.member.GetString(MemberStatusName)
 }
 
 // GetClusterHealthCheckPeriod returns the configured cluster health check period
@@ -263,4 +271,19 @@ func (c *Config) GetMemberOperatorWebhookImage() string {
 // DoDeployWebhook returns true if the Webhook should be deployed
 func (c *Config) DoDeployWebhook() bool {
 	return c.member.GetBool(varDeployWebhook)
+}
+
+// DoDeployAutoscalingBuffer returns true if the autoscaler buffer app should be deployed
+func (c *Config) DoDeployAutoscalingBuffer() bool {
+	return c.member.GetBool(varDeployAutoscalingBuffer)
+}
+
+// GetAutoscalerBufferMemory returns how much memory should be required by the autoscaler buffer
+func (c *Config) GetAutoscalerBufferMemory() string {
+	return c.member.GetString(varAutoscalerBufferMemory)
+}
+
+// GetAutoscalerBufferReplicas returns the number of autoscaler buffer pods
+func (c *Config) GetAutoscalerBufferReplicas() int {
+	return c.member.GetInt(varAutoscalerBufferReplicas)
 }

@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -19,12 +20,6 @@ import (
 
 type namespacesManager struct {
 	*statusManager
-}
-
-type validationError struct{}
-
-func (e *validationError) Error() string {
-	return "Namespace deletion wasn't complete"
 }
 
 // ensure ensures that all expected namespaces exists and they contain all the expected resources
@@ -190,9 +185,7 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 				}
 			}
 			// No error implies namespace was not deleted
-			v := validationError{}
-			err = &v
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name)
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, fmt.Errorf("namespace deletion wasn't complete"), "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name)
 		}
 	}
 	return false, nil

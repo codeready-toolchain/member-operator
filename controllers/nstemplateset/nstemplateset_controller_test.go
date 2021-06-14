@@ -993,7 +993,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// get the NSTemplateSet resource again, check it is not deleted and its status
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			HasFinalizer().
-			HasConditions(UnableToTerminate("Namespace deletion wasn't complete"))
+			HasConditions(UnableToTerminate("namespace deletion wasn't complete"))
 
 		fakeClient.MockDelete = nil //now removing the mockDelete
 		//Second reconcile, since namespace wasn't deleted and err is wrapped with statusUpdate

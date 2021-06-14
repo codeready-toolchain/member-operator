@@ -46,6 +46,12 @@ func (a *NamespaceAssertion) DoesNotExist() *NamespaceAssertion {
 	return a
 }
 
+func (a *NamespaceAssertion) DoesExist() *NamespaceAssertion{
+	err := a.loadNamespace()
+	require.NoError(a.t,err)
+	return a
+}
+
 func (a *NamespaceAssertion) HasNoOwnerReference() *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)

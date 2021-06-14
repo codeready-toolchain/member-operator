@@ -969,6 +969,51 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
 	})
+
+	t.Run("NSTemplateSet not deleted untill namespace is deleted", func(t *testing.T) {
+		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withDeletionTs(), withClusterResources("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+
+		r, fakeClient := prepareController(t, nsTmplSet, devNS)
+		req := newReconcileRequest(namespaceName, username)
+
+		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			fmt.Printf("Calling Mock Delete")
+			return nil
+		}
+		// when a first reconcile loop was triggered
+		_, err := r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		// get the first namespace and check that it is not deleted
+		firstNSName := fmt.Sprintf("%s-dev", username)
+		AssertThatNamespace(t, firstNSName, r.Client).DoesExist()
+		// get the NSTemplateSet resource again, check it is not deleted and its status
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
+			HasFinalizer().
+			HasConditions(UnableToTerminate("Namespace deletion wasn't complete"))
+
+		fakeClient.MockDelete = nil //now removing the mockDelete
+		//Second reconcile, since namespace wasn't deleted and err is wrapped with statusUpdate
+		_, err = r.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		// get the first namespace and check it IS deleted
+		AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()
+		// get the NSTemplateSet resource again, check it is not deleted and its status
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
+			HasFinalizer().
+			HasConditions(Terminating())
+
+		// Another reconcile triggered since namespace was deleted
+		_, err = r.Reconcile(req)
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).DoesNotHaveFinalizer()
+
+	})
 }
 
 func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {

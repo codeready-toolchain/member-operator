@@ -2,6 +2,8 @@ package nstemplateset
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -17,6 +19,12 @@ import (
 
 type namespacesManager struct {
 	*statusManager
+}
+
+type validationError struct{}
+
+func (e *validationError) Error() string {
+	return "Namespace deletion wasn't complete"
 }
 
 // ensure ensures that all expected namespaces exists and they contain all the expected resources
@@ -175,7 +183,16 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 			if err := r.Client.Delete(context.TODO(), &ns); err != nil {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", ns.Name)
 			}
-			return true, nil
+
+			if err := r.Client.Get(context.TODO(),types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); err != nil {
+				if errors.IsNotFound(err) {
+					return true, nil // namespace was actually deleted and thus not found by get
+				}
+			}
+			// No error implies namespace was not deleted
+			v := validationError{}
+			err = &v
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed,err, "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name)
 		}
 	}
 	return false, nil

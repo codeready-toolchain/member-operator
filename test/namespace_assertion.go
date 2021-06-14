@@ -46,9 +46,9 @@ func (a *NamespaceAssertion) DoesNotExist() *NamespaceAssertion {
 	return a
 }
 
-func (a *NamespaceAssertion) DoesExist() *NamespaceAssertion{
+func (a *NamespaceAssertion) DoesExist() *NamespaceAssertion {
 	err := a.loadNamespace()
-	require.NoError(a.t,err)
+	require.NoError(a.t, err)
 	return a
 }
 

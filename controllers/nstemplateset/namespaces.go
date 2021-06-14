@@ -184,7 +184,7 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", ns.Name)
 			}
 
-			if err := r.Client.Get(context.TODO(),types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); err != nil {
+			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); err != nil {
 				if errors.IsNotFound(err) {
 					return true, nil // namespace was actually deleted and thus not found by get
 				}
@@ -192,7 +192,7 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 			// No error implies namespace was not deleted
 			v := validationError{}
 			err = &v
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed,err, "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name)
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name)
 		}
 	}
 	return false, nil

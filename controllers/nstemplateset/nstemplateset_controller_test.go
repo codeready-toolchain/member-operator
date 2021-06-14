@@ -979,7 +979,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		req := newReconcileRequest(namespaceName, username)
 
 		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-			fmt.Printf("Calling Mock Delete")
+			fmt.Printf("Skipping deletion")
 			return nil
 		}
 		// when a first reconcile loop was triggered

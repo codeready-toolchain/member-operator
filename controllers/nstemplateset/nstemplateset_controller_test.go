@@ -970,7 +970,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
 	})
 
-	t.Run("NSTemplateSet not deleted untill namespace is deleted", func(t *testing.T) {
+	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withDeletionTs(), withClusterResources("abcde11"))
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))

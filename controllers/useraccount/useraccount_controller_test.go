@@ -1511,11 +1511,6 @@ func newNSTmplSetWithStatus(username, reason, meessage string) *toolchainv1alpha
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      username,
 			Namespace: test.MemberOperatorNs,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					BlockOwnerDeletion: func(b bool) *bool { return &b }(true),
-				},
-			},
 		},
 		Spec: newNSTmplSetSpec(),
 		Status: toolchainv1alpha1.NSTemplateSetStatus{

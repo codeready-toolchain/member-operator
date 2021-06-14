@@ -562,17 +562,6 @@ func TestDeleteNamespsace(t *testing.T) {
 		// given
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS)
 
-		cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-			if obj, ok := obj.(*corev1.Namespace); ok {
-				// mark namespaces as deleted...
-				deletionTS := metav1.Now()
-				obj.SetDeletionTimestamp(&deletionTS)
-				// ... but replace them in the fake client cache yet instead of deleting them
-				return cl.Client.Update(ctx, obj)
-			}
-			return cl.Client.Delete(ctx, obj, opts...)
-		}
-
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when
 			deleted, err := manager.delete(log, nsTmplSet)
@@ -582,7 +571,7 @@ func TestDeleteNamespsace(t *testing.T) {
 			assert.True(t, deleted)
 			// get the first namespace and check its deletion timestamp
 			firstNSName := fmt.Sprintf("%s-dev", username)
-			AssertThatNamespace(t, firstNSName, cl).HasDeletionTimestamp()
+			AssertThatNamespace(t, firstNSName, cl).DoesNotExist()
 
 			t.Run("delete the second namespace", func(t *testing.T) {
 				// when
@@ -593,7 +582,7 @@ func TestDeleteNamespsace(t *testing.T) {
 				assert.True(t, deleted)
 				// get the second namespace and check its deletion timestamp
 				secondtNSName := fmt.Sprintf("%s-code", username)
-				AssertThatNamespace(t, secondtNSName, cl).HasDeletionTimestamp()
+				AssertThatNamespace(t, secondtNSName, cl).DoesNotExist()
 			})
 		})
 	})

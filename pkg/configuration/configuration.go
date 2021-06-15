@@ -160,7 +160,6 @@ func (c *Config) setConfigDefaults() {
 	c.member.SetDefault(clusterHealthCheckPeriod, defaultClusterHealthCheckPeriod)
 	c.member.SetDefault(toolchainClusterTimeout, defaultClusterHealthCheckTimeout)
 	c.member.SetDefault(identityProviderName, defaultIdentityProviderName)
-	c.member.SetDefault(varMemberStatusRefreshTime, defaultMemberStatusRefreshTime)
 	c.member.SetDefault(varConsoleNamespace, defaultConsoleNamespace)
 	c.member.SetDefault(varConsoleRouteName, defaultConsoleRouteName)
 	c.member.SetDefault(varCheNamespace, defaultCheNamespace)
@@ -211,11 +210,6 @@ func (c *Config) GetClusterHealthCheckPeriod() time.Duration {
 // GetToolchainClusterTimeout returns the configured cluster health check timeout
 func (c *Config) GetToolchainClusterTimeout() time.Duration {
 	return c.member.GetDuration(toolchainClusterTimeout)
-}
-
-// GetMemberStatusRefreshTime returns the time how often the MemberStatus should load and refresh the current hosted-toolchain status
-func (c *Config) GetMemberStatusRefreshTime() time.Duration {
-	return c.member.GetDuration(varMemberStatusRefreshTime)
 }
 
 // GetConsoleNamespace returns the console route namespace

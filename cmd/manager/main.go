@@ -11,6 +11,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
+	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/controllers/memberstatus"
 	"github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
@@ -224,6 +225,13 @@ func main() {
 		GetHostCluster: cluster.GetHostCluster,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccountStatus")
+		os.Exit(1)
+	}
+	if err = (&memberoperatorconfig.Reconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MemberOperatorConfig")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

@@ -25,12 +25,6 @@ const (
 
 // Configuration constants
 const (
-	// varMemberStatusRefreshTime specifies how often the MemberStatus should load and refresh the current member cluster status
-	varMemberStatusRefreshTime = "memberstatus.refresh.time"
-
-	// defaultMemberStatusRefreshTime is the default refresh period for MemberStatus
-	defaultMemberStatusRefreshTime = "5s"
-
 	// varConsoleNamespace is the console route namespace
 	varConsoleNamespace = "console.namespace"
 

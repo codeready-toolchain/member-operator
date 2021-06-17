@@ -7,7 +7,6 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
@@ -105,11 +104,4 @@ func newMemberOperatorConfigWithReset(t *testing.T, options ...testconfig.Member
 
 func matchesDefaultConfig(t *testing.T, actual MemberOperatorConfig) {
 	assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
-}
-
-func newController(cl client.Client, members cluster.GetMemberClustersFunc) Reconciler {
-	return Reconciler{
-		Client: cl,
-		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
-	}
 }

@@ -2,7 +2,6 @@ package memberoperatorconfig
 
 import (
 	"context"
-	"time"
 
 	"github.com/go-logr/logr"
 
@@ -17,11 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-const configResourceName = "config"
-
-// Requeue every 10 seconds by default to ensure the MemberOperatorConfig on each member remains synchronized with the MemberOperatorConfig
-var defaultReconcile = reconcile.Result{RequeueAfter: 10 * time.Second}
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {

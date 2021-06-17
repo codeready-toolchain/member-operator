@@ -28,20 +28,6 @@ func (a MemberStatusConfig) RefreshPeriod() time.Duration {
 	return d
 }
 
-func getBool(value *bool, defaultValue bool) bool {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
-}
-
-func getInt(value *int, defaultValue int) int {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
-}
-
 func getString(value *string, defaultValue string) string {
 	if value != nil {
 		return *value

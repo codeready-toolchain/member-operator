@@ -84,7 +84,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		require.Equal(t, expectedErrMsg, err.Error())
+		require.Equal(t, "unable to get MemberOperatorConfig: "+expectedErrMsg, err.Error())
 		assert.Equal(t, reconcile.Result{}, res)
 	})
 }

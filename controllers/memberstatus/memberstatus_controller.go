@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	cfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -91,11 +92,16 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling MemberStatus")
-	requeueTime := r.Config.GetMemberStatusRefreshTime()
+
+	config, err := cfg.GetConfig(r.Client, request.Namespace)
+	if err != nil {
+		return reconcile.Result{}, errs.Wrapf(err, "unable to get MemberOperatorConfig")
+	}
+	requeuePeriod := config.MemberStatus().RefreshPeriod()
 
 	// Fetch the MemberStatus
 	memberStatus := &toolchainv1alpha1.MemberStatus{}
-	err := r.Client.Get(context.TODO(), request.NamespacedName, memberStatus)
+	err = r.Client.Get(context.TODO(), request.NamespacedName, memberStatus)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -109,11 +115,11 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus)
 	if err != nil {
 		reqLogger.Error(err, "Failed to update status")
-		return reconcile.Result{RequeueAfter: requeueTime}, err
+		return reconcile.Result{RequeueAfter: requeuePeriod}, err
 	}
 
-	reqLogger.Info(fmt.Sprintf("Finished updating MemberStatus, requeueing after %v", requeueTime))
-	return reconcile.Result{RequeueAfter: requeueTime}, nil
+	reqLogger.Info(fmt.Sprintf("Finished updating MemberStatus, requeueing after %v", requeuePeriod))
+	return reconcile.Result{RequeueAfter: requeuePeriod}, nil
 }
 
 type statusHandler struct {

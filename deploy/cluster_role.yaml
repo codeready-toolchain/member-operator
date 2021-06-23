@@ -228,6 +228,32 @@ rules:
 - apiGroups:
   - toolchain.dev.openshift.com
   resources:
+  - memberoperatorconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - memberoperatorconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - memberoperatorconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
   - memberstatuses
   verbs:
   - create

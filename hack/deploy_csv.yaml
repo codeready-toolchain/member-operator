@@ -185,7 +185,8 @@ data:
                             the autoscaler buffer
                           type: string
                         bufferReplicas:
-                          description: Represents the number of autoscaler buffer pods
+                          description: Represents the number of autoscaler buffer replicas
+                            to request
                           type: integer
                         deploy:
                           description: Defines the flag that determines whether to deploy
@@ -196,10 +197,15 @@ data:
                       description: Keeps parameters concerned with Che/CRW
                       properties:
                         cheSecret:
+                          description: Defines all secrets related to Che configuration
                           properties:
                             cheAdminPasswordKey:
+                              description: The key for the Che admin password in the secret
+                                values map
                               type: string
                             cheAdminUsernameKey:
+                              description: The key for the Che admin username in the secret
+                                values map
                               type: string
                             ref:
                               description: Reference is the name of the secret resource

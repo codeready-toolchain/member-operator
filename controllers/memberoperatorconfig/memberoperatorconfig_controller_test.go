@@ -1,4 +1,4 @@
-package memberoperatorconfig
+package memberoperatorconfig_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	. "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +19,7 @@ import (
 
 func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	// given
-	config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 	cl := test.NewFakeClient(t, config)
 	controller := Reconciler{
 		Client: cl,
@@ -97,11 +97,6 @@ func newRequest() reconcile.Request {
 	}
 }
 
-func newMemberOperatorConfigWithReset(t *testing.T, options ...testconfig.MemberOperatorConfigOption) *toolchainv1alpha1.MemberOperatorConfig {
-	t.Cleanup(Reset)
-	return testconfig.NewMemberOperatorConfig(options...)
-}
-
-func matchesDefaultConfig(t *testing.T, actual MemberOperatorConfig) {
+func matchesDefaultConfig(t *testing.T, actual Configuration) {
 	assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
 }

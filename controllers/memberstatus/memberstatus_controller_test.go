@@ -8,13 +8,14 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/h2non/gock.v1"
 
@@ -40,7 +41,7 @@ var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 
 const defaultMemberOperatorName = "member-operator"
 
-const defaultMemberStatusName = configuration.MemberStatusName
+const defaultMemberStatusName = memberCfg.MemberStatusName
 
 // che test constants
 const (
@@ -474,9 +475,8 @@ func TestOverallStatusCondition(t *testing.T) {
 
 			t.Run("when required", func(t *testing.T) {
 				// given
-				reset := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_CHE_REQUIRED", "true")
-				defer reset()
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+				config := memberCfg.NewMemberOperatorConfigWithReset(t, testconfig.Che().Required(true))
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
 
 				// when
 				res, err := reconciler.Reconcile(req)
@@ -502,14 +502,15 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			// given
-			restore := test.SetEnvVarsAndRestore(t,
-				test.Env("WATCH_NAMESPACE", "toolchain-member"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			)
-			defer restore()
+			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+				testconfig.Che().
+					UserDeletionEnabled(true).
+					Secret().
+					Ref("test-secret").
+					CheAdminUsernameKey("che.admin.username").
+					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			defer gock.OffAll()
 			gock.New(testCheURL).
@@ -533,15 +534,12 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("che admin user not configured (no member secret)", func(t *testing.T) {
 			// given
-			restore := test.SetEnvVarsAndRestore(t,
-				test.Env("WATCH_NAMESPACE", "toolchain-member"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "true"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			)
-			defer restore()
+			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+				testconfig.Che().
+					Required(true).
+					UserDeletionEnabled(true))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -558,15 +556,16 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("no che route", func(t *testing.T) {
 			// given
-			restore := test.SetEnvVarsAndRestore(t,
-				test.Env("WATCH_NAMESPACE", "toolchain-member"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "true"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			)
-			defer restore()
+			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+				testconfig.Che().
+					Required(true).
+					UserDeletionEnabled(true).
+					Secret().
+					Ref("test-secret").
+					CheAdminUsernameKey("che.admin.username").
+					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(req)
@@ -583,15 +582,16 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("che API check failure", func(t *testing.T) {
 			// given
-			restore := test.SetEnvVarsAndRestore(t,
-				test.Env("WATCH_NAMESPACE", "toolchain-member"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_REQUIRED", "true"),
-				test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-				test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			)
-			defer restore()
+			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+				testconfig.Che().
+					Required(true).
+					UserDeletionEnabled(true).
+					Secret().
+					Ref("test-secret").
+					CheAdminUsernameKey("che.admin.username").
+					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 			defer gock.OffAll()
 			gock.New(testCheURL).
 				Get(cheUserPath).
@@ -683,14 +683,14 @@ func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterF
 func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := configuration.LoadConfig(fakeClient)
+	config, err := memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
 	require.NoError(t, err)
 	r := &Reconciler{
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              scheme.Scheme,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
-		Config:              config,
+		config:              config,
 		CheClient:           cheTestClient(config, allNamespacesClient),
 		Log:                 ctrl.Log.WithName("controllers").WithName("MemberStatus"),
 	}
@@ -799,7 +799,7 @@ func cheRoute(tls bool) *routev1.Route {
 	return r
 }
 
-func cheTestClient(cfg *configuration.Config, cl client.Client) *che.Client {
+func cheTestClient(cfg memberCfg.Configuration, cl client.Client) *che.Client {
 	tokenCache := che.NewTokenCacheWithToken(
 		http.DefaultClient,
 		&che.TokenSet{

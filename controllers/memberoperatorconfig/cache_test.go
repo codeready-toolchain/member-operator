@@ -28,9 +28,9 @@ func TestCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5*time.Second, defaultConfig.MemberStatus().RefreshPeriod())
 
-	t.Run("return config that is stored in client", func(t *testing.T) {
+	t.Run("return config that is stored in cache", func(t *testing.T) {
 		// given
-		config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 		cl := NewFakeClient(t, config)
 
 		// when
@@ -42,7 +42,7 @@ func TestCache(t *testing.T) {
 
 		t.Run("returns the same when the cache hasn't been updated", func(t *testing.T) {
 			// given
-			newConfig := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+			newConfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 			cl := NewFakeClient(t, newConfig)
 
 			// when
@@ -55,11 +55,11 @@ func TestCache(t *testing.T) {
 
 		t.Run("returns the new config when the cache was updated", func(t *testing.T) {
 			// given
-			newConfig := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
+			newConfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 			cl := NewFakeClient(t)
 
 			// when
-			updateConfig(newConfig)
+			updateConfig(newConfig, map[string]map[string]string{})
 
 			// then
 			actual, err := GetConfig(cl, MemberOperatorNs)
@@ -72,7 +72,7 @@ func TestCache(t *testing.T) {
 func TestGetConfigFailed(t *testing.T) {
 	// given
 	t.Run("config not found", func(t *testing.T) {
-		config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
+		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 			return apierrors.NewNotFound(schema.GroupResource{}, "config")
@@ -88,7 +88,7 @@ func TestGetConfigFailed(t *testing.T) {
 	})
 
 	t.Run("error getting config", func(t *testing.T) {
-		config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
+		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
 			return fmt.Errorf("some error")
@@ -109,7 +109,7 @@ func TestMultipleExecutionsInParallel(t *testing.T) {
 	var latch sync.WaitGroup
 	latch.Add(1)
 	var waitForFinished sync.WaitGroup
-	initconfig := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
+	initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
 	cl := NewFakeClient(t, initconfig)
 
 	for i := 1; i < 1001; i++ {
@@ -128,8 +128,8 @@ func TestMultipleExecutionsInParallel(t *testing.T) {
 		go func(i int) {
 			defer waitForFinished.Done()
 			latch.Wait()
-			config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod(fmt.Sprintf("%ds", i)))
-			updateConfig(config)
+			config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod(fmt.Sprintf("%ds", i)))
+			updateConfig(config, map[string]map[string]string{})
 		}(i)
 	}
 

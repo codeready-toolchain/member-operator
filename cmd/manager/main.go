@@ -19,7 +19,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
@@ -114,18 +113,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	crtConfig, err := getCRTConfiguration(cfg)
-	if err != nil {
-		setupLog.Error(err, "")
-		os.Exit(1)
-	}
-	crtConfig.Print()
-
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {
 		setupLog.Error(err, "Failed to get watch namespace")
 		os.Exit(1)
 	}
+
+	crtConfig, err := getCRTConfiguration(cfg, namespace)
+	if err != nil {
+		setupLog.Error(err, "")
+		os.Exit(1)
+	}
+	// crtConfig.Print()
 
 	ctx := context.TODO()
 	// Become the leader before proceeding
@@ -173,7 +172,7 @@ func main() {
 		mgr,
 		ctrl.Log.WithName("controllers").WithName("ToolchainCluster"),
 		namespace,
-		crtConfig.GetToolchainClusterTimeout(),
+		crtConfig.ToolchainCluster().HealthCheckTimeout(),
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
 		os.Exit(1)
@@ -192,7 +191,6 @@ func main() {
 		Log:                 ctrl.Log.WithName("controllers").WithName("MemberStatus"),
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
-		Config:              crtConfig,
 		AllNamespacesClient: allNamespacesClient,
 		CheClient:           che.DefaultClient,
 	}).SetupWithManager(mgr); err != nil {
@@ -212,7 +210,6 @@ func main() {
 		Client:    mgr.GetClient(),
 		Log:       ctrl.Log.WithName("controllers").WithName("UserAccount"),
 		Scheme:    mgr.GetScheme(),
-		Config:    crtConfig,
 		CheClient: che.DefaultClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccount")
@@ -250,9 +247,9 @@ func main() {
 
 		// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
 		// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
-		if crtConfig.DoDeployWebhook() {
+		if crtConfig.Webhook().Deploy() {
 			setupLog.Info("(Re)Deploying users' pods webhook")
-			if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetMemberOperatorWebhookImage()); err != nil {
+			if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.Webhook().Image()); err != nil {
 				setupLog.Error(err, "cannot deploy mutating users' pods webhook")
 				os.Exit(1)
 			}
@@ -261,9 +258,9 @@ func main() {
 			setupLog.Info("Skipping deployment of users' pods webhook")
 		}
 
-		if crtConfig.DoDeployAutoscalingBuffer() {
+		if crtConfig.Autoscaler().Deploy() {
 			setupLog.Info("(Re)Deploying autoscaling buffer")
-			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.GetAutoscalerBufferMemory(), crtConfig.GetAutoscalerBufferReplicas()); err != nil {
+			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.Autoscaler().BufferMemory(), crtConfig.Autoscaler().BufferReplicas()); err != nil {
 				setupLog.Error(err, "cannot deploy autoscaling buffer")
 				os.Exit(1)
 			}
@@ -282,11 +279,11 @@ func main() {
 		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")
-		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.GetClusterHealthCheckPeriod())
+		toolchaincluster.StartHealthChecks(mgr, namespace, stopChannel, crtConfig.ToolchainCluster().HealthCheckPeriod())
 
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")
-		memberStatusName := configuration.MemberStatusName
+		memberStatusName := memberoperatorconfig.MemberStatusName
 		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), mgr.GetScheme(), namespace, memberStatusName); err != nil {
 			setupLog.Error(err, "cannot create/update MemberStatus resource")
 			os.Exit(1)
@@ -411,12 +408,12 @@ func serveCRMetrics(cfg *rest.Config, operatorNs string) error { // nolint:unuse
 
 // getCRTConfiguration creates the client used for configuration and
 // returns the loaded crt configuration
-func getCRTConfiguration(config *rest.Config) (*configuration.Config, error) {
+func getCRTConfiguration(config *rest.Config, namespace string) (memberoperatorconfig.Configuration, error) {
 	// create client that will be used for retrieving the member operator config maps
 	cl, err := client.New(config, client.Options{})
 	if err != nil {
-		return nil, err
+		return memberoperatorconfig.Configuration{}, err
 	}
 
-	return configuration.LoadConfig(cl)
+	return memberoperatorconfig.GetConfig(cl, namespace)
 }

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	. "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/require"
@@ -27,7 +27,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		cl := NewFakeClient(t)
 
 		// when
-		err = CreateOrUpdateResources(cl, s, MemberOperatorNs, configuration.MemberStatusName)
+		err = CreateOrUpdateResources(cl, s, MemberOperatorNs, memberCfg.MemberStatusName)
 
 		// then
 		require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		}
 
 		// when
-		err = CreateOrUpdateResources(cl, s, MemberOperatorNs, configuration.MemberStatusName)
+		err = CreateOrUpdateResources(cl, s, MemberOperatorNs, memberCfg.MemberStatusName)
 
 		// then
 		require.Error(t, err)

@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
+
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -27,7 +29,7 @@ const (
 	testKeycloakURL = "https://keycloak-codeready-workspaces-operator.member-cluster"
 )
 
-func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, *crtcfg.Config) {
+func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, memberCfg.Configuration) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	s := scheme.Scheme
@@ -35,7 +37,7 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := crtcfg.LoadConfig(fakeClient)
+	config, err := memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
 	require.NoError(t, err)
 
 	return fakeClient, config
@@ -68,17 +70,19 @@ func TestGetToken(t *testing.T) {
 	})
 
 	t.Run("with configuration", func(t *testing.T) {
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", "toolchain-member"),
-			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			test.Env(crtcfg.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
-		)
-		defer restore()
+		config := memberCfg.NewMemberOperatorConfigWithReset(t,
+			testconfig.Che().
+				UserDeletionEnabled(true).
+				KeycloakRouteName("keycloak").
+				Secret().
+				Ref("test-secret").
+				CheAdminUsernameKey("che.admin.username").
+				CheAdminPasswordKey("che.admin.password"))
 
 		t.Run("no keycloak route", func(t *testing.T) {
 			// given
 			tokenCache := testTokenCache()
-			cl, cfg := prepareClientAndConfig(t, testSecret)
+			cl, cfg := prepareClientAndConfig(t, config, testSecret)
 
 			// when
 			tok, err := tokenCache.getToken(cl, cfg)

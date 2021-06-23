@@ -5,9 +5,8 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	cfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
-	crtCfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
@@ -72,10 +71,10 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 // Reconciler reconciles a MemberStatus object
 type Reconciler struct {
 	Client              client.Client
+	config              memberCfg.Configuration
 	Log                 logr.Logger
 	Scheme              *runtime.Scheme
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
-	Config              *crtCfg.Config
 	AllNamespacesClient client.Client
 	CheClient           *che.Client
 }
@@ -93,10 +92,13 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	reqLogger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling MemberStatus")
 
-	config, err := cfg.GetConfig(r.Client, request.Namespace)
+	// retrieve the latest config and use it for this reconciliation
+	config, err := memberCfg.GetConfig(r.Client, request.Namespace)
 	if err != nil {
 		return reconcile.Result{}, errs.Wrapf(err, "unable to get MemberOperatorConfig")
 	}
+	r.config = config
+
 	requeuePeriod := config.MemberStatus().RefreshPeriod()
 
 	// Fetch the MemberStatus
@@ -165,8 +167,8 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 	attributes := status.ToolchainClusterAttributes{
 		GetClusterFunc: r.GetHostCluster,
-		Period:         r.Config.GetClusterHealthCheckPeriod(),
-		Timeout:        r.Config.GetToolchainClusterTimeout(),
+		Period:         r.config.ToolchainCluster().HealthCheckPeriod(),
+		Timeout:        r.config.ToolchainCluster().HealthCheckTimeout(),
 	}
 
 	// look up host connection status
@@ -279,7 +281,7 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 
 	cheURL, err := r.cheDashboardURL()
 	if err != nil {
-		if r.Config.IsCheRequired() {
+		if r.config.Che().IsRequired() {
 			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
 			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 			return err
@@ -302,7 +304,7 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 	}
 
 	// Is che user deletion enabled
-	if !r.Config.IsCheUserDeletionEnabled() {
+	if !r.config.Che().IsUserDeletionEnabled() {
 		// Che user deletion is not enabled, set condition to Ready. No further checks required
 		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserDeletionNotEnabledReason)
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
@@ -418,7 +420,7 @@ func (r *Reconciler) setStatusNotReady(memberStatus *toolchainv1alpha1.MemberSta
 
 func (r *Reconciler) consoleURL() (string, error) {
 	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: r.Config.GetConsoleNamespace(), Name: r.Config.GetConsoleRouteName()}
+	namespacedName := types.NamespacedName{Namespace: r.config.Console().Namespace(), Name: r.config.Console().RouteName()}
 	if err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
 		return "", err
 	}
@@ -427,7 +429,7 @@ func (r *Reconciler) consoleURL() (string, error) {
 
 func (r *Reconciler) cheDashboardURL() (string, error) {
 	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: r.Config.GetCheNamespace(), Name: r.Config.GetCheRouteName()}
+	namespacedName := types.NamespacedName{Namespace: r.config.Che().Namespace(), Name: r.config.Che().RouteName()}
 	err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route)
 	if err != nil {
 		return "", err
@@ -442,5 +444,5 @@ func (r *Reconciler) cheDashboardURL() (string, error) {
 // isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
 // Returns false otherwise.
 func (r *Reconciler) isCheAdminUserConfigured() bool {
-	return r.Config.GetCheAdminUsername() != "" && r.Config.GetCheAdminPassword() != ""
+	return r.config.Che().AdminUserName() != "" && r.config.Che().AdminPassword() != ""
 }

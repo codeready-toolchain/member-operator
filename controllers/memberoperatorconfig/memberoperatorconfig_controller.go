@@ -7,6 +7,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -26,7 +27,19 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource MemberOperatorConfig
-	return c.Watch(&source.Kind{Type: &toolchainv1alpha1.MemberOperatorConfig{}}, &handler.EnqueueRequestForObject{}, &predicate.GenerationChangedPredicate{})
+	if err = c.Watch(
+		&source.Kind{Type: &toolchainv1alpha1.MemberOperatorConfig{}},
+		&handler.EnqueueRequestForObject{}, &predicate.GenerationChangedPredicate{},
+	); err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resources: Namespaces associated with an NSTemplateSet (not owned, though - see https://issues.redhat.com/browse/CRT-429)
+	return c.Watch(
+		&source.Kind{Type: &corev1.Secret{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: SecretToMemberOperatorConfigMapper{client: mgr.GetClient()},
+		})
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -67,6 +80,12 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-	updateConfig(memberconfig)
+
+	allSecrets, err := loadSecrets(r.Client)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	updateConfig(memberconfig, allSecrets)
 	return reconcile.Result{}, nil
 }

@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/stretchr/testify/require"
@@ -24,11 +25,6 @@ const (
 func TestUserExists(t *testing.T) {
 	// given
 	testSecret := newTestSecret()
-	restore := test.SetEnvVarsAndRestore(t,
-		test.Env("WATCH_NAMESPACE", "toolchain-member"),
-		test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-	)
-	defer restore()
 
 	t.Run("missing che route", func(t *testing.T) {
 		// given
@@ -127,11 +123,6 @@ func TestUserExists(t *testing.T) {
 func TestGetUserIDByUsername(t *testing.T) {
 	// given
 	testSecret := newTestSecret()
-	restore := test.SetEnvVarsAndRestore(t,
-		test.Env("WATCH_NAMESPACE", "toolchain-member"),
-		test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-	)
-	defer restore()
 
 	t.Run("missing che route", func(t *testing.T) {
 		// given
@@ -255,12 +246,6 @@ func TestDeleteUser(t *testing.T) {
 	// given
 	testSecret := newTestSecret()
 
-	restore := test.SetEnvVarsAndRestore(t,
-		test.Env("WATCH_NAMESPACE", "toolchain-member"),
-		test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-	)
-	defer restore()
-
 	t.Run("missing che route", func(t *testing.T) {
 		// given
 		cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
@@ -353,11 +338,6 @@ func TestDeleteUser(t *testing.T) {
 func TestUserAPICheck(t *testing.T) {
 	// given
 	testSecret := newTestSecret()
-	restore := test.SetEnvVarsAndRestore(t,
-		test.Env("WATCH_NAMESPACE", "toolchain-member"),
-		test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-	)
-	defer restore()
 
 	t.Run("missing che admin credentials", func(t *testing.T) {
 		// given
@@ -464,12 +444,14 @@ func TestCheRequest(t *testing.T) {
 	})
 
 	t.Run("error scenarios", func(t *testing.T) {
-
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", "toolchain-member"),
-			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-		)
-		defer restore()
+		config := memberCfg.NewMemberOperatorConfigWithReset(t,
+			testconfig.Che().
+				UserDeletionEnabled(true).
+				KeycloakRouteName("keycloak").
+				Secret().
+				Ref("test-secret").
+				CheAdminUsernameKey("che.admin.username").
+				CheAdminPasswordKey("che.admin.password"))
 
 		t.Run("no che route", func(t *testing.T) {
 			// given
@@ -490,12 +472,8 @@ func TestCheRequest(t *testing.T) {
 		})
 
 		t.Run("no keycloak route", func(t *testing.T) {
-			keycloakEnvRestore := test.SetEnvVarsAndRestore(t,
-				test.Env(crtcfg.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
-			)
-			defer keycloakEnvRestore()
 			// given
-			cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true))
+			cl, cfg := prepareClientAndConfig(t, testSecret, config, cheRoute(true))
 			cheClient := &Client{
 				config:     cfg,
 				httpClient: http.DefaultClient,

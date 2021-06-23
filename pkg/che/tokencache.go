@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +44,7 @@ func NewTokenCacheWithToken(cl *http.Client, t *TokenSet) *TokenCache {
 }
 
 // getToken returns the token needed to use Che user APIs, or an error if there was a problem getting the token
-func (tc *TokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
+func (tc *TokenCache) getToken(cl client.Client, cfg memberCfg.Configuration) (TokenSet, error) {
 	tc.RLock()
 	// use the cached credentials if they are still valid
 	if !tokenExpired(tc.token) {
@@ -59,7 +59,7 @@ func (tc *TokenCache) getToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, 
 }
 
 // obtainAndCacheNewToken obtains an access token, updates the cache and returns the token. Returns an error if there was a failure at any point
-func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Config) (TokenSet, error) {
+func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg memberCfg.Configuration) (TokenSet, error) {
 	defer tc.Unlock()
 	tc.Lock()
 
@@ -70,13 +70,13 @@ func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg *crtcfg.Confi
 
 	// no valid token, retrieve a new one
 	// get the credentials
-	user, pass := cfg.GetCheAdminUsername(), cfg.GetCheAdminPassword()
+	user, pass := cfg.Che().AdminUserName(), cfg.Che().AdminPassword()
 	if user == "" || pass == "" {
 		return TokenSet{}, fmt.Errorf("the che admin username and/or password are not configured")
 	}
 
 	// get keycloak URL
-	cheKeycloakURL, err := route.GetRouteURL(cl, cfg.GetCheNamespace(), cfg.GetCheKeycloakRouteName())
+	cheKeycloakURL, err := route.GetRouteURL(cl, cfg.Che().Namespace(), cfg.Che().KeycloakRouteName())
 	if err != nil {
 		return TokenSet{}, err
 	}

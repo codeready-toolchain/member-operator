@@ -986,7 +986,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		_, err := r.Reconcile(req)
 
 		// then
-		require.NoError(t, err)
+		require.Error(t, err)
 		// get the first namespace and check that it is not deleted
 		firstNSName := fmt.Sprintf("%s-dev", username)
 		AssertThatNamespace(t, firstNSName, r.Client).DoesExist()

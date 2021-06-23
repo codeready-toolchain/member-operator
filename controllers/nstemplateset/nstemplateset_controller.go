@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -177,8 +176,13 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 
 	// delete all namespace one by one
 	deletedAny, err := r.namespaces.delete(logger, nsTmplSet)
-	if err != nil || deletedAny {
+
+	if deletedAny {
 		return reconcile.Result{}, nil
+	}
+	// when err, status Update will not trigger reconcile, sending returning error.
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user

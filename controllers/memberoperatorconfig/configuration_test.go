@@ -17,7 +17,7 @@ func TestAuth(t *testing.T) {
 		assert.Equal(t, "rhd", memberOperatorCfg.Auth().IdP())
 	})
 	t.Run("non-default", func(t *testing.T) {
-		cfg := NewMemberOperatorConfigWithReset(t, testconfig.Auth().IdP("another"))
+		cfg := NewMemberOperatorConfigWithReset(t, testconfig.Auth().Idp("another"))
 		memberOperatorCfg := Configuration{m: &cfg.Spec}
 
 		assert.Equal(t, "another", memberOperatorCfg.Auth().IdP())

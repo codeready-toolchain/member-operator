@@ -52,7 +52,7 @@ type AuthConfig struct {
 }
 
 func (a AuthConfig) IdP() string {
-	return getString(a.auth.IdP, "rhd")
+	return getString(a.auth.Idp, "rhd")
 }
 
 type AutoscalerConfig struct {

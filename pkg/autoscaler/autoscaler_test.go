@@ -221,7 +221,7 @@ func marshalRuntimeObject(t *testing.T, obj runtime.Object) string {
 }
 
 func priorityClass() string {
-	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"member-operator-autoscaling-buffer","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-5,"globalDefault":false,"description":"This priority class is to be used by the autoscaling buffer pod only"}`
+	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"member-operator-autoscaling-buffer","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-100,"globalDefault":false,"description":"This priority class is to be used by the autoscaling buffer pod only"}`
 }
 
 func deployment(memory string, replicas int) string {

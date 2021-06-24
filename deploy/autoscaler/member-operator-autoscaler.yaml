@@ -9,7 +9,7 @@ objects:
       name: member-operator-autoscaling-buffer
       labels:
         toolchain.dev.openshift.com/provider: codeready-toolchain
-    value: -5
+    value: -100
     globalDefault: false
     description: "This priority class is to be used by the autoscaling buffer pod only"
   - apiVersion: apps/v1

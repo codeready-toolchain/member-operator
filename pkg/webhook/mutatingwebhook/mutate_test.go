@@ -41,7 +41,7 @@ func TestMutateSuccess(t *testing.T) {
 
 func verifySuccessfulResponse(t *testing.T, response []byte) {
 	reviewResponse := toReviewResponse(t, response)
-	assert.Equal(t, `[{"op":"replace","path":"/spec/priorityClassName","value":"sandbox-users-pods"},{"op":"replace","path":"/spec/priority","value":-10}]`, string(reviewResponse.Patch))
+	assert.Equal(t, `[{"op":"replace","path":"/spec/priorityClassName","value":"sandbox-users-pods"},{"op":"replace","path":"/spec/priority","value":-3}]`, string(reviewResponse.Patch))
 	assert.Contains(t, "the sandbox-users-pods PriorityClass was set", reviewResponse.AuditAnnotations["users_pods_mutating_webhook"])
 	assert.True(t, reviewResponse.Allowed)
 	assert.Equal(t, v1.PatchTypeJSONPatch, *reviewResponse.PatchType)

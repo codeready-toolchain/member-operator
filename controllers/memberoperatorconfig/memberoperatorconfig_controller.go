@@ -35,11 +35,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to secrets that should trigger an update of the config cache
+	// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;watch;list
 	return c.Watch(
 		&source.Kind{Type: &corev1.Secret{}},
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: SecretToMemberOperatorConfigMapper{client: mgr.GetClient()},
-		})
+		},
+		&predicate.GenerationChangedPredicate{},
+	)
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -48,6 +48,26 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 		}, req[0].NamespacedName)
 	})
 
+	t.Run("test secret from another namespace is not mapped", func(t *testing.T) {
+		c := test.NewFakeClient(t, config)
+
+		mapper := &SecretToMemberOperatorConfigMapper{
+			client: c,
+		}
+
+		// This is required for the mapper to function
+		restore := test.SetEnvVarAndRestore(t, k8sutil.WatchNamespaceEnvVar, test.MemberOperatorNs)
+		defer restore()
+
+		secretFromAnotherNamespace := secret.DeepCopy()
+		secretFromAnotherNamespace.Namespace = "default"
+		req := mapper.Map(handler.MapObject{
+			Object: secretFromAnotherNamespace,
+		})
+
+		require.Len(t, req, 0)
+	})
+
 	t.Run("test SecretToMemberOperatorConfigMapper returns nil when client list fails", func(t *testing.T) {
 		c := test.NewFakeClient(t)
 		c.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
@@ -61,7 +81,7 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 			Object: secret,
 		})
 
-		require.Nil(t, req)
+		require.Len(t, req, 0)
 	})
 
 	t.Run("test SecretToMemberOperatorConfigMapper returns nil when watch namespace not set ", func(t *testing.T) {
@@ -74,6 +94,6 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 			Object: secret,
 		})
 
-		require.Nil(t, req)
+		require.Len(t, req, 0)
 	})
 }

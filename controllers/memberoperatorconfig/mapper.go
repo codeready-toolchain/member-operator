@@ -22,19 +22,23 @@ var _ handler.Mapper = SecretToMemberOperatorConfigMapper{}
 var mapperLog = ctrl.Log.WithName("SecretToMemberOperatorConfigMapper")
 
 func (m SecretToMemberOperatorConfigMapper) Map(obj handler.MapObject) []reconcile.Request {
-	if _, ok := obj.Object.(*corev1.Secret); ok {
-		ns, err := k8sutil.GetWatchNamespace()
+	if secret, ok := obj.Object.(*corev1.Secret); ok {
+		controllerNS, err := k8sutil.GetWatchNamespace()
 		if err != nil {
 			mapperLog.Error(err, "Could not determine watched namespace")
-			return nil
+			return []reconcile.Request{}
+		}
+
+		if secret.GetNamespace() != controllerNS {
+			return []reconcile.Request{}
 		}
 
 		config := &toolchainv1alpha1.MemberOperatorConfig{}
-		if err := m.client.Get(context.TODO(), types.NamespacedName{Namespace: ns, Name: "config"}, config); err != nil {
-			mapperLog.Error(err, "Could not get MemberOperatorConfig resource", "name", "config", "namespace", ns)
-			return nil
+		if err := m.client.Get(context.TODO(), types.NamespacedName{Namespace: controllerNS, Name: "config"}, config); err != nil {
+			mapperLog.Error(err, "Could not get MemberOperatorConfig resource", "name", "config", "namespace", controllerNS)
+			return []reconcile.Request{}
 		}
-		return []reconcile.Request{{types.NamespacedName{Namespace: ns, Name: "config"}}}
+		return []reconcile.Request{{types.NamespacedName{Namespace: controllerNS, Name: "config"}}}
 	}
 	// the obj was not a Secret
 	return []reconcile.Request{}

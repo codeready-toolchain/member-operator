@@ -172,7 +172,7 @@ func getUnstructuredObject(t *testing.T, content string) *unstructured.Unstructu
 }
 
 func priorityClass() string {
-	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"sandbox-users-pods","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-10,"globalDefault":false,"description":"Priority class for pods in users' namespaces"}`
+	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"sandbox-users-pods","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-3,"globalDefault":false,"description":"Priority class for pods in users' namespaces"}`
 }
 
 func service(namespace string) string {

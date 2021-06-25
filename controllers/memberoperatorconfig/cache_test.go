@@ -11,7 +11,10 @@ import (
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,33 +41,40 @@ func TestCache(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod())
+		assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod()) // regular value
+		assert.Equal(t, "", actual.Che().AdminUserName())                      // secret value
 
 		t.Run("returns the same when the cache hasn't been updated", func(t *testing.T) {
-			// given
-			newConfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
-			cl := NewFakeClient(t, newConfig)
-
 			// when
 			actual, err := GetConfig(cl, MemberOperatorNs)
 
 			// then
 			require.NoError(t, err)
-			assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod())
+			assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod()) // regular value
+			assert.Equal(t, "", actual.Che().AdminUserName())                      // secret value
 		})
 
 		t.Run("returns the new config when the cache was updated", func(t *testing.T) {
 			// given
-			newConfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
+			newConfig := NewMemberOperatorConfigWithReset(t,
+				testconfig.MemberStatus().RefreshPeriod("11s"),
+				testconfig.Che().Secret().
+					Ref("che-secret").
+					CheAdminUsernameKey("che-admin-username"))
 			cl := NewFakeClient(t)
-
+			secretData := map[string]map[string]string{
+				"che-secret": {
+					"che-admin-username": "cheadmin",
+				},
+			}
 			// when
-			updateConfig(newConfig, map[string]map[string]string{})
+			updateConfig(newConfig, secretData)
 
 			// then
 			actual, err := GetConfig(cl, MemberOperatorNs)
 			require.NoError(t, err)
 			assert.Equal(t, 11*time.Second, actual.MemberStatus().RefreshPeriod())
+			assert.Equal(t, "cheadmin", actual.Che().AdminUserName()) // secret value
 		})
 	})
 }
@@ -101,6 +111,139 @@ func TestGetConfigFailed(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, 5*time.Second, defaultConfig.MemberStatus().RefreshPeriod())
 
+	})
+}
+
+func TestLoadLatest(t *testing.T) {
+	t.Run("config found", func(t *testing.T) {
+		initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
+		// given
+		cl := NewFakeClient(t, initconfig)
+
+		// when
+		err := loadLatest(cl, MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("config not found", func(t *testing.T) {
+		// given
+		cl := NewFakeClient(t)
+
+		// when
+		err := loadLatest(cl, MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("get config error", func(t *testing.T) {
+		initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
+		// given
+		cl := NewFakeClient(t, initconfig)
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+			return fmt.Errorf("get error")
+		}
+
+		// when
+		err := loadLatest(cl, MemberOperatorNs)
+
+		// then
+		require.EqualError(t, err, "get error")
+	})
+
+	t.Run("load secrets error", func(t *testing.T) {
+		initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
+		// given
+		cl := NewFakeClient(t, initconfig)
+		cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			return fmt.Errorf("list error")
+		}
+
+		// when
+		err := loadLatest(cl, MemberOperatorNs)
+
+		// then
+		require.EqualError(t, err, "list error")
+	})
+}
+
+func TestLoadSecrets(t *testing.T) {
+	secretData := map[string][]byte{
+		"che-admin-username": []byte("cheadmin"),
+		"che-admin-password": []byte("password"),
+	}
+	secretData2 := map[string][]byte{
+		"che-admin-username2": []byte("cheadmin2"),
+		"che-admin-password2": []byte("password2"),
+	}
+
+	t.Run("one secret found", func(t *testing.T) {
+		// given
+		secret := newSecret("che-secret", secretData)
+		cl := NewFakeClient(t, secret)
+
+		// when
+		secrets, err := loadSecrets(cl)
+
+		// then
+		expected := map[string]string{
+			"che-admin-username": "cheadmin",
+			"che-admin-password": "password",
+		}
+		require.NoError(t, err)
+		require.Equal(t, expected, secrets["che-secret"])
+	})
+
+	t.Run("two secrets found", func(t *testing.T) {
+		// given
+		secret := newSecret("che-secret", secretData)
+		secret2 := newSecret("che-secret2", secretData2)
+		cl := NewFakeClient(t, secret, secret2)
+
+		// when
+		secrets, err := loadSecrets(cl)
+
+		// then
+		expected := map[string]string{
+			"che-admin-username": "cheadmin",
+			"che-admin-password": "password",
+		}
+		expected2 := map[string]string{
+			"che-admin-username2": "cheadmin2",
+			"che-admin-password2": "password2",
+		}
+		require.NoError(t, err)
+		require.Equal(t, expected, secrets["che-secret"])
+		require.Equal(t, expected2, secrets["che-secret2"])
+	})
+
+	t.Run("no secrets found", func(t *testing.T) {
+		// given
+		cl := NewFakeClient(t)
+
+		// when
+		secrets, err := loadSecrets(cl)
+
+		// then
+		require.NoError(t, err)
+		require.Empty(t, secrets)
+	})
+
+	t.Run("list secrets error", func(t *testing.T) {
+		// given
+		cl := NewFakeClient(t)
+		cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			return fmt.Errorf("list error")
+		}
+
+		// when
+		secrets, err := loadSecrets(cl)
+
+		// then
+		require.EqualError(t, err, "list error")
+		require.Empty(t, secrets)
 	})
 }
 
@@ -141,4 +284,14 @@ func TestMultipleExecutionsInParallel(t *testing.T) {
 	// then
 	require.NoError(t, err)
 	assert.NotEmpty(t, config.MemberStatus().RefreshPeriod())
+}
+
+func newSecret(name string, data map[string][]byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: MemberOperatorNs,
+		},
+		Data: data,
+	}
 }

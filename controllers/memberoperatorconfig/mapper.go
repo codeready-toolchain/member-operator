@@ -31,8 +31,10 @@ func (m SecretToMemberOperatorConfigMapper) Map(obj handler.MapObject) []reconci
 
 		config := &toolchainv1alpha1.MemberOperatorConfig{}
 		if err := m.client.Get(context.TODO(), types.NamespacedName{Namespace: ns, Name: "config"}, config); err != nil {
-			return []reconcile.Request{{types.NamespacedName{Namespace: ns, Name: "config"}}}
+			mapperLog.Error(err, "Could not get MemberOperatorConfig resource", "name", "config", "namespace", ns)
+			return nil
 		}
+		return []reconcile.Request{{types.NamespacedName{Namespace: ns, Name: "config"}}}
 	}
 	// the obj was not a Secret
 	return []reconcile.Request{}

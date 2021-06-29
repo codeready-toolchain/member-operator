@@ -537,7 +537,11 @@ func TestOverallStatusCondition(t *testing.T) {
 			config := memberCfg.NewMemberOperatorConfigWithReset(t,
 				testconfig.Che().
 					Required(true).
-					UserDeletionEnabled(true))
+					UserDeletionEnabled(true).
+					Secret().
+					Ref("test-secret").
+					CheAdminUsernameKey("che.admin.username").
+					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
 

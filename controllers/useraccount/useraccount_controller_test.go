@@ -1247,7 +1247,6 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 	t.Run("che user deletion is enabled", func(t *testing.T) {
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 
-		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
 		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
 			testconfig.Che().
 				UserDeletionEnabled(true).

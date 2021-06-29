@@ -1,0 +1,14 @@
+apiVersion: toolchain.dev.openshift.com/v1alpha1
+kind: ToolchainCluster
+metadata:
+  labels:
+    namespace: toolchain-host-operator
+    ownerClusterName: member-member-crvjv
+    type: host
+  name: host-host-8bs24
+  namespace: toolchain-member-operator
+spec:
+  apiEndpoint: https://api.host.crt-stage.com:6443
+  caBundle: LS0tLS1CRUdJTiBDRVJUSVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  secretRef:
+    name: host-operator-host-8ns25

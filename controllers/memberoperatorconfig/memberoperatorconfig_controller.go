@@ -29,7 +29,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Watch for changes to primary resource MemberOperatorConfig
 	if err = c.Watch(
 		&source.Kind{Type: &toolchainv1alpha1.MemberOperatorConfig{}},
-		&handler.EnqueueRequestForObject{}, &predicate.GenerationChangedPredicate{},
+		&handler.EnqueueRequestForObject{},
+		&predicate.GenerationChangedPredicate{},
 	); err != nil {
 		return err
 	}

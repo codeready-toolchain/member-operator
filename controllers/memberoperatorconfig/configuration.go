@@ -60,7 +60,7 @@ type AutoscalerConfig struct {
 }
 
 func (a AutoscalerConfig) Deploy() bool {
-	return getBool(a.autoscaler.Deploy, false)
+	return getBool(a.autoscaler.Deploy, true) // TODO it is temporarily changed to true but should be changed back to false after autoscaler handling is moved to memberoperatorconfig controller
 }
 
 func (a AutoscalerConfig) BufferMemory() string {

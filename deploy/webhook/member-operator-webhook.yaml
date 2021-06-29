@@ -9,7 +9,7 @@ objects:
     name: sandbox-users-pods
     labels:
       toolchain.dev.openshift.com/provider: codeready-toolchain
-  value: -10
+  value: -3
   globalDefault: false
   description: "Priority class for pods in users' namespaces"
 - apiVersion: v1

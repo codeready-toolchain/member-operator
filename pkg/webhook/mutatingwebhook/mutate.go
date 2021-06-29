@@ -27,7 +27,7 @@ var (
 )
 
 const (
-	priority          = int32(-10)
+	priority          = int32(-3)
 	priorityClassName = "sandbox-users-pods"
 )
 

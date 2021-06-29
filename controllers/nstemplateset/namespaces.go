@@ -183,6 +183,7 @@ func (r *namespacesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alp
 			if errors.IsNotFound(err) {
 				return true, nil // namespace was actually deleted and thus not found by get
 			}
+			return false,r.wrapErrorWithStatusUpdate(logger,nsTmplSet, r.setStatusTerminatingFailed, err, "failed to get user namespace '%s'", ns.Name)
 		}
 		// No error implies namespace was not deleted
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, fmt.Errorf("namespace deletion wasn't complete"), "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name)

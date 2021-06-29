@@ -128,7 +128,7 @@ func (a ConsoleConfig) Namespace() string {
 }
 
 func (a ConsoleConfig) RouteName() string {
-	return getString(a.console.Namespace, "console")
+	return getString(a.console.RouteName, "console")
 }
 
 type MemberStatusConfig struct {
@@ -175,10 +175,6 @@ type WebhookConfig struct {
 
 func (a WebhookConfig) Deploy() bool {
 	return getBool(a.w.Deploy, true)
-}
-
-func (a WebhookConfig) Image() string {
-	return getString(a.w.Image, "")
 }
 
 func getBool(value *bool, defaultValue bool) bool {

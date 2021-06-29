@@ -30,13 +30,13 @@ func TestAutoscaler(t *testing.T) {
 			cfg := NewMemberOperatorConfigWithReset(t)
 			memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-			assert.False(t, memberOperatorCfg.Autoscaler().Deploy())
+			assert.True(t, memberOperatorCfg.Autoscaler().Deploy())
 		})
 		t.Run("non-default", func(t *testing.T) {
-			cfg := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
 			memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-			assert.True(t, memberOperatorCfg.Autoscaler().Deploy())
+			assert.False(t, memberOperatorCfg.Autoscaler().Deploy())
 		})
 	})
 	t.Run("buffer memory", func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestAutoscaler(t *testing.T) {
 			cfg := NewMemberOperatorConfigWithReset(t)
 			memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-			assert.Equal(t, 0, memberOperatorCfg.Autoscaler().BufferReplicas())
+			assert.Equal(t, 1, memberOperatorCfg.Autoscaler().BufferReplicas())
 		})
 		t.Run("non-default", func(t *testing.T) {
 			cfg := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().BufferReplicas(2))
@@ -186,17 +186,96 @@ func TestChe(t *testing.T) {
 	})
 }
 
-func TestMemberStatusConfig(t *testing.T) {
+func TestConsole(t *testing.T) {
+	t.Run("console namespace", func(t *testing.T) {
+		t.Run("default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t)
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, "openshift-console", memberOperatorCfg.Console().Namespace())
+		})
+		t.Run("non-default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.Console().Namespace("another-namespace"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, "another-namespace", memberOperatorCfg.Console().Namespace())
+		})
+	})
+	t.Run("console route", func(t *testing.T) {
+		t.Run("default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t)
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, "console", memberOperatorCfg.Console().RouteName())
+		})
+		t.Run("non-default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.Console().RouteName("another-route"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, "another-route", memberOperatorCfg.Console().RouteName())
+		})
+	})
+}
+
+func TestMemberStatus(t *testing.T) {
+	t.Run("member status refresh period", func(t *testing.T) {
+		t.Run("default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t)
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 5*time.Second, memberOperatorCfg.MemberStatus().RefreshPeriod())
+		})
+		t.Run("non-default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 10*time.Second, memberOperatorCfg.MemberStatus().RefreshPeriod())
+		})
+	})
+}
+
+func TestToolchainCluster(t *testing.T) {
+	t.Run("health check period", func(t *testing.T) {
+		t.Run("default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t)
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 10*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckPeriod())
+		})
+		t.Run("non-default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.ToolchainCluster().HealthCheckPeriod("3s"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 3*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckPeriod())
+		})
+	})
+	t.Run("health check timeout", func(t *testing.T) {
+		t.Run("default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t)
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 3*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckTimeout())
+		})
+		t.Run("non-default", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.ToolchainCluster().HealthCheckTimeout("11s"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 11*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckTimeout())
+		})
+	})
+}
+
+func TestWebhook(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		cfg := NewMemberOperatorConfigWithReset(t)
 		memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-		assert.Equal(t, 5*time.Second, memberOperatorCfg.MemberStatus().RefreshPeriod())
+		assert.True(t, memberOperatorCfg.Webhook().Deploy())
 	})
 	t.Run("non-default", func(t *testing.T) {
-		cfg := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+		cfg := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
 		memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-		assert.Equal(t, 10*time.Second, memberOperatorCfg.MemberStatus().RefreshPeriod())
+		assert.False(t, memberOperatorCfg.Webhook().Deploy())
 	})
 }

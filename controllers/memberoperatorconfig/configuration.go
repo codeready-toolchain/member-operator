@@ -59,7 +59,7 @@ type AuthConfig struct {
 	auth toolchainv1alpha1.AuthConfig
 }
 
-func (a AuthConfig) IdP() string {
+func (a AuthConfig) Idp() string {
 	return getString(a.auth.Idp, "rhd")
 }
 

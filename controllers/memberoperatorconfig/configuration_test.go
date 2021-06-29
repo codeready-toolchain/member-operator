@@ -14,13 +14,13 @@ func TestAuth(t *testing.T) {
 		cfg := NewMemberOperatorConfigWithReset(t)
 		memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-		assert.Equal(t, "rhd", memberOperatorCfg.Auth().IdP())
+		assert.Equal(t, "rhd", memberOperatorCfg.Auth().Idp())
 	})
 	t.Run("non-default", func(t *testing.T) {
 		cfg := NewMemberOperatorConfigWithReset(t, testconfig.Auth().Idp("another"))
 		memberOperatorCfg := Configuration{m: &cfg.Spec}
 
-		assert.Equal(t, "another", memberOperatorCfg.Auth().IdP())
+		assert.Equal(t, "another", memberOperatorCfg.Auth().Idp())
 	})
 }
 

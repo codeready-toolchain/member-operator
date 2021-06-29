@@ -221,12 +221,12 @@ func (r *Reconciler) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 	logger.Info("user already exists", "name", userAcc.Name)
 
 	// ensure mapping
-	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID, r.config.Auth().IdP()) {
+	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID, r.config.Auth().Idp()) {
 		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
 		if err := r.setStatusProvisioning(userAcc); err != nil {
 			return nil, false, err
 		}
-		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID, r.config.Auth().IdP())}
+		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID, r.config.Auth().Idp())}
 		if err := r.Client.Update(context.TODO(), user); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update user '%s'", userAcc.Name)
 		}
@@ -240,7 +240,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 }
 
 func (r *Reconciler) ensureIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	name := ToIdentityName(userAcc.Spec.UserID, r.config.Auth().IdP())
+	name := ToIdentityName(userAcc.Spec.UserID, r.config.Auth().Idp())
 	identity := &userv1.Identity{}
 	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
 		if errors.IsNotFound(err) {
@@ -410,7 +410,7 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
-	identityName := ToIdentityName(userAcc.Spec.UserID, r.config.Auth().IdP())
+	identityName := ToIdentityName(userAcc.Spec.UserID, r.config.Auth().Idp())
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -582,18 +582,18 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config memberCfg.Configurat
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().IdP())},
+		Identities: []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())},
 	}
 	return user
 }
 
 func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config memberCfg.Configuration) *userv1.Identity {
-	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().IdP())
+	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 		},
-		ProviderName:     config.Auth().IdP(),
+		ProviderName:     config.Auth().Idp(),
 		ProviderUserName: userAcc.Spec.UserID,
 		User: corev1.ObjectReference{
 			Name: user.Name,

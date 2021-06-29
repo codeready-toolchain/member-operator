@@ -25,7 +25,7 @@ func (m SecretToMemberOperatorConfigMapper) Map(obj handler.MapObject) []reconci
 	if secret, ok := obj.Object.(*corev1.Secret); ok {
 		controllerNS, err := k8sutil.GetWatchNamespace()
 		if err != nil {
-			mapperLog.Error(err, "Could not determine watched namespace")
+			mapperLog.Error(err, "could not determine watched namespace")
 			return []reconcile.Request{}
 		}
 
@@ -35,7 +35,7 @@ func (m SecretToMemberOperatorConfigMapper) Map(obj handler.MapObject) []reconci
 
 		config := &toolchainv1alpha1.MemberOperatorConfig{}
 		if err := m.client.Get(context.TODO(), types.NamespacedName{Namespace: controllerNS, Name: "config"}, config); err != nil {
-			mapperLog.Error(err, "Could not get MemberOperatorConfig resource", "name", "config", "namespace", controllerNS)
+			mapperLog.Error(err, "could not get MemberOperatorConfig resource", "name", "config", "namespace", controllerNS)
 			return []reconcile.Request{}
 		}
 		return []reconcile.Request{{types.NamespacedName{Namespace: controllerNS, Name: "config"}}}

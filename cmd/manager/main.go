@@ -124,7 +124,7 @@ func main() {
 		setupLog.Error(err, "")
 		os.Exit(1)
 	}
-	// crtConfig.Print()
+	crtConfig.Print()
 
 	ctx := context.TODO()
 	// Become the leader before proceeding

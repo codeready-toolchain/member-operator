@@ -4,6 +4,8 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // constants
@@ -11,9 +13,15 @@ const (
 	MemberStatusName = "toolchain-member-status"
 )
 
+var log = logf.Log.WithName("configuration")
+
 type Configuration struct {
 	m       *toolchainv1alpha1.MemberOperatorConfigSpec
 	secrets map[string]map[string]string
+}
+
+func (c *Configuration) Print() {
+	log.Info("Member operator configuration variables", "MemberOperatorConfigSpec", c.m)
 }
 
 func (c *Configuration) Auth() AuthConfig {

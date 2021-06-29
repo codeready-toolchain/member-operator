@@ -76,7 +76,7 @@ func (a AutoscalerConfig) BufferMemory() string {
 }
 
 func (a AutoscalerConfig) BufferReplicas() int {
-	return getInt(a.autoscaler.BufferReplicas, 0)
+	return getInt(a.autoscaler.BufferReplicas, 1)
 }
 
 type CheConfig struct {

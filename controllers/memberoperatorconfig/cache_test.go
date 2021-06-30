@@ -235,6 +235,30 @@ func TestLoadSecrets(t *testing.T) {
 		require.Empty(t, secrets)
 	})
 
+	t.Run("service account secrets are not listed", func(t *testing.T) {
+		// given
+		secret := newSecret("che-secret", secretData)
+		secret.Annotations = map[string]string{
+			"kubernetes.io/service-account.name": "default-something",
+		}
+		secret2 := newSecret("che-secret2", secretData2)
+		secret2.Annotations = map[string]string{
+			"kubernetes.io/service-account.name": "builder-something",
+		}
+		secret3 := newSecret("che-secret3", secretData2)
+		secret3.Annotations = map[string]string{
+			"kubernetes.io/service-account.name": "deployer-something",
+		}
+		cl := NewFakeClient(t, secret, secret2, secret3)
+
+		// when
+		secrets, err := loadSecrets(cl, MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		require.Empty(t, secrets)
+	})
+
 	t.Run("no secrets found", func(t *testing.T) {
 		// given
 		cl := NewFakeClient(t)

@@ -67,6 +67,10 @@ func loadSecrets(cl client.Client, namespace string) (map[string]map[string]stri
 		return allSecrets, err
 	}
 	for _, secret := range secretList.Items {
+		if _, ok := secret.Annotations["kubernetes.io/service-account.name"]; ok {
+			// skip service account secrets
+			continue
+		}
 		var secretData = make(map[string]string)
 		for key, value := range secret.Data {
 			secretData[key] = string(value)

@@ -623,7 +623,7 @@ func newMemberSecret(username, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
-			Namespace: "toolchain-member",
+			Namespace: test.MemberOperatorNs,
 		},
 		Data: map[string][]byte{
 			"che.admin.username": []byte(username),

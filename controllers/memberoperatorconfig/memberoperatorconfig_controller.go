@@ -85,7 +85,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	allSecrets, err := loadSecrets(r.Client)
+	allSecrets, err := loadSecrets(r.Client, request.Namespace)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

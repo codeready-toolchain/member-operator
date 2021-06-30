@@ -185,7 +185,7 @@ func TestLoadSecrets(t *testing.T) {
 		cl := NewFakeClient(t, secret)
 
 		// when
-		secrets, err := loadSecrets(cl)
+		secrets, err := loadSecrets(cl, MemberOperatorNs)
 
 		// then
 		expected := map[string]string{
@@ -203,7 +203,7 @@ func TestLoadSecrets(t *testing.T) {
 		cl := NewFakeClient(t, secret, secret2)
 
 		// when
-		secrets, err := loadSecrets(cl)
+		secrets, err := loadSecrets(cl, MemberOperatorNs)
 
 		// then
 		expected := map[string]string{
@@ -219,12 +219,28 @@ func TestLoadSecrets(t *testing.T) {
 		require.Equal(t, expected2, secrets["che-secret2"])
 	})
 
+	t.Run("secrets from another namespace not listed", func(t *testing.T) {
+		// given
+		secret := newSecret("che-secret", secretData)
+		secret.Namespace = "default"
+		secret2 := newSecret("che-secret2", secretData2)
+		secret2.Namespace = "default"
+		cl := NewFakeClient(t, secret, secret2)
+
+		// when
+		secrets, err := loadSecrets(cl, MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		require.Empty(t, secrets)
+	})
+
 	t.Run("no secrets found", func(t *testing.T) {
 		// given
 		cl := NewFakeClient(t)
 
 		// when
-		secrets, err := loadSecrets(cl)
+		secrets, err := loadSecrets(cl, MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -239,7 +255,7 @@ func TestLoadSecrets(t *testing.T) {
 		}
 
 		// when
-		secrets, err := loadSecrets(cl)
+		secrets, err := loadSecrets(cl, MemberOperatorNs)
 
 		// then
 		require.EqualError(t, err, "list error")

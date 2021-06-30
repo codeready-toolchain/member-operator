@@ -50,7 +50,7 @@ func loadLatest(cl client.Client, namespace string) error {
 		return err
 	}
 
-	allSecrets, err := loadSecrets(cl)
+	allSecrets, err := loadSecrets(cl, namespace)
 	if err != nil {
 		return err
 	}
@@ -59,10 +59,10 @@ func loadLatest(cl client.Client, namespace string) error {
 	return nil
 }
 
-func loadSecrets(cl client.Client) (map[string]map[string]string, error) {
+func loadSecrets(cl client.Client, namespace string) (map[string]map[string]string, error) {
 	var allSecrets = make(map[string]map[string]string)
 	secretList := &corev1.SecretList{}
-	err := cl.List(context.TODO(), secretList)
+	err := cl.List(context.TODO(), secretList, client.InNamespace(namespace))
 	if err != nil {
 		return allSecrets, err
 	}

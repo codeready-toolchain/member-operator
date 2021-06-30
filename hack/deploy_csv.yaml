@@ -266,9 +266,6 @@ data:
                           description: Defines the flag that determines whether to deploy
                             the Webhook
                           type: boolean
-                        image:
-                          description: Defines the Webhook image
-                          type: string
                       type: object
                   type: object
                 status:

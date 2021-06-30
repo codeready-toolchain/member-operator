@@ -40,7 +40,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	return c.Watch(
 		&source.Kind{Type: &corev1.Secret{}},
 		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: SecretToMemberOperatorConfigMapper{client: mgr.GetClient()},
+			ToRequests: SecretToMemberOperatorConfigMapper{},
 		},
 		&predicate.GenerationChangedPredicate{},
 	)

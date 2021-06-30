@@ -23,7 +23,7 @@ func (m SecretToMemberOperatorConfigMapper) Map(obj handler.MapObject) []reconci
 			mapperLog.Error(err, "could not determine watched namespace")
 			return []reconcile.Request{}
 		}
-		return []reconcile.Request{{types.NamespacedName{Namespace: controllerNS, Name: "config"}}}
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: controllerNS, Name: "config"}}}
 	}
 	// the obj was not a Secret
 	return []reconcile.Request{}

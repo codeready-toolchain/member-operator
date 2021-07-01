@@ -21,5 +21,11 @@ func GetRouteURL(cl client.Client, namespace, name string) (string, error) {
 	if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
 		scheme = "http"
 	}
-	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path), nil
+
+	path := ""
+	if route.Spec.Path != "/" {
+		path = route.Spec.Path
+	}
+
+	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, path), nil
 }

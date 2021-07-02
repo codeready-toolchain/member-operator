@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,10 +23,10 @@ func GetRouteURL(cl client.Client, namespace, name string) (string, error) {
 		scheme = "http"
 	}
 
-	path := ""
-	if route.Spec.Path != "/" {
-		path = route.Spec.Path
+	path := route.Spec.Path
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
 	}
 
-	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, path), nil
+	return fmt.Sprintf("%s://%s%s", scheme, route.Spec.Host, path), nil
 }

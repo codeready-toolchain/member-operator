@@ -584,7 +584,7 @@ func cheRoute(tls bool) *routev1.Route { //nolint: unparam
 		},
 		Spec: routev1.RouteSpec{
 			Host: fmt.Sprintf("codeready-codeready-workspaces-operator.%s", test.MemberClusterName),
-			Path: "",
+			Path: "/",
 		},
 	}
 	if tls {

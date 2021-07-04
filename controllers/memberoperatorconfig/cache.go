@@ -33,7 +33,7 @@ func (c *cache) set(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[
 func (c *cache) get() (*toolchainv1alpha1.MemberOperatorConfig, map[string]map[string]string) {
 	c.RLock()
 	defer c.RUnlock()
-	return c.config.DeepCopy(), c.secrets
+	return c.config.DeepCopy(), copyOf(c.secrets)
 }
 
 func updateConfig(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[string]map[string]string) {

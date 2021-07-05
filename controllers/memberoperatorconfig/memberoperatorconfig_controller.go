@@ -1,14 +1,11 @@
 package memberoperatorconfig
 
 import (
-	"context"
-
 	"github.com/go-logr/logr"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -70,26 +67,5 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	reqLogger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling MemberOperatorConfig")
 
-	// Fetch the MemberOperatorConfig instance
-	memberconfig := &toolchainv1alpha1.MemberOperatorConfig{}
-	err := r.Client.Get(context.TODO(), request.NamespacedName, memberconfig)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			reqLogger.Error(err, "it looks like the MemberOperatorConfig resource with the name 'config' was removed - the cache will use the latest version of the resource")
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
-	allSecrets, err := loadSecrets(r.Client, request.Namespace)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	updateConfig(memberconfig, allSecrets)
-	return reconcile.Result{}, nil
+	return reconcile.Result{}, loadLatest(r.Client, request.Namespace)
 }

@@ -129,7 +129,7 @@ func TestLoadLatest(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod())
 
-		t.Run("returns the same when the cache hasn't been updated", func(t *testing.T) {
+		t.Run("returns the same when the config hasn't been updated", func(t *testing.T) {
 			// when
 			err := loadLatest(cl, MemberOperatorNs)
 

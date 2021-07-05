@@ -325,6 +325,25 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
+	t.Run("when missing only one NodeMetrics resource then it's fine", func(t *testing.T) {
+		// given
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+
+		unraedyNodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-unready", []string{"worker"}, "3000000Ki"))
+		reconciler, req, fakeClient := prepareReconcile(t, defaultMemberStatusName, newGetHostClusterReady, allNamespacesCl, append(nodeAndMetrics, unraedyNodeAndMetrics[0], memberOperatorDeployment, newMemberStatus())...)
+
+		// when
+		res, err := reconciler.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, defaultMemberStatusName, fakeClient).
+			HasCondition(ComponentsReady()).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+	})
+
 	t.Run("metrics failures", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
@@ -393,10 +412,11 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
-		t.Run("when missing NodeMetrics for Node", func(t *testing.T) {
+		t.Run("when missing NodeMetrics for two Nodes", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, nodeAndMetrics[0], memberOperatorDeployment, memberStatus)
+			nodeAndMetrics1 := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
+			nodeAndMetrics2 := newNodesAndNodeMetrics(forNode("worker-456", []string{"worker"}, "3000000Ki"))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, nodeAndMetrics1[0], nodeAndMetrics2[0], memberOperatorDeployment, memberStatus)
 
 			// when
 			res, err := reconciler.Reconcile(req)

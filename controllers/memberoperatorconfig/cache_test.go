@@ -143,10 +143,11 @@ func TestLoadLatest(t *testing.T) {
 		t.Run("returns the new value when the config has been updated", func(t *testing.T) {
 			// get
 			changedConfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("20s"))
-			cl.Update(context.TODO(), changedConfig)
+			err := cl.Update(context.TODO(), changedConfig)
+			require.NoError(t, err)
 
 			// when
-			err := loadLatest(cl, MemberOperatorNs)
+			err = loadLatest(cl, MemberOperatorNs)
 
 			// then
 			require.NoError(t, err)

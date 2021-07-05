@@ -325,6 +325,28 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 	})
 
+	t.Run("when missing only one NodeMetrics resource then it's fine", func(t *testing.T) {
+		// given
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+
+		// let's create another pair of Node and NodeMetrics resources - the resulting array will contain Node as the first object and NodeMetrics as the second object
+		singleNodeAndMetrics := newNodesAndNodeMetrics(forNode("worker", []string{"worker"}, "3000000Ki"))
+		// now use only the first object - Node - and don't add the NodeMetrics so we can simulate a situation when one NodeMetrics is missing
+		reconciler, req, fakeClient := prepareReconcile(t, defaultMemberStatusName, newGetHostClusterReady, allNamespacesCl,
+			append(nodeAndMetrics, singleNodeAndMetrics[0], memberOperatorDeployment, newMemberStatus())...)
+
+		// when
+		res, err := reconciler.Reconcile(req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, defaultMemberStatusName, fakeClient).
+			HasCondition(ComponentsReady()).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+	})
+
 	t.Run("metrics failures", func(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
@@ -393,10 +415,17 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
-		t.Run("when missing NodeMetrics for Node", func(t *testing.T) {
+		t.Run("when missing NodeMetrics for two Nodes", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, nodeAndMetrics[0], memberOperatorDeployment, memberStatus)
+
+			// let's the first pair of Node and NodeMetrics resources
+			singleNodeAndMetrics1 := newNodesAndNodeMetrics(forNode("worker-a", []string{"worker"}, "3000000Ki"))
+			// and lest' also create the second pair of Node and NodeMetrics resources
+			singleNodeAndMetrics2 := newNodesAndNodeMetrics(forNode("worker-b", []string{"worker"}, "3000000Ki"))
+			// since the arrays contain Node as the first object and NodeMetrics as the second object, we can now use only the first object from both of the arrays
+			// and don't add the NodeMetrics so we can simulate a situation when the NodeMetrics resources are missing for both of the Nodes
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl,
+				append(nodeAndMetrics, singleNodeAndMetrics1[0], singleNodeAndMetrics2[0], memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(req)

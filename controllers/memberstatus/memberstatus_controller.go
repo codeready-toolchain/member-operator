@@ -244,9 +244,9 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 		return fmt.Errorf("memory item not found in NodeMetrics: %v", nodeMetric)
 	}
 
-	// Check if all allocatable values were used or if there is some value that the NodeMetrics resource wasn't found for.
+	// Check if all allocatable values were used or if there are more than one value that the NodeMetrics resource wasn't found for.
 	// In such a case we need to return an error, because the metrics are not complete
-	if len(allocatableValues) > 0 {
+	if len(allocatableValues) > 1 {
 		var nodeNames []string
 		for nodeName := range allocatableValues {
 			nodeNames = append(nodeNames, nodeName)

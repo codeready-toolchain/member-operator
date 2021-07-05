@@ -80,7 +80,7 @@ func loadSecrets(cl client.Client, namespace string) (map[string]map[string]stri
 	return allSecrets, err
 }
 
-// GetConfig returns a cached host-operator config.
+// GetConfig returns a cached memberoperator config.
 // If no config is stored in the cache, then it retrieves it from the cluster and stores in the cache.
 // If the resource is not found, then returns the default config.
 // If any failure happens while getting the MemberOperatorConfig resource, then returns an error.

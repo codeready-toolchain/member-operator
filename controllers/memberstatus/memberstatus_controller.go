@@ -71,7 +71,6 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 // Reconciler reconciles a MemberStatus object
 type Reconciler struct {
 	Client              client.Client
-	config              memberCfg.Configuration
 	Log                 logr.Logger
 	Scheme              *runtime.Scheme
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
@@ -97,7 +96,6 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 	if err != nil {
 		return reconcile.Result{}, errs.Wrapf(err, "unable to get MemberOperatorConfig")
 	}
-	r.config = config
 
 	requeuePeriod := config.MemberStatus().RefreshPeriod()
 
@@ -114,7 +112,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		return reconcile.Result{}, err
 	}
 
-	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus)
+	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus, config)
 	if err != nil {
 		reqLogger.Error(err, "Failed to update status")
 		return reconcile.Result{RequeueAfter: requeuePeriod}, err
@@ -126,12 +124,12 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 
 type statusHandler struct {
 	name         statusComponentTag
-	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error
+	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error
 }
 
 // aggregateAndUpdateStatus runs each of the status handlers. Each status handler reports readiness for a toolchain component. If any
 // component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
-func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
 
 	statusHandlers := []statusHandler{
 		{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus},
@@ -146,7 +144,7 @@ func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatu
 
 	// Retrieve component statuses eg. toolchainCluster, member deployment
 	for _, statusHandler := range statusHandlers {
-		err := statusHandler.handleStatus(reqLogger, memberStatus)
+		err := statusHandler.handleStatus(reqLogger, memberStatus, config)
 		if err != nil {
 			reqLogger.Error(err, "status update problem")
 			unreadyComponents = append(unreadyComponents, string(statusHandler.name))
@@ -163,12 +161,12 @@ func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatu
 // hostConnectionHandleStatus retrieves the host cluster object that represents the connection between this member cluster and the host cluster.
 // It then takes the status from the cluster object and adds it to MemberStatus. Finally, it checks its status and will return an error if
 // its status is not ready
-func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
 
 	attributes := status.ToolchainClusterAttributes{
 		GetClusterFunc: r.GetHostCluster,
-		Period:         r.config.ToolchainCluster().HealthCheckPeriod(),
-		Timeout:        r.config.ToolchainCluster().HealthCheckTimeout(),
+		Period:         config.ToolchainCluster().HealthCheckPeriod(),
+		Timeout:        config.ToolchainCluster().HealthCheckTimeout(),
 	}
 
 	// look up host connection status
@@ -183,7 +181,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
 	operatorStatus := &toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
 		Revision:       version.Commit,
@@ -212,7 +210,7 @@ func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberSta
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status
-func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
 	memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole = map[string]int{}
 	allocatableValues, err := r.getAllocatableValues(reqLogger)
 	if err != nil {
@@ -267,11 +265,11 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 
 // routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
 // Returns an error if at least one of the required routes are not available.
-func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
 	if memberStatus.Status.Routes == nil {
 		memberStatus.Status.Routes = &toolchainv1alpha1.Routes{}
 	}
-	consoleURL, err := r.consoleURL()
+	consoleURL, err := r.consoleURL(config)
 	if err != nil {
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusConsoleRouteUnavailableReason, err.Error())
 		memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
@@ -279,9 +277,9 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 	}
 	memberStatus.Status.Routes.ConsoleURL = consoleURL
 
-	cheURL, err := r.cheDashboardURL()
+	cheURL, err := r.cheDashboardURL(config)
 	if err != nil {
-		if r.config.Che().IsRequired() {
+		if config.Che().IsRequired() {
 			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
 			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 			return err
@@ -298,20 +296,20 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 
 // cheHandleStatus checks all necessary aspects related integration between the member operator and Che
 // Returns an error if any problems are discovered.
-func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
 	if memberStatus.Status.Che == nil {
 		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
 	}
 
 	// Is che user deletion enabled
-	if !r.config.Che().IsUserDeletionEnabled() {
+	if !config.Che().IsUserDeletionEnabled() {
 		// Che user deletion is not enabled, set condition to Ready. No further checks required
 		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserDeletionNotEnabledReason)
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
 		return nil
 	}
 
-	if !r.isCheAdminUserConfigured() {
+	if !r.isCheAdminUserConfigured(config) {
 		err := fmt.Errorf("Che admin user credentials are not configured but Che user deletion is enabled")
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheAdminUserNotConfiguredReason, err.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
@@ -319,7 +317,7 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 	}
 
 	// Get che route for testing user API
-	if _, err := r.cheDashboardURL(); err != nil {
+	if _, err := r.cheDashboardURL(config); err != nil {
 		wrappedErr := errs.Wrapf(err, "Che dashboard URL unavailable but Che user deletion is enabled")
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, wrappedErr.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
@@ -418,18 +416,18 @@ func (r *Reconciler) setStatusNotReady(memberStatus *toolchainv1alpha1.MemberSta
 		})
 }
 
-func (r *Reconciler) consoleURL() (string, error) {
+func (r *Reconciler) consoleURL(config memberCfg.Configuration) (string, error) {
 	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: r.config.Console().Namespace(), Name: r.config.Console().RouteName()}
+	namespacedName := types.NamespacedName{Namespace: config.Console().Namespace(), Name: config.Console().RouteName()}
 	if err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
 }
 
-func (r *Reconciler) cheDashboardURL() (string, error) {
+func (r *Reconciler) cheDashboardURL(config memberCfg.Configuration) (string, error) {
 	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: r.config.Che().Namespace(), Name: r.config.Che().RouteName()}
+	namespacedName := types.NamespacedName{Namespace: config.Che().Namespace(), Name: config.Che().RouteName()}
 	err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route)
 	if err != nil {
 		return "", err
@@ -443,6 +441,6 @@ func (r *Reconciler) cheDashboardURL() (string, error) {
 
 // isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
 // Returns false otherwise.
-func (r *Reconciler) isCheAdminUserConfigured() bool {
-	return r.config.Che().AdminUserName() != "" && r.config.Che().AdminPassword() != ""
+func (r *Reconciler) isCheAdminUserConfigured(config memberCfg.Configuration) bool {
+	return config.Che().AdminUserName() != "" && config.Che().AdminPassword() != ""
 }

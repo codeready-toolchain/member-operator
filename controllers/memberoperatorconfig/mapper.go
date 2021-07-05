@@ -17,13 +17,8 @@ var mapperLog = ctrl.Log.WithName("SecretToMemberOperatorConfigMapper")
 
 // Map maps secrets to the singular instance of MemberOperatorConfig named "config"
 func (m SecretToMemberOperatorConfigMapper) Map(obj handler.MapObject) []reconcile.Request {
-	if _, ok := obj.Object.(*corev1.Secret); ok {
-		controllerNS, err := k8sutil.GetWatchNamespace()
-		if err != nil {
-			mapperLog.Error(err, "could not determine watched namespace")
-			return []reconcile.Request{}
-		}
-		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: controllerNS, Name: "config"}}}
+	if secret, ok := obj.Object.(*corev1.Secret); ok {
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: secret.Namespace, Name: "config"}}}
 	}
 	// the obj was not a Secret
 	return []reconcile.Request{}

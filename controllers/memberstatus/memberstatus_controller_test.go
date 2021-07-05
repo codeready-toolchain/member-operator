@@ -694,7 +694,6 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              scheme.Scheme,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
-		config:              config,
 		CheClient:           cheTestClient(config, allNamespacesClient),
 		Log:                 ctrl.Log.WithName("controllers").WithName("MemberStatus"),
 	}

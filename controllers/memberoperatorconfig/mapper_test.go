@@ -5,7 +5,6 @@ import (
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/require"
 
 	corev1 "k8s.io/api/core/v1"
@@ -24,10 +23,6 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 	t.Run("test secret maps correctly", func(t *testing.T) {
 		mapper := &SecretToMemberOperatorConfigMapper{}
 
-		// This is required for the mapper to function
-		restore := test.SetEnvVarAndRestore(t, k8sutil.WatchNamespaceEnvVar, test.MemberOperatorNs)
-		defer restore()
-
 		req := mapper.Map(handler.MapObject{
 			Object: secret,
 		})
@@ -42,23 +37,10 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 	t.Run("a non-secret resource is not mapped", func(t *testing.T) {
 		mapper := &SecretToMemberOperatorConfigMapper{}
 
-		// This is required for the mapper to function
-		restore := test.SetEnvVarAndRestore(t, k8sutil.WatchNamespaceEnvVar, test.MemberOperatorNs)
-		defer restore()
-
 		pod := &corev1.Pod{}
 
 		req := mapper.Map(handler.MapObject{
 			Object: pod,
-		})
-
-		require.Len(t, req, 0)
-	})
-
-	t.Run("test SecretToMemberOperatorConfigMapper returns nil when watch namespace not set ", func(t *testing.T) {
-		mapper := &SecretToMemberOperatorConfigMapper{}
-		req := mapper.Map(handler.MapObject{
-			Object: secret,
 		})
 
 		require.Len(t, req, 0)

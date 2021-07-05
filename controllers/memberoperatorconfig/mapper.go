@@ -1,8 +1,6 @@
 package memberoperatorconfig
 
 import (
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"

@@ -125,6 +125,35 @@ func TestLoadLatest(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
+		actual, err := GetConfig(cl, MemberOperatorNs)
+		require.NoError(t, err)
+		assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod())
+
+		t.Run("returns the same when the cache hasn't been updated", func(t *testing.T) {
+			// when
+			err := loadLatest(cl, MemberOperatorNs)
+
+			// then
+			require.NoError(t, err)
+			actual, err = GetConfig(cl, MemberOperatorNs)
+			require.NoError(t, err)
+			assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod())
+		})
+
+		t.Run("returns the new value when the config has been updated", func(t *testing.T) {
+			// get
+			changedConfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("20s"))
+			cl.Update(context.TODO(), changedConfig)
+
+			// when
+			err := loadLatest(cl, MemberOperatorNs)
+
+			// then
+			require.NoError(t, err)
+			actual, err = GetConfig(cl, MemberOperatorNs)
+			require.NoError(t, err)
+			assert.Equal(t, 20*time.Second, actual.MemberStatus().RefreshPeriod())
+		})
 	})
 
 	t.Run("config not found", func(t *testing.T) {

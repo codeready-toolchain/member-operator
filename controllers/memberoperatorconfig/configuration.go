@@ -72,11 +72,11 @@ func (a AutoscalerConfig) Deploy() bool {
 }
 
 func (a AutoscalerConfig) BufferMemory() string {
-	return getString(a.autoscaler.BufferMemory, "")
+	return getString(a.autoscaler.BufferMemory, "50Mi") // TODO temporarily changed to e2e value, should be changed back to "" after autoscaler handling is moved to memberoperatorconfig controller
 }
 
 func (a AutoscalerConfig) BufferReplicas() int {
-	return getInt(a.autoscaler.BufferReplicas, 1)
+	return getInt(a.autoscaler.BufferReplicas, 2) // TODO temporarily changed to e2e value, should be changed back to 1 after autoscaler handling is moved to memberoperatorconfig controller
 }
 
 type CheConfig struct {

@@ -158,14 +158,15 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	return nil // nothing changed, no error occurred
 }
 
-// ensureDeleted deletes namespaces that are owned by the user (based on the label). The method deletes only one namespace in one call
-// and returns information if any namespace was deleted or not. The cases are described below:
-//
+// ensureDeleted ensures that the namespaces that are owned by the user (based on the label) are deleted.
+// The method deletes only one namespace in one call.
 // It returns true if all the namespaces are gone and returns false if we should re-try:
 //     If there is no namespaces found then it returns true, nil.
-//     If there is still some namespace which is not already in terminating state then it triggers the deletion of the namespace (one namespace in one call).
-//     If a namespace deletion was triggered in this call or previously but is not complete yet (namespace is in terminating state) then it updates the status of the NSTemplateSet stating that some of the namespace is still in terminating state and returns false, nil.
-// If there are some error happened then it returns false, error
+//     If there is still some namespace which is not already in terminating state then it triggers
+//        the deletion of the namespace (one namespace in one call) and returns false, nil
+//     If a namespace deletion was triggered in this call or previously but is not complete yet (namespace is in terminating state)
+//        then it updates the status of the NSTemplateSet stating that some of the namespace is still in terminating state and returns false, nil.
+// If some error happened then it returns false, error
 func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// now, we can delete all "child" namespaces explicitly
 	username := nsTmplSet.Name
@@ -173,28 +174,24 @@ func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolcha
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
-	// delete the first namespace which (still) exists and is not in a terminating state
-	logger.Info("checking user namepaces associated with the deleted NSTemplateSet...")
 	for _, ns := range userNamespaces {
 		if !util.IsBeingDeleted(&ns) {
-			logger.Info("deleting a user namepace associated with the deleted NSTemplateSet", "namespace", ns.Name)
+			logger.Info("deleting a user namespace associated with the deleted NSTemplateSet", "namespace", ns.Name)
 			if err := r.Client.Delete(context.TODO(), &ns); err != nil {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", ns.Name)
 			}
+			return false, nil // The namespace deletion is triggered so we should stop here. When the namespace is actually deleted the reconcile will be triggered again
 		}
 		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: ns.Name}, &corev1.Namespace{}); err != nil {
 			if errors.IsNotFound(err) {
-				return false, nil // namespace was actually deleted but return false since only one ns deleted in one call
+				continue // This namespace is gone. Check the next one.
 			}
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to get user namespace '%s'", ns.Name)
 		}
-		// No error implies namespace was not deleted, update status
-		if err := r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, fmt.Errorf("namespace deletion wasn't complete"), "delete was triggered, but failed to delete user namespace '%s', something could be blocking ns deletion", ns.Name); err != nil {
-			return false, err
-		}
-		return false, nil
+		// No error implies namespace is in terminating state but has not been deleted yet, update status and returns false so we will re-try when the namespace is actually deleted
+		return false, r.setStatusTerminatingFailed(nsTmplSet, fmt.Sprintf("user namespace %s deletion was triggered but is not complete yet, something could be blocking ns deletion", ns.Name))
 	}
-	return true, nil
+	return true, nil // All namespaces are gone
 }
 
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {

@@ -175,18 +175,17 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	username := nsTmplSet.GetName()
 
 	// delete all namespace one by one
-	deletedAny, err := r.namespaces.delete(logger, nsTmplSet)
-
-	if deletedAny {
-		return reconcile.Result{}, nil
-	}
+	allDeleted, err := r.namespaces.ensureDeleted(logger, nsTmplSet)
 	// when err, status Update will not trigger reconcile, sending returning error.
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+	if !allDeleted {
+		return reconcile.Result{}, nil
+	}
 
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user
-	deletedAny, err = r.clusterResources.delete(logger, nsTmplSet)
+	deletedAny, err := r.clusterResources.delete(logger, nsTmplSet)
 	if err != nil || deletedAny {
 		return reconcile.Result{}, nil
 	}

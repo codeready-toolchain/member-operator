@@ -547,11 +547,11 @@ func TestDeleteNamespsace(t *testing.T) {
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, deleted)
+		assert.False(t, allDeleted)
 		// get the first namespace and check its deletion timestamp
 		firstNSName := fmt.Sprintf("%s-dev", username)
 		AssertThatNamespace(t, firstNSName, cl).
@@ -564,25 +564,33 @@ func TestDeleteNamespsace(t *testing.T) {
 
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when
-			deleted, err := manager.delete(log, nsTmplSet)
+			allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
-			assert.True(t, deleted)
+			assert.False(t, allDeleted)
 			// get the first namespace and check its deletion timestamp
 			firstNSName := fmt.Sprintf("%s-dev", username)
 			AssertThatNamespace(t, firstNSName, cl).DoesNotExist()
 
 			t.Run("delete the second namespace", func(t *testing.T) {
 				// when
-				deleted, err := manager.delete(log, nsTmplSet)
+				allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
-				assert.True(t, deleted)
+				assert.False(t, allDeleted)
 				// get the second namespace and check its deletion timestamp
 				secondtNSName := fmt.Sprintf("%s-code", username)
 				AssertThatNamespace(t, secondtNSName, cl).DoesNotExist()
+			})
+
+			t.Run("ensure all namespaces are deleted", func(t *testing.T) {
+				allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, allDeleted)
 			})
 		})
 	})
@@ -592,11 +600,11 @@ func TestDeleteNamespsace(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
-		assert.False(t, deleted)
+		assert.True(t, allDeleted)
 	})
 
 	t.Run("failed to fetch namespaces", func(t *testing.T) {
@@ -611,11 +619,11 @@ func TestDeleteNamespsace(t *testing.T) {
 		}
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
 
 		// then
 		require.Error(t, err)
-		assert.False(t, deleted)
+		assert.False(t, allDeleted)
 		assert.Equal(t, "failed to list namespace with label owner 'johnsmith': mock error", err.Error())
 		AssertThatNSTemplateSet(t, namespaceName, username, cl).
 			HasFinalizer(). // finalizer was not added and nothing else was done

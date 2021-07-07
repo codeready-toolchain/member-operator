@@ -67,7 +67,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 				}
 				list[index] = toolchainObject
 			}
-			return applycl.SortedComparableToolchainObjects(list), nil
+			return applycl.SortToolchainObjectsByName(list), nil
 		}),
 
 	newToolchainObjectKind(
@@ -86,7 +86,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 				}
 				list[index] = toolchainObject
 			}
-			return applycl.SortedComparableToolchainObjects(list), nil
+			return applycl.SortToolchainObjectsByName(list), nil
 		}),
 
 	newToolchainObjectKind(
@@ -105,7 +105,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 				}
 				list[index] = toolchainObject
 			}
-			return applycl.SortedComparableToolchainObjects(list), nil
+			return applycl.SortToolchainObjectsByName(list), nil
 		}),
 }
 

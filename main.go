@@ -120,8 +120,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr.GetClient()
-
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
 		setupLog.Error(err, "")

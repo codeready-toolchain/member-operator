@@ -91,7 +91,7 @@ func TestDeployWebhook(t *testing.T) {
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -153,7 +153,7 @@ func setScheme(t *testing.T) *runtime.Scheme {
 func contains(t *testing.T, objects []applycl.ToolchainObject, expected string) {
 	expectedObject := getUnstructuredObject(t, expected)
 	for _, obj := range objects {
-		if reflect.DeepEqual(obj.GetRuntimeObject(), runtime.Object(expectedObject)) {
+		if reflect.DeepEqual(obj.GetClientObject(), runtime.Object(expectedObject)) {
 			return
 		}
 	}

@@ -16,7 +16,7 @@ $(OUT_DIR)/operator:
 		go build ${V_FLAG} \
 		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
 		-o $(OUT_DIR)/bin/member-operator \
-		cmd/manager/main.go
+		main.go
 	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
 		go build ${V_FLAG} \
 		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
@@ -28,12 +28,11 @@ vendor:
 	$(Q)go mod vendor
 
 .PHONY: generate-assets
-generate-assets:
-	@go install github.com/go-bindata/go-bindata/...
+generate-assets: go-bindata
 	@echo "generating users pods mutating webhook template data..."
 	@rm ./pkg/webhook/deploy/userspodswebhook/template_assets.go 2>/dev/null || true
-	@$(shell go env GOPATH)/bin/go-bindata -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
+	@$(GO_BINDATA) -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
 	@echo "generating autoscaler buffer template data..."
 	@rm ./pkg/autoscaler/template_assets.go 2>/dev/null || true
-	@$(shell go env GOPATH)/bin/go-bindata -pkg autoscaler -o ./pkg/autoscaler/template_assets.go -nocompress -prefix deploy/autoscaler deploy/autoscaler
+	@$(GO_BINDATA) -pkg autoscaler -o ./pkg/autoscaler/template_assets.go -nocompress -prefix deploy/autoscaler deploy/autoscaler
 

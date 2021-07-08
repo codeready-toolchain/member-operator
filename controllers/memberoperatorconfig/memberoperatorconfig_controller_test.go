@@ -11,7 +11,6 @@ import (
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -27,7 +26,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.NoError(t, err)
@@ -43,7 +42,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		_, err = controller.Reconcile(newRequest())
+		_, err = controller.Reconcile(context.TODO(), newRequest())
 
 		// then
 		require.NoError(t, err)
@@ -56,7 +55,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 func TestReconcileWhenReturnsError(t *testing.T) {
 	// given
 	cl := test.NewFakeClient(t)
-	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 		return fmt.Errorf("some error")
 	}
 	controller := Reconciler{
@@ -65,7 +64,7 @@ func TestReconcileWhenReturnsError(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.Error(t, err)
@@ -82,7 +81,7 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.NoError(t, err)

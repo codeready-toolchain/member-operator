@@ -26,7 +26,7 @@ func Deploy(cl client.Client, s *runtime.Scheme, namespace, requestsMemory strin
 	applyClient := applycl.NewApplyClient(cl, s)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, toolchainObject := range toolchainObjects {
-		if _, err := applyClient.ApplyObject(toolchainObject.GetRuntimeObject()); err != nil {
+		if _, err := applyClient.ApplyObject(toolchainObject.GetClientObject()); err != nil {
 			return errs.Wrap(err, "cannot deploy autoscaling buffer template")
 		}
 	}
@@ -44,7 +44,7 @@ func Delete(cl client.Client, s *runtime.Scheme, namespace string) (bool, error)
 	var deleted bool
 	for _, obj := range toolchainObjects {
 		unst := &unstructured.Unstructured{}
-		unst.SetGroupVersionKind(obj.GetRuntimeObject().GetObjectKind().GroupVersionKind())
+		unst.SetGroupVersionKind(obj.GetGvk())
 		if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}, unst); err != nil {
 			if !errors.IsNotFound(err) { // Ignore not found
 				return false, errs.Wrap(err, "cannot get autoscaling buffer object")

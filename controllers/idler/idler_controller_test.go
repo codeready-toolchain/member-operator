@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -41,7 +40,7 @@ func TestReconcile(t *testing.T) {
 		reconciler, req, _, _ := prepareReconcile(t, requestName)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then - there should not be any error, the controller should only log that the resource was not found
 		require.NoError(t, err)
@@ -51,7 +50,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("Fail to get Idler resource", func(t *testing.T) {
 		// given
 		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler")
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			if key.Name == "cant-get-idler" {
 				return errors.New("can't get idler")
 			}
@@ -59,7 +58,7 @@ func TestReconcile(t *testing.T) {
 		}
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.EqualError(t, err, "can't get idler")
@@ -79,7 +78,7 @@ func TestReconcile(t *testing.T) {
 		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", idler)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then - ignore the idler which is being deleted
 		require.NoError(t, err)
@@ -104,7 +103,7 @@ func TestEnsureIdling(t *testing.T) {
 		preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -133,7 +132,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
 			//when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -174,7 +173,7 @@ func TestEnsureIdling(t *testing.T) {
 
 			t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
 				//when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -216,7 +215,7 @@ func TestEnsureIdling(t *testing.T) {
 
 				t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
 					//when
-					res, err := reconciler.Reconcile(req)
+					res, err := reconciler.Reconcile(context.TODO(), req)
 
 					// then
 					require.NoError(t, err)
@@ -238,7 +237,7 @@ func TestEnsureIdling(t *testing.T) {
 						}
 
 						//when
-						res, err := reconciler.Reconcile(req)
+						res, err := reconciler.Reconcile(context.TODO(), req)
 
 						// then
 						require.NoError(t, err)
@@ -272,7 +271,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, idler)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -294,7 +293,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		}
 
 		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, idler)
-		allCl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+		allCl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			pl := &corev1.PodList{}
 			if reflect.TypeOf(list) == reflect.TypeOf(pl) && len(opts) == 1 {
 				return errors.New("can't list pods")
@@ -303,7 +302,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		}
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.EqualError(t, err, "failed to ensure idling 'john-dev': can't list pods")
@@ -326,7 +325,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return errors.New(errMsg)
 					}
@@ -334,7 +333,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				}
 
 				//when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
@@ -358,7 +357,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return apierrors.NewNotFound(schema.GroupResource{
 							Group:    "",
@@ -369,7 +368,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				}
 
 				//when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				assert.NoError(t, err) // 'NotFound' errors are ignored!
@@ -396,7 +395,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				update := allCl.MockUpdate
 				defer func() { allCl.MockUpdate = update }()
-				allCl.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+				allCl.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return errors.New(errMsg)
 					}
@@ -404,7 +403,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				}
 
 				//when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
@@ -426,7 +425,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				dlt := allCl.MockDelete
 				defer func() { allCl.MockDelete = dlt }()
-				allCl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+				allCl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return errors.New(errMsg)
 					}
@@ -434,7 +433,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				}
 
 				//when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
@@ -613,7 +612,6 @@ func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              s,
-		Log:                 ctrl.Log.WithName("controllers").WithName("Idler"),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient
 }
@@ -624,7 +622,7 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)
 	//start tracking pods, so the Idler status is filled with the tracked pods
-	_, err := reconciler.Reconcile(req)
+	_, err := reconciler.Reconcile(context.TODO(), req)
 	require.NoError(t, err)
 	memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(payloads.allPods)
 	return reconciler, req, cl, allCl

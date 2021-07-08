@@ -29,7 +29,7 @@ func Webhook(cl client.Client, s *runtime.Scheme, namespace, image string) error
 	// create all objects that are within the template, and update only when the object has changed.
 	// if the object was either created or updated, then return and wait for another reconcile
 	for _, toolchainObject := range toolchainObjects {
-		if _, err := applyClient.ApplyObject(toolchainObject.GetRuntimeObject()); err != nil {
+		if _, err := applyClient.ApplyObject(toolchainObject.GetClientObject()); err != nil {
 			return errs.Wrap(err, "cannot deploy webhook template")
 		}
 	}

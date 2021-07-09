@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 )
 
 func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
@@ -21,12 +20,13 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 	secret := newSecret("test-secret", secretData)
 
 	t.Run("test secret maps correctly", func(t *testing.T) {
-		mapper := &SecretToMemberOperatorConfigMapper{}
+		// given
+		c := test.NewFakeClient(t)
 
-		req := mapper.Map(handler.MapObject{
-			Object: secret,
-		})
+		// when
+		req := MapSecretToMemberOperatorConfig(c)(secret)
 
+		// then
 		require.Len(t, req, 1)
 		require.Equal(t, types.NamespacedName{
 			Namespace: test.MemberOperatorNs,
@@ -35,13 +35,12 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 	})
 
 	t.Run("a non-secret resource is not mapped", func(t *testing.T) {
-		mapper := &SecretToMemberOperatorConfigMapper{}
-
+		// given
+		c := test.NewFakeClient(t)
 		pod := &corev1.Pod{}
 
-		req := mapper.Map(handler.MapObject{
-			Object: pod,
-		})
+		// when
+		req := MapSecretToMemberOperatorConfig(c)(pod)
 
 		require.Len(t, req, 0)
 	})

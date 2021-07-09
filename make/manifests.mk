@@ -7,7 +7,7 @@ OWNER_AND_BRANCH_LOCATION=codeready-toolchain/api/master
 GH_SCRIPTS_URL=https://raw.githubusercontent.com/${OWNER_AND_BRANCH_LOCATION}/scripts
 
 TMP_DIR?=/tmp
-IMAGE_BUILDER?=podman
+IMAGE_BUILDER?=docker
 INDEX_IMAGE_NAME?=member-operator-index
 FIRST_RELEASE=false
 CHANNEL=staging

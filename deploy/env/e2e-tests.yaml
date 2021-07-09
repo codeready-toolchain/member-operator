@@ -1,4 +1,6 @@
 member-operator:
+  config-map:
+    name: member-operator-config
   cluster-healthcheck-period: '5s'
   memberstatus-refresh-time: '1s'
   autoscalingbuffer:

@@ -15,7 +15,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -84,7 +83,7 @@ func TestGetConfigFailed(t *testing.T) {
 	t.Run("config not found", func(t *testing.T) {
 		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return apierrors.NewNotFound(schema.GroupResource{}, "config")
 		}
 
@@ -100,7 +99,7 @@ func TestGetConfigFailed(t *testing.T) {
 	t.Run("error getting config", func(t *testing.T) {
 		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -172,7 +171,7 @@ func TestLoadLatest(t *testing.T) {
 		initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
 		// given
 		cl := NewFakeClient(t, initconfig)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return fmt.Errorf("get error")
 		}
 
@@ -187,7 +186,7 @@ func TestLoadLatest(t *testing.T) {
 		initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
 		// given
 		cl := NewFakeClient(t, initconfig)
-		cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+		cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			return fmt.Errorf("list error")
 		}
 
@@ -304,7 +303,7 @@ func TestLoadSecrets(t *testing.T) {
 	t.Run("list secrets error", func(t *testing.T) {
 		// given
 		cl := NewFakeClient(t)
-		cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+		cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			return fmt.Errorf("list error")
 		}
 

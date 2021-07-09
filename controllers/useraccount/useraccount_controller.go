@@ -10,10 +10,9 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
-	"github.com/operator-framework/operator-sdk/pkg/predicate"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
@@ -21,11 +20,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -34,47 +36,21 @@ type IdentityProvider interface {
 	GetIdP() string
 }
 
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	c, err := controller.New("useraccount-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to primary resource UserAccount
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.UserAccount{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resources
-	enqueueRequestForOwner := &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &toolchainv1alpha1.UserAccount{},
-	}
-	if err := c.Watch(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, enqueueRequestForOwner); err != nil {
-		return err
-	}
-	// Watch for changes to secondary resources: Users and Identities associated with a UserAccount.
-	// We can't use owner references because namespaced resources (UserAccount) can't own cluster scoped resources (User & Identity)
-	if err := c.Watch(&source.Kind{Type: &userv1.User{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
-		return err
-	}
-	if err := c.Watch(&source.Kind{Type: &userv1.Identity{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
-	return add(mgr, r)
+	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Owns(&toolchainv1alpha1.NSTemplateSet{}).
+		Watches(&source.Kind{Type: &userv1.User{}}, mapToOwnerByLabel).
+		Watches(&source.Kind{Type: &userv1.Identity{}}, mapToOwnerByLabel).
+		Complete(r)
 }
 
 // Reconciler reconciles a UserAccount object
 type Reconciler struct {
 	Client    client.Client
-	Log       logr.Logger
 	Scheme    *runtime.Scheme
 	CheClient *che.Client
 }
@@ -91,14 +67,14 @@ type Reconciler struct {
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	logger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	logger.Info("reconciling UserAccount")
 	var err error
 
 	namespace := request.Namespace
 	if namespace == "" {
-		namespace, err = k8sutil.GetWatchNamespace()
+		namespace, err = commonconfig.GetWatchNamespace()
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -157,7 +133,7 @@ func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, err
 		}
 
 		// Clean up Che resources by deleting the Che user (required for GDPR and reactivation of users)
-		if err := r.lookupAndDeleteCheUser(config, userAcc); err != nil {
+		if err := r.lookupAndDeleteCheUser(logger, config, userAcc); err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete Che user data")
 		}
 
@@ -617,12 +593,12 @@ func ToIdentityName(userID string, identityProvider string) string {
 	return fmt.Sprintf("%s:%s", identityProvider, userID)
 }
 
-func (r *Reconciler) lookupAndDeleteCheUser(config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
 
 	// If Che user deletion is not required then just return, this is a way to disable this Che user deletion logic since
 	// it's meant to be a temporary measure until Che is updated to handle user deletion on its own
 	if !config.Che().IsUserDeletionEnabled() {
-		r.Log.Info("Che user deletion is not enabled, skipping it")
+		logger.Info("Che user deletion is not enabled, skipping it")
 		return nil
 	}
 
@@ -633,7 +609,7 @@ func (r *Reconciler) lookupAndDeleteCheUser(config memberCfg.Configuration, user
 
 	// If the user doesn't exist then there's nothing left to do.
 	if !userExists {
-		r.Log.Info("Che user no longer exists")
+		logger.Info("Che user no longer exists")
 		return nil
 	}
 

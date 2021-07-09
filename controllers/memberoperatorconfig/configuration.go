@@ -13,7 +13,7 @@ const (
 	MemberStatusName = "toolchain-member-status"
 )
 
-var log = logf.Log.WithName("configuration")
+var logger = logf.Log.WithName("configuration")
 
 type Configuration struct {
 	m       *toolchainv1alpha1.MemberOperatorConfigSpec
@@ -21,7 +21,7 @@ type Configuration struct {
 }
 
 func (c *Configuration) Print() {
-	log.Info("Member operator configuration variables", "MemberOperatorConfigSpec", c.m)
+	logger.Info("Member operator configuration variables", "MemberOperatorConfigSpec", c.m)
 }
 
 func (c *Configuration) Auth() AuthConfig {

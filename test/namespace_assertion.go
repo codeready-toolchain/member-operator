@@ -12,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -75,7 +74,7 @@ func (a *NamespaceAssertion) HasNoLabel(key string) *NamespaceAssertion {
 	return a
 }
 
-func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object) *NamespaceAssertion {
+func (a *NamespaceAssertion) HasResource(name string, obj client.Object) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
@@ -89,7 +88,7 @@ func (a *NamespaceAssertion) HasResource(name string, obj runtime.Object) *Names
 	return a
 }
 
-func (a *NamespaceAssertion) HasNoResource(name string, obj runtime.Object) *NamespaceAssertion {
+func (a *NamespaceAssertion) HasNoResource(name string, obj client.Object) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)

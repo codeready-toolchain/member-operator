@@ -16,9 +16,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -41,44 +43,26 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 	}
 }
 
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("nstemplateset-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
+// SetupWithManager sets up the controller with the Manager.
+func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
 
-	// Watch for changes to primary resources: NSTemplateSets
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resources: Namespaces associated with an NSTemplateSet (not owned, though - see https://issues.redhat.com/browse/CRT-429)
-	if err := c.Watch(&source.Kind{Type: &corev1.Namespace{}}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey)); err != nil {
-		return err
-	}
+	build := ctrl.NewControllerManagedBy(mgr).
+		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel)
 
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources
-		if err := c.Watch(&source.Kind{Type: clusterResource.objectType}, commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey), commonpredicates.LabelsAndGenerationPredicate{}); err != nil {
-			return err
-		}
+		build = build.Watches(&source.Kind{Type: clusterResource.objectType}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	}
 
-	return nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
-	return add(mgr, r)
+	return build.Complete(r)
 }
 
 type APIClient struct {
 	Client         client.Client
 	Scheme         *runtime.Scheme
-	Log            logr.Logger
 	GetHostCluster cluster.GetHostClusterFunc
 }
 
@@ -101,8 +85,8 @@ type Reconciler struct {
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec
-func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	logger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	logger.Info("reconciling NSTemplateSet")
 
 	var err error
@@ -211,7 +195,7 @@ Current:
 				continue Current
 			}
 		}
-		if err := client.Delete(context.TODO(), currentObj.GetRuntimeObject()); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
+		if err := client.Delete(context.TODO(), currentObj.GetClientObject()); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
 			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetGvk().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted

@@ -9,11 +9,13 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -22,13 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // statusComponentTags are used in the overall condition to point out which components are not ready
@@ -46,32 +46,16 @@ const (
 	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
 )
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r *Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("memberstatus-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to primary resource MemberStatus
-	err = c.Watch(&source.Kind{Type: &toolchainv1alpha1.MemberStatus{}}, &handler.EnqueueRequestForObject{}, predicate.GenerationChangedPredicate{})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
-	return add(mgr, r)
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&toolchainv1alpha1.MemberStatus{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		Complete(r)
 }
 
 // Reconciler reconciles a MemberStatus object
 type Reconciler struct {
 	Client              client.Client
-	Log                 logr.Logger
 	Scheme              *runtime.Scheme
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 	AllNamespacesClient client.Client
@@ -87,8 +71,8 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting
-func (r *Reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := r.Log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling MemberStatus")
 
 	// retrieve the latest config and use it for this reconciliation
@@ -189,7 +173,7 @@ func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberSta
 	}
 
 	// Look up status of member deployment
-	memberOperatorDeploymentName, err := k8sutil.GetOperatorName()
+	memberOperatorName, err := configuration.GetOperatorName()
 	if err != nil {
 		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, err.Error())
@@ -197,6 +181,7 @@ func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberSta
 		memberStatus.Status.MemberOperator = operatorStatus
 		return err
 	}
+	memberOperatorDeploymentName := fmt.Sprintf("%s-controller-manager", memberOperatorName)
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// Check member operator deployment status

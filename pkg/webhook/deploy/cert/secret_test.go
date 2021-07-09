@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -136,7 +135,7 @@ func TestEnsureCertSecret(t *testing.T) {
 	t.Run("when cannot get the secret", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -155,7 +154,7 @@ func TestEnsureCertSecret(t *testing.T) {
 	t.Run("when cannot create the secret", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 

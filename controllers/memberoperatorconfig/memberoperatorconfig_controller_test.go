@@ -10,8 +10,6 @@ import (
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -27,7 +25,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.NoError(t, err)
@@ -43,7 +41,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		_, err = controller.Reconcile(newRequest())
+		_, err = controller.Reconcile(context.TODO(), newRequest())
 
 		// then
 		require.NoError(t, err)
@@ -56,7 +54,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
 	// given
 	cl := test.NewFakeClient(t)
-	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 		return fmt.Errorf("get error")
 	}
 	controller := Reconciler{
@@ -65,7 +63,7 @@ func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.EqualError(t, err, "get error")
@@ -78,7 +76,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 	// given
 	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 	cl := test.NewFakeClient(t, config)
-	cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+	cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 		return fmt.Errorf("list error")
 	}
 	controller := Reconciler{
@@ -87,7 +85,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.EqualError(t, err, "list error")
@@ -104,7 +102,7 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 	}
 
 	// when
-	_, err := controller.Reconcile(newRequest())
+	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
 	require.NoError(t, err)

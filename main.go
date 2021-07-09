@@ -285,7 +285,9 @@ func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, er
 // returns the loaded crt configuration
 func getCRTConfiguration(config *rest.Config, namespace string) (memberoperatorconfig.Configuration, error) {
 	// create client that will be used for retrieving the member operator config maps
-	cl, err := client.New(config, client.Options{})
+	cl, err := client.New(config, client.Options{
+		Scheme: scheme,
+	})
 	if err != nil {
 		return memberoperatorconfig.Configuration{}, err
 	}

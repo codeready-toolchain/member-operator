@@ -11,7 +11,7 @@ import (
 var mapperLog = ctrl.Log.WithName("SecretToMemberOperatorConfigMapper")
 
 // MapSecretToMemberOperatorConfig maps secrets to the singular instance of MemberOperatorConfig named "config"
-func MapSecretToMemberOperatorConfig(cl client.Client) func(object client.Object) []reconcile.Request {
+func MapSecretToMemberOperatorConfig() func(object client.Object) []reconcile.Request {
 	return func(obj client.Object) []reconcile.Request {
 		if secret, ok := obj.(*corev1.Secret); ok {
 			mapperLog.Info("Secret mapped to MemberOperatorConfig", "name", secret.Name)

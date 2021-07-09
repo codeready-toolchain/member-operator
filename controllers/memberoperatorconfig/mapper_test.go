@@ -17,14 +17,13 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 		"che-admin-username": []byte("cheadmin"),
 		"che-admin-password": []byte("password"),
 	}
-	secret := newSecret("test-secret", secretData)
 
 	t.Run("test secret maps correctly", func(t *testing.T) {
 		// given
-		c := test.NewFakeClient(t)
+		secret := newSecret("test-secret", secretData)
 
 		// when
-		req := MapSecretToMemberOperatorConfig(c)(secret)
+		req := MapSecretToMemberOperatorConfig()(secret)
 
 		// then
 		require.Len(t, req, 1)
@@ -36,12 +35,12 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 
 	t.Run("a non-secret resource is not mapped", func(t *testing.T) {
 		// given
-		c := test.NewFakeClient(t)
 		pod := &corev1.Pod{}
 
 		// when
-		req := MapSecretToMemberOperatorConfig(c)(pod)
+		req := MapSecretToMemberOperatorConfig()(pod)
 
+		// then
 		require.Len(t, req, 0)
 	})
 }

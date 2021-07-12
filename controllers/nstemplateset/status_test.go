@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -110,11 +109,11 @@ func TestUpdateStatus(t *testing.T) {
 			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
-			fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return fmt.Errorf("status update mock error")
 			}
 			// when a reconcile loop is triggered
-			_, err := r.Reconcile(req)
+			_, err := r.Reconcile(context.TODO(), req)
 
 			// then
 			require.Error(t, err)
@@ -202,7 +201,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
 
 		// when
-		_, err := r.Reconcile(req)
+		_, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)

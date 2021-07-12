@@ -15,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake" //nolint: staticcheck // not deprecated anymore: see https://github.com/kubernetes-sigs/controller-runtime/pull/1101
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -36,7 +35,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 			// when
-			_, err := cntrl.Reconcile(newUaRequest(userAcc))
+			_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 			// then
 			require.NoError(t, err)
@@ -54,7 +53,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 			// when
-			_, err := cntrl.Reconcile(newUaRequest(userAcc))
+			_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 			// then
 			require.NoError(t, err)
@@ -72,7 +71,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, false, "")
 
 			// when
-			_, err := cntrl.Reconcile(newUaRequest(userAcc))
+			_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 			// then
 			require.Error(t, err)
@@ -88,7 +87,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionFalse)
 
 			// when
-			_, err := cntrl.Reconcile(newUaRequest(userAcc))
+			_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 			// then
 			require.Error(t, err)
@@ -113,7 +112,7 @@ func TestUpdateMasterUserRecordWithExistingEmbeddedUserAccount(t *testing.T) {
 	cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 	// when
-	_, err := cntrl.Reconcile(newUaRequest(userAcc))
+	_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 	// then
 	require.NoError(t, err)
@@ -138,7 +137,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 		cntrl, _ := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 		// when
-		_, err := cntrl.Reconcile(newUaRequest(userAcc))
+		_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 		// then
 		require.Error(t, err)
@@ -151,7 +150,7 @@ func TestUpdateMasterUserRecordWithoutUserAccountEmbedded(t *testing.T) {
 		cntrl, _ := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
 
 		// when
-		_, err := cntrl.Reconcile(newUaRequest(userAcc))
+		_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
 
 		// then
 		require.Error(t, err)
@@ -168,14 +167,13 @@ func newReconcileStatus(t *testing.T,
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	memberClient := fake.NewFakeClientWithScheme(s, userAcc)
-	hostClient := fake.NewFakeClientWithScheme(s, mur)
+	memberClient := fake.NewClientBuilder().WithScheme(s).WithObjects(userAcc).Build()
+	hostClient := fake.NewClientBuilder().WithScheme(s).WithObjects(mur).Build()
 
 	return Reconciler{
 		Client:         memberClient,
 		GetHostCluster: test.NewGetHostCluster(hostClient, ok, status),
 		Scheme:         s,
-		Log:            ctrl.Log.WithName("controllers").WithName("UserAccountStatus"),
 	}, hostClient
 }
 

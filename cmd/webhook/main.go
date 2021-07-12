@@ -9,14 +9,12 @@ import (
 
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var log = logf.Log.WithName("cmd")
+var log = ctrl.Log.WithName("setup")
 
 func main() {
-	logf.SetLogger(zap.Logger())
 	log.Info("Configuring webhook server ...")
 
 	mux := http.NewServeMux()

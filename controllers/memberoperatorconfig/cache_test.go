@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -74,7 +73,7 @@ func TestGetConfigFailed(t *testing.T) {
 	t.Run("config not found", func(t *testing.T) {
 		config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return apierrors.NewNotFound(schema.GroupResource{}, "config")
 		}
 
@@ -90,7 +89,7 @@ func TestGetConfigFailed(t *testing.T) {
 	t.Run("error getting config", func(t *testing.T) {
 		config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return fmt.Errorf("some error")
 		}
 

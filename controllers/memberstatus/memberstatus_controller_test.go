@@ -13,12 +13,12 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/h2non/gock.v1"
 
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -39,6 +38,7 @@ import (
 var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 
 const defaultMemberOperatorName = "member-operator"
+const defaultMemberOperatorDeploymentName = "member-operator-controller-manager"
 
 const defaultMemberStatusName = configuration.MemberStatusName
 
@@ -62,7 +62,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		reconciler, req, _ := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then - there should not be any error, the controller should only log that the resource was not found
 		require.NoError(t, err)
@@ -75,12 +75,12 @@ func TestNoMemberStatusFound(t *testing.T) {
 		requestName := defaultMemberStatusName
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
-		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj runtime.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj client.Object) error {
 			return fmt.Errorf(expectedErrMsg)
 		}
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.Error(t, err)
@@ -94,7 +94,7 @@ func TestOverallStatusCondition(t *testing.T) {
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	restore := test.SetEnvVarsAndRestore(t, test.Env(k8sutil.OperatorNameEnvVar, defaultMemberOperatorName))
+	restore := test.SetEnvVarsAndRestore(t, test.Env(commonconfig.OperatorNameEnvVar, defaultMemberOperatorName))
 	defer restore()
 	nodeAndMetrics := newNodesAndNodeMetrics(
 		forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("1250000Ki")),
@@ -114,7 +114,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -213,7 +213,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -233,7 +233,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -246,14 +246,14 @@ func TestOverallStatusCondition(t *testing.T) {
 
 	t.Run("Member operator deployment not found - deployment env var not set", func(t *testing.T) {
 		// given
-		resetFunc := test.UnsetEnvVarAndRestore(t, k8sutil.OperatorNameEnvVar)
+		resetFunc := test.UnsetEnvVarAndRestore(t, commonconfig.OperatorNameEnvVar)
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		resetFunc()
@@ -274,7 +274,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -294,7 +294,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -336,7 +336,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			append(nodeAndMetrics, singleNodeAndMetrics[0], memberOperatorDeployment, newMemberStatus())...)
 
 		// when
-		res, err := reconciler.Reconcile(req)
+		res, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -360,7 +360,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("when unable to list Nodes", func(t *testing.T) {
 			// given
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
-			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				if _, ok := list.(*corev1.NodeList); ok {
 					return fmt.Errorf("some error")
 				}
@@ -382,7 +382,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			}
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -396,7 +396,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
 			// given
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
-			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				if _, ok := list.(*v1beta1.NodeMetricsList); ok {
 					return fmt.Errorf("some error")
 				}
@@ -404,7 +404,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			}
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -428,7 +428,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				append(nodeAndMetrics, singleNodeAndMetrics1[0], singleNodeAndMetrics2[0], memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -453,7 +453,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -470,7 +470,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -490,7 +490,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 				// when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -508,7 +508,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 				// when
-				res, err := reconciler.Reconcile(req)
+				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -548,7 +548,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				Reply(200)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -573,7 +573,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -598,7 +598,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -630,7 +630,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				BodyString(`{"error":"che error"}`)
 
 			// when
-			res, err := reconciler.Reconcile(req)
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -667,11 +667,10 @@ func newMemberStatus() *toolchainv1alpha1.MemberStatus {
 }
 
 func newMemberDeploymentWithConditions(deploymentConditions ...appsv1.DeploymentCondition) *appsv1.Deployment {
-	memberOperatorDeploymentName := defaultMemberOperatorName
 	replicas := int32(1)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      memberOperatorDeploymentName,
+			Name:      defaultMemberOperatorDeploymentName,
 			Namespace: test.MemberOperatorNs,
 			Labels: map[string]string{
 				"foo": "bar",
@@ -721,7 +720,6 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		Config:              config,
 		CheClient:           cheTestClient(config, allNamespacesClient),
-		Log:                 ctrl.Log.WithName("controllers").WithName("MemberStatus"),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }

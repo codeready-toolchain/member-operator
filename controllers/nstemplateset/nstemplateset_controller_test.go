@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -47,7 +46,7 @@ func TestReconcileAddFinalizer(t *testing.T) {
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 			// when
-			res, err := r.Reconcile(req)
+			res, err := r.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -60,13 +59,13 @@ func TestReconcileAddFinalizer(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer())
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
-			fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+			fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				fmt.Printf("updating object of type '%T'\n", obj)
 				return fmt.Errorf("mock error")
 			}
 
 			// when
-			res, err := r.Reconcile(req)
+			res, err := r.Reconcile(context.TODO(), req)
 
 			// then
 			require.Error(t, err)
@@ -94,7 +93,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -132,7 +131,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS, crb, idlerDev, idlerCode, idlerStage)
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -151,7 +150,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -174,7 +173,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		r, req, _ := prepareReconcile(t, namespaceName, username)
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -195,7 +194,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -212,7 +211,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 		t.Run("provision john's clusterRoleBinding", func(t *testing.T) {
 			// when
-			res, err := r.Reconcile(req)
+			res, err := r.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -229,7 +228,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 			t.Run("provision john's Idlers", func(t *testing.T) {
 				// when
-				res, err := r.Reconcile(req)
+				res, err := r.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -245,7 +244,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 				// when
-				res, err = r.Reconcile(req)
+				res, err = r.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -256,7 +255,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 					HasResource(username+"-code", &toolchainv1alpha1.Idler{})
 
 				// when
-				res, err = r.Reconcile(req)
+				res, err = r.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -268,7 +267,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 				t.Run("provision john's dev namespace", func(t *testing.T) {
 					// when
-					res, err := r.Reconcile(req)
+					res, err := r.Reconcile(context.TODO(), req)
 
 					// then
 					require.NoError(t, err)
@@ -292,7 +291,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 						r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 						// when
-						res, err := r.Reconcile(req)
+						res, err := r.Reconcile(context.TODO(), req)
 
 						// then
 						require.NoError(t, err)
@@ -321,7 +320,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 							joeReq := newReconcileRequest(namespaceName, joeUsername)
 
 							// when
-							res, err := r.Reconcile(joeReq)
+							res, err := r.Reconcile(context.TODO(), joeReq)
 
 							// then
 							require.NoError(t, err)
@@ -338,7 +337,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 							t.Run("provision joe's clusterRoleBinding (using cached TierTemplate)", func(t *testing.T) {
 								// when
-								res, err := r.Reconcile(joeReq)
+								res, err := r.Reconcile(context.TODO(), joeReq)
 
 								// then
 								require.NoError(t, err)
@@ -355,7 +354,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 								t.Run("provision joe's Idlers", func(t *testing.T) {
 									// when
-									res, err := r.Reconcile(joeReq)
+									res, err := r.Reconcile(context.TODO(), joeReq)
 
 									// then
 									require.NoError(t, err)
@@ -371,7 +370,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 										HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 									// when
-									res, err = r.Reconcile(joeReq)
+									res, err = r.Reconcile(context.TODO(), joeReq)
 
 									// then
 									require.NoError(t, err)
@@ -382,7 +381,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 										HasResource(joeUsername+"-code", &toolchainv1alpha1.Idler{})
 
 									// when
-									res, err = r.Reconcile(joeReq)
+									res, err = r.Reconcile(context.TODO(), joeReq)
 
 									// then
 									require.NoError(t, err)
@@ -394,7 +393,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 									t.Run("provision joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
 										// when
-										res, err := r.Reconcile(joeReq)
+										res, err := r.Reconcile(context.TODO(), joeReq)
 
 										// then
 										require.NoError(t, err)
@@ -418,7 +417,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 											r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 											// when
-											res, err := r.Reconcile(joeReq)
+											res, err := r.Reconcile(context.TODO(), joeReq)
 
 											// then
 											require.NoError(t, err)
@@ -472,7 +471,7 @@ func TestReconcilePromotion(t *testing.T) {
 			require.NoError(t, err)
 
 			// when
-			_, err = r.Reconcile(req)
+			_, err = r.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -498,7 +497,7 @@ func TestReconcilePromotion(t *testing.T) {
 
 			t.Run("create ClusterRoleBinding", func(t *testing.T) {
 				// when
-				_, err = r.Reconcile(req)
+				_, err = r.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -523,21 +522,21 @@ func TestReconcilePromotion(t *testing.T) {
 
 				t.Run("create Idlers", func(t *testing.T) {
 					// when
-					_, err = r.Reconcile(req)
+					_, err = r.Reconcile(context.TODO(), req)
 					// then
 					require.NoError(t, err)
 					AssertThatCluster(t, fakeClient).
 						HasResource(username+"-dev", &toolchainv1alpha1.Idler{})
 
 					// when
-					_, err = r.Reconcile(req)
+					_, err = r.Reconcile(context.TODO(), req)
 					// then
 					require.NoError(t, err)
 					AssertThatCluster(t, fakeClient).
 						HasResource(username+"-code", &toolchainv1alpha1.Idler{})
 
 					// when
-					_, err = r.Reconcile(req)
+					_, err = r.Reconcile(context.TODO(), req)
 					// then
 					require.NoError(t, err)
 					AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
@@ -551,7 +550,7 @@ func TestReconcilePromotion(t *testing.T) {
 					t.Run("delete redundant namespace", func(t *testing.T) {
 
 						// when - should delete the -code namespace
-						_, err := r.Reconcile(req)
+						_, err := r.Reconcile(context.TODO(), req)
 
 						// then
 						require.NoError(t, err)
@@ -574,7 +573,7 @@ func TestReconcilePromotion(t *testing.T) {
 
 						t.Run("upgrade the dev namespace", func(t *testing.T) {
 							// when - should upgrade the namespace
-							_, err = r.Reconcile(req)
+							_, err = r.Reconcile(context.TODO(), req)
 
 							// then
 							require.NoError(t, err)
@@ -601,7 +600,7 @@ func TestReconcilePromotion(t *testing.T) {
 								r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 								// when - should check if everything is OK and set status to provisioned
-								_, err = r.Reconcile(req)
+								_, err = r.Reconcile(context.TODO(), req)
 
 								// then
 								require.NoError(t, err)
@@ -661,7 +660,7 @@ func TestReconcileUpdate(t *testing.T) {
 			require.NoError(t, err)
 
 			// when
-			_, err = r.Reconcile(req)
+			_, err = r.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
@@ -691,7 +690,7 @@ func TestReconcileUpdate(t *testing.T) {
 
 			t.Run("delete ClusterRoleBinding", func(t *testing.T) {
 				// when
-				_, err = r.Reconcile(req)
+				_, err = r.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
@@ -719,7 +718,7 @@ func TestReconcileUpdate(t *testing.T) {
 				t.Run("delete redundant namespace", func(t *testing.T) {
 
 					// when - should delete the -code namespace
-					_, err := r.Reconcile(req)
+					_, err := r.Reconcile(context.TODO(), req)
 
 					// then
 					require.NoError(t, err)
@@ -746,7 +745,7 @@ func TestReconcileUpdate(t *testing.T) {
 
 					t.Run("upgrade the dev namespace", func(t *testing.T) {
 						// when - should upgrade the namespace
-						_, err = r.Reconcile(req)
+						_, err = r.Reconcile(context.TODO(), req)
 
 						// then
 						require.NoError(t, err)
@@ -777,7 +776,7 @@ func TestReconcileUpdate(t *testing.T) {
 							r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
 
 							// when - should check if everything is OK and set status to provisioned
-							_, err = r.Reconcile(req)
+							_, err = r.Reconcile(context.TODO(), req)
 
 							// then
 							require.NoError(t, err)
@@ -820,12 +819,12 @@ func TestReconcileProvisionFail(t *testing.T) {
 	t.Run("fail to get nstmplset", func(t *testing.T) {
 		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			return errors.New("unable to get NSTemplate")
 		}
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.Error(t, err)
@@ -837,12 +836,12 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 			return errors.New("unable to update status")
 		}
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.Error(t, err)
@@ -859,7 +858,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		req := newReconcileRequest("", username)
 
 		// when
-		res, err := r.Reconcile(req)
+		res, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.Error(t, err)
@@ -883,12 +882,12 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 		t.Run("reconcile after nstemplateset deletion triggers deletion of the first namespace", func(t *testing.T) {
 			// when a first reconcile loop was triggered (because a cluster resource quota was deleted)
-			_, err := r.Reconcile(req)
+			_, err := r.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
 			// get the first namespace and check its deletion timestamp
-			firstNSName := fmt.Sprintf("%s-dev", username)
+			firstNSName := fmt.Sprintf("%s-code", username)
 			AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()
 			// get the NSTemplateSet resource again and check its status
 			AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
@@ -897,12 +896,12 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 			t.Run("reconcile after first user namespace deletion triggers deletion of the second namespace", func(t *testing.T) {
 				// when a second reconcile loop was triggered (because a user namespace was deleted)
-				_, err := r.Reconcile(req)
+				_, err := r.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
 				// get the second namespace and check its deletion timestamp
-				secondtNSName := fmt.Sprintf("%s-code", username)
+				secondtNSName := fmt.Sprintf("%s-dev", username)
 				AssertThatNamespace(t, secondtNSName, r.Client).DoesNotExist()
 				// get the NSTemplateSet resource again and check its finalizers and status
 				AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
@@ -911,7 +910,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 				t.Run("reconcile after second user namespace deletion triggers deletion of CRQ", func(t *testing.T) {
 					// when
-					_, err := r.Reconcile(req)
+					_, err := r.Reconcile(context.TODO(), req)
 
 					// then
 					require.NoError(t, err)
@@ -926,7 +925,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 						r.GetHostCluster = NewGetHostCluster(r.Client, true, v1.ConditionFalse)
 
 						// when a last reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
-						_, err := r.Reconcile(req)
+						_, err := r.Reconcile(context.TODO(), req)
 
 						// then
 						require.NoError(t, err)
@@ -941,7 +940,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 							req := newReconcileRequest(namespaceName, username)
 
 							// when
-							_, err := r.Reconcile(req)
+							_, err := r.Reconcile(context.TODO(), req)
 
 							// then
 							require.NoError(t, err)
@@ -962,7 +961,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		r, req, _ := prepareReconcile(t, namespaceName, username, nsTmplSet)
 
 		// when a reconcile loop is triggered
-		_, err := r.Reconcile(req)
+		_, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
@@ -1045,7 +1044,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 	// objects created from OpenShift templates are `*unstructured.Unstructured`,
 	// which causes troubles when calling the `List` method on the fake client,
 	// so we're explicitly converting the objects during their creation and update
-	fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+	fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 		o, err := toStructured(obj, decoder)
 		if err != nil {
 			return err
@@ -1055,7 +1054,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		}
 		return passGeneration(o, obj)
 	}
-	fakeClient.MockUpdate = func(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+	fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o, err := toStructured(obj, decoder)
 		if err != nil {
 			return err
@@ -1069,7 +1068,6 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		Client:         fakeClient,
 		Scheme:         s,
 		GetHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
-		Log:            ctrl.Log.WithName("controllers").WithName("NSTemplateSet"),
 	}, fakeClient
 }
 
@@ -1112,7 +1110,7 @@ func passGeneration(from, to runtime.Object) error {
 	return nil
 }
 
-func toStructured(obj runtime.Object, decoder runtime.Decoder) (runtime.Object, error) {
+func toStructured(obj client.Object, decoder runtime.Decoder) (client.Object, error) {
 	if u, ok := obj.(*unstructured.Unstructured); ok {
 		data, err := u.MarshalJSON()
 		if err != nil {

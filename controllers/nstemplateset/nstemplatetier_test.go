@@ -10,13 +10,11 @@ import (
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	templatev1 "github.com/openshift/api/template/v1"
-	"github.com/operator-framework/operator-sdk/pkg/log/zap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
@@ -44,7 +42,6 @@ func TestGetTierTemplate(t *testing.T) {
 	// Setup Scheme for all resources (required before adding objects in the fake client)
 	err := apis.AddToScheme(scheme.Scheme)
 	require.NoError(t, err)
-	logf.SetLogger(zap.Logger())
 
 	basicTierCode := newTierTemplate("basic", "code", "abcdef")
 	basicTierDev := newTierTemplate("basic", "dev", "123456")

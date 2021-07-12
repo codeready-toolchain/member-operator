@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -214,6 +215,20 @@ func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace,
 	if err := client.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
 		return nil, err
 	}
+	names := make([]string, len(userNamespaceList.Items))
+	for i, ns := range userNamespaceList.Items {
+		names[i] = ns.Name
+	}
+	sort.Strings(names)
+	sortedNamespaces := make([]corev1.Namespace, len(userNamespaceList.Items))
+	for i, name := range names {
+		for _, ns := range userNamespaceList.Items {
+			if ns.Name == name {
+				sortedNamespaces[i] = ns
+				break
+			}
+		}
+	}
 	return userNamespaceList.Items, nil
 }
 
@@ -263,7 +278,7 @@ func findNamespace(namespaces []corev1.Namespace, typeName string) (corev1.Names
 func getNamespaceName(request reconcile.Request) (string, error) {
 	namespace := request.Namespace
 	if namespace == "" {
-		return k8sutil.GetWatchNamespace()
+		return configuration.GetWatchNamespace()
 	}
 	return namespace, nil
 }

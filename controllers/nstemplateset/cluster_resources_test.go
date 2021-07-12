@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var log = ctrl.Log.WithName("controllers").WithName("NSTemplateSet")
+var logger = ctrl.Log.WithName("controllers").WithName("NSTemplateSet")
 
 func TestClusterResourceKinds(t *testing.T) {
 	// given
@@ -65,7 +65,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			require.Len(t, existingResources, 1)
-			assert.Equal(t, johnyObject, existingResources[0].GetRuntimeObject())
+			assert.Equal(t, johnyObject, existingResources[0].GetClientObject())
 		})
 
 		t.Run("listExistingResources should return two resources of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -78,8 +78,8 @@ func TestClusterResourceKinds(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			require.Len(t, existingResources, 2)
-			assert.Equal(t, johnyObject, existingResources[0].GetRuntimeObject())
-			assert.Equal(t, johnyObject2, existingResources[1].GetRuntimeObject())
+			assert.Equal(t, johnyObject, existingResources[0].GetClientObject())
+			assert.Equal(t, johnyObject2, existingResources[1].GetClientObject())
 		})
 
 		t.Run("listExistingResources should return not return any resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -97,7 +97,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		t.Run("listExistingResources should return an error when listing resources of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject)
-			fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				return fmt.Errorf("some error")
 			}
 
@@ -150,7 +150,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(log, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(log, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -186,7 +186,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(log, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -201,7 +201,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 		t.Run("should create the second CRQ when the first one is already created but still not ClusterRoleBinding", func(t *testing.T) {
 			// when
-			createdOrUpdated, err := manager.ensure(log, nsTmplSet)
+			createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -216,7 +216,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 			t.Run("should create ClusterRoleBinding when both CRQs are created", func(t *testing.T) {
 				// when
-				createdOrUpdated, err := manager.ensure(log, nsTmplSet)
+				createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -243,7 +243,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerCode, idlerStage)
 
 		// when
-		createdOrUpdated, err := manager.ensure(log, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -271,12 +271,12 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 	t.Run("fail to list cluster resources", func(t *testing.T) {
 		// given
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
-		fakeClient.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+		fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			return errors.New("unable to list cluster resources")
 		}
 
 		// when
-		_, err := manager.ensure(log, nsTmplSet)
+		_, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -292,7 +292,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		_, err := manager.ensure(log, nsTmplSet)
+		_, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -306,12 +306,12 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 	t.Run("fail to create cluster resources", func(t *testing.T) {
 		// given
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
-		fakeClient.MockCreate = func(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 
 		// when
-		_, err := manager.ensure(log, nsTmplSet)
+		_, err := manager.ensure(logger, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -336,7 +336,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		deleted, err := manager.delete(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -347,7 +347,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 		t.Run("delete ClusterRoleBinding since CRQ is already deleted", func(t *testing.T) {
 			// when
-			deleted, err := manager.delete(log, nsTmplSet)
+			deleted, err := manager.delete(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -367,19 +367,19 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq, crb)
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		deleted, err := manager.delete(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
 		assert.True(t, deleted)
 		AssertThatCluster(t, cl).
-			HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-			HasResource("for-empty", &quotav1.ClusterResourceQuota{}).
+			HasNoResource("for-empty", &quotav1.ClusterResourceQuota{}).
+			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 		t.Run("delete the for-empty CRQ since it's the last one to be deleted", func(t *testing.T) {
 			// when
-			deleted, err := manager.delete(log, nsTmplSet)
+			deleted, err := manager.delete(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -402,7 +402,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		deleted, err := manager.delete(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -417,7 +417,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		deleted, err := manager.delete(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -429,12 +429,12 @@ func TestDeleteClusterResources(t *testing.T) {
 	t.Run("failed to delete CRQ", func(t *testing.T) {
 		// given
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
-		cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("mock error")
 		}
 
 		// when
-		deleted, err := manager.delete(log, nsTmplSet)
+		deleted, err := manager.delete(logger, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -465,7 +465,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -483,7 +483,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("upgrade from advanced to team tier by changing only the CRB since CRQ is already changed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -511,7 +511,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -530,7 +530,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("promote from withemptycrq to advanced tier by changing only the CRQ since redundant CRQ is already removed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -558,7 +558,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -572,7 +572,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("downgrade from advanced to basic tier by removing CRB since CRQ is already removed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -593,7 +593,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -613,7 +613,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -630,7 +630,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("upgrade from basic to advanced by creating CRB since CRQ is already created", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -667,7 +667,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerCode, idlerStage, anotherIdlerDev, anotherIdlerCode, anotherIdlerStage)
 
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -696,7 +696,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				// when - let remove everything
 				var err error
 				updated := true
-				for ; updated; updated, err = manager.ensure(log, nsTmplSet) {
+				for ; updated; updated, err = manager.ensure(logger, nsTmplSet) {
 					require.NoError(t, err)
 				}
 
@@ -724,7 +724,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, advancedCRQ, anotherCRQ, crb)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -741,7 +741,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("it should delete the second for-empty CRQ since it's the last one", func(t *testing.T) {
 				// when - should delete the second ClusterResourceQuota
-				updated, err = manager.ensure(log, nsTmplSet)
+				updated, err = manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -754,7 +754,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 				t.Run("it should delete the CRB since both CRQs are already removed", func(t *testing.T) {
 					// when - should delete the second ClusterResourceQuota
-					updated, err = manager.ensure(log, nsTmplSet)
+					updated, err = manager.ensure(logger, nsTmplSet)
 
 					// then
 					require.NoError(t, err)
@@ -779,12 +779,12 @@ func TestPromoteClusterResources(t *testing.T) {
 			crq := newClusterResourceQuota(username, "fail")
 			crb := newTektonClusterRoleBinding(username, "fail")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
-			cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				return fmt.Errorf("some error")
 			}
 
 			// when
-			_, err := manager.ensure(log, nsTmplSet)
+			_, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -805,12 +805,12 @@ func TestPromoteClusterResources(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			crq := newClusterResourceQuota(username, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
-			cl.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("some error")
 			}
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -848,7 +848,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -862,7 +862,7 @@ func TestUpdateClusterResources(t *testing.T) {
 
 			t.Run("update from abcde11 revision to abcde12 revision by deleting CRB since CRQ is already changed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -882,7 +882,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -895,7 +895,7 @@ func TestUpdateClusterResources(t *testing.T) {
 
 			t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by creating CRB", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(log, nsTmplSet)
+				updated, err := manager.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -916,12 +916,12 @@ func TestUpdateClusterResources(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withClusterResources("abcde11"), withConditions(Updating()))
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
-			cl.MockList = func(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+			cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				return fmt.Errorf("some error")
 			}
 
 			// when
-			_, err := manager.ensure(log, nsTmplSet)
+			_, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -940,7 +940,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 
 			// when
-			updated, err := manager.ensure(log, nsTmplSet)
+			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
 			require.Error(t, err)

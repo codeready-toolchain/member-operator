@@ -533,7 +533,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 
 }
 
-func TestDeleteNamespsace(t *testing.T) {
+func TestDeleteNamespace(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
@@ -546,7 +546,7 @@ func TestDeleteNamespsace(t *testing.T) {
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 		// when
-		allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -563,29 +563,29 @@ func TestDeleteNamespsace(t *testing.T) {
 
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when
-			allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+			allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
 			assert.False(t, allDeleted)
 			// get the first namespace and check its deletion timestamp
-			firstNSName := fmt.Sprintf("%s-dev", username)
+			firstNSName := fmt.Sprintf("%s-code", username)
 			AssertThatNamespace(t, firstNSName, cl).DoesNotExist()
 
 			t.Run("delete the second namespace", func(t *testing.T) {
 				// when
-				allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+				allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
 				assert.False(t, allDeleted)
 				// get the second namespace and check its deletion timestamp
-				secondtNSName := fmt.Sprintf("%s-code", username)
+				secondtNSName := fmt.Sprintf("%s-dev", username)
 				AssertThatNamespace(t, secondtNSName, cl).DoesNotExist()
 			})
 
 			t.Run("ensure all namespaces are deleted", func(t *testing.T) {
-				allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+				allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -600,7 +600,7 @@ func TestDeleteNamespsace(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
-		allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -619,7 +619,7 @@ func TestDeleteNamespsace(t *testing.T) {
 		}
 
 		// when
-		allDeleted, err := manager.ensureDeleted(log, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 		// then
 		require.Error(t, err)

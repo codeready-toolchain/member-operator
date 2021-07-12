@@ -978,20 +978,20 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		req := newReconcileRequest(namespaceName, username)
 
 		// only add deletion timestamp, but not delete
-		fakeClient.MockDelete = func(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			if obj, ok := obj.(*corev1.Namespace); ok {
 				deletionTs := metav1.Now()
 				obj.DeletionTimestamp = &deletionTs
-				r.Client.Update(context.TODO(),obj)
+				r.Client.Update(context.TODO(), obj)
 			}
 			return nil
 		}
 		// first reconcile, deletion is triggered
-		_, err := r.Reconcile(req)
+		_, err := r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 		//then second reconcile to check if namespace has actually been deleted
-		_, err = r.Reconcile(req)
-		require.Error(t, err)
+		_, err = r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
 
 		// get the first namespace and check that it is not deleted
 		firstNSName := fmt.Sprintf("%s-dev", username)
@@ -1011,10 +1011,10 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		fakeClient.MockDelete = nil //now removing the mockDelete
 
 		//reconcile, deletion is triggered
-		_, err = r.Reconcile(req)
+		_, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 		// second reconcile triggered when ns is deleted
-		_, err = r.Reconcile(req)
+		_, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 
 		// get the first namespace and check it IS deleted

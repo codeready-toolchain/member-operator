@@ -560,6 +560,18 @@ func TestDeleteNamespace(t *testing.T) {
 	t.Run("with 2 user namespaces to delete", func(t *testing.T) {
 		// given
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS)
+		t.Run("delete returns error", func(t *testing.T) {
+			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				return fmt.Errorf("client.Delete() failed")
+			}
+			// when
+			allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+			require.Error(t, err)
+			require.False(t, allDeleted)
+
+			// set mockDelete to nil
+			cl.MockDelete = nil
+		})
 
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when
@@ -568,7 +580,7 @@ func TestDeleteNamespace(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			assert.False(t, allDeleted)
-			// get the first namespace and check its deletion timestamp
+			// get the first namespace and check its deleted
 			firstNSName := fmt.Sprintf("%s-code", username)
 			AssertThatNamespace(t, firstNSName, cl).DoesNotExist()
 
@@ -579,9 +591,9 @@ func TestDeleteNamespace(t *testing.T) {
 				// then
 				require.NoError(t, err)
 				assert.False(t, allDeleted)
-				// get the second namespace and check its deletion timestamp
-				secondtNSName := fmt.Sprintf("%s-dev", username)
-				AssertThatNamespace(t, secondtNSName, cl).DoesNotExist()
+				// get the second namespace and check its deleted
+				secondNSName := fmt.Sprintf("%s-dev", username)
+				AssertThatNamespace(t, secondNSName, cl).DoesNotExist()
 			})
 
 			t.Run("ensure all namespaces are deleted", func(t *testing.T) {

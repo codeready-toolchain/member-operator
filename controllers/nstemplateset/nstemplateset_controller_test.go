@@ -982,7 +982,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			if obj, ok := obj.(*corev1.Namespace); ok {
 				deletionTs := metav1.Now()
 				obj.DeletionTimestamp = &deletionTs
-				if err:= r.Client.Update(context.TODO(), obj); err !=nil {
+				if err := r.Client.Update(context.TODO(), obj); err != nil {
 					return err
 				}
 			}

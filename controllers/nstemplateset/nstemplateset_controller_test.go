@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"testing"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"strings"
+	"testing"
 
 	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
@@ -70,6 +69,7 @@ func TestReconcileAddFinalizer(t *testing.T) {
 
 			// then
 			require.Error(t, err)
+
 			assert.Equal(t, reconcile.Result{}, res)
 			AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 				DoesNotHaveFinalizer()
@@ -967,6 +967,67 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
+	})
+
+	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
+		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withDeletionTs(), withClusterResources("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+
+		r, fakeClient := prepareController(t, nsTmplSet, devNS)
+		req := newReconcileRequest(namespaceName, username)
+
+		// only add deletion timestamp, but not delete
+		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				deletionTs := metav1.Now()
+				obj.DeletionTimestamp = &deletionTs
+				if err := r.Client.Update(context.TODO(), obj); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		// first reconcile, deletion is triggered
+		result, err := r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
+		require.NoError(t, err)
+		//then second reconcile to check if namespace has actually been deleted
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
+		require.NoError(t, err)
+
+		// get the first namespace and check that it is not deleted
+		firstNSName := fmt.Sprintf("%s-dev", username)
+		AssertThatNamespace(t, firstNSName, r.Client).DoesExist()
+		// get the NSTemplateSet resource again, check it is not deleted and its status
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
+			HasFinalizer().
+			HasConditions(UnableToTerminate("user namespace johnsmith-dev deletion was triggered but is not complete yet, something could be blocking ns deletion"))
+
+		// remove deletion timestamp, actual delete is now triggered
+		userNS := &corev1.Namespace{}
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: firstNSName}, userNS)
+		require.NoError(t, err)
+		userNS.DeletionTimestamp = nil
+		err = r.Client.Update(context.TODO(), userNS)
+		require.NoError(t, err)
+		fakeClient.MockDelete = nil //now removing the mockDelete
+
+		//reconcile, deletion is triggered
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
+		require.NoError(t, err)
+		// second reconcile triggered when ns is deleted
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
+		require.NoError(t, err)
+
+		// get the first namespace and check it IS deleted
+		AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()
+		// Check that nsTemplateSet is set to delete
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).DoesNotHaveFinalizer().HasConditions(Terminating())
+
 	})
 }
 

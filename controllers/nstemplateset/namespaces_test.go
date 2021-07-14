@@ -533,7 +533,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 
 }
 
-func TestDeleteNamespsace(t *testing.T) {
+func TestDeleteNamespace(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
@@ -546,11 +546,11 @@ func TestDeleteNamespsace(t *testing.T) {
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, deleted)
+		assert.False(t, allDeleted)
 		// get the first namespace and check its deletion timestamp
 		firstNSName := fmt.Sprintf("%s-dev", username)
 		AssertThatNamespace(t, firstNSName, cl).
@@ -560,39 +560,49 @@ func TestDeleteNamespsace(t *testing.T) {
 	t.Run("with 2 user namespaces to delete", func(t *testing.T) {
 		// given
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS)
-
-		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-			if obj, ok := obj.(*corev1.Namespace); ok {
-				// mark namespaces as deleted...
-				deletionTS := metav1.Now()
-				obj.SetDeletionTimestamp(&deletionTS)
-				// ... but replace them in the fake client cache yet instead of deleting them
-				return cl.Client.Update(ctx, obj)
+		t.Run("delete returns error", func(t *testing.T) {
+			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				return fmt.Errorf("client.Delete() failed")
 			}
-			return cl.Client.Delete(ctx, obj, opts...)
-		}
+			// when
+			allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+			require.Error(t, err)
+			require.False(t, allDeleted)
+
+			// set mockDelete to nil
+			cl.MockDelete = nil
+		})
 
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when
-			deleted, err := manager.delete(logger, nsTmplSet)
+			allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
-			assert.True(t, deleted)
-			// get the first namespace and check its deletion timestamp
+			assert.False(t, allDeleted)
+			// get the first namespace and check its deleted
 			firstNSName := fmt.Sprintf("%s-code", username)
-			AssertThatNamespace(t, firstNSName, cl).HasDeletionTimestamp()
+			AssertThatNamespace(t, firstNSName, cl).DoesNotExist()
 
 			t.Run("delete the second namespace", func(t *testing.T) {
 				// when
-				deleted, err := manager.delete(logger, nsTmplSet)
+				allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
-				assert.True(t, deleted)
-				// get the second namespace and check its deletion timestamp
-				secondtNSName := fmt.Sprintf("%s-dev", username)
-				AssertThatNamespace(t, secondtNSName, cl).HasDeletionTimestamp()
+				assert.False(t, allDeleted)
+				// get the second namespace and check its deleted
+				secondNSName := fmt.Sprintf("%s-dev", username)
+				AssertThatNamespace(t, secondNSName, cl).DoesNotExist()
+			})
+
+			t.Run("ensure all namespaces are deleted", func(t *testing.T) {
+				allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, allDeleted)
+
 			})
 		})
 	})
@@ -602,11 +612,11 @@ func TestDeleteNamespsace(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
-		assert.False(t, deleted)
+		assert.True(t, allDeleted)
 	})
 
 	t.Run("failed to fetch namespaces", func(t *testing.T) {
@@ -621,11 +631,11 @@ func TestDeleteNamespsace(t *testing.T) {
 		}
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
 
 		// then
 		require.Error(t, err)
-		assert.False(t, deleted)
+		assert.False(t, allDeleted)
 		assert.Equal(t, "failed to list namespace with label owner 'johnsmith': mock error", err.Error())
 		AssertThatNSTemplateSet(t, namespaceName, username, cl).
 			HasFinalizer(). // finalizer was not added and nothing else was done

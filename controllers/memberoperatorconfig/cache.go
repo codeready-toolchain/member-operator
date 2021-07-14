@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	common "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,34 +50,13 @@ func loadLatest(cl client.Client, namespace string) error {
 		return err
 	}
 
-	allSecrets, err := loadSecrets(cl, namespace)
+	allSecrets, err := common.LoadSecrets(cl, namespace)
 	if err != nil {
 		return err
 	}
 
 	configCache.set(config, allSecrets)
 	return nil
-}
-
-func loadSecrets(cl client.Client, namespace string) (map[string]map[string]string, error) {
-	var allSecrets = make(map[string]map[string]string)
-	secretList := &corev1.SecretList{}
-	err := cl.List(context.TODO(), secretList, client.InNamespace(namespace))
-	if err != nil {
-		return allSecrets, err
-	}
-	for _, secret := range secretList.Items {
-		if _, ok := secret.Annotations["kubernetes.io/service-account.name"]; ok {
-			// skip service account secrets
-			continue
-		}
-		var secretData = make(map[string]string)
-		for key, value := range secret.Data {
-			secretData[key] = string(value)
-		}
-		allSecrets[secret.Name] = secretData
-	}
-	return allSecrets, err
 }
 
 // GetConfig returns a cached memberoperator config.

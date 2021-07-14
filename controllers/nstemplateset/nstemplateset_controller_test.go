@@ -989,10 +989,12 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			return nil
 		}
 		// first reconcile, deletion is triggered
-		_, err := r.Reconcile(context.TODO(), req)
+		result, err := r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
 		require.NoError(t, err)
 		//then second reconcile to check if namespace has actually been deleted
-		_, err = r.Reconcile(context.TODO(), req)
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
 		require.NoError(t, err)
 
 		// get the first namespace and check that it is not deleted
@@ -1013,10 +1015,12 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		fakeClient.MockDelete = nil //now removing the mockDelete
 
 		//reconcile, deletion is triggered
-		_, err = r.Reconcile(context.TODO(), req)
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
 		require.NoError(t, err)
 		// second reconcile triggered when ns is deleted
-		_, err = r.Reconcile(context.TODO(), req)
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
 		require.NoError(t, err)
 
 		// get the first namespace and check it IS deleted

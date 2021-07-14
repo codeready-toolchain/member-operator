@@ -2,19 +2,14 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20210708073330-362a8f80c8fc
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20210708074916-046e2bc28f85
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20210714012219-d30211a26ff9
 	github.com/go-logr/logr v0.4.0
-	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/google/go-cmp v0.5.2
-	github.com/gopherjs/gopherjs v0.0.0-20191106031601-ce3c9ade29de // indirect
 	// using latest commit from 'github.com/openshift/api@release-4.7'
 	github.com/openshift/api v0.0.0-20210428205234-a8389931bee7
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v1.1.3-0.20210602122509-2eaf121122d2
 	github.com/satori/go.uuid v1.2.0
-	github.com/smartystreets/assertions v1.0.1 // indirect
-	github.com/spf13/cast v1.3.1
-	github.com/spf13/viper v1.7.1
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/crypto v0.0.0-20201117144127-c1f2f97bffc9 // indirect
 	gopkg.in/h2non/gock.v1 v1.0.14

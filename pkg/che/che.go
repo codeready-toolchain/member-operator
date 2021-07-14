@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	crtcfg "github.com/codeready-toolchain/member-operator/pkg/configuration"
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 
@@ -30,21 +30,21 @@ var DefaultClient *Client
 
 // Client is a client for interacting with Che services
 type Client struct {
-	config     *crtcfg.Config
+	config     memberCfg.Configuration
 	httpClient *http.Client
 	k8sClient  client.Client
 	tokenCache *TokenCache
 }
 
 // InitDefaultCheClient initializes the default Che client instance
-func InitDefaultCheClient(cfg *crtcfg.Config, cl client.Client) {
+func InitDefaultCheClient(cfg memberCfg.Configuration, cl client.Client) {
 	defaultHTTPClient := newHTTPClient()
 	tc := NewTokenCache(defaultHTTPClient)
 	DefaultClient = NewCheClient(cfg, defaultHTTPClient, cl, tc)
 }
 
 // NewCheClient creates a new instance of a Che client
-func NewCheClient(cfg *crtcfg.Config, httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
+func NewCheClient(cfg memberCfg.Configuration, httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
 	return &Client{
 		config:     cfg,
 		httpClient: httpCl,
@@ -140,7 +140,7 @@ func (c *Client) UserAPICheck() error {
 
 func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*http.Response, error) {
 	// get Che route URL
-	cheURL, err := route.GetRouteURL(c.k8sClient, c.config.GetCheNamespace(), c.config.GetCheRouteName())
+	cheURL, err := route.GetRouteURL(c.k8sClient, c.config.Che().Namespace(), c.config.Che().RouteName())
 	if err != nil {
 		return nil, err
 	}

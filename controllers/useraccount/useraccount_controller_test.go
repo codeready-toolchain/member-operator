@@ -9,11 +9,12 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
-	"github.com/codeready-toolchain/member-operator/pkg/configuration"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -48,14 +49,14 @@ func TestReconcile(t *testing.T) {
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 
-	config, err := configuration.LoadConfig(test.NewFakeClient(t))
+	config, err := memberCfg.GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
 	require.NoError(t, err)
 
 	// given
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name: ToIdentityName(userAcc.Spec.UserID, config),
+		Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
 		UID:  types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
 		Name: username,
@@ -65,7 +66,7 @@ func TestReconcile(t *testing.T) {
 		Name:   username,
 		UID:    userUID,
 		Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
-	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)}}
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
@@ -82,7 +83,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("deleted account ignored", func(t *testing.T) {
 		// given
 		// No user account exists
-		r, req, _ := prepareReconcile(t, username)
+		r, req, _, _ := prepareReconcile(t, username)
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
 
@@ -96,7 +97,7 @@ func TestReconcile(t *testing.T) {
 		assert.True(t, apierros.IsNotFound(err))
 
 		// Check the identity is not created
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, &userv1.Identity{})
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -139,7 +140,7 @@ func TestReconcile(t *testing.T) {
 			checkMapping(t, user, preexistingIdentity)
 
 			// Check the identity is not created yet
-			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, &userv1.Identity{})
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, &userv1.Identity{})
 			require.Error(t, err)
 			assert.True(t, apierros.IsNotFound(err))
 
@@ -149,7 +150,7 @@ func TestReconcile(t *testing.T) {
 		}
 
 		t.Run("create", func(t *testing.T) {
-			r, req, _ := prepareReconcile(t, username, userAcc)
+			r, req, _, _ := prepareReconcile(t, username, userAcc)
 			reconcile(r, req)
 		})
 
@@ -159,7 +160,7 @@ func TestReconcile(t *testing.T) {
 				UID:    userUID,
 				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 			}}
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			reconcile(r, req)
 		})
 	})
@@ -167,7 +168,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("create or update user failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
-			r, req, fakeClient := prepareReconcile(t, username, userAcc)
+			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc)
 			fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create user")
 			}
@@ -191,7 +192,7 @@ func TestReconcile(t *testing.T) {
 				UID:    userUID,
 				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 			}}
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
+			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update user")
 			}
@@ -232,9 +233,9 @@ func TestReconcile(t *testing.T) {
 
 			// Check the created/updated identity
 			identity := &userv1.Identity{}
-			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
 			require.NoError(t, err)
-			assert.Equal(t, fmt.Sprintf("%s:%s", r.Config.GetIdP(), userAcc.Spec.UserID), identity.Name)
+			assert.Equal(t, fmt.Sprintf("%s:%s", config.Auth().Idp(), userAcc.Spec.UserID), identity.Name)
 			require.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])
 			assert.Empty(t, identity.OwnerReferences) // Identity has no explicit owner reference.
 
@@ -243,18 +244,18 @@ func TestReconcile(t *testing.T) {
 		}
 
 		t.Run("create", func(t *testing.T) {
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
 			reconcile(r, req)
 		})
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:   ToIdentityName(userAcc.Spec.UserID, config),
+				Name:   ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
 				UID:    types.UID(uuid.NewV4().String()),
 				Labels: map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
 			}}
 
-			r, req, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
 			reconcile(r, req)
 		})
 	})
@@ -262,7 +263,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("create or update identity failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser)
+			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser)
 			fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create identity")
 			}
@@ -271,7 +272,7 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(context.TODO(), req)
 
 			//then
-			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID, config)))
+			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())))
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
@@ -282,11 +283,11 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithFinalizer(username, userID)
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:   ToIdentityName(userAcc.Spec.UserID, config),
+				Name:   ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
 				UID:    types.UID(uuid.NewV4().String()),
 				Labels: map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
 			}}
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
+			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update identity")
 			}
@@ -307,7 +308,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("create nstmplset OK", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
 			// given
-			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -327,7 +328,7 @@ func TestReconcile(t *testing.T) {
 			userAcc := newUserAccountWithStatus(username, userID)
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "Provisioning", "")
 
-			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -347,7 +348,7 @@ func TestReconcile(t *testing.T) {
 			userAcc := newUserAccountWithStatus(username, userID)
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
 
-			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -366,7 +367,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithStatus(username, userID)
 
-			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -384,7 +385,7 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("create nstmplset failed", func(t *testing.T) {
 		t.Run("create", func(t *testing.T) {
-			r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 			cl.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 				return errors.New("unable to create NSTemplateSet")
 			}
@@ -400,7 +401,7 @@ func TestReconcile(t *testing.T) {
 		})
 
 		t.Run("provision status failed", func(t *testing.T) {
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 			fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update status")
 			}
@@ -416,7 +417,7 @@ func TestReconcile(t *testing.T) {
 			userAcc := newUserAccountWithStatus(username, userID)
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
 
-			r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
 			fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return errors.New("unable to update status")
 			}
@@ -433,7 +434,7 @@ func TestReconcile(t *testing.T) {
 	// Last cycle of reconcile. User, Identity created/updated.
 	t.Run("provisioned", func(t *testing.T) {
 		// given
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -449,7 +450,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.TierName = "advanced"
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -468,7 +469,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.Namespaces[0].TemplateRef = "basic-dev-09876"
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -487,7 +488,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.Namespaces = userAcc.Spec.NSTemplateSet.Namespaces[1:2]
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -507,7 +508,7 @@ func TestReconcile(t *testing.T) {
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.Namespaces = append(userAcc.Spec.NSTemplateSet.Namespaces,
 			toolchainv1alpha1.NSTemplateSetNamespace{TemplateRef: "basic-stage-1234"})
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -526,7 +527,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.ClusterResources.TemplateRef = "basic-clusterresources-007"
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -545,7 +546,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.ClusterResources = nil
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -565,7 +566,7 @@ func TestReconcile(t *testing.T) {
 		userAcc := newUserAccount(username, userID, false)
 		nsTemplateSet := preexistingNsTmplSet.DeepCopy()
 		nsTemplateSet.Spec.ClusterResources = nil
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, nsTemplateSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, nsTemplateSet)
 
 		//when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -584,7 +585,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
 		userAcc.Spec.NSTemplateSet.TierName = "advanced"
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 		cl.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 			if obj.GetObjectKind().GroupVersionKind().Kind == "NSTemplateSet" {
 				return fmt.Errorf("some error")
@@ -610,15 +611,14 @@ func TestReconcile(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
-			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
-			// For tests we'll assume they're two different routes.
-			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
-		)
-		defer restore()
+		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
+			testconfig.Che().
+				UserDeletionEnabled(true).
+				KeycloakRouteName("keycloak").
+				Secret().
+				Ref("test-secret").
+				CheAdminUsernameKey("che.admin.username").
+				CheAdminPasswordKey("che.admin.password"))
 
 		mockCallsCounter := new(int)
 		defer gock.OffAll()
@@ -629,7 +629,7 @@ func TestReconcile(t *testing.T) {
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID, false)
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -659,7 +659,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -693,7 +693,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("add finalizer fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
-		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		// Mock setting finalizer failure
 		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
@@ -711,7 +711,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("remove finalizer fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
-		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -763,7 +763,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
 		require.Error(t, err)
 		assert.True(t, apierros.IsNotFound(err))
 
@@ -786,15 +786,14 @@ func TestReconcile(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
-			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
-			// For tests we'll assume they're two different routes.
-			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
-		)
-		defer restore()
+		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
+			testconfig.Che().
+				UserDeletionEnabled(true).
+				KeycloakRouteName("keycloak").
+				Secret().
+				Ref("test-secret").
+				CheAdminUsernameKey("che.admin.username").
+				CheAdminPasswordKey("che.admin.password"))
 
 		mockCallsCounter := new(int)
 		defer gock.OffAll()
@@ -803,7 +802,7 @@ func TestReconcile(t *testing.T) {
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID, false)
-		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, fakeClient, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -830,7 +829,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
 		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
@@ -847,7 +846,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("delete identity fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
-		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -879,7 +878,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
 		require.NoError(t, err)
 
 		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
@@ -889,7 +888,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
-		r, req, fakeClient := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -924,7 +923,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated identity has been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config)}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
 		require.NoError(t, err)
 
 		// Check that the associated user has not been deleted
@@ -1039,13 +1038,13 @@ func TestDisabledUserAccount(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	config, err := configuration.LoadConfig(test.NewFakeClient(t))
+	config, err := memberCfg.GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
 	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-		Name: ToIdentityName(userAcc.Spec.UserID, config),
+		Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
 		UID:  types.UID(username + "identity"),
 	}, User: corev1.ObjectReference{
 		Name: username,
@@ -1055,7 +1054,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		Name:   username,
 		UID:    userUID,
 		Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
-	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config)}}
+	}, Identities: []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}}
 	preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userAcc.Name,
@@ -1071,7 +1070,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("disabling useraccount", func(t *testing.T) {
 		// given
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
 		// when
 		userAcc.Spec.Disabled = true
@@ -1083,7 +1082,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		//then
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()))
 		useraccount.AssertThatUserAccount(t, req.Name, cl).
 			HasConditions(failed("Disabling", "deleting user/identity"))
 
@@ -1096,7 +1095,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -1110,7 +1109,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		userAcc := newUserAccount(username, userID, true)
 
 		// given
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
 
 		res, err := r.Reconcile(context.TODO(), req)
 		assert.Equal(t, reconcile.Result{}, res)
@@ -1121,7 +1120,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -1134,7 +1133,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	t.Run("disabling useraccount without user", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, true)
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -1147,7 +1146,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -1160,7 +1159,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	t.Run("disabling useraccount without identity", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, true)
-		r, req, cl := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
+		r, req, cl, config := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -1172,7 +1171,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()))
 
 		// Check that the associated user has been deleted
 		// since disabled has been set to true
@@ -1186,7 +1185,7 @@ func TestDisabledUserAccount(t *testing.T) {
 		// given
 		userAcc := newDisabledUserAccountWithFinalizer(username, userID)
 		userAcc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
-		r, req, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet, preexistingUser, preexistingIdentity)
+		r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet, preexistingUser, preexistingIdentity)
 
 		// when
 		_, err := r.Reconcile(context.TODO(), req)
@@ -1196,7 +1195,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// Check that the associated identity has been deleted
 		// since disabled has been set to true
-		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config))
+		assertIdentityNotFound(t, r, ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()))
 
 		t.Run("deleting identity for disabled useraccount", func(t *testing.T) {
 			// when
@@ -1235,10 +1234,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 	t.Run("che user deletion is not enabled", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID, false)
-		r, _, _ := prepareReconcile(t, username, userAcc, cheRoute(true), keycloackRoute(true))
+		r, _, _, config := prepareReconcile(t, username, userAcc, cheRoute(true), keycloackRoute(true))
 
 		// when
-		err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+		err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 		// then
 		require.NoError(t, err)
@@ -1246,15 +1245,15 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 
 	t.Run("che user deletion is enabled", func(t *testing.T) {
 		memberOperatorSecret := newSecretWithCheAdminCreds()
-		restore := test.SetEnvVarsAndRestore(t,
-			test.Env("WATCH_NAMESPACE", test.MemberOperatorNs),
-			test.Env("MEMBER_OPERATOR_SECRET_NAME", "test-secret"),
-			test.Env(configuration.MemberEnvPrefix+"_"+"CHE_USER_DELETION_ENABLED", "true"),
-			// Che has two different routes for Che & Keycloak but CRW uses a single route for both.
-			// For tests we'll assume they're two different routes.
-			test.Env(configuration.MemberEnvPrefix+"_CHE_KEYCLOAK_ROUTE_NAME", "keycloak"),
-		)
-		defer restore()
+
+		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
+			testconfig.Che().
+				UserDeletionEnabled(true).
+				KeycloakRouteName("keycloak").
+				Secret().
+				Ref("test-secret").
+				CheAdminUsernameKey("che.admin.username").
+				CheAdminPasswordKey("che.admin.password"))
 
 		t.Run("get token error", func(t *testing.T) {
 			// given
@@ -1262,10 +1261,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			defer gock.OffAll()
 			gockTokenFail(mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, _, _, config := prepareReconcile(t, username, cfg, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			//when
-			err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 			// then
 			require.EqualError(t, err, `request to find Che user 'sugar' failed: unable to obtain access token for che, Response status: '400 Bad Request'. Response body: ''`)
@@ -1283,10 +1282,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			gockTokenSuccess(mockCallsCounter)
 			gockFindUserNoBody(username, 404, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 			// then
 			require.NoError(t, err)
@@ -1304,10 +1303,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			gockTokenSuccess(mockCallsCounter)
 			gockFindUserNoBody(username, 400, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 			// then
 			require.EqualError(t, err, `request to find Che user 'sugar' failed, Response status: '400 Bad Request' Body: ''`)
@@ -1325,10 +1324,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			gockTokenSuccess(mockCallsCounter)
 			gockFindUserNoBody(username, 200, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 			// then
 			require.EqualError(t, err, `unable to get Che user ID for user 'sugar': error unmarshalling Che user json  : unexpected end of JSON input`)
@@ -1347,10 +1346,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			gockFindUserTimes(username, 2, mockCallsCounter)
 			gockDeleteUser(400, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 			// then
 			require.EqualError(t, err, `this error is expected if deletion is still in progress: unable to delete Che user with ID 'abc1234', Response status: '400 Bad Request' Body: ''`)
@@ -1368,10 +1367,10 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 			gockFindUserTimes(username, 2, mockCallsCounter)
 			gockDeleteUser(204, mockCallsCounter)
 			userAcc := newUserAccount(username, userID, false)
-			r, _, _ := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, userAcc)
+			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 			// then
 			require.NoError(t, err)
@@ -1541,24 +1540,26 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, identity.Name, user.Identities[0])
 }
 
-func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, memberCfg.Configuration) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := configuration.LoadConfig(fakeClient)
+	config, err := memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
 	require.NoError(t, err)
 
 	tc := che.NewTokenCache(http.DefaultClient)
 	cheClient := che.NewCheClient(config, http.DefaultClient, fakeClient, tc)
 
+	config, err = memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
+	require.NoError(t, err)
+
 	r := &Reconciler{
 		Client:    fakeClient,
 		Scheme:    s,
-		Config:    config,
 		CheClient: cheClient,
 	}
-	return r, newReconcileRequest(username), fakeClient
+	return r, newReconcileRequest(username), fakeClient, config
 }
 
 func updating() toolchainv1alpha1.Condition {

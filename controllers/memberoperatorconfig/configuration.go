@@ -4,6 +4,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -60,7 +61,7 @@ type AuthConfig struct {
 }
 
 func (a AuthConfig) Idp() string {
-	return getString(a.auth.Idp, "rhd")
+	return configuration.GetString(a.auth.Idp, "rhd")
 }
 
 type AutoscalerConfig struct {
@@ -68,15 +69,15 @@ type AutoscalerConfig struct {
 }
 
 func (a AutoscalerConfig) Deploy() bool {
-	return getBool(a.autoscaler.Deploy, true) // TODO it is temporarily changed to true but should be changed back to false after autoscaler handling is moved to memberoperatorconfig controller
+	return configuration.GetBool(a.autoscaler.Deploy, true) // TODO it is temporarily changed to true but should be changed back to false after autoscaler handling is moved to memberoperatorconfig controller
 }
 
 func (a AutoscalerConfig) BufferMemory() string {
-	return getString(a.autoscaler.BufferMemory, "50Mi") // TODO temporarily changed to e2e value, should be changed back to "" after autoscaler handling is moved to memberoperatorconfig controller
+	return configuration.GetString(a.autoscaler.BufferMemory, "50Mi") // TODO temporarily changed to e2e value, should be changed back to "" after autoscaler handling is moved to memberoperatorconfig controller
 }
 
 func (a AutoscalerConfig) BufferReplicas() int {
-	return getInt(a.autoscaler.BufferReplicas, 2) // TODO temporarily changed to e2e value, should be changed back to 1 after autoscaler handling is moved to memberoperatorconfig controller
+	return configuration.GetInt(a.autoscaler.BufferReplicas, 2) // TODO temporarily changed to e2e value, should be changed back to 1 after autoscaler handling is moved to memberoperatorconfig controller
 }
 
 type CheConfig struct {
@@ -85,38 +86,38 @@ type CheConfig struct {
 }
 
 func (a CheConfig) cheSecret(cheSecretKey string) string {
-	cheSecret := getString(a.che.Secret.Ref, "")
+	cheSecret := configuration.GetString(a.che.Secret.Ref, "")
 	return a.secrets[cheSecret][cheSecretKey]
 }
 
 func (a CheConfig) AdminUserName() string {
-	adminUsernameKey := getString(a.che.Secret.CheAdminUsernameKey, "")
+	adminUsernameKey := configuration.GetString(a.che.Secret.CheAdminUsernameKey, "")
 	return a.cheSecret(adminUsernameKey)
 }
 
 func (a CheConfig) AdminPassword() string {
-	adminPasswordKey := getString(a.che.Secret.CheAdminPasswordKey, "")
+	adminPasswordKey := configuration.GetString(a.che.Secret.CheAdminPasswordKey, "")
 	return a.cheSecret(adminPasswordKey)
 }
 
 func (a CheConfig) IsRequired() bool {
-	return getBool(a.che.Required, false)
+	return configuration.GetBool(a.che.Required, false)
 }
 
 func (a CheConfig) IsUserDeletionEnabled() bool {
-	return getBool(a.che.UserDeletionEnabled, false)
+	return configuration.GetBool(a.che.UserDeletionEnabled, false)
 }
 
 func (a CheConfig) KeycloakRouteName() string {
-	return getString(a.che.KeycloakRouteName, "codeready")
+	return configuration.GetString(a.che.KeycloakRouteName, "codeready")
 }
 
 func (a CheConfig) Namespace() string {
-	return getString(a.che.Namespace, "codeready-workspaces-operator")
+	return configuration.GetString(a.che.Namespace, "codeready-workspaces-operator")
 }
 
 func (a CheConfig) RouteName() string {
-	return getString(a.che.RouteName, "codeready")
+	return configuration.GetString(a.che.RouteName, "codeready")
 }
 
 type ConsoleConfig struct {
@@ -124,11 +125,11 @@ type ConsoleConfig struct {
 }
 
 func (a ConsoleConfig) Namespace() string {
-	return getString(a.console.Namespace, "openshift-console")
+	return configuration.GetString(a.console.Namespace, "openshift-console")
 }
 
 func (a ConsoleConfig) RouteName() string {
-	return getString(a.console.RouteName, "console")
+	return configuration.GetString(a.console.RouteName, "console")
 }
 
 type MemberStatusConfig struct {
@@ -137,7 +138,7 @@ type MemberStatusConfig struct {
 
 func (a MemberStatusConfig) RefreshPeriod() time.Duration {
 	defaultRefreshPeriod := "5s"
-	refreshPeriod := getString(a.memberStatus.RefreshPeriod, defaultRefreshPeriod)
+	refreshPeriod := configuration.GetString(a.memberStatus.RefreshPeriod, defaultRefreshPeriod)
 	d, err := time.ParseDuration(refreshPeriod)
 	if err != nil {
 		d, _ = time.ParseDuration(defaultRefreshPeriod)
@@ -151,7 +152,7 @@ type ToolchainClusterConfig struct {
 
 func (a ToolchainClusterConfig) HealthCheckPeriod() time.Duration {
 	defaultClusterHealthCheckPeriod := "10s"
-	healthCheckPeriod := getString(a.t.HealthCheckPeriod, defaultClusterHealthCheckPeriod)
+	healthCheckPeriod := configuration.GetString(a.t.HealthCheckPeriod, defaultClusterHealthCheckPeriod)
 	d, err := time.ParseDuration(healthCheckPeriod)
 	if err != nil {
 		d, _ = time.ParseDuration(defaultClusterHealthCheckPeriod)
@@ -161,7 +162,7 @@ func (a ToolchainClusterConfig) HealthCheckPeriod() time.Duration {
 
 func (a ToolchainClusterConfig) HealthCheckTimeout() time.Duration {
 	defaultClusterHealthCheckTimeout := "3s"
-	healthCheckTimeout := getString(a.t.HealthCheckTimeout, defaultClusterHealthCheckTimeout)
+	healthCheckTimeout := configuration.GetString(a.t.HealthCheckTimeout, defaultClusterHealthCheckTimeout)
 	d, err := time.ParseDuration(healthCheckTimeout)
 	if err != nil {
 		d, _ = time.ParseDuration(defaultClusterHealthCheckTimeout)
@@ -174,26 +175,5 @@ type WebhookConfig struct {
 }
 
 func (a WebhookConfig) Deploy() bool {
-	return getBool(a.w.Deploy, true)
-}
-
-func getBool(value *bool, defaultValue bool) bool {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
-}
-
-func getInt(value *int, defaultValue int) int {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
-}
-
-func getString(value *string, defaultValue string) string {
-	if value != nil {
-		return *value
-	}
-	return defaultValue
+	return configuration.GetBool(a.w.Deploy, true)
 }

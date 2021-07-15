@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
@@ -18,7 +17,7 @@ import (
 
 func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	// given
-	config := newMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 	cl := test.NewFakeClient(t, config)
 	controller := Reconciler{
 		Client: cl,
@@ -52,11 +51,11 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	})
 }
 
-func TestReconcileWhenReturnsError(t *testing.T) {
+func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
 	// given
 	cl := test.NewFakeClient(t)
 	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-		return fmt.Errorf("some error")
+		return fmt.Errorf("get error")
 	}
 	controller := Reconciler{
 		Client: cl,
@@ -67,7 +66,29 @@ func TestReconcileWhenReturnsError(t *testing.T) {
 	_, err := controller.Reconcile(context.TODO(), newRequest())
 
 	// then
-	require.Error(t, err)
+	require.EqualError(t, err, "get error")
+	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	require.NoError(t, err)
+	matchesDefaultConfig(t, actual)
+}
+
+func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
+	// given
+	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+	cl := test.NewFakeClient(t, config)
+	cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+		return fmt.Errorf("list error")
+	}
+	controller := Reconciler{
+		Client: cl,
+		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
+	}
+
+	// when
+	_, err := controller.Reconcile(context.TODO(), newRequest())
+
+	// then
+	require.EqualError(t, err, "list error")
 	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
@@ -96,11 +117,6 @@ func newRequest() reconcile.Request {
 	}
 }
 
-func newMemberOperatorConfigWithReset(t *testing.T, options ...testconfig.MemberOperatorConfigOption) *toolchainv1alpha1.MemberOperatorConfig {
-	t.Cleanup(Reset)
-	return testconfig.NewMemberOperatorConfig(options...)
-}
-
-func matchesDefaultConfig(t *testing.T, actual MemberOperatorConfig) {
+func matchesDefaultConfig(t *testing.T, actual Configuration) {
 	assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
 }

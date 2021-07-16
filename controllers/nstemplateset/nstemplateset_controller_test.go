@@ -1020,9 +1020,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 		// actually delete ns
 		ns := &corev1.Namespace{}
-		err = r.Client.Get(context.TODO(),types.NamespacedName{Name: firstNSName},ns)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: firstNSName}, ns)
 		require.NoError(t, err)
-		err = r.Client.Delete(context.TODO(),ns)
+		err = r.Client.Delete(context.TODO(), ns)
 		require.NoError(t, err)
 
 		// deletion of ns would trigger another reconcile

@@ -556,22 +556,22 @@ func TestDeleteNamespace(t *testing.T) {
 		AssertThatNamespace(t, firstNSName, cl).
 			DoesNotExist()
 	})
+	t.Run("when kube delete returns error", func(t *testing.T) {
+		// given
+		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS)
+
+		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("client.Delete() failed")
+		}
+		// when
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		require.Error(t, err)
+		require.False(t, allDeleted)
+	})
 
 	t.Run("with 2 user namespaces to delete", func(t *testing.T) {
 		// given
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS)
-		t.Run("delete returns error", func(t *testing.T) {
-			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-				return fmt.Errorf("client.Delete() failed")
-			}
-			// when
-			allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
-			require.Error(t, err)
-			require.False(t, allDeleted)
-
-			// set mockDelete to nil
-			cl.MockDelete = nil
-		})
 
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when

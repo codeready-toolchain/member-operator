@@ -970,10 +970,11 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
-		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withDeletionTs(), withClusterResources("abcde11"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"))
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 
-		r, fakeClient := prepareController(t, nsTmplSet, devNS)
+		r, fakeClient := prepareController(t, nsTmplSet, devNS, codeNS)
 		req := newReconcileRequest(namespaceName, username)
 
 		// only add deletion timestamp, but not delete
@@ -996,13 +997,16 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.Empty(t, result)
 		require.NoError(t, err)
 
+		firstNSName := fmt.Sprintf("%s-code", username)
+		secondNSName := fmt.Sprintf("%s-dev", username)
 		// get the first namespace and check that it has deletion timestamp
-		firstNSName := fmt.Sprintf("%s-dev", username)
 		AssertThatNamespace(t, firstNSName, r.Client).HasDeletionTimestamp()
+		//second NS is not affected
+		AssertThatNamespace(t, secondNSName, r.Client).HasNoDeletionTimestamp()
 		// get the NSTemplateSet resource again, check it is not deleted and its status
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			HasFinalizer().
-			HasConditions(UnableToTerminate("user namespace johnsmith-dev deletion was triggered but is not complete yet, something could be blocking ns deletion"))
+			HasConditions(UnableToTerminate("user namespace johnsmith-code deletion was triggered but is not complete yet, something could be blocking ns deletion"))
 
 		// set MockDelete to nil
 		fakeClient.MockDelete = nil //now removing the mockDelete
@@ -1013,10 +1017,11 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.NoError(t, err)
 
 		AssertThatNamespace(t, firstNSName, r.Client).HasDeletionTimestamp()
+		AssertThatNamespace(t, secondNSName, r.Client).HasNoDeletionTimestamp()
 		// get the NSTemplateSet resource again, check it is not deleted and its status
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			HasFinalizer().
-			HasConditions(UnableToTerminate("user namespace johnsmith-dev deletion was triggered but is not complete yet, something could be blocking ns deletion"))
+			HasConditions(UnableToTerminate("user namespace johnsmith-code deletion was triggered but is not complete yet, something could be blocking ns deletion"))
 
 		// actually delete ns
 		ns := &corev1.Namespace{}
@@ -1025,13 +1030,24 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		err = r.Client.Delete(context.TODO(), ns)
 		require.NoError(t, err)
 
-		// deletion of ns would trigger another reconcile
+		// deletion of firstNS would trigger another reconcile deleting secondNS
 		result, err = r.Reconcile(context.TODO(), req)
 		require.Empty(t, result)
 		require.NoError(t, err)
 
 		// get the first namespace and check it IS deleted
 		AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()
+
+		// Check that nsTemplateSet still has finalizer
+		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
+			HasFinalizer().HasConditions(Terminating())
+
+		// deletion of secondNS would trigger another reconcile
+		result, err = r.Reconcile(context.TODO(), req)
+		require.Empty(t, result)
+		require.NoError(t, err)
+
+		AssertThatNamespace(t, secondNSName, r.Client).DoesNotExist()
 		// Check that nsTemplateSet is set to delete
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			DoesNotHaveFinalizer().HasConditions(Terminating())

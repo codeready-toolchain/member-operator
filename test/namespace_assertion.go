@@ -45,12 +45,6 @@ func (a *NamespaceAssertion) DoesNotExist() *NamespaceAssertion {
 	return a
 }
 
-func (a *NamespaceAssertion) DoesExist() *NamespaceAssertion {
-	err := a.loadNamespace()
-	require.NoError(a.t, err)
-	return a
-}
-
 func (a *NamespaceAssertion) HasNoOwnerReference() *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
@@ -62,6 +56,13 @@ func (a *NamespaceAssertion) HasDeletionTimestamp() *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	assert.NotNil(a.t, a.namespace.DeletionTimestamp)
+	return a
+}
+
+func (a *NamespaceAssertion) HasNoDeletionTimestamp() *NamespaceAssertion {
+	err := a.loadNamespace()
+	require.NoError(a.t, err)
+	assert.Nil(a.t, a.namespace.DeletionTimestamp)
 	return a
 }
 

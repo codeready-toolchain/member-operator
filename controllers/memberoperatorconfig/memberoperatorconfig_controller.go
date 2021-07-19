@@ -2,13 +2,17 @@ package memberoperatorconfig
 
 import (
 	"context"
+	"os"
 
 	"github.com/go-logr/logr"
+	errs "github.com/pkg/errors"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,5 +52,46 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling MemberOperatorConfig")
 
-	return reconcile.Result{}, loadLatest(r.Client, request.Namespace)
+	crtConfig, err := loadLatest(r.Client, request.Namespace)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if crtConfig.Autoscaler().Deploy() {
+		reqLogger.Info("(Re)Deploying autoscaling buffer")
+		if err := autoscaler.Deploy(r.Client, r.Client.Scheme(), request.Namespace, crtConfig.Autoscaler().BufferMemory(), crtConfig.Autoscaler().BufferReplicas()); err != nil {
+			return reconcile.Result{}, logAndWrapErr(reqLogger, err, "cannot deploy autoscaling buffer")
+		}
+		reqLogger.Info("(Re)Deployed autoscaling buffer")
+	} else {
+		deleted, err := autoscaler.Delete(r.Client, r.Client.Scheme(), request.Namespace)
+		if err != nil {
+			return reconcile.Result{}, logAndWrapErr(reqLogger, err, "cannot delete previously deployed autoscaling buffer")
+		}
+		if deleted {
+			reqLogger.Info("Deleted previously deployed autoscaling buffer")
+		} else {
+			reqLogger.Info("Skipping deployment of autoscaling buffer")
+		}
+	}
+
+	// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
+	// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
+	if crtConfig.Webhook().Deploy() {
+		webhookImage := os.Getenv("MEMBER_OPERATOR_WEBHOOK_IMAGE")
+		reqLogger.Info("(Re)Deploying users' pods webhook")
+		if err := deploy.Webhook(r.Client, r.Client.Scheme(), request.Namespace, webhookImage); err != nil {
+			return reconcile.Result{}, logAndWrapErr(reqLogger, err, "cannot deploy mutating users' pods webhook")
+		}
+		reqLogger.Info("(Re)Deployed users' pods webhook")
+	} else {
+		reqLogger.Info("Skipping deployment of users' pods webhook")
+	}
+
+	return reconcile.Result{}, nil
+}
+
+func logAndWrapErr(logger logr.Logger, err error, msg string) error {
+	logger.Error(err, msg)
+	return errs.Wrap(err, msg)
 }

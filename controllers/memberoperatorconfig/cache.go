@@ -40,23 +40,23 @@ func updateConfig(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[st
 	configCache.set(config, secrets)
 }
 
-func loadLatest(cl client.Client, namespace string) error {
+func loadLatest(cl client.Client, namespace string) (Configuration, error) {
 	config := &toolchainv1alpha1.MemberOperatorConfig{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "config"}, config); err != nil {
 		if apierrors.IsNotFound(err) {
 			cacheLog.Info("MemberOperatorConfig resource with the name 'config' wasn't found, default configuration will be used", "namespace", namespace)
-			return nil
+			return Configuration{}, nil
 		}
-		return err
+		return Configuration{}, err
 	}
 
 	allSecrets, err := common.LoadSecrets(cl, namespace)
 	if err != nil {
-		return err
+		return Configuration{}, err
 	}
 
 	configCache.set(config, allSecrets)
-	return nil
+	return getConfig(), nil
 }
 
 // GetConfig returns a cached memberoperator config.
@@ -64,18 +64,19 @@ func loadLatest(cl client.Client, namespace string) error {
 // If the resource is not found, then returns the default config.
 // If any failure happens while getting the MemberOperatorConfig resource, then returns an error.
 func GetConfig(cl client.Client, namespace string) (Configuration, error) {
+	config, _ := configCache.get()
+	if config == nil {
+		return loadLatest(cl, namespace)
+	}
+	return getConfig(), nil
+}
+
+func getConfig() Configuration {
 	config, secrets := configCache.get()
 	if config == nil {
-		err := loadLatest(cl, namespace)
-		if err != nil {
-			return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}, err
-		}
-		config, secrets = configCache.get()
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}
 	}
-	if config == nil {
-		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}, nil
-	}
-	return Configuration{m: &config.Spec, secrets: secrets}, nil
+	return Configuration{m: &config.Spec, secrets: secrets}
 }
 
 // Reset resets the cache.

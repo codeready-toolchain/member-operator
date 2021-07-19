@@ -28,9 +28,8 @@ func TestUserExists(t *testing.T) {
 
 	t.Run("missing che route", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -46,9 +45,8 @@ func TestUserExists(t *testing.T) {
 
 	t.Run("unexpected error", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -71,9 +69,8 @@ func TestUserExists(t *testing.T) {
 
 	t.Run("user not found", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -96,9 +93,8 @@ func TestUserExists(t *testing.T) {
 
 	t.Run("user found", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -126,9 +122,8 @@ func TestGetUserIDByUsername(t *testing.T) {
 
 	t.Run("missing che route", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -144,9 +139,8 @@ func TestGetUserIDByUsername(t *testing.T) {
 
 	t.Run("unexpected error", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -169,9 +163,8 @@ func TestGetUserIDByUsername(t *testing.T) {
 
 	t.Run("user ID parse error", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -193,9 +186,8 @@ func TestGetUserIDByUsername(t *testing.T) {
 
 	t.Run("bad body", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -218,9 +210,8 @@ func TestGetUserIDByUsername(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -248,9 +239,8 @@ func TestDeleteUser(t *testing.T) {
 
 	t.Run("missing che route", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -265,9 +255,8 @@ func TestDeleteUser(t *testing.T) {
 
 	t.Run("unexpected error", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -289,9 +278,8 @@ func TestDeleteUser(t *testing.T) {
 
 	t.Run("user not found", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -313,9 +301,8 @@ func TestDeleteUser(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -341,9 +328,8 @@ func TestUserAPICheck(t *testing.T) {
 
 	t.Run("missing che admin credentials", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: testTokenCache(),
@@ -358,9 +344,8 @@ func TestUserAPICheck(t *testing.T) {
 
 	t.Run("missing che route", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -375,9 +360,8 @@ func TestUserAPICheck(t *testing.T) {
 
 	t.Run("error code", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -399,9 +383,8 @@ func TestUserAPICheck(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+		cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: tokenCacheWithValidToken(),
@@ -427,9 +410,8 @@ func TestCheRequest(t *testing.T) {
 
 	t.Run("missing configuration", func(t *testing.T) {
 		// given
-		cl, cfg := prepareClientAndConfig(t, cheRoute(true))
+		cl, _ := prepareClientAndConfig(t, cheRoute(true))
 		cheClient := &Client{
-			config:     cfg,
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 			tokenCache: testTokenCache(),
@@ -455,9 +437,8 @@ func TestCheRequest(t *testing.T) {
 
 		t.Run("no che route", func(t *testing.T) {
 			// given
-			cl, cfg := prepareClientAndConfig(t, testSecret)
+			cl, _ := prepareClientAndConfig(t, testSecret)
 			cheClient := &Client{
-				config:     cfg,
 				httpClient: http.DefaultClient,
 				k8sClient:  cl,
 				tokenCache: testTokenCache(),
@@ -473,9 +454,8 @@ func TestCheRequest(t *testing.T) {
 
 		t.Run("no keycloak route", func(t *testing.T) {
 			// given
-			cl, cfg := prepareClientAndConfig(t, testSecret, config, cheRoute(true))
+			cl, _ := prepareClientAndConfig(t, testSecret, config, cheRoute(true))
 			cheClient := &Client{
-				config:     cfg,
 				httpClient: http.DefaultClient,
 				k8sClient:  cl,
 				tokenCache: testTokenCache(),
@@ -491,9 +471,8 @@ func TestCheRequest(t *testing.T) {
 
 		t.Run("nil query params", func(t *testing.T) {
 			// given
-			cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+			cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 			cheClient := &Client{
-				config:     cfg,
 				httpClient: http.DefaultClient,
 				k8sClient:  cl,
 				tokenCache: tokenCacheWithValidToken(),
@@ -516,9 +495,8 @@ func TestCheRequest(t *testing.T) {
 
 		t.Run("che returns error", func(t *testing.T) {
 			// given
-			cl, cfg := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
+			cl, _ := prepareClientAndConfig(t, testSecret, cheRoute(true), keycloackRoute(true))
 			cheClient := &Client{
-				config:     cfg,
 				httpClient: http.DefaultClient,
 				k8sClient:  cl,
 				tokenCache: tokenCacheWithValidToken(),

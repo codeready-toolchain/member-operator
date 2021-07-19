@@ -3,6 +3,7 @@ package che
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -31,13 +32,14 @@ const (
 
 func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, memberCfg.Configuration) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
+	config, err := memberCfg.GetConfig(fakeClient)
 	require.NoError(t, err)
 
 	return fakeClient, config

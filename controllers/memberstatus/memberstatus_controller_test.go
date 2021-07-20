@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -714,15 +715,14 @@ func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterF
 
 func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
-	require.NoError(t, err)
 	r := &Reconciler{
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              scheme.Scheme,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
-		CheClient:           cheTestClient(config, allNamespacesClient),
+		CheClient:           cheTestClient(allNamespacesClient),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }
@@ -829,7 +829,7 @@ func cheRoute(tls bool) *routev1.Route {
 	return r
 }
 
-func cheTestClient(cfg memberCfg.Configuration, cl client.Client) *che.Client {
+func cheTestClient(cl client.Client) *che.Client {
 	tokenCache := che.NewTokenCacheWithToken(
 		http.DefaultClient,
 		&che.TokenSet{
@@ -839,7 +839,7 @@ func cheTestClient(cfg memberCfg.Configuration, cl client.Client) *che.Client {
 			RefreshToken: "111.222.333",
 			TokenType:    "bearer",
 		})
-	return che.NewCheClient(cfg, http.DefaultClient, cl, tokenCache)
+	return che.NewCheClient(http.DefaultClient, cl, tokenCache)
 }
 
 func cheReady() toolchainv1alpha1.Condition {

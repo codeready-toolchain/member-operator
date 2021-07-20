@@ -30,23 +30,21 @@ var DefaultClient *Client
 
 // Client is a client for interacting with Che services
 type Client struct {
-	config     memberCfg.Configuration
 	httpClient *http.Client
 	k8sClient  client.Client
 	tokenCache *TokenCache
 }
 
 // InitDefaultCheClient initializes the default Che client instance
-func InitDefaultCheClient(cfg memberCfg.Configuration, cl client.Client) {
+func InitDefaultCheClient(cl client.Client) {
 	defaultHTTPClient := newHTTPClient()
 	tc := NewTokenCache(defaultHTTPClient)
-	DefaultClient = NewCheClient(cfg, defaultHTTPClient, cl, tc)
+	DefaultClient = NewCheClient(defaultHTTPClient, cl, tc)
 }
 
 // NewCheClient creates a new instance of a Che client
-func NewCheClient(cfg memberCfg.Configuration, httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
+func NewCheClient(httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
 	return &Client{
-		config:     cfg,
 		httpClient: httpCl,
 		k8sClient:  cl,
 		tokenCache: tc,
@@ -139,8 +137,14 @@ func (c *Client) UserAPICheck() error {
 }
 
 func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*http.Response, error) {
+
+	config, err := memberCfg.GetConfig(c.k8sClient)
+	if err != nil {
+		return nil, err
+	}
+
 	// get Che route URL
-	cheURL, err := route.GetRouteURL(c.k8sClient, c.config.Che().Namespace(), c.config.Che().RouteName())
+	cheURL, err := route.GetRouteURL(c.k8sClient, config.Che().Namespace(), config.Che().RouteName())
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +160,7 @@ func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*h
 	}
 
 	// get auth token for request
-	token, err := c.tokenCache.getToken(c.k8sClient, c.config)
+	token, err := c.tokenCache.getToken(c.k8sClient, config)
 	if err != nil {
 		return nil, err
 	}

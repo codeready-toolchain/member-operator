@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	. "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
@@ -120,21 +121,17 @@ func TestLoadLatest(t *testing.T) {
 		cl := NewFakeClient(t, initconfig)
 
 		// when
-		err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl, MemberOperatorNs)
 
 		// then
-		require.NoError(t, err)
-		actual, err := GetConfig(cl, MemberOperatorNs)
 		require.NoError(t, err)
 		assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod())
 
 		t.Run("returns the same when the config hasn't been updated", func(t *testing.T) {
 			// when
-			err := loadLatest(cl, MemberOperatorNs)
+			actual, err := loadLatest(cl, MemberOperatorNs)
 
 			// then
-			require.NoError(t, err)
-			actual, err = GetConfig(cl, MemberOperatorNs)
 			require.NoError(t, err)
 			assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod())
 		})
@@ -146,11 +143,9 @@ func TestLoadLatest(t *testing.T) {
 			require.NoError(t, err)
 
 			// when
-			err = loadLatest(cl, MemberOperatorNs)
+			actual, err = loadLatest(cl, MemberOperatorNs)
 
 			// then
-			require.NoError(t, err)
-			actual, err = GetConfig(cl, MemberOperatorNs)
 			require.NoError(t, err)
 			assert.Equal(t, 20*time.Second, actual.MemberStatus().RefreshPeriod())
 		})
@@ -161,10 +156,11 @@ func TestLoadLatest(t *testing.T) {
 		cl := NewFakeClient(t)
 
 		// when
-		err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl, MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
+		require.Equal(t, Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, actual)
 	})
 
 	t.Run("get config error", func(t *testing.T) {
@@ -176,10 +172,11 @@ func TestLoadLatest(t *testing.T) {
 		}
 
 		// when
-		err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl, MemberOperatorNs)
 
 		// then
 		require.EqualError(t, err, "get error")
+		require.Equal(t, Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, actual)
 	})
 
 	t.Run("load secrets error", func(t *testing.T) {
@@ -191,10 +188,43 @@ func TestLoadLatest(t *testing.T) {
 		}
 
 		// when
-		err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl, MemberOperatorNs)
 
 		// then
 		require.EqualError(t, err, "list error")
+		require.Equal(t, Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, actual)
+	})
+}
+
+func TestGetConfigOrDefault(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		// when
+		actual := getConfigOrDefault()
+
+		// then
+		assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
+		assert.Empty(t, actual.Che().AdminUserName())
+	})
+
+	t.Run("non-default", func(t *testing.T) {
+		initconfig := NewMemberOperatorConfigWithReset(t,
+			testconfig.MemberStatus().RefreshPeriod("111s"),
+			testconfig.Che().Secret().
+				Ref("che-secret").
+				CheAdminUsernameKey("che-admin-username"))
+		cheSecretValues := make(map[string]string)
+		cheSecretValues["che-admin-username"] = "super-admin"
+		secrets := make(map[string]map[string]string)
+		secrets["che-secret"] = cheSecretValues
+		// given
+		configCache.set(initconfig, secrets)
+
+		// when
+		actual := getConfigOrDefault()
+
+		// then
+		assert.Equal(t, 111*time.Second, actual.MemberStatus().RefreshPeriod())
+		assert.Equal(t, "super-admin", actual.Che().AdminUserName())
 	})
 }
 

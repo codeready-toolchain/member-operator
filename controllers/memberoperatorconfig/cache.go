@@ -27,13 +27,13 @@ func (c *cache) set(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[
 	c.Lock()
 	defer c.Unlock()
 	c.config = config.DeepCopy()
-	c.secrets = copyOf(secrets)
+	c.secrets = common.CopyOf(secrets)
 }
 
 func (c *cache) get() (*toolchainv1alpha1.MemberOperatorConfig, map[string]map[string]string) {
 	c.RLock()
 	defer c.RUnlock()
-	return c.config.DeepCopy(), copyOf(c.secrets)
+	return c.config.DeepCopy(), common.CopyOf(c.secrets)
 }
 
 func updateConfig(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[string]map[string]string) {
@@ -45,18 +45,18 @@ func loadLatest(cl client.Client, namespace string) (Configuration, error) {
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "config"}, config); err != nil {
 		if apierrors.IsNotFound(err) {
 			cacheLog.Info("MemberOperatorConfig resource with the name 'config' wasn't found, default configuration will be used", "namespace", namespace)
-			return Configuration{}, nil
+			return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, nil
 		}
-		return Configuration{}, err
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, err
 	}
 
 	allSecrets, err := common.LoadSecrets(cl, namespace)
 	if err != nil {
-		return Configuration{}, err
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, err
 	}
 
 	configCache.set(config, allSecrets)
-	return getConfig(), nil
+	return getConfigOrDefault(), nil
 }
 
 // GetConfig returns a cached memberoperator config.
@@ -68,10 +68,10 @@ func GetConfig(cl client.Client, namespace string) (Configuration, error) {
 	if config == nil {
 		return loadLatest(cl, namespace)
 	}
-	return getConfig(), nil
+	return getConfigOrDefault(), nil
 }
 
-func getConfig() Configuration {
+func getConfigOrDefault() Configuration {
 	config, secrets := configCache.get()
 	if config == nil {
 		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}
@@ -84,16 +84,4 @@ func getConfig() Configuration {
 // then the function has to be exported and placed here.
 func Reset() {
 	configCache = &cache{}
-}
-
-func copyOf(originalMap map[string]map[string]string) map[string]map[string]string {
-	targetMap := make(map[string]map[string]string, len(originalMap))
-	for key, value := range originalMap {
-		secretData := make(map[string]string, len(value))
-		for k, v := range value {
-			secretData[k] = v
-		}
-		targetMap[key] = secretData
-	}
-	return targetMap
 }

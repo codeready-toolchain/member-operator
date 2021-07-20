@@ -17,12 +17,12 @@ import (
 func Webhook(cl client.Client, s *runtime.Scheme, namespace, image string) error {
 	caBundle, err := cert.EnsureSecret(cl, namespace, cert.Expiration)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "cannot deploy webhook template")
 	}
 
 	toolchainObjects, err := getTemplateObjects(s, namespace, image, caBundle)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "cannot deploy webhook template")
 	}
 
 	applyClient := applycl.NewApplyClient(cl, s)

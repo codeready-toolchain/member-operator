@@ -33,7 +33,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod())
 
@@ -49,7 +49,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+		actual, err := GetConfig(test.NewFakeClient(t))
 		require.NoError(t, err)
 		assert.Equal(t, 8*time.Second, actual.MemberStatus().RefreshPeriod())
 	})
@@ -71,7 +71,7 @@ func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "get error")
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -93,7 +93,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "list error")
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -107,7 +107,7 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -118,7 +118,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		// given
 		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when
@@ -137,7 +137,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when
@@ -153,7 +153,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 			modifiedConfig := UpdateMemberOperatorConfigWithReset(t, cl, testconfig.Autoscaler().Deploy(false))
 			err = cl.Update(context.TODO(), modifiedConfig)
 			require.NoError(t, err)
-			updatedConfig, err := loadLatest(cl, test.MemberOperatorNs)
+			updatedConfig, err := loadLatest(cl)
 			require.NoError(t, err)
 			require.False(t, updatedConfig.Autoscaler().Deploy())
 
@@ -173,7 +173,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		// given
 		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when
@@ -195,7 +195,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 			},
 		}
 		controller, cl := prepareReconcile(t, config, actualPrioClass)
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when
@@ -215,7 +215,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when
@@ -233,7 +233,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		// given
 		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when
@@ -250,7 +250,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		// given
 		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl, test.MemberOperatorNs)
+		actualConfig, err := GetConfig(cl)
 		require.NoError(t, err)
 
 		// when

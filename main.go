@@ -96,7 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	crtConfig, err := getCRTConfiguration(cfg, namespace)
+	crtConfig, err := getCRTConfiguration(cfg)
 	if err != nil {
 		setupLog.Error(err, "failed to get toolchain configuration")
 		os.Exit(1)
@@ -124,7 +124,7 @@ func main() {
 	}
 
 	// initialize che client
-	che.InitDefaultCheClient(crtConfig, allNamespacesClient)
+	che.InitDefaultCheClient(allNamespacesClient)
 
 	// Setup all Controllers
 	if err = toolchaincluster.NewReconciler(
@@ -247,7 +247,7 @@ func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, er
 
 // getCRTConfiguration creates the client used for configuration and
 // returns the loaded crt configuration
-func getCRTConfiguration(config *rest.Config, namespace string) (memberoperatorconfig.Configuration, error) {
+func getCRTConfiguration(config *rest.Config) (memberoperatorconfig.Configuration, error) {
 	// create client that will be used for retrieving the member operator config maps
 	cl, err := client.New(config, client.Options{
 		Scheme: scheme,
@@ -256,5 +256,5 @@ func getCRTConfiguration(config *rest.Config, namespace string) (memberoperatorc
 		return memberoperatorconfig.Configuration{}, err
 	}
 
-	return memberoperatorconfig.GetConfig(cl, namespace)
+	return memberoperatorconfig.GetConfig(cl)
 }

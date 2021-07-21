@@ -76,7 +76,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	reqLogger.Info("Reconciling MemberStatus")
 
 	// retrieve the latest config and use it for this reconciliation
-	config, err := memberCfg.GetConfig(r.Client, request.Namespace)
+	config, err := memberCfg.GetConfig(r.Client)
 	if err != nil {
 		return reconcile.Result{}, errs.Wrapf(err, "unable to get MemberOperatorConfig")
 	}

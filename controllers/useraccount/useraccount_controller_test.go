@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -46,10 +47,12 @@ const (
 
 func TestReconcile(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
+
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 
-	config, err := memberCfg.GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	config, err := memberCfg.GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 
 	// given
@@ -1038,7 +1041,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	config, err := memberCfg.GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	config, err := memberCfg.GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
@@ -1545,14 +1548,11 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
+	config, err := memberCfg.GetConfig(fakeClient)
 	require.NoError(t, err)
 
 	tc := che.NewTokenCache(http.DefaultClient)
-	cheClient := che.NewCheClient(config, http.DefaultClient, fakeClient, tc)
-
-	config, err = memberCfg.GetConfig(fakeClient, test.MemberOperatorNs)
-	require.NoError(t, err)
+	cheClient := che.NewCheClient(http.DefaultClient, fakeClient, tc)
 
 	r := &Reconciler{
 		Client:    fakeClient,

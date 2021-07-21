@@ -6,6 +6,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	common "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	errs "github.com/pkg/errors"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,7 +41,12 @@ func updateConfig(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[st
 	configCache.set(config, secrets)
 }
 
-func loadLatest(cl client.Client, namespace string) (Configuration, error) {
+func loadLatest(cl client.Client) (Configuration, error) {
+	namespace, err := common.GetWatchNamespace()
+	if err != nil {
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, errs.Wrap(err, "Failed to get watch namespace")
+	}
+
 	config := &toolchainv1alpha1.MemberOperatorConfig{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "config"}, config); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -63,10 +69,10 @@ func loadLatest(cl client.Client, namespace string) (Configuration, error) {
 // If no config is stored in the cache, then it retrieves it from the cluster and stores in the cache.
 // If the resource is not found, then returns the default config.
 // If any failure happens while getting the MemberOperatorConfig resource, then returns an error.
-func GetConfig(cl client.Client, namespace string) (Configuration, error) {
+func GetConfig(cl client.Client) (Configuration, error) {
 	config, _ := configCache.get()
 	if config == nil {
-		return loadLatest(cl, namespace)
+		return loadLatest(cl)
 	}
 	return getConfigOrDefault(), nil
 }

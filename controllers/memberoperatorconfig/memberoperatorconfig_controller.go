@@ -51,7 +51,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling MemberOperatorConfig")
 
-	crtConfig, err := loadLatest(r.Client, request.Namespace)
+	crtConfig, err := loadLatest(r.Client)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

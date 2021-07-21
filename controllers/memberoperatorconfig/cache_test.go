@@ -3,6 +3,7 @@ package memberoperatorconfig
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -22,10 +23,11 @@ import (
 
 func TestCache(t *testing.T) {
 	// given
+	os.Setenv("WATCH_NAMESPACE", MemberOperatorNs)
 	cl := NewFakeClient(t)
 
 	// when
-	defaultConfig, err := GetConfig(cl, MemberOperatorNs)
+	defaultConfig, err := GetConfig(cl)
 
 	// then
 	require.NoError(t, err)
@@ -37,7 +39,7 @@ func TestCache(t *testing.T) {
 		cl := NewFakeClient(t, config)
 
 		// when
-		actual, err := GetConfig(cl, MemberOperatorNs)
+		actual, err := GetConfig(cl)
 
 		// then
 		require.NoError(t, err)
@@ -46,7 +48,7 @@ func TestCache(t *testing.T) {
 
 		t.Run("returns the same when the cache hasn't been updated", func(t *testing.T) {
 			// when
-			actual, err := GetConfig(cl, MemberOperatorNs)
+			actual, err := GetConfig(cl)
 
 			// then
 			require.NoError(t, err)
@@ -71,7 +73,7 @@ func TestCache(t *testing.T) {
 			updateConfig(newConfig, secretData)
 
 			// then
-			actual, err := GetConfig(cl, MemberOperatorNs)
+			actual, err := GetConfig(cl)
 			require.NoError(t, err)
 			assert.Equal(t, 11*time.Second, actual.MemberStatus().RefreshPeriod())
 			assert.Equal(t, "cheadmin", actual.Che().AdminUserName()) // secret value
@@ -89,7 +91,7 @@ func TestGetConfigFailed(t *testing.T) {
 		}
 
 		// when
-		defaultConfig, err := GetConfig(cl, MemberOperatorNs)
+		defaultConfig, err := GetConfig(cl)
 
 		// then
 		require.NoError(t, err)
@@ -105,7 +107,7 @@ func TestGetConfigFailed(t *testing.T) {
 		}
 
 		// when
-		defaultConfig, err := GetConfig(cl, MemberOperatorNs)
+		defaultConfig, err := GetConfig(cl)
 
 		// then
 		require.Error(t, err)
@@ -121,7 +123,7 @@ func TestLoadLatest(t *testing.T) {
 		cl := NewFakeClient(t, initconfig)
 
 		// when
-		actual, err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl)
 
 		// then
 		require.NoError(t, err)
@@ -129,7 +131,7 @@ func TestLoadLatest(t *testing.T) {
 
 		t.Run("returns the same when the config hasn't been updated", func(t *testing.T) {
 			// when
-			actual, err := loadLatest(cl, MemberOperatorNs)
+			actual, err := loadLatest(cl)
 
 			// then
 			require.NoError(t, err)
@@ -143,7 +145,7 @@ func TestLoadLatest(t *testing.T) {
 			require.NoError(t, err)
 
 			// when
-			actual, err = loadLatest(cl, MemberOperatorNs)
+			actual, err = loadLatest(cl)
 
 			// then
 			require.NoError(t, err)
@@ -156,7 +158,7 @@ func TestLoadLatest(t *testing.T) {
 		cl := NewFakeClient(t)
 
 		// when
-		actual, err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl)
 
 		// then
 		require.NoError(t, err)
@@ -172,7 +174,7 @@ func TestLoadLatest(t *testing.T) {
 		}
 
 		// when
-		actual, err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl)
 
 		// then
 		require.EqualError(t, err, "get error")
@@ -188,7 +190,7 @@ func TestLoadLatest(t *testing.T) {
 		}
 
 		// when
-		actual, err := loadLatest(cl, MemberOperatorNs)
+		actual, err := loadLatest(cl)
 
 		// then
 		require.EqualError(t, err, "list error")
@@ -243,7 +245,7 @@ func TestMultipleExecutionsInParallel(t *testing.T) {
 			latch.Wait()
 
 			// when
-			config, err := GetConfig(cl, MemberOperatorNs)
+			config, err := GetConfig(cl)
 
 			// then
 			require.NoError(t, err)
@@ -260,7 +262,7 @@ func TestMultipleExecutionsInParallel(t *testing.T) {
 	// when
 	latch.Done()
 	waitForFinished.Wait()
-	config, err := GetConfig(NewFakeClient(t), MemberOperatorNs)
+	config, err := GetConfig(NewFakeClient(t))
 
 	// then
 	require.NoError(t, err)

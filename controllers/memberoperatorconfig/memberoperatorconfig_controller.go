@@ -48,5 +48,5 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling MemberOperatorConfig")
 
-	return reconcile.Result{}, loadLatest(r.Client, request.Namespace)
+	return reconcile.Result{}, loadLatest(r.Client)
 }

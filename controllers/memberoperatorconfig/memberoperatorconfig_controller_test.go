@@ -29,7 +29,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod())
 
@@ -45,7 +45,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+		actual, err := GetConfig(test.NewFakeClient(t))
 		require.NoError(t, err)
 		assert.Equal(t, 8*time.Second, actual.MemberStatus().RefreshPeriod())
 	})
@@ -67,7 +67,7 @@ func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "get error")
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -89,7 +89,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "list error")
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -106,7 +106,7 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfig(test.NewFakeClient(t), test.MemberOperatorNs)
+	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }

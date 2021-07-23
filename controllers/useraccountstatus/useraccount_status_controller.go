@@ -3,6 +3,7 @@ package useraccountstatus
 import (
 	"context"
 	"fmt"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/predicate"

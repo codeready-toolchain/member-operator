@@ -82,8 +82,8 @@ func TestCache(t *testing.T) {
 }
 
 func TestGetConfigFailed(t *testing.T) {
-	// given
 	t.Run("config not found", func(t *testing.T) {
+		// given
 		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -96,10 +96,10 @@ func TestGetConfigFailed(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, 5*time.Second, defaultConfig.MemberStatus().RefreshPeriod())
-
 	})
 
 	t.Run("error getting config", func(t *testing.T) {
+		// given
 		config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("11s"))
 		cl := NewFakeClient(t, config)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -112,7 +112,6 @@ func TestGetConfigFailed(t *testing.T) {
 		// then
 		require.Error(t, err)
 		assert.Equal(t, 5*time.Second, defaultConfig.MemberStatus().RefreshPeriod())
-
 	})
 }
 
@@ -153,7 +152,7 @@ func TestLoadLatest(t *testing.T) {
 		})
 	})
 
-	t.Run("config not found", func(t *testing.T) {
+	t.Run("config not found - cache not initialized (return default config)", func(t *testing.T) {
 		// given
 		cl := NewFakeClient(t)
 
@@ -162,7 +161,28 @@ func TestLoadLatest(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		require.Equal(t, Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, actual)
+		require.Equal(t, Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: map[string]map[string]string{}}, actual)
+	})
+
+	t.Run("config not found - cache initialized (return cached config)", func(t *testing.T) {
+		// given
+		initconfig := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("1s"))
+		cl := NewFakeClient(t, initconfig)
+
+		actual, err := loadLatest(cl)
+
+		require.NoError(t, err)
+		assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod())
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			return apierrors.NewNotFound(schema.GroupResource{}, "config")
+		}
+
+		// when
+		actual, err = loadLatest(cl)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, 1*time.Second, actual.MemberStatus().RefreshPeriod()) // cached config
 	})
 
 	t.Run("get config error", func(t *testing.T) {

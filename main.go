@@ -13,9 +13,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccountstatus"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -195,40 +193,6 @@ func main() {
 		if !mgr.GetCache().WaitForCacheSync(stopChannel) {
 			setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
 			os.Exit(1)
-		}
-
-		// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
-		// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
-		if crtConfig.Webhook().Deploy() {
-			setupLog.Info("(Re)Deploying users' pods webhook")
-			webhookImage := os.Getenv("MEMBER_OPERATOR_WEBHOOK_IMAGE")
-			if err := deploy.Webhook(mgr.GetClient(), mgr.GetScheme(), namespace, webhookImage); err != nil {
-				setupLog.Error(err, "cannot deploy mutating users' pods webhook")
-				os.Exit(1)
-			}
-			setupLog.Info("(Re)Deployed users' pods webhook")
-		} else {
-			setupLog.Info("Skipping deployment of users' pods webhook")
-		}
-
-		if crtConfig.Autoscaler().Deploy() {
-			setupLog.Info("(Re)Deploying autoscaling buffer")
-			if err := autoscaler.Deploy(mgr.GetClient(), mgr.GetScheme(), namespace, crtConfig.Autoscaler().BufferMemory(), crtConfig.Autoscaler().BufferReplicas()); err != nil {
-				setupLog.Error(err, "cannot deploy autoscaling buffer")
-				os.Exit(1)
-			}
-			setupLog.Info("(Re)Deployed autoscaling buffer")
-		} else {
-			deleted, err := autoscaler.Delete(mgr.GetClient(), mgr.GetScheme(), namespace)
-			if err != nil {
-				setupLog.Error(err, "cannot delete previously deployed autoscaling buffer")
-				os.Exit(1)
-			}
-			if deleted {
-				setupLog.Info("Deleted previously deployed autoscaling buffer")
-			} else {
-				setupLog.Info("Skipping deployment of autoscaling buffer")
-			}
 		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")

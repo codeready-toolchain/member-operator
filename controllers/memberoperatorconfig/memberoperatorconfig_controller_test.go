@@ -6,10 +6,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	appsv1 "k8s.io/api/apps/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -18,11 +26,7 @@ import (
 func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	// given
 	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
-	cl := test.NewFakeClient(t, config)
-	controller := Reconciler{
-		Client: cl,
-		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
-	}
+	controller, cl := prepareReconcile(t, config)
 
 	// when
 	_, err := controller.Reconcile(context.TODO(), newRequest())
@@ -96,10 +100,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 
 func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 	// given
-	controller := Reconciler{
-		Client: test.NewFakeClient(t),
-		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
-	}
+	controller, _ := prepareReconcile(t)
 
 	// when
 	_, err := controller.Reconcile(context.TODO(), newRequest())
@@ -109,6 +110,173 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 	actual, err := GetConfig(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
+}
+
+func TestHandleAutoscalerDeploy(t *testing.T) {
+
+	t.Run("deploy false", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
+		controller, cl := prepareReconcile(t, config)
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		actualPrioClass := &schedulingv1.PriorityClass{}
+		err = cl.Get(context.TODO(), test.NamespacedName("", "member-operator-autoscaling-buffer"), actualPrioClass)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+	})
+
+	t.Run("deploy true", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
+		controller, cl := prepareReconcile(t, config)
+
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		actualPrioClass := &schedulingv1.PriorityClass{}
+		err = cl.Get(context.TODO(), test.NamespacedName("", "member-operator-autoscaling-buffer"), actualPrioClass)
+		require.NoError(t, err)
+
+		t.Run("removed when set to back false", func(t *testing.T) {
+			modifiedConfig := UpdateMemberOperatorConfigWithReset(t, cl, testconfig.Autoscaler().Deploy(false))
+			err = cl.Update(context.TODO(), modifiedConfig)
+			require.NoError(t, err)
+			updatedConfig, err := loadLatest(cl)
+			require.NoError(t, err)
+			require.False(t, updatedConfig.Autoscaler().Deploy())
+
+			// when
+			err = controller.handleAutoscalerDeploy(controller.Log, updatedConfig, test.MemberOperatorNs)
+
+			// then
+			require.NoError(t, err)
+			actualPrioClass := &schedulingv1.PriorityClass{}
+			err = cl.Get(context.TODO(), test.NamespacedName("", "member-operator-autoscaling-buffer"), actualPrioClass)
+			require.Error(t, err)
+			require.True(t, errors.IsNotFound(err))
+		})
+	})
+
+	t.Run("deploy error", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
+		controller, cl := prepareReconcile(t, config)
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			return fmt.Errorf("client error")
+		}
+		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.Contains(t, err.Error(), "cannot deploy autoscaling buffer template: ")
+	})
+
+	t.Run("delete error", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
+		actualPrioClass := &schedulingv1.PriorityClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "member-operator-autoscaling-buffer",
+			},
+		}
+		controller, cl := prepareReconcile(t, config, actualPrioClass)
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		cl.(*test.FakeClient).MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+			return fmt.Errorf("client error")
+		}
+		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.EqualError(t, err, "cannot delete autoscaling buffer object: client error")
+	})
+}
+
+func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
+	t.Run("deployment not created when webhook deploy is false", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
+		controller, cl := prepareReconcile(t, config)
+
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		actualDeployment := &appsv1.Deployment{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-webhook"), actualDeployment)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+	})
+
+	t.Run("deployment created when webhook deploy is true", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
+		controller, cl := prepareReconcile(t, config)
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		actualDeployment := &appsv1.Deployment{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-webhook"), actualDeployment)
+		require.NoError(t, err)
+	})
+
+	t.Run("deployment error", func(t *testing.T) {
+		// given
+		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
+		controller, cl := prepareReconcile(t, config)
+		actualConfig, err := GetConfig(cl)
+		require.NoError(t, err)
+
+		// when
+		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			return fmt.Errorf("client error")
+		}
+		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.EqualError(t, err, "cannot deploy webhook template: client error")
+	})
+}
+
+func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*Reconciler, client.Client) {
+
+	restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_WEBHOOK_IMAGE", "webhookimage")
+	t.Cleanup(restore)
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	fakeClient := test.NewFakeClient(t, initObjs...)
+	r := &Reconciler{
+		Client: fakeClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
+	}
+	return r, fakeClient
 }
 
 func newRequest() reconcile.Request {

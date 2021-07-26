@@ -50,8 +50,8 @@ func loadLatest(cl client.Client) (Configuration, error) {
 	config := &toolchainv1alpha1.MemberOperatorConfig{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "config"}, config); err != nil {
 		if apierrors.IsNotFound(err) {
-			cacheLog.Info("MemberOperatorConfig resource with the name 'config' wasn't found, default configuration will be used", "namespace", namespace)
-			return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, nil
+			cacheLog.Info("MemberOperatorConfig resource with the name 'config' wasn't found, using cached configuration", "namespace", namespace)
+			return getConfigOrDefault(), nil
 		}
 		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, err
 	}

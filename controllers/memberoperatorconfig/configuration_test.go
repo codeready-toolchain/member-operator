@@ -231,6 +231,12 @@ func TestMemberStatus(t *testing.T) {
 
 			assert.Equal(t, 10*time.Second, memberOperatorCfg.MemberStatus().RefreshPeriod())
 		})
+		t.Run("non-default invalid value", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10ABC"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 5*time.Second, memberOperatorCfg.MemberStatus().RefreshPeriod())
+		})
 	})
 }
 
@@ -248,6 +254,12 @@ func TestToolchainCluster(t *testing.T) {
 
 			assert.Equal(t, 3*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckPeriod())
 		})
+		t.Run("non-default invalid value", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.ToolchainCluster().HealthCheckPeriod("3ABC"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 10*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckPeriod())
+		})
 	})
 	t.Run("health check timeout", func(t *testing.T) {
 		t.Run("default", func(t *testing.T) {
@@ -261,6 +273,12 @@ func TestToolchainCluster(t *testing.T) {
 			memberOperatorCfg := Configuration{m: &cfg.Spec}
 
 			assert.Equal(t, 11*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckTimeout())
+		})
+		t.Run("non-default invalid value", func(t *testing.T) {
+			cfg := NewMemberOperatorConfigWithReset(t, testconfig.ToolchainCluster().HealthCheckTimeout("11ABC"))
+			memberOperatorCfg := Configuration{m: &cfg.Spec}
+
+			assert.Equal(t, 3*time.Second, memberOperatorCfg.ToolchainCluster().HealthCheckTimeout())
 		})
 	})
 }

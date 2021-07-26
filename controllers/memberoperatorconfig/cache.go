@@ -28,59 +28,61 @@ func (c *cache) set(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[
 	c.Lock()
 	defer c.Unlock()
 	c.config = config.DeepCopy()
-	c.secrets = copyOf(secrets)
+	c.secrets = common.CopyOf(secrets)
 }
 
 func (c *cache) get() (*toolchainv1alpha1.MemberOperatorConfig, map[string]map[string]string) {
 	c.RLock()
 	defer c.RUnlock()
-	return c.config.DeepCopy(), copyOf(c.secrets)
+	return c.config.DeepCopy(), common.CopyOf(c.secrets)
 }
 
 func updateConfig(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[string]map[string]string) {
 	configCache.set(config, secrets)
 }
 
-func loadLatest(cl client.Client) error {
+func loadLatest(cl client.Client) (Configuration, error) {
 	namespace, err := common.GetWatchNamespace()
 	if err != nil {
-		return errs.Wrap(err, "Failed to get watch namespace")
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, errs.Wrap(err, "Failed to get watch namespace")
 	}
 
 	config := &toolchainv1alpha1.MemberOperatorConfig{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "config"}, config); err != nil {
 		if apierrors.IsNotFound(err) {
-			cacheLog.Info("MemberOperatorConfig resource with the name 'config' wasn't found, default configuration will be used", "namespace", namespace)
-			return nil
+			cacheLog.Info("MemberOperatorConfig resource with the name 'config' wasn't found, using cached configuration", "namespace", namespace)
+			return getConfigOrDefault(), nil
 		}
-		return err
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, err
 	}
 
 	allSecrets, err := common.LoadSecrets(cl, namespace)
 	if err != nil {
-		return err
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, err
 	}
 
 	configCache.set(config, allSecrets)
-	return nil
+	return getConfigOrDefault(), nil
 }
 
 // GetConfig returns a cached memberoperator config.
 // If no config is stored in the cache, then it retrieves it from the cluster and stores in the cache.
 // If the resource is not found, then returns the default config.
-// If any failure happens while getting the MemberOperatorConfig resource, then returns an error and default configuration.
+// If any failure happens while getting the MemberOperatorConfig resource, then returns an error.
 func GetConfig(cl client.Client) (Configuration, error) {
+	config, _ := configCache.get()
+	if config == nil {
+		return loadLatest(cl)
+	}
+	return getConfigOrDefault(), nil
+}
+
+func getConfigOrDefault() Configuration {
 	config, secrets := configCache.get()
 	if config == nil {
-		if err := loadLatest(cl); err != nil {
-			return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}, err
-		}
-		config, secrets = configCache.get()
+		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}
 	}
-	if config == nil {
-		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}, secrets: secrets}, nil
-	}
-	return Configuration{m: &config.Spec, secrets: secrets}, nil
+	return Configuration{m: &config.Spec, secrets: secrets}
 }
 
 // Reset resets the cache.
@@ -88,16 +90,4 @@ func GetConfig(cl client.Client) (Configuration, error) {
 // then the function has to be exported and placed here.
 func Reset() {
 	configCache = &cache{}
-}
-
-func copyOf(originalMap map[string]map[string]string) map[string]map[string]string {
-	targetMap := make(map[string]map[string]string, len(originalMap))
-	for key, value := range originalMap {
-		secretData := make(map[string]string, len(value))
-		for k, v := range value {
-			secretData[k] = v
-		}
-		targetMap[key] = secretData
-	}
-	return targetMap
 }

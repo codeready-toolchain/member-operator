@@ -71,14 +71,12 @@ func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuratio
 	if cfg.Autoscaler().Deploy() {
 		logger.Info("(Re)Deploying autoscaling buffer")
 		if err := autoscaler.Deploy(r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
-			logger.Error(err, "failed to deploy autoscaling buffer")
 			return err
 		}
 		logger.Info("(Re)Deployed autoscaling buffer")
 	} else {
 		deleted, err := autoscaler.Delete(r.Client, r.Client.Scheme(), namespace)
 		if err != nil {
-			logger.Error(err, "failed to delete autoscaling buffer")
 			return err
 		}
 		if deleted {
@@ -97,7 +95,6 @@ func (r *Reconciler) handleUserPodsWebhookDeploy(logger logr.Logger, cfg Configu
 		webhookImage := os.Getenv("MEMBER_OPERATOR_WEBHOOK_IMAGE")
 		logger.Info("(Re)Deploying users' pods webhook")
 		if err := deploy.Webhook(r.Client, r.Client.Scheme(), namespace, webhookImage); err != nil {
-			logger.Error(err, "failed to deploy mutating users' pods webhook")
 			return err
 		}
 		logger.Info("(Re)Deployed users' pods webhook")

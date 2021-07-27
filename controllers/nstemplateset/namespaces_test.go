@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"testing"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"os"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -617,6 +616,24 @@ func TestDeleteNamespace(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.True(t, allDeleted)
+	})
+	t.Run("wait for namespace to be completely deleted", func(t *testing.T) {
+		// given namespace with deletion timestamp
+		manager, cl := prepareNamespacesManager(t, nsTmplSet, codeNS)
+		timeStamp := metav1.Now()
+		codeNS.DeletionTimestamp = &timeStamp
+		err := cl.Client.Update(context.TODO(),codeNS)
+		require.NoError(t, err)
+
+		// then namespace should not be deleted
+		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		require.NoError(t,err)
+		require.False(t, allDeleted)
+
+		// allDeleted is still false
+		allDeleted, err = manager.ensureDeleted(logger, nsTmplSet)
+		require.NoError(t,err)
+		require.False(t, allDeleted)
 	})
 
 	t.Run("failed to fetch namespaces", func(t *testing.T) {

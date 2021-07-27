@@ -622,17 +622,17 @@ func TestDeleteNamespace(t *testing.T) {
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, codeNS)
 		timeStamp := metav1.Now()
 		codeNS.DeletionTimestamp = &timeStamp
-		err := cl.Client.Update(context.TODO(),codeNS)
+		err := cl.Client.Update(context.TODO(), codeNS)
 		require.NoError(t, err)
 
 		// then namespace should not be deleted
 		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
-		require.NoError(t,err)
+		require.NoError(t, err)
 		require.False(t, allDeleted)
 
 		// allDeleted is still false
 		allDeleted, err = manager.ensureDeleted(logger, nsTmplSet)
-		require.NoError(t,err)
+		require.NoError(t, err)
 		require.False(t, allDeleted)
 	})
 

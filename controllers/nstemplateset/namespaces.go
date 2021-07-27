@@ -180,10 +180,10 @@ func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolcha
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete user namespace '%s'", ns.Name)
 			}
 			return false, nil // The namespace deletion is triggered so we should stop here. When the namespace is actually deleted the reconcile will be triggered again
-		} else {
-			// implies namespace has a deletion timestamp but has not been deleted yet, update status and returns false so we will re-try when the namespace is actually deleted
-			return false, r.setStatusTerminatingFailed(nsTmplSet, fmt.Sprintf("user namespace %s deletion was triggered but is not complete yet, something could be blocking ns deletion", ns.Name))
 		}
+		// implies namespace has a deletion timestamp but has not been deleted yet, update status and returns false so we will re-try when the namespace is actually deleted
+		return false, r.setStatusTerminatingFailed(nsTmplSet, fmt.Sprintf("user namespace %s deletion was triggered but is not complete yet, something could be blocking ns deletion", ns.Name))
+
 	}
 	return true, nil // All namespaces are gone
 }

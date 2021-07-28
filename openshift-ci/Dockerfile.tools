@@ -42,6 +42,18 @@ RUN pip3 install operator-courier
 
 RUN mkdir -p ${GOPATH}/src/${GO_PACKAGE_PATH}/
 
+WORKDIR /tmp
+
+# download, verify and install golang
+ENV PATH=$PATH:/usr/local/go/bin
+RUN curl -Lo ${GOLANG_VERSION}.linux-amd64.tar.gz https://dl.google.com/go/${GOLANG_VERSION}.linux-amd64.tar.gz \
+    && echo "b12c23023b68de22f74c0524f10b753e7b08b1504cb7e417eccebdd3fae49061 ${GOLANG_VERSION}.linux-amd64.tar.gz" > ${GOLANG_VERSION}.linux-amd64.sha256 \
+    && sha256sum -c ${GOLANG_VERSION}.linux-amd64.sha256 \
+    && tar xzf ${GOLANG_VERSION}.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf ${GOLANG_VERSION}.linux-amd64.tar.gz \
+    && rm -f ${GOLANG_VERSION}.linux-amd64.tar.gz \
+    && go version
+
 WORKDIR ${GOPATH}/src/${GO_PACKAGE_PATH}
 
 ENTRYPOINT [ "/bin/bash" ]

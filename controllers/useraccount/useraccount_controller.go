@@ -106,8 +106,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		if err := r.addFinalizer(logger, userAcc); err != nil {
 			return reconcile.Result{}, err
 		}
+	} else {
+		return reconcile.Result{}, r.ensureUserAccountDeletion(logger, config, userAcc)
 	}
-	if !util.IsBeingDeleted(userAcc) && !userAcc.Spec.Disabled {
+	if !userAcc.Spec.Disabled {
 		logger.Info("ensuring user and identity associated with UserAccount")
 		var createdOrUpdated bool
 		var user *userv1.User
@@ -120,39 +122,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		if _, createdOrUpdated, err = r.ensureNSTemplateSet(logger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-	} else if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) && util.IsBeingDeleted(userAcc) {
-		logger.Info("terminating UserAccount")
-		// We need to be sure that the status is updated when the UserAccount is deleted.
-		// In this case the UserAccountStatus controller updates the MUR on the host cluster
-		// with `syncIndex=0`.
-		// In turn, the MUR controller may decide to recreate the UserAccount resource on the
-		// member cluster.
-		if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
-			logger.Error(err, "error updating status")
-			return reconcile.Result{}, err
-		}
-
-		// Clean up Che resources by deleting the Che user (required for GDPR and reactivation of users)
-		if err := r.lookupAndDeleteCheUser(logger, config, userAcc); err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete Che user data")
-		}
-
-		deleted, err := r.deleteIdentityAndUser(logger, config, userAcc)
-		if err != nil {
-			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
-		}
-
-		// Remove finalizer from UserAccount
-		if !deleted {
-			util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-			if err := r.Client.Update(context.Background(), userAcc); err != nil {
-				return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
-			}
-
-			return reconcile.Result{}, nil
-		}
-		return reconcile.Result{}, nil
-	} else if userAcc.Spec.Disabled {
+	} else {
 		logger.Info("Disabling UserAccount")
 		if err := r.setStatusDisabling(userAcc, "deleting user/identity"); err != nil {
 			logger.Error(err, "error updating status")
@@ -169,6 +139,44 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, nil
 	}
 	return reconcile.Result{}, r.setStatusReady(userAcc)
+}
+
+func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
+	if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
+		logger.Info("terminating UserAccount")
+		// We need to be sure that the status is updated when the UserAccount is deleted.
+		// In this case the UserAccountStatus controller updates the MUR on the host cluster
+		// In turn, the MUR controller may decide to recreate the UserAccount resource on the
+		// member cluster.
+		if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
+			logger.Error(err, "error updating status")
+			return err
+		}
+
+		// Clean up Che resources by deleting the Che user (required for GDPR and reactivation of users)
+		if err := r.lookupAndDeleteCheUser(logger, config, userAcc); err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete Che user data")
+		}
+
+		deleted, err := r.deleteIdentityAndUser(logger, config, userAcc)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
+		}
+		if deleted {
+			return nil
+		}
+
+		// Remove finalizer from UserAccount
+		util.RemoveFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+		if err := r.Client.Update(context.Background(), userAcc); err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to remove finalizer")
+		}
+	}
+	if err := r.setStatusTerminating(userAcc, "deleting NSTemplateSet"); err != nil {
+		logger.Error(err, "error updating status")
+		return err
+	}
+	return nil
 }
 
 func (r *Reconciler) ensureUser(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
@@ -373,7 +381,10 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 	logger.Info("deleting the user resource")
 	// Delete User associated with UserAccount
 	if err := r.Client.Delete(context.TODO(), user); err != nil {
-		return false, err
+		if !errors.IsNotFound(err) {
+			return false, err
+		}
+		return false, nil
 	}
 	return true, nil
 }
@@ -395,7 +406,10 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, config memberCfg.Configu
 	logger.Info("deleting the identity resource")
 	// Delete Identity associated with UserAccount
 	if err := r.Client.Delete(context.TODO(), identity); err != nil {
-		return false, err
+		if !errors.IsNotFound(err) {
+			return false, err
+		}
+		return false, nil
 	}
 
 	return true, nil

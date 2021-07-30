@@ -45,12 +45,28 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
 		})
 
-		t.Run("should reset the syncIndex", func(t *testing.T) {
+		t.Run("should change the syncIndex when deletion timestamp is set", func(t *testing.T) {
 			// given
 			userAcc := newUserAccount("foo")
 			now := metav1.Now()
 			userAcc.DeletionTimestamp = &now
+			userAcc.ResourceVersion = "333333"
 			cntrl, hostClient := newReconcileStatus(t, userAcc, mur, true, v1.ConditionTrue)
+
+			// when
+			_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
+
+			// then
+			require.NoError(t, err)
+			currentMur := &toolchainv1alpha1.MasterUserRecord{}
+			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
+			require.NoError(t, err)
+			assert.Equal(t, "333333", currentMur.Spec.UserAccounts[0].SyncIndex)
+		})
+
+		t.Run("should reset the syncIndex when UserAccount is missing", func(t *testing.T) {
+			// given
+			cntrl, hostClient := newReconcileStatus(t, nil, mur, true, v1.ConditionTrue)
 
 			// when
 			_, err := cntrl.Reconcile(context.TODO(), newUaRequest(userAcc))
@@ -167,11 +183,15 @@ func newReconcileStatus(t *testing.T,
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
-	memberClient := fake.NewClientBuilder().WithScheme(s).WithObjects(userAcc).Build()
+	memberClientBuilder := fake.NewClientBuilder().WithScheme(s)
+	if userAcc != nil {
+		memberClientBuilder = memberClientBuilder.WithObjects(userAcc)
+	}
+
 	hostClient := fake.NewClientBuilder().WithScheme(s).WithObjects(mur).Build()
 
 	return Reconciler{
-		Client:         memberClient,
+		Client:         memberClientBuilder.Build(),
 		GetHostCluster: test.NewGetHostCluster(hostClient, ok, status),
 		Scheme:         s,
 	}, hostClient

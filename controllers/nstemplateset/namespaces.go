@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -164,7 +163,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 //     If there is still some namespace which is not already in terminating state then it triggers
 //        the deletion of the namespace (one namespace in one call) and returns false, nil
 //     If a namespace deletion was triggered previously but is not complete yet (namespace is in terminating state)
-//        then it updates the status of the NSTemplateSet stating that some of the namespace is still in terminating state and returns false, nil.
+//        then it returns false, nil.
 // If some error happened then it returns false, error
 func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// now, we can delete all "child" namespaces explicitly
@@ -185,8 +184,8 @@ func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolcha
 		}
 		return false, nil // The namespace deletion is triggered so we should stop here. When the namespace is actually deleted the reconcile will be triggered again
 	}
-	// implies namespace has a deletion timestamp but has not been deleted yet, update status and returns false so we will re-try when the namespace is actually deleted
-	return false, r.setStatusTerminatingFailed(nsTmplSet, fmt.Sprintf("user namespace %s deletion was triggered but is not complete yet, something could be blocking ns deletion", ns.Name))
+	// implies namespace has a deletion timestamp but has not been deleted yet, let's wait until is gone - it will trigger another reconcile
+	return false, nil
 }
 
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {

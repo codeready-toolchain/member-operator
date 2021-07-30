@@ -1006,7 +1006,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// get the NSTemplateSet resource again, check it is not deleted and its status
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			HasFinalizer().
-			HasConditions(UnableToTerminate("user namespace johnsmith-code deletion was triggered but is not complete yet, something could be blocking ns deletion"))
+			HasConditions(Terminating())
 
 		// set MockDelete to nil
 		fakeClient.MockDelete = nil //now removing the mockDelete
@@ -1021,7 +1021,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// get the NSTemplateSet resource again, check it is not deleted and its status
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
 			HasFinalizer().
-			HasConditions(UnableToTerminate("user namespace johnsmith-code deletion was triggered but is not complete yet, something could be blocking ns deletion"))
+			HasConditions(Terminating())
 
 		// actually delete ns
 		ns := &corev1.Namespace{}

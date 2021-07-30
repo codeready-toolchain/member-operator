@@ -7,8 +7,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/predicate"
-	"github.com/go-logr/logr"
-	"github.com/redhat-cop/operator-utils/pkg/util"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,24 +37,32 @@ type Reconciler struct {
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithName("status")
 	logger.Info("reconciling UserAccountStatus")
+
+	var syncIndex string
 
 	// Fetch the UserAccount object
 	userAcc := &toolchainv1alpha1.UserAccount{}
 	err := r.Client.Get(context.TODO(), request.NamespacedName, userAcc)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return reconcile.Result{}, nil
+			logger.Info("Updating MUR after UserAccount deletion")
+			syncIndex = "0"
+		} else {
+			// Error reading the object - requeue the request.
+			return reconcile.Result{}, err
 		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
+	} else {
+		if userAcc.DeletionTimestamp != nil {
+			logger.Info("Updating MUR during UserAccount deletion")
+		} else {
+			logger.Info("Updating MUR")
+		}
+		syncIndex = userAcc.ResourceVersion
 	}
 
-	mur, err := r.updateMasterUserRecord(logger, userAcc)
+	mur, err := r.updateMasterUserRecord(request.Name, syncIndex)
 	if err != nil {
 		if mur != nil {
 			logger.Error(err, "unable to update the master user record", "MasterUserRecord", mur, "UserAccount", userAcc)
@@ -68,12 +74,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return reconcile.Result{}, nil
 }
 
-func (r *Reconciler) updateMasterUserRecord(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.MasterUserRecord, error) {
-	if userAcc.DeletionTimestamp != nil {
-		logger.Info("Updating MUR after UserAccount deletion")
-	} else {
-		logger.Info("Updating MUR")
-	}
+func (r *Reconciler) updateMasterUserRecord(name, syncIndex string) (*toolchainv1alpha1.MasterUserRecord, error) {
 	cachedToolchainCluster, ok := r.GetHostCluster()
 	if !ok {
 		return nil, fmt.Errorf("there is no host cluster registered")
@@ -82,17 +83,13 @@ func (r *Reconciler) updateMasterUserRecord(logger logr.Logger, userAcc *toolcha
 		return nil, fmt.Errorf("the host cluster is not ready")
 	}
 	mur := &toolchainv1alpha1.MasterUserRecord{}
-	name := types.NamespacedName{Namespace: cachedToolchainCluster.OperatorNamespace, Name: userAcc.Name}
-	if err := cachedToolchainCluster.Client.Get(context.TODO(), name, mur); err != nil {
+	namespacedName := types.NamespacedName{Namespace: cachedToolchainCluster.OperatorNamespace, Name: name}
+	if err := cachedToolchainCluster.Client.Get(context.TODO(), namespacedName, mur); err != nil {
 		return nil, err
 	}
 	for i, account := range mur.Spec.UserAccounts {
 		if account.TargetCluster == cachedToolchainCluster.OwnerClusterName {
-			if util.IsBeingDeleted(userAcc) {
-				mur.Spec.UserAccounts[i].SyncIndex = "0"
-			} else {
-				mur.Spec.UserAccounts[i].SyncIndex = userAcc.ResourceVersion
-			}
+			mur.Spec.UserAccounts[i].SyncIndex = syncIndex
 			return mur, cachedToolchainCluster.Client.Update(context.TODO(), mur)
 		}
 	}

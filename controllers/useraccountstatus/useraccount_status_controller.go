@@ -21,7 +21,7 @@ import (
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.OnlyUpdateWhenGenerationNotChanged{})).
+		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.EitherUpdateWhenGenerationNotChangedOrDelete{})).
 		Complete(r)
 }
 

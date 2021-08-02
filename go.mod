@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20210708073330-362a8f80c8fc
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20210714012219-d30211a26ff9
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20210802160210-c95208a59638
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.2
 	// using latest commit from 'github.com/openshift/api@release-4.7'
@@ -21,7 +21,5 @@ require (
 	k8s.io/metrics v0.20.2
 	sigs.k8s.io/controller-runtime v0.8.3
 )
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/matousjobanek/toolchain-common v0.0.0-20210802064614-79233f38cecd
 
 go 1.16

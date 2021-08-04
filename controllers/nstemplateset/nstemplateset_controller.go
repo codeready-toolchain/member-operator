@@ -2,6 +2,8 @@ package nstemplateset
 
 import (
 	"context"
+	"time"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -151,6 +153,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 		logger.Info("NSTemplateSet resource is terminated")
 		return reconcile.Result{}, nil
 	}
+	logger.Info("NSTemplateSet resource is being deleted")
 	// since the NSTmplSet resource is being deleted, we must set its status to `ready=false/reason=terminating`
 	if err := r.status.setStatusTerminating(nsTmplSet); err != nil {
 		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err,
@@ -165,8 +168,11 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err, "failed to ensure namespace deletion")
 	}
 	if !allDeleted {
-		// One or more namespaces may not yet be deleted. We can stop here. When it's finally deleted it will trigger another reconcile.
-		return reconcile.Result{}, nil
+		// One or more namespaces may not yet be deleted. We can stop here.
+		return reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: time.Second,
+		}, nil
 	}
 
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user

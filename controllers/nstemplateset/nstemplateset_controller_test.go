@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReconcileAddFinalizer(t *testing.T) {
@@ -990,12 +991,14 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		}
 		// first reconcile, deletion is triggered
 		result, err := r.Reconcile(context.TODO(), req)
-		require.Empty(t, result)
 		require.NoError(t, err)
+		require.True(t, result.Requeue)
+		require.Equal(t, time.Second, result.RequeueAfter)
 		//then second reconcile to check if namespace has actually been deleted
 		result, err = r.Reconcile(context.TODO(), req)
-		require.Empty(t, result)
 		require.NoError(t, err)
+		require.True(t, result.Requeue)
+		require.Equal(t, time.Second, result.RequeueAfter)
 
 		firstNSName := fmt.Sprintf("%s-code", username)
 		secondNSName := fmt.Sprintf("%s-dev", username)
@@ -1013,8 +1016,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 		//reconcile to check there is no change, ns still exists
 		result, err = r.Reconcile(context.TODO(), req)
-		require.Empty(t, result)
 		require.NoError(t, err)
+		require.True(t, result.Requeue)
+		require.Equal(t, time.Second, result.RequeueAfter)
 
 		AssertThatNamespace(t, firstNSName, r.Client).HasDeletionTimestamp()
 		AssertThatNamespace(t, secondNSName, r.Client).HasNoDeletionTimestamp()
@@ -1032,8 +1036,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 		// deletion of firstNS would trigger another reconcile deleting secondNS
 		result, err = r.Reconcile(context.TODO(), req)
-		require.Empty(t, result)
 		require.NoError(t, err)
+		require.True(t, result.Requeue)
+		require.Equal(t, time.Second, result.RequeueAfter)
 
 		// get the first namespace and check it IS deleted
 		AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()

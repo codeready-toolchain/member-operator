@@ -632,66 +632,121 @@ func TestReconcile(t *testing.T) {
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID, false)
+		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
-		//when
-		res, err := r.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
+		t.Run("when deletion timestamp is set then it deletes identity", func(t *testing.T) {
+			// given
+			// Set the deletionTimestamp
+			userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+			err = r.Client.Update(context.TODO(), userAcc)
+			require.NoError(t, err)
 
-		//then
-		userAcc = &toolchainv1alpha1.UserAccount{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
-		require.NoError(t, err)
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
 
-		// Check that the finalizer is present
-		require.True(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+			// then
+			assert.Equal(t, reconcile.Result{}, res)
+			require.NoError(t, err)
 
-		// Set the deletionTimestamp
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(failed("Terminating", "deleting user/identity"))
+
+			// Check that the associated identity has been deleted
+			// when reconciling the useraccount with a deletion timestamp
+			identity := &userv1.Identity{}
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
+			require.Error(t, err)
+			assert.True(t, apierros.IsNotFound(err))
+			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+			t.Run("second reconcile deletes user", func(t *testing.T) {
+				// when
+				res, err = r.Reconcile(context.TODO(), req)
+
+				// then
+				assert.Equal(t, reconcile.Result{}, res)
+				require.NoError(t, err)
+
+				useraccount.AssertThatUserAccount(t, req.Name, cl).
+					HasConditions(failed("Terminating", "deleting user/identity"))
+
+				// Check that the associated user has been deleted
+				// when reconciling the useraccount with a deletion timestamp
+				user := &userv1.User{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+				require.Error(t, err)
+				assert.True(t, apierros.IsNotFound(err))
+				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+				t.Run("third reconcile removes finalizer", func(t *testing.T) {
+					// when
+					res, err = r.Reconcile(context.TODO(), req)
+
+					// then
+					assert.Equal(t, reconcile.Result{}, res)
+					require.NoError(t, err)
+
+					// Check that the user account finalizer has been removed
+					// when reconciling the useraccount with a deletion timestamp
+					userAcc = &toolchainv1alpha1.UserAccount{}
+					err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+					require.NoError(t, err)
+					require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+					require.Equal(t, 6, *mockCallsCounter) // Only 1 reconcile will do the delete (4 calls) followed by 2 reconciles with user exists check only
+					test.AssertConditionsMatch(t, userAcc.Status.Conditions, terminating("deleting NSTemplateSet"))
+				})
+			})
+		})
+	})
+
+	t.Run("useraccount is being deleted and delete calls returns not found - then it should just remove finalizer", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID, false)
+		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+			return apierros.NewNotFound(toolchainv1alpha1.GroupVersion.WithResource("UserAccount").GroupResource(), userAcc.Name)
+		}
 		userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
 		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
-		res, err = r.Reconcile(context.TODO(), req)
-		assert.Equal(t, reconcile.Result{}, res)
+		// when
+		_, err := r.Reconcile(context.TODO(), req)
+
+		// then
 		require.NoError(t, err)
-
-		useraccount.AssertThatUserAccount(t, req.Name, cl).
-			HasConditions(failed("Terminating", "deleting user/identity"))
-
-		// Check that the associated identity has been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
-		res, err = r.Reconcile(context.TODO(), req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		useraccount.AssertThatUserAccount(t, req.Name, cl).
-			HasConditions(failed("Terminating", "deleting user/identity"))
-
-		// Check that the associated user has been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		user := &userv1.User{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
-
-		res, err = r.Reconcile(context.TODO(), req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.NoError(t, err)
-
-		// Check that the user account finalizer has been removed
-		// when reconciling the useraccount with a deletion timestamp
 		userAcc = &toolchainv1alpha1.UserAccount{}
 		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
 		require.NoError(t, err)
 		require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
-		require.Equal(t, 6, *mockCallsCounter) // Only 1 reconcile will do the delete (4 calls) followed by 2 reconciles with user exists check only
+		test.AssertConditionsMatch(t, userAcc.Status.Conditions, terminating("deleting NSTemplateSet"))
+
+		t.Run("when useraccount is being deleted and doesn't have finalizer, then status should stay the same", func(t *testing.T) {
+			// given
+			userAcc := newUserAccount(username, userID, false)
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				return apierros.NewNotFound(toolchainv1alpha1.GroupVersion.WithResource("UserAccount").GroupResource(), userAcc.Name)
+			}
+			userAcc.DeletionTimestamp = &metav1.Time{time.Now()} //nolint: govet
+			err = r.Client.Update(context.TODO(), userAcc)
+			require.NoError(t, err)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			userAcc = &toolchainv1alpha1.UserAccount{}
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: username, Namespace: test.MemberOperatorNs}, userAcc)
+			require.NoError(t, err)
+			require.False(t, util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName))
+			test.AssertConditionsMatch(t, userAcc.Status.Conditions, terminating("deleting NSTemplateSet"))
+		})
 	})
+
 	// Add finalizer fails
 	t.Run("add finalizer fails", func(t *testing.T) {
 		// given
@@ -1387,6 +1442,15 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 
 	})
 
+}
+
+func terminating(msg string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.ConditionReady,
+		Status:  corev1.ConditionFalse,
+		Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
+		Message: msg,
+	}
 }
 
 func assertUserNotFound(t *testing.T, r *Reconciler, account *toolchainv1alpha1.UserAccount) {

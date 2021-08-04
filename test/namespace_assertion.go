@@ -59,6 +59,13 @@ func (a *NamespaceAssertion) HasDeletionTimestamp() *NamespaceAssertion {
 	return a
 }
 
+func (a *NamespaceAssertion) HasNoDeletionTimestamp() *NamespaceAssertion {
+	err := a.loadNamespace()
+	require.NoError(a.t, err)
+	assert.Nil(a.t, a.namespace.DeletionTimestamp)
+	return a
+}
+
 func (a *NamespaceAssertion) HasLabel(key, value string) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)

@@ -972,6 +972,34 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"))
+		nsTmplSet.SetDeletionTimestamp(&metav1.Time{Time: time.Now().Add(-61 * time.Second)})
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
+
+		r, fakeClient := prepareController(t, nsTmplSet, devNS, codeNS)
+		req := newReconcileRequest(namespaceName, username)
+
+		// only add deletion timestamp, but not delete
+		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+			if obj, ok := obj.(*corev1.Namespace); ok {
+				deletionTs := metav1.Now()
+				obj.DeletionTimestamp = &deletionTs
+				if err := r.Client.Update(context.TODO(), obj); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		// when
+		_, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.EqualError(t, err, "NSTemplateSet deletion has not completed in over 1 minute")
+	})
+
+	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
+		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"))
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 

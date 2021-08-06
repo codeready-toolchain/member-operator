@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -168,6 +169,9 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err, "failed to ensure namespace deletion")
 	}
 	if !allDeleted {
+		if time.Since(nsTmplSet.DeletionTimestamp.Time) > 60*time.Second {
+			return reconcile.Result{}, fmt.Errorf("NSTemplateSet deletion has not completed in over 1 minute")
+		}
 		// One or more namespaces may not yet be deleted. We can stop here.
 		return reconcile.Result{
 			Requeue:      true,

@@ -237,9 +237,9 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withConditions(Provisioned()))
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
-		idlerDev := newIdler(username, username+"-dev")
-		idlerCode := newIdler(username, username+"-code")
-		idlerStage := newIdler(username, username+"-stage")
+		idlerDev := newIdler(username, username+"-dev", "advanced")
+		idlerCode := newIdler(username, username+"-code", "advanced")
+		idlerStage := newIdler(username, username+"-stage", "advanced")
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerCode, idlerStage)
 
 		// when
@@ -500,6 +500,30 @@ func TestPromoteClusterResources(t *testing.T) {
 			})
 		})
 
+		t.Run("upgrade from base to advanced tier by changing only the tier label", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+			codeNs := newNamespace("advanced", username, "code")
+			crq := newClusterResourceQuota(username, "advanced")
+			crq.Labels["toolchain.dev.openshift.com/tier"] = "base"
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
+
+			// when
+			updated, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`))
+		})
+
 		t.Run("promote from withemptycrq to advanced tier by removing the redundant CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("dev"), withClusterResources("abcde11"))
@@ -654,12 +678,12 @@ func TestPromoteClusterResources(t *testing.T) {
 			anotherCRQ := newClusterResourceQuota("another-user", "basic")
 			anotherCrb := newTektonClusterRoleBinding("another", "basic")
 
-			idlerDev := newIdler(username, username+"-dev")
-			idlerCode := newIdler(username, username+"-code")
-			idlerStage := newIdler(username, username+"-stage")
-			anotherIdlerDev := newIdler("another", "another-dev")
-			anotherIdlerCode := newIdler("another", "another-code")
-			anotherIdlerStage := newIdler("another", "another-stage")
+			idlerDev := newIdler(username, username+"-dev", "advanced")
+			idlerCode := newIdler(username, username+"-code", "advanced")
+			idlerStage := newIdler(username, username+"-stage", "advanced")
+			anotherIdlerDev := newIdler("another", "another-dev", "advanced")
+			anotherIdlerCode := newIdler("another", "another-code", "advanced")
+			anotherIdlerStage := newIdler("another", "another-stage", "advanced")
 
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given

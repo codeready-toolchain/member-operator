@@ -138,6 +138,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		}
 		return reconcile.Result{}, nil
 	}
+	logger.Info("All provisioned - setting status to ready.")
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
 
@@ -308,13 +309,16 @@ func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 	if !reflect.DeepEqual(nsTmplSet.Spec, userAcc.Spec.NSTemplateSet) {
 		return r.updateNSTemplateSet(logger, userAcc, nsTmplSet)
 	}
+	logger.Info("NSTemplateSet is up-to-date", "name", name)
 
 	// update status if ready=false
 	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
 	if !found || readyCond.Status == corev1.ConditionUnknown || (readyCond.Status == corev1.ConditionFalse && readyCond.Message == "") {
+		logger.Info("NSTemplateSet is either being provisioned or in an invalid state", "ready-condition", readyCond)
 		return nsTmplSet, true, nil
 	}
 	if readyCond.Status == corev1.ConditionFalse {
+		logger.Info("NSTemplateSet is not ready", "ready-condition", readyCond)
 		if err := r.setStatusFromNSTemplateSet(userAcc, readyCond.Reason, readyCond.Message); err != nil {
 			return nsTmplSet, false, err
 		}

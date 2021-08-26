@@ -14,6 +14,7 @@ import (
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
+	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,10 +49,11 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
-
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel)
+		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel).
+		Watches(&source.Kind{Type: &rbac.Role{}}, mapToOwnerByLabel).
+		Watches(&source.Kind{Type: &rbac.RoleBinding{}}, mapToOwnerByLabel)
 
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
@@ -63,9 +65,10 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 }
 
 type APIClient struct {
-	Client         client.Client
-	Scheme         *runtime.Scheme
-	GetHostCluster cluster.GetHostClusterFunc
+	Client              client.Client
+	Scheme              *runtime.Scheme
+	GetHostCluster      cluster.GetHostClusterFunc
+	AllNamespacesClient client.Client
 }
 
 // Reconciler the NSTemplateSet reconciler

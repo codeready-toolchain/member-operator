@@ -134,6 +134,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 	}
 	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)

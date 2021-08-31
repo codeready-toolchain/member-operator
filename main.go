@@ -129,7 +129,7 @@ func main() {
 		Port:                   9080,
 		HealthProbeBindAddress: NSTmplateSetprobeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "2fc71baf.toolchain.member.operator",
+		LeaderElectionID:       "3fc71baf.toolchain.member.operator",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager for NSTemplateSet")
@@ -163,8 +163,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&memberstatus.Reconciler{
-		Client:              mgr.GetClient(),
-		Scheme:              mgr.GetScheme(),
+		Client:              nstmplsetMgr.GetClient(),
+		Scheme:              nstmplsetMgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
 		AllNamespacesClient: allNamespacesClient,
 		CheClient:           che.DefaultClient,

@@ -2,6 +2,7 @@ package memberoperatorconfig
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -42,6 +43,7 @@ func updateConfig(config *toolchainv1alpha1.MemberOperatorConfig, secrets map[st
 }
 
 func loadLatest(cl client.Client) (Configuration, error) {
+	fmt.Printf(" \n \n >>>> Inside load latest for client :%v", cl)
 	namespace, err := common.GetWatchNamespace()
 	if err != nil {
 		return Configuration{m: &toolchainv1alpha1.MemberOperatorConfigSpec{}}, errs.Wrap(err, "Failed to get watch namespace")

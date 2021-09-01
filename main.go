@@ -215,6 +215,12 @@ func main() {
 			os.Exit(1)
 		}
 
+		//setupLog.Info("waiting for nstemplateset cache to sync")
+		//if !nstmplsetMgr.GetCache().WaitForCacheSync(stopChannel) {
+		//	setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync in NSTemplate Manager"), "")
+		//	os.Exit(1)
+		//}
+
 		setupLog.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(stopChannel, mgr, namespace, crtConfig.ToolchainCluster().HealthCheckPeriod())
 
@@ -247,6 +253,12 @@ func main() {
 	setupLog.Info("starting manager")
 	if err := mgr.Start(stopChannel); err != nil {
 		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
+	}
+
+	setupLog.Info("starting NStemplateSet manager")
+	if err := nstmplsetMgr.Start(stopChannel); err != nil {
+		setupLog.Error(err, "problem running NStemplateSet manager")
 		os.Exit(1)
 	}
 }

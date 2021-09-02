@@ -215,11 +215,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		//setupLog.Info("waiting for nstemplateset cache to sync")
-		//if !nstmplsetMgr.GetCache().WaitForCacheSync(stopChannel) {
-		//	setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync in NSTemplate Manager"), "")
-		//	os.Exit(1)
-		//}
+		setupLog.Info("waiting for nstemplateset cache to sync")
+		if !nstmplsetMgr.GetCache().WaitForCacheSync(stopChannel) {
+			setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync in NSTemplate Manager"), "")
+			os.Exit(1)
+		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(stopChannel, mgr, namespace, crtConfig.ToolchainCluster().HealthCheckPeriod())
@@ -250,17 +250,20 @@ func main() {
 		}
 	}()
 
+	go func() {
+		setupLog.Info("starting NStemplateSet manager")
+		if err := nstmplsetMgr.Start(stopChannel); err != nil {
+			setupLog.Error(err, "problem running NStemplateSet manager")
+			os.Exit(1)
+		}
+	}()
+
 	setupLog.Info("starting manager")
 	if err := mgr.Start(stopChannel); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting NStemplateSet manager")
-	if err := nstmplsetMgr.Start(stopChannel); err != nil {
-		setupLog.Error(err, "problem running NStemplateSet manager")
-		os.Exit(1)
-	}
 }
 
 // newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.

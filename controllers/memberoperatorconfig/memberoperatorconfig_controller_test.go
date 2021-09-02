@@ -3,10 +3,12 @@ package memberoperatorconfig
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +27,7 @@ import (
 
 func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 	// given
-	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+	config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 	controller, cl := prepareReconcile(t, config)
 
 	// when
@@ -33,7 +35,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfig(test.NewFakeClient(t))
+	actual, err := GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod())
 
@@ -49,13 +51,13 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		actual, err := GetConfig(test.NewFakeClient(t))
+		actual, err := GetConfiguration(test.NewFakeClient(t))
 		require.NoError(t, err)
 		assert.Equal(t, 8*time.Second, actual.MemberStatus().RefreshPeriod())
 	})
 }
 
-func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
+func TestReconcileWhenGetConfigurationReturnsError(t *testing.T) {
 	// given
 	cl := test.NewFakeClient(t)
 	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
@@ -71,14 +73,14 @@ func TestReconcileWhenGetConfigReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "get error")
-	actual, err := GetConfig(test.NewFakeClient(t))
+	actual, err := GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
 
 func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 	// given
-	config := NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
+	config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().RefreshPeriod("10s"))
 	cl := test.NewFakeClient(t, config)
 	cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 		return fmt.Errorf("list error")
@@ -93,7 +95,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "list error")
-	actual, err := GetConfig(test.NewFakeClient(t))
+	actual, err := GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -107,7 +109,7 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfig(test.NewFakeClient(t))
+	actual, err := GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -116,9 +118,9 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 
 	t.Run("deploy false", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -134,10 +136,10 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 
 	t.Run("deploy true", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -150,10 +152,10 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("removed when set to back false", func(t *testing.T) {
-			modifiedConfig := UpdateMemberOperatorConfigWithReset(t, cl, testconfig.Autoscaler().Deploy(false))
+			modifiedConfig := commonconfig.UpdateMemberOperatorConfigWithReset(t, cl, testconfig.Autoscaler().Deploy(false))
 			err = cl.Update(context.TODO(), modifiedConfig)
 			require.NoError(t, err)
-			updatedConfig, err := loadLatest(cl)
+			updatedConfig, err := ForceLoadConfiguration(cl)
 			require.NoError(t, err)
 			require.False(t, updatedConfig.Autoscaler().Deploy())
 
@@ -171,9 +173,9 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 
 	t.Run("deploy error", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -188,14 +190,14 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 
 	t.Run("delete error", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
 		actualPrioClass := &schedulingv1.PriorityClass{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "member-operator-autoscaling-buffer",
 			},
 		}
 		controller, cl := prepareReconcile(t, config, actualPrioClass)
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -212,10 +214,10 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 	t.Run("deployment not created when webhook deploy is false", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -231,9 +233,9 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 
 	t.Run("deployment created when webhook deploy is true", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -248,9 +250,9 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 
 	t.Run("deployment error", func(t *testing.T) {
 		// given
-		config := NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfig(cl)
+		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -265,7 +267,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 }
 
 func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*Reconciler, client.Client) {
-
+	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_WEBHOOK_IMAGE", "webhookimage")
 	t.Cleanup(restore)
 	s := scheme.Scheme

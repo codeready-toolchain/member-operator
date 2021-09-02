@@ -9,7 +9,7 @@ import (
 	"path"
 	"strings"
 
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 
@@ -138,7 +138,7 @@ func (c *Client) UserAPICheck() error {
 
 func (c *Client) cheRequest(method, endpoint string, queryParams url.Values) (*http.Response, error) {
 
-	config, err := memberCfg.GetConfig(c.k8sClient)
+	config, err := membercfg.GetConfiguration(c.k8sClient)
 	if err != nil {
 		return nil, err
 	}

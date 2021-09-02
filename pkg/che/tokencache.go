@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
 	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +44,7 @@ func NewTokenCacheWithToken(cl *http.Client, t *TokenSet) *TokenCache {
 }
 
 // getToken returns the token needed to use Che user APIs, or an error if there was a problem getting the token
-func (tc *TokenCache) getToken(cl client.Client, cfg memberCfg.Configuration) (TokenSet, error) {
+func (tc *TokenCache) getToken(cl client.Client, cfg membercfg.Configuration) (TokenSet, error) {
 	tc.RLock()
 	// use the cached credentials if they are still valid
 	if !tokenExpired(tc.token) {
@@ -59,7 +59,7 @@ func (tc *TokenCache) getToken(cl client.Client, cfg memberCfg.Configuration) (T
 }
 
 // obtainAndCacheNewToken obtains an access token, updates the cache and returns the token. Returns an error if there was a failure at any point
-func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg memberCfg.Configuration) (TokenSet, error) {
+func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg membercfg.Configuration) (TokenSet, error) {
 	defer tc.Unlock()
 	tc.Lock()
 

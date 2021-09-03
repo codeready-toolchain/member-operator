@@ -313,8 +313,8 @@ func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 
 	// update status if ready=false
 	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
-	if !found || readyCond.Status == corev1.ConditionUnknown || (readyCond.Status == corev1.ConditionFalse && readyCond.Message == "") {
-		logger.Info("NSTemplateSet is either being provisioned or in an invalid state", "ready-condition", readyCond)
+	if !found || readyCond.Status == corev1.ConditionUnknown {
+		logger.Info("NSTemplateSet is in an invalid state", "ready-condition", readyCond)
 		return nsTmplSet, true, nil
 	}
 	if readyCond.Status == corev1.ConditionFalse {

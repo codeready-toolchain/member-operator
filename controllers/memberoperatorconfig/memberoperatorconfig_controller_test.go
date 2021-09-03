@@ -185,6 +185,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
 
 		// then
+		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "cannot deploy autoscaling buffer template: ")
 	})
 

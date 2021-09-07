@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -137,6 +138,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 			return reconcile.Result{}, r.setStatusDisabled(userAcc)
 		}
 		return reconcile.Result{}, nil
+	}
+
+	// check what the current ready condition is set to
+	readyCond, ok := condition.FindConditionByType(userAcc.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	// if the condition is present, has updating reason and was set less than 1 second ago
+	if ok && readyCond.Reason == toolchainv1alpha1.UserAccountUpdatingReason && time.Since(readyCond.LastTransitionTime.Time) <= time.Second {
+		// then don't do anything and just postpone the next reconcile
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: time.Second,
+		}, nil
 	}
 	logger.Info("All provisioned - setting status to ready.")
 	return reconcile.Result{}, r.setStatusReady(userAcc)
@@ -311,12 +323,15 @@ func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 	}
 	logger.Info("NSTemplateSet is up-to-date", "name", name)
 
-	// update status if ready=false
 	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
-	if !found || readyCond.Status == corev1.ConditionUnknown {
-		logger.Info("NSTemplateSet is in an invalid state", "ready-condition", readyCond)
+	// if UserAccount ready condition is already set to false, then don't update if no message is provided
+	// also, don't update when NSTemplateSet ready condition is in an invalid state
+	if !found || readyCond.Status == corev1.ConditionUnknown ||
+		(condition.IsFalse(userAcc.Status.Conditions, toolchainv1alpha1.ConditionReady) && readyCond.Status == corev1.ConditionFalse && readyCond.Message == "") {
+		logger.Info("Either NSTemplateSet is an invalid state or UserAccount ready condition is already set to false and no message is provided by NSTemplateSet", "nstemplateset-ready-condition", readyCond)
 		return nsTmplSet, true, nil
 	}
+
 	if readyCond.Status == corev1.ConditionFalse {
 		logger.Info("NSTemplateSet is not ready", "ready-condition", readyCond)
 		if err := r.setStatusFromNSTemplateSet(userAcc, readyCond.Reason, readyCond.Message); err != nil {

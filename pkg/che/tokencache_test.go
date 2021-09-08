@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -30,7 +31,7 @@ const (
 	testKeycloakURL = "https://keycloak-codeready-workspaces-operator.member-cluster"
 )
 
-func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, memberCfg.Configuration) {
+func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, membercfg.Configuration) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 
@@ -39,7 +40,7 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := memberCfg.GetConfig(fakeClient)
+	config, err := membercfg.GetConfiguration(fakeClient)
 	require.NoError(t, err)
 
 	return fakeClient, config
@@ -72,7 +73,7 @@ func TestGetToken(t *testing.T) {
 	})
 
 	t.Run("with configuration", func(t *testing.T) {
-		config := memberCfg.NewMemberOperatorConfigWithReset(t,
+		config := commonconfig.NewMemberOperatorConfigWithReset(t,
 			testconfig.Che().
 				UserDeletionEnabled(true).
 				KeycloakRouteName("keycloak").

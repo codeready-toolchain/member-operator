@@ -117,6 +117,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	allNamespacesCluster, err := runtimecluster.New(ctrl.GetConfigOrDie(), func(options *runtimecluster.Options) {
+		options.Scheme = scheme
+	})
+	mgr.Add(allNamespacesCluster)
+
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
 		setupLog.Error(err, "")
@@ -154,10 +159,11 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		GetHostCluster: cluster.GetHostCluster,
-	})).SetupWithManager(mgr); err != nil {
+		Client:              mgr.GetClient(),
+		AllNamespacesClient: allNamespacesClient,
+		Scheme:              mgr.GetScheme(),
+		GetHostCluster:      cluster.GetHostCluster,
+	})).SetupWithManager(mgr, allNamespacesCluster); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
 		os.Exit(1)
 	}

@@ -51,6 +51,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	t.Run("return namespace whose revision is not set", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
+		delete(userNamespaces[1].Labels, "toolchain.dev.openshift.com/templateref")
 
 		// when
 		tierTemplate, userNS, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -75,12 +76,10 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
 	})
 
-	t.Run("return namespace whose revision is different than in tier", func(t *testing.T) {
+	t.Run("return namespace whose tier label is different than the tier name", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[0].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-123"
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-123"
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/tier"] = "advanced"
+		userNamespaces[0].Labels["toolchain.dev.openshift.com/tier"] = "advanced"
 
 		// when
 		tierTemplate, userNS, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -157,8 +156,9 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-code", Labels: map[string]string{
-					"toolchain.dev.openshift.com/type": "code",
-					"toolchain.dev.openshift.com/tier": "basic",
+					"toolchain.dev.openshift.com/type":        "code",
+					"toolchain.dev.openshift.com/tier":        "basic",
+					"toolchain.dev.openshift.com/templateref": "basic-code-abcde21",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},

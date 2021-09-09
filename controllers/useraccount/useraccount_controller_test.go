@@ -327,7 +327,7 @@ func TestReconcile(t *testing.T) {
 				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 
-		t.Run("status not changed when NSTempalteSet is being provisoned", func(t *testing.T) {
+		t.Run("status not changed when NSTemplateSet is being provisioned", func(t *testing.T) {
 			// given
 			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "ShouldStay")
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "Provisioning", "")

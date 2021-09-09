@@ -327,9 +327,8 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 
 // isUpToDate returns true if the currentObject uses the corresponding templateRef and tier labels
 func isUpToDate(currentObject, _ applycl.ToolchainObject, tierTemplate *tierTemplate) bool {
-	return currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+	return currentObject.GetLabels() != nil &&
 		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
-		currentObject.GetLabels()[toolchainv1alpha1.TierLabelKey] != "" &&
 		currentObject.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName
 	// && currentObject.IsSame(newObject)  <-- TODO Uncomment when IsSame is implemented for all ToolchainObjects!
 }

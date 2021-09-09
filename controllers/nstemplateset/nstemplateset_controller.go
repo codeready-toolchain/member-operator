@@ -231,8 +231,7 @@ func listByOwnerLabel(username string) client.ListOption {
 }
 
 func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {
-	return obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+	return obj.GetLabels() != nil &&
 		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
-		obj.GetLabels()[toolchainv1alpha1.TierLabelKey] != "" &&
 		obj.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName
 }

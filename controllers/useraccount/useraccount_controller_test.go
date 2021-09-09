@@ -10,10 +10,11 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	. "github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
@@ -52,7 +53,7 @@ func TestReconcile(t *testing.T) {
 	username := "johnsmith"
 	userID := uuid.NewV4().String()
 
-	config, err := memberCfg.GetConfig(test.NewFakeClient(t))
+	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
 	// given
@@ -673,7 +674,7 @@ func TestReconcile(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
 			testconfig.Che().
 				UserDeletionEnabled(true).
 				KeycloakRouteName("keycloak").
@@ -903,7 +904,7 @@ func TestReconcile(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
 			testconfig.Che().
 				UserDeletionEnabled(true).
 				KeycloakRouteName("keycloak").
@@ -1155,7 +1156,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	config, err := memberCfg.GetConfig(test.NewFakeClient(t))
+	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
 	userAcc := newUserAccount(username, userID, false)
@@ -1363,7 +1364,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 	t.Run("che user deletion is enabled", func(t *testing.T) {
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 
-		cfg := memberCfg.NewMemberOperatorConfigWithReset(t,
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
 			testconfig.Che().
 				UserDeletionEnabled(true).
 				KeycloakRouteName("keycloak").
@@ -1671,12 +1672,12 @@ func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
 	assert.Equal(t, identity.Name, user.Identities[0])
 }
 
-func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, memberCfg.Configuration) {
+func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, membercfg.Configuration) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, initObjs...)
-	config, err := memberCfg.GetConfig(fakeClient)
+	config, err := membercfg.GetConfiguration(fakeClient)
 	require.NoError(t, err)
 
 	tc := che.NewTokenCache(http.DefaultClient)

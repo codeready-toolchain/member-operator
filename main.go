@@ -7,7 +7,7 @@ import (
 	goruntime "runtime"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
-	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/controllers/memberstatus"
 	"github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
@@ -177,7 +177,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccountStatus")
 		os.Exit(1)
 	}
-	if err = (&memberoperatorconfig.Reconciler{
+	if err = (&membercfg.Reconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
 	}).SetupWithManager(mgr); err != nil {
@@ -200,7 +200,7 @@ func main() {
 
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")
-		memberStatusName := memberoperatorconfig.MemberStatusName
+		memberStatusName := membercfg.MemberStatusName
 		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), mgr.GetScheme(), namespace, memberStatusName); err != nil {
 			setupLog.Error(err, "cannot create/update MemberStatus resource")
 			os.Exit(1)
@@ -247,14 +247,14 @@ func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, er
 
 // getCRTConfiguration creates the client used for configuration and
 // returns the loaded crt configuration
-func getCRTConfiguration(config *rest.Config) (memberoperatorconfig.Configuration, error) {
+func getCRTConfiguration(config *rest.Config) (membercfg.Configuration, error) {
 	// create client that will be used for retrieving the member operator config maps
 	cl, err := client.New(config, client.Options{
 		Scheme: scheme,
 	})
 	if err != nil {
-		return memberoperatorconfig.Configuration{}, err
+		return membercfg.Configuration{}, err
 	}
 
-	return memberoperatorconfig.GetConfig(cl)
+	return membercfg.GetConfiguration(cl)
 }

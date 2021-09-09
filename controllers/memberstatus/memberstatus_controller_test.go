@@ -9,7 +9,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -42,7 +42,7 @@ var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 const defaultMemberOperatorName = "member-operator"
 const defaultMemberOperatorDeploymentName = "member-operator-controller-manager"
 
-const defaultMemberStatusName = memberCfg.MemberStatusName
+const defaultMemberStatusName = membercfg.MemberStatusName
 
 // che test constants
 const (
@@ -505,7 +505,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 			t.Run("when required", func(t *testing.T) {
 				// given
-				config := memberCfg.NewMemberOperatorConfigWithReset(t, testconfig.Che().Required(true))
+				config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().Required(true))
 				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
 
 				// when
@@ -532,7 +532,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("success", func(t *testing.T) {
 			// given
-			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+			config := commonconfig.NewMemberOperatorConfigWithReset(t,
 				testconfig.Che().
 					UserDeletionEnabled(true).
 					Secret().
@@ -564,7 +564,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("che admin user not configured (no member secret)", func(t *testing.T) {
 			// given
-			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+			config := commonconfig.NewMemberOperatorConfigWithReset(t,
 				testconfig.Che().
 					Required(true).
 					UserDeletionEnabled(true).
@@ -590,7 +590,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("no che route", func(t *testing.T) {
 			// given
-			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+			config := commonconfig.NewMemberOperatorConfigWithReset(t,
 				testconfig.Che().
 					Required(true).
 					UserDeletionEnabled(true).
@@ -616,7 +616,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("che API check failure", func(t *testing.T) {
 			// given
-			config := memberCfg.NewMemberOperatorConfigWithReset(t,
+			config := commonconfig.NewMemberOperatorConfigWithReset(t,
 				testconfig.Che().
 					Required(true).
 					UserDeletionEnabled(true).

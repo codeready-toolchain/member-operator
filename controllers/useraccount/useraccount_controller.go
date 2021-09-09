@@ -7,7 +7,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -82,7 +82,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	// retrieve the latest config and use it for this reconciliation
-	config, err := memberCfg.GetConfig(r.Client)
+	config, err := membercfg.GetConfiguration(r.Client)
 	if err != nil {
 		return reconcile.Result{}, errs.Wrapf(err, "unable to get MemberOperatorConfig")
 	}
@@ -154,7 +154,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return reconcile.Result{}, r.setStatusReady(userAcc)
 }
 
-func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
 	if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
 		logger.Info("terminating UserAccount")
 		// We need to be sure that the status is updated when the UserAccount is deleted.
@@ -192,7 +192,7 @@ func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config member
 	return nil
 }
 
-func (r *Reconciler) ensureUser(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
+func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (*userv1.User, bool, error) {
 	user := &userv1.User{}
 	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user); err != nil {
 		if errors.IsNotFound(err) {
@@ -234,7 +234,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config memberCfg.Configurati
 	return user, false, nil
 }
 
-func (r *Reconciler) ensureIdentity(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
+func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
 	identity := &userv1.Identity{}
 	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
@@ -374,7 +374,7 @@ func (r *Reconciler) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1
 
 // deleteIdentityAndUser deletes the identity and user. Returns bool and error indicating that
 // whether the user/identity were deleted.
-func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	if deleted, err := r.deleteIdentity(logger, config, userAcc); err != nil || deleted {
 		return deleted, err
 	}
@@ -411,7 +411,7 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 // deleteIdentity deletes the identity resource. Returns `true` if the identity was deleted, `false` otherwise,
 // with the underlying error if the identity existed and something wrong happened. If the identity did not
 // exist, this func returns `false, nil`
-func (r *Reconciler) deleteIdentity(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *Reconciler) deleteIdentity(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the Identity associated with the UserAccount
 	identity := &userv1.Identity{}
 	identityName := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
@@ -584,7 +584,7 @@ func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccou
 	return r.Client.Status().Update(context.TODO(), userAcc)
 }
 
-func newUser(userAcc *toolchainv1alpha1.UserAccount, config memberCfg.Configuration) *userv1.User {
+func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
@@ -594,7 +594,7 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config memberCfg.Configurat
 	return user
 }
 
-func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config memberCfg.Configuration) *userv1.Identity {
+func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
 	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
@@ -626,7 +626,7 @@ func ToIdentityName(userID string, identityProvider string) string {
 	return fmt.Sprintf("%s:%s", identityProvider, userID)
 }
 
-func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config memberCfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
 
 	// If Che user deletion is not required then just return, this is a way to disable this Che user deletion logic since
 	// it's meant to be a temporary measure until Che is updated to handle user deletion on its own

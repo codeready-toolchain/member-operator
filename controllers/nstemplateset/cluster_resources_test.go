@@ -11,6 +11,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	quotav1 "github.com/openshift/api/quota/v1"
 	"github.com/stretchr/testify/assert"
@@ -500,12 +501,13 @@ func TestPromoteClusterResources(t *testing.T) {
 			})
 		})
 
-		t.Run("upgrade from base to advanced tier by changing only the tier label", func(t *testing.T) {
+		t.Run("upgrade from base to advanced tier by changing only the tier label - the templateref label doesn't change", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			codeNs := newNamespace("advanced", username, "code")
 			crq := newClusterResourceQuota(username, "advanced")
 			crq.Labels["toolchain.dev.openshift.com/tier"] = "base"
+			crq.Spec.Quota.Hard["limits.cpu"] = resource.MustParse("100m")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when

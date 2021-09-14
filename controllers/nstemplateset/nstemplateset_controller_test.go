@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -15,7 +19,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -27,9 +30,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestReconcileAddFinalizer(t *testing.T) {
@@ -1115,7 +1115,8 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		if err := test.Create(ctx, fakeClient, o, opts...); err != nil {
 			return err
 		}
-		return passGeneration(o, obj)
+		obj.SetGeneration(o.GetGeneration())
+		return nil
 	}
 	fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o, err := toStructured(obj, decoder)
@@ -1125,7 +1126,8 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		if err := test.Update(ctx, fakeClient, o, opts...); err != nil {
 			return err
 		}
-		return passGeneration(o, obj)
+		obj.SetGeneration(o.GetGeneration())
+		return nil
 	}
 	return &APIClient{
 		Client:         fakeClient,
@@ -1158,19 +1160,6 @@ func prepareClusterResourcesManager(t *testing.T, initObjs ...runtime.Object) (*
 func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return NewReconciler(apiClient), fakeClient
-}
-
-func passGeneration(from, to runtime.Object) error {
-	fromMeta, err := meta.Accessor(from)
-	if err != nil {
-		return err
-	}
-	toMeta, err := meta.Accessor(to)
-	if err != nil {
-		return err
-	}
-	toMeta.SetGeneration(fromMeta.GetGeneration())
-	return nil
 }
 
 func toStructured(obj client.Object, decoder runtime.Decoder) (client.Object, error) {

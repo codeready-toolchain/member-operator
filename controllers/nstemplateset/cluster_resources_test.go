@@ -36,19 +36,19 @@ func TestClusterResourceKinds(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, clusterResourceKind := range clusterResourceKinds {
-		johnyObject := clusterResourceKind.objectType.DeepCopyObject()
+		johnyObject := clusterResourceKind.object.DeepCopyObject()
 		objAccessor, err := meta.Accessor(johnyObject)
 		require.NoError(t, err)
 		objAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
 		objAccessor.SetName("johny-object")
 
-		johnyObject2 := clusterResourceKind.objectType.DeepCopyObject()
+		johnyObject2 := clusterResourceKind.object.DeepCopyObject()
 		objAccessor2, err := meta.Accessor(johnyObject2)
 		require.NoError(t, err)
 		objAccessor2.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
 		objAccessor2.SetName("johny-object-2")
 
-		anotherObject := clusterResourceKind.objectType.DeepCopyObject()
+		anotherObject := clusterResourceKind.object.DeepCopyObject()
 		anotherObjAccessor, err := meta.Accessor(anotherObject)
 		require.NoError(t, err)
 		anotherObjAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
@@ -115,7 +115,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		clusterResource := clusterResourceKinds[0]
 
 		// then
-		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.objectType)
+		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.object)
 		assert.Equal(t, quotav1.GroupVersion.WithKind("ClusterResourceQuota"), clusterResource.gvk)
 	})
 
@@ -124,7 +124,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		clusterResource := clusterResourceKinds[1]
 
 		// then
-		assert.Equal(t, &rbacv1.ClusterRoleBinding{}, clusterResource.objectType)
+		assert.Equal(t, &rbacv1.ClusterRoleBinding{}, clusterResource.object)
 		assert.Equal(t, rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"), clusterResource.gvk)
 	})
 
@@ -133,7 +133,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		clusterResource := clusterResourceKinds[2]
 
 		// then
-		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.objectType)
+		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.object)
 		assert.Equal(t, toolchainv1alpha1.GroupVersion.WithKind("Idler"), clusterResource.gvk)
 	})
 }

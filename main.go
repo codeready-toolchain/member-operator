@@ -121,6 +121,10 @@ func main() {
 	allNamespacesCluster, err := runtimecluster.New(ctrl.GetConfigOrDie(), func(options *runtimecluster.Options) {
 		options.Scheme = scheme
 	})
+	if err != nil {
+		setupLog.Error(err, "unable to start allNamespaceCluster")
+		os.Exit(1)
+	}
 	mgr.Add(allNamespacesCluster)
 
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)

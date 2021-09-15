@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 
@@ -426,7 +426,7 @@ func TestCheRequest(t *testing.T) {
 	})
 
 	t.Run("error scenarios", func(t *testing.T) {
-		config := memberCfg.NewMemberOperatorConfigWithReset(t,
+		config := commonconfig.NewMemberOperatorConfigWithReset(t,
 			testconfig.Che().
 				UserDeletionEnabled(true).
 				KeycloakRouteName("keycloak").

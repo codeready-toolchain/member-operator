@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	memberCfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -76,7 +76,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	reqLogger.Info("Reconciling MemberStatus")
 
 	// retrieve the latest config and use it for this reconciliation
-	config, err := memberCfg.GetConfig(r.Client)
+	config, err := membercfg.GetConfiguration(r.Client)
 	if err != nil {
 		return reconcile.Result{}, errs.Wrapf(err, "unable to get MemberOperatorConfig")
 	}
@@ -108,12 +108,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 
 type statusHandler struct {
 	name         statusComponentTag
-	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error
+	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error
 }
 
 // aggregateAndUpdateStatus runs each of the status handlers. Each status handler reports readiness for a toolchain component. If any
 // component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
-func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
+func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 
 	statusHandlers := []statusHandler{
 		{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus},
@@ -145,7 +145,7 @@ func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatu
 // hostConnectionHandleStatus retrieves the host cluster object that represents the connection between this member cluster and the host cluster.
 // It then takes the status from the cluster object and adds it to MemberStatus. Finally, it checks its status and will return an error if
 // its status is not ready
-func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
+func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 
 	attributes := status.ToolchainClusterAttributes{
 		GetClusterFunc: r.GetHostCluster,
@@ -165,7 +165,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
+func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	operatorStatus := &toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
 		Revision:       version.Commit,
@@ -195,7 +195,7 @@ func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberSta
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status
-func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
+func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole = map[string]int{}
 	allocatableValues, err := r.getAllocatableValues(reqLogger)
 	if err != nil {
@@ -250,7 +250,7 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 
 // routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
 // Returns an error if at least one of the required routes are not available.
-func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
+func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	if memberStatus.Status.Routes == nil {
 		memberStatus.Status.Routes = &toolchainv1alpha1.Routes{}
 	}
@@ -281,7 +281,7 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 
 // cheHandleStatus checks all necessary aspects related integration between the member operator and Che
 // Returns an error if any problems are discovered.
-func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config memberCfg.Configuration) error {
+func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	if memberStatus.Status.Che == nil {
 		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
 	}
@@ -401,7 +401,7 @@ func (r *Reconciler) setStatusNotReady(memberStatus *toolchainv1alpha1.MemberSta
 		})
 }
 
-func (r *Reconciler) consoleURL(config memberCfg.Configuration) (string, error) {
+func (r *Reconciler) consoleURL(config membercfg.Configuration) (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: config.Console().Namespace(), Name: config.Console().RouteName()}
 	if err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
@@ -410,7 +410,7 @@ func (r *Reconciler) consoleURL(config memberCfg.Configuration) (string, error) 
 	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
 }
 
-func (r *Reconciler) cheDashboardURL(config memberCfg.Configuration) (string, error) {
+func (r *Reconciler) cheDashboardURL(config membercfg.Configuration) (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: config.Che().Namespace(), Name: config.Che().RouteName()}
 	err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route)
@@ -426,6 +426,6 @@ func (r *Reconciler) cheDashboardURL(config memberCfg.Configuration) (string, er
 
 // isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
 // Returns false otherwise.
-func (r *Reconciler) isCheAdminUserConfigured(config memberCfg.Configuration) bool {
+func (r *Reconciler) isCheAdminUserConfigured(config membercfg.Configuration) bool {
 	return config.Che().AdminUserName() != "" && config.Che().AdminPassword() != ""
 }

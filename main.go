@@ -123,18 +123,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	nstmplsetMgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     NSTmplateSetmetricsAddr,
-		Port:                   9080,
-		HealthProbeBindAddress: NSTmplateSetprobeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "3fc71baf.toolchain.member.operator",
+	allNamespacesCluster, err := runtimecluster.New(ctrl.GetConfigOrDie(), func(options *runtimecluster.Options) {
+		options.Scheme = scheme
 	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager for NSTemplateSet")
-		os.Exit(1)
-	}
+	mgr.Add(allNamespacesCluster)
 
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
@@ -163,8 +155,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&memberstatus.Reconciler{
-		Client:              nstmplsetMgr.GetClient(),
-		Scheme:              nstmplsetMgr.GetScheme(),
+		Client:              mgr.GetClient(),
+		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
 		AllNamespacesClient: allNamespacesClient,
 		CheClient:           che.DefaultClient,
@@ -174,10 +166,10 @@ func main() {
 	}
 	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
 		Client:              mgr.GetClient(),
+		AllNamespacesClient: allNamespacesClient,
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
-		AllNamespacesClient: allNamespacesClient,
-	})).SetupWithManager(nstmplsetMgr); err != nil {
+	})).SetupWithManager(mgr, allNamespacesCluster); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
 		os.Exit(1)
 	}
@@ -215,12 +207,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		setupLog.Info("waiting for nstemplateset cache to sync")
-		if !nstmplsetMgr.GetCache().WaitForCacheSync(stopChannel) {
-			setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync in NSTemplate Manager"), "")
-			os.Exit(1)
-		}
-
 		setupLog.Info("Starting ToolchainCluster health checks.")
 		toolchaincluster.StartHealthChecks(stopChannel, mgr, namespace, crtConfig.ToolchainCluster().HealthCheckPeriod())
 
@@ -246,14 +232,6 @@ func main() {
 	go func() {
 		if err := allNamespacesCache.Start(stopChannel); err != nil {
 			setupLog.Error(err, "failed to start all-namespaces cache")
-			os.Exit(1)
-		}
-	}()
-
-	go func() {
-		setupLog.Info("starting NStemplateSet manager")
-		if err := nstmplsetMgr.Start(stopChannel); err != nil {
-			setupLog.Error(err, "problem running NStemplateSet manager")
 			os.Exit(1)
 		}
 	}()

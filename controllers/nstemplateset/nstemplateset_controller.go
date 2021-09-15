@@ -22,6 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -47,13 +48,12 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel).
-		Watches(&source.Kind{Type: &rbac.Role{}}, mapToOwnerByLabel).
-		Watches(&source.Kind{Type: &rbac.RoleBinding{}}, mapToOwnerByLabel)
+		Watches(source.NewKindWithCache(&rbac.Role{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel)
 
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
@@ -61,6 +61,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 		build = build.Watches(&source.Kind{Type: clusterResource.objectType}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	}
 
+	r.AllNamespacesClient = allNamespaceCluster.GetClient()
 	return build.Complete(r)
 }
 

@@ -74,11 +74,6 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 
-	var NSTmplateSetmetricsAddr string
-	var NSTmplateSetprobeAddr string
-	flag.StringVar(&NSTmplateSetmetricsAddr, "nstemplateset-metrics-bind-address", ":8008", "The address the metric endpoint binds to.")
-	flag.StringVar(&NSTmplateSetprobeAddr, "nstemplateset-health-probe-bind-address", ":8009", "The address the probe endpoint binds to.")
-
 	opts := zap.Options{
 		Development: true,
 	}

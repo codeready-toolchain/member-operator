@@ -10,8 +10,8 @@ import (
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
-	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admissionregistration/v1"
@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const imgLoc = "quay.io/cool/member-operator-webhook:123"
@@ -31,15 +31,15 @@ func TestGetTemplateObjects(t *testing.T) {
 	s := setScheme(t)
 
 	// when
-	toolchainObjects, err := getTemplateObjects(s, test.MemberOperatorNs, imgLoc, []byte("super-cool-ca"))
+	objs, err := getTemplateObjects(s, test.MemberOperatorNs, imgLoc, []byte("super-cool-ca"))
 
 	// then
 	require.NoError(t, err)
-	require.Len(t, toolchainObjects, 4)
-	contains(t, toolchainObjects, priorityClass())
-	contains(t, toolchainObjects, service(test.MemberOperatorNs))
-	contains(t, toolchainObjects, deployment(test.MemberOperatorNs, imgLoc))
-	contains(t, toolchainObjects, mutatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
+	require.Len(t, objs, 4)
+	contains(t, objs, priorityClass())
+	contains(t, objs, service(test.MemberOperatorNs))
+	contains(t, objs, deployment(test.MemberOperatorNs, imgLoc))
+	contains(t, objs, mutatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
 }
 
 func TestDeployWebhook(t *testing.T) {
@@ -91,7 +91,7 @@ func TestDeployWebhook(t *testing.T) {
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+		fakeClient.MockCreate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -150,10 +150,10 @@ func setScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-func contains(t *testing.T, objects []applycl.ToolchainObject, expected string) {
+func contains(t *testing.T, objects []runtimeclient.Object, expected string) {
 	expectedObject := getUnstructuredObject(t, expected)
 	for _, obj := range objects {
-		if reflect.DeepEqual(obj.GetClientObject(), runtime.Object(expectedObject)) {
+		if reflect.DeepEqual(obj, runtime.Object(expectedObject)) {
 			return
 		}
 	}

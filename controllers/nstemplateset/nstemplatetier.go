@@ -6,11 +6,11 @@ import (
 	"sync"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	templatev1 "github.com/openshift/api/template/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -75,7 +75,7 @@ type tierTemplate struct {
 
 // process processes the template inside of the tierTemplate object and replaces the USERNAME variable with the given username.
 // Optionally, it also filters the result to return a subset of the template objects.
-func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]client.ToolchainObject, error) {
+func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	tmplProcessor := template.NewProcessor(scheme)
 	params := map[string]string{"USERNAME": username}
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)

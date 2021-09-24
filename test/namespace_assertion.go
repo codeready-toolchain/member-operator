@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -88,8 +87,7 @@ func (a *NamespaceAssertion) HasResource(name string, obj client.Object) *Namesp
 	require.NoError(a.t, err)
 
 	// check for toolchain.dev.openshift.com/provider label
-	metaObj, _ := meta.Accessor(obj)
-	labels := metaObj.GetLabels()
+	labels := obj.GetLabels()
 	assert.Equal(a.t, labels[toolchainv1alpha1.ProviderLabelKey], toolchainv1alpha1.ProviderLabelValue)
 
 	return a

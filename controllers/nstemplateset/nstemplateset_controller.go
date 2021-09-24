@@ -56,7 +56,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources
-		build = build.Watches(&source.Kind{Type: clusterResource.objectType}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+		build = build.Watches(&source.Kind{Type: clusterResource.object}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	}
 
 	return build.Complete(r)

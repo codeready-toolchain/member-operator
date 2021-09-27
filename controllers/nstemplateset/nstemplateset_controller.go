@@ -203,7 +203,8 @@ func deleteRedundantObjects(logger logr.Logger, client runtimeclient.Client, del
 	logger.Info("checking redundant objects", "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
-		logger.Info("checking redundant object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
+		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
+		objectLogger.Info("checking redundant object")
 		for _, newObj := range newObjects {
 			if currentObj.GetObjectKind().GroupVersionKind() == newObj.GetObjectKind().GroupVersionKind() && currentObj.GetName() == newObj.GetName() {
 				continue Current

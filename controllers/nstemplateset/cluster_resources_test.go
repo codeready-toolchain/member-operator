@@ -17,8 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -37,23 +36,23 @@ func TestClusterResourceKinds(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, clusterResourceKind := range clusterResourceKinds {
-		johnyObject := clusterResourceKind.objectType.DeepCopyObject()
-		objAccessor, err := meta.Accessor(johnyObject)
-		require.NoError(t, err)
-		objAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
-		objAccessor.SetName("johny-object")
+		johnyRuntimeObject := clusterResourceKind.object.DeepCopyObject()
+		johnyObject, ok := johnyRuntimeObject.(client.Object)
+		require.True(t, ok)
+		johnyObject.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
+		johnyObject.SetName("johny-object")
 
-		johnyObject2 := clusterResourceKind.objectType.DeepCopyObject()
-		objAccessor2, err := meta.Accessor(johnyObject2)
-		require.NoError(t, err)
-		objAccessor2.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
-		objAccessor2.SetName("johny-object-2")
+		johnyRuntimeObject2 := clusterResourceKind.object.DeepCopyObject()
+		johnyObject2, ok := johnyRuntimeObject2.(client.Object)
+		require.True(t, ok)
+		johnyObject2.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
+		johnyObject2.SetName("johny-object-2")
 
-		anotherObject := clusterResourceKind.objectType.DeepCopyObject()
-		anotherObjAccessor, err := meta.Accessor(anotherObject)
-		require.NoError(t, err)
-		anotherObjAccessor.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
-		anotherObjAccessor.SetName("another-object")
+		anotherRuntimeObject := clusterResourceKind.object.DeepCopyObject()
+		anotherObject, ok := anotherRuntimeObject.(client.Object)
+		require.True(t, ok)
+		anotherObject.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
+		anotherObject.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
 		t.Run("listExistingResources should return one resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -116,7 +115,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		clusterResource := clusterResourceKinds[0]
 
 		// then
-		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.objectType)
+		assert.Equal(t, &quotav1.ClusterResourceQuota{}, clusterResource.object)
 		assert.Equal(t, quotav1.GroupVersion.WithKind("ClusterResourceQuota"), clusterResource.gvk)
 	})
 
@@ -125,7 +124,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		clusterResource := clusterResourceKinds[1]
 
 		// then
-		assert.Equal(t, &rbacv1.ClusterRoleBinding{}, clusterResource.objectType)
+		assert.Equal(t, &rbacv1.ClusterRoleBinding{}, clusterResource.object)
 		assert.Equal(t, rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"), clusterResource.gvk)
 	})
 
@@ -134,7 +133,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		clusterResource := clusterResourceKinds[2]
 
 		// then
-		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.objectType)
+		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.object)
 		assert.Equal(t, toolchainv1alpha1.GroupVersion.WithKind("Idler"), clusterResource.gvk)
 	})
 }
@@ -396,7 +395,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(username, "withemptycrq")
-		deletionTS := v1.NewTime(time.Now())
+		deletionTS := metav1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
 		emptyCrq.Labels["toolchain.dev.openshift.com/owner"] = username

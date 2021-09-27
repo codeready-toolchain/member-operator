@@ -8,8 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -42,20 +40,18 @@ func (a *ClusterAssertion) HasNoResource(name string, obj client.Object) *Cluste
 	return a
 }
 
-type ResourceOption func(t test.T, obj runtime.Object)
+type ResourceOption func(t test.T, obj client.Object)
 
 func WithLabel(key, value string) ResourceOption {
-	return func(t test.T, obj runtime.Object) {
-		acc, err := meta.Accessor(obj)
-		require.NoError(t, err)
-		v, exists := acc.GetLabels()[key]
+	return func(t test.T, obj client.Object) {
+		v, exists := obj.GetLabels()[key]
 		require.True(t, exists)
 		assert.Equal(t, value, v)
 	}
 }
 
 func Containing(value string) ResourceOption {
-	return func(t test.T, obj runtime.Object) {
+	return func(t test.T, obj client.Object) {
 		content, err := json.Marshal(obj)
 		require.NoError(t, err)
 		assert.Contains(t, string(content), value)
@@ -63,9 +59,7 @@ func Containing(value string) ResourceOption {
 }
 
 func HasDeletionTimestamp() ResourceOption {
-	return func(t test.T, obj runtime.Object) {
-		acc, err := meta.Accessor(obj)
-		require.NoError(t, err)
-		assert.NotNil(t, acc.GetDeletionTimestamp())
+	return func(t test.T, obj client.Object) {
+		assert.NotNil(t, obj.GetDeletionTimestamp())
 	}
 }

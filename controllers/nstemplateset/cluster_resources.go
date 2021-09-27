@@ -33,14 +33,14 @@ type listExistingResources func(cl client.Client, username string) ([]applycl.Co
 // toolchainObjectKind type created in clusterResourceKinds list
 type toolchainObjectKind struct {
 	gvk                   schema.GroupVersionKind
-	objectType            client.Object
+	object                client.Object
 	listExistingResources listExistingResources
 }
 
 func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject client.Object, listExistingResources listExistingResources) toolchainObjectKind {
 	return toolchainObjectKind{
 		gvk:                   gvk,
-		objectType:            emptyObject,
+		object:                emptyObject,
 		listExistingResources: listExistingResources,
 	}
 }

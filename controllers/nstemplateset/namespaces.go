@@ -97,7 +97,7 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	_, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(objs, labels)
+	_, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(objs, labels)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tierTemplate.typeName)
 	}
@@ -135,7 +135,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
-	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(newObjs, labels); err != nil {
+	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 

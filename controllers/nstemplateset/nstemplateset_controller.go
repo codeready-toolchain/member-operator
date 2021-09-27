@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -64,7 +63,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 }
 
 type APIClient struct {
-	Client         client.Client
+	Client         runtimeclient.Client
 	Scheme         *runtime.Scheme
 	GetHostCluster cluster.GetHostClusterFunc
 }
@@ -199,7 +198,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 // deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteRedundantObjects(logger logr.Logger, client client.Client, deleteOnlyOne bool, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
+func deleteRedundantObjects(logger logr.Logger, client runtimeclient.Client, deleteOnlyOne bool, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
 	deleted := false
 	logger.Info("checking redundant objects", "count", len(currentObjs))
 Current:
@@ -224,11 +223,11 @@ Current:
 	return deleted, nil
 }
 
-// listByOwnerLabel returns client.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
-func listByOwnerLabel(username string) client.ListOption {
+// listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
+func listByOwnerLabel(username string) runtimeclient.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 
-	return client.MatchingLabels(labels)
+	return runtimeclient.MatchingLabels(labels)
 }
 
 func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {

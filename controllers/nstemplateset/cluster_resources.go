@@ -24,7 +24,7 @@ type clusterResourcesManager struct {
 	*statusManager
 }
 
-// listExistingResources returns a list of comparable  ToolchainObjects representing existing resources in the cluster
+// listExistingResources returns a list of comparable Objects representing existing resources in the cluster
 type listExistingResources func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error)
 
 // toolchainObjectKind represents a resource kind that should be present in templates containing cluster resources.
@@ -60,7 +60,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 			for index := range itemList.Items {
 				list[index] = &itemList.Items[index]
 			}
-			return applycl.SortToolchainObjectsByName(list), nil
+			return applycl.SortObjectsByName(list), nil
 		}),
 
 	newToolchainObjectKind(
@@ -75,7 +75,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 			for index := range itemList.Items {
 				list[index] = &itemList.Items[index]
 			}
-			return applycl.SortToolchainObjectsByName(list), nil
+			return applycl.SortObjectsByName(list), nil
 		}),
 
 	newToolchainObjectKind(
@@ -90,7 +90,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 			for index := range itemList.Items {
 				list[index] = &itemList.Items[index]
 			}
-			return applycl.SortToolchainObjectsByName(list), nil
+			return applycl.SortObjectsByName(list), nil
 		}),
 }
 
@@ -178,7 +178,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	// see https://issues.redhat.com/browse/CRT-429
 
 	logger.Info("applying cluster resource", "gvk", toApply.GetObjectKind().GroupVersionKind())
-	if _, err := applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects([]runtimeclient.Object{toApply}, labels); err != nil {
+	if _, err := applycl.NewApplyClient(r.Client, r.Scheme).Apply([]runtimeclient.Object{toApply}, labels); err != nil {
 		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", toApply.GetObjectKind().GroupVersionKind())
 	}
 	return true, nil

@@ -7,6 +7,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
+	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
 
@@ -206,7 +207,7 @@ Current:
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		objectLogger.Info("checking redundant object")
 		for _, newObj := range newObjects {
-			if currentObj.GetObjectKind().GroupVersionKind() == newObj.GetObjectKind().GroupVersionKind() && currentObj.GetName() == newObj.GetName() {
+			if commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
 			}
 		}

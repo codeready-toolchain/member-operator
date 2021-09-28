@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -288,7 +287,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 					t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
-						r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+						r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 						// when
 						res, err := r.Reconcile(context.TODO(), req)
@@ -414,7 +413,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 										t.Run("provision inner resources of joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
 											// given - when host cluster is not ready, then it should use the cache
-											r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+											r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 											// when
 											res, err := r.Reconcile(context.TODO(), joeReq)
@@ -597,7 +596,7 @@ func TestReconcilePromotion(t *testing.T) {
 
 							t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
 								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-								r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 								// when - should check if everything is OK and set status to provisioned
 								_, err = r.Reconcile(context.TODO(), req)
@@ -773,7 +772,7 @@ func TestReconcileUpdate(t *testing.T) {
 
 						t.Run("when nothing to update, then it should be provisioned", func(t *testing.T) {
 							// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-							r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+							r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 							// when - should check if everything is OK and set status to provisioned
 							_, err = r.Reconcile(context.TODO(), req)
@@ -922,7 +921,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 					t.Run("reconcile after cluster resource quota deletion triggers removal of the finalizer", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
-						r.GetHostCluster = NewGetHostCluster(r.Client, true, v1.ConditionFalse)
+						r.GetHostCluster = NewGetHostCluster(r.Client, true, corev1.ConditionFalse)
 
 						// when a last reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
 						_, err := r.Reconcile(context.TODO(), req)
@@ -1132,7 +1131,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 	return &APIClient{
 		Client:         fakeClient,
 		Scheme:         s,
-		GetHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
+		GetHostCluster: NewGetHostCluster(fakeClient, true, corev1.ConditionTrue),
 	}, fakeClient
 }
 
@@ -1178,7 +1177,7 @@ func toStructured(obj client.Object, decoder runtime.Decoder) (client.Object, er
 			_, _, err = decoder.Decode(data, nil, crb)
 			return crb, err
 		case "Namespace":
-			ns := &v1.Namespace{}
+			ns := &corev1.Namespace{}
 			_, _, err = decoder.Decode(data, nil, ns)
 			ns.Status = corev1.NamespaceStatus{Phase: corev1.NamespaceActive}
 			return ns, err

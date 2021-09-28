@@ -65,7 +65,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			require.Len(t, existingResources, 1)
-			assert.Equal(t, johnyObject, existingResources[0].GetClientObject())
+			assert.Equal(t, johnyObject, existingResources[0])
 		})
 
 		t.Run("listExistingResources should return two resources of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -78,8 +78,8 @@ func TestClusterResourceKinds(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			require.Len(t, existingResources, 2)
-			assert.Equal(t, johnyObject, existingResources[0].GetClientObject())
-			assert.Equal(t, johnyObject2, existingResources[1].GetClientObject())
+			assert.Equal(t, johnyObject, existingResources[0])
+			assert.Equal(t, johnyObject2, existingResources[1])
 		})
 
 		t.Run("listExistingResources should return not return any resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {

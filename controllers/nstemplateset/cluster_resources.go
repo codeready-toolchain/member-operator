@@ -7,6 +7,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+
 	"github.com/go-logr/logr"
 	quotav1 "github.com/openshift/api/quota/v1"
 	errs "github.com/pkg/errors"
@@ -16,15 +17,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type clusterResourcesManager struct {
 	*statusManager
 }
 
-// listExistingResources returns a list of comparable  ToolchainObjects representing existing resources in the cluster
-type listExistingResources func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error)
+// listExistingResources returns a list of comparable Objects representing existing resources in the cluster
+type listExistingResources func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error)
 
 // toolchainObjectKind represents a resource kind that should be present in templates containing cluster resources.
 // Such a kind should be watched by NSTempalateSet controller which means that every change of the
@@ -33,11 +34,11 @@ type listExistingResources func(cl client.Client, username string) ([]applycl.Co
 // toolchainObjectKind type created in clusterResourceKinds list
 type toolchainObjectKind struct {
 	gvk                   schema.GroupVersionKind
-	object                client.Object
+	object                runtimeclient.Object
 	listExistingResources listExistingResources
 }
 
-func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject client.Object, listExistingResources listExistingResources) toolchainObjectKind {
+func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject runtimeclient.Object, listExistingResources listExistingResources) toolchainObjectKind {
 	return toolchainObjectKind{
 		gvk:                   gvk,
 		object:                emptyObject,
@@ -45,67 +46,51 @@ func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject client.Obje
 	}
 }
 
-var compareNotSupported applycl.CompareToolchainObjects = func(firstObject, secondObject applycl.ToolchainObject) (bool, error) {
-	return false, fmt.Errorf("objects comparison is not supported")
-}
-
 // clusterResourceKinds is a list that contains definitions for all cluster-scoped toolchainObjectKinds
 var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		quotav1.GroupVersion.WithKind("ClusterResourceQuota"),
 		&quotav1.ClusterResourceQuota{},
-		func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error) {
+		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
 			itemList := &quotav1.ClusterResourceQuotaList{}
 			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
 				return nil, err
 			}
-			list := make([]applycl.ComparableToolchainObject, len(itemList.Items))
+			list := make([]runtimeclient.Object, len(itemList.Items))
 			for index := range itemList.Items {
-				toolchainObject, err := applycl.NewComparableToolchainObject(&itemList.Items[index], compareNotSupported)
-				if err != nil {
-					return nil, err
-				}
-				list[index] = toolchainObject
+				list[index] = &itemList.Items[index]
 			}
-			return applycl.SortToolchainObjectsByName(list), nil
+			return applycl.SortObjectsByName(list), nil
 		}),
 
 	newToolchainObjectKind(
 		rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
 		&rbacv1.ClusterRoleBinding{},
-		func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error) {
+		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
 			itemList := &rbacv1.ClusterRoleBindingList{}
 			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
 				return nil, err
 			}
-			list := make([]applycl.ComparableToolchainObject, len(itemList.Items))
+			list := make([]runtimeclient.Object, len(itemList.Items))
 			for index := range itemList.Items {
-				toolchainObject, err := applycl.NewComparableToolchainObject(&itemList.Items[index], compareNotSupported)
-				if err != nil {
-					return nil, err
-				}
-				list[index] = toolchainObject
+				list[index] = &itemList.Items[index]
 			}
-			return applycl.SortToolchainObjectsByName(list), nil
+			return applycl.SortObjectsByName(list), nil
 		}),
 
 	newToolchainObjectKind(
 		toolchainv1alpha1.GroupVersion.WithKind("Idler"),
 		&toolchainv1alpha1.Idler{},
-		func(cl client.Client, username string) ([]applycl.ComparableToolchainObject, error) {
+		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
 			itemList := &toolchainv1alpha1.IdlerList{}
 			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
 				return nil, err
 			}
-			list := make([]applycl.ComparableToolchainObject, len(itemList.Items))
+			list := make([]runtimeclient.Object, len(itemList.Items))
 			for index := range itemList.Items {
-				toolchainObject, err := applycl.NewComparableToolchainObject(&itemList.Items[index], compareNotSupported)
-				if err != nil {
-					return nil, err
-				}
-				list[index] = toolchainObject
+				list[index] = &itemList.Items[index]
 			}
-			return applycl.SortToolchainObjectsByName(list), nil
+			return applycl.SortObjectsByName(list), nil
 		}),
 }
 
@@ -128,7 +113,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	for _, clusterResourceKind := range clusterResourceKinds {
 		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
 		gvkLogger.Info("ensuring cluster resource kind")
-		newObjs := make([]applycl.ToolchainObject, 0)
+		newObjs := make([]runtimeclient.Object, 0)
 
 		// get all objects of the resource kind from the template (if the template is specified)
 		if tierTemplate != nil {
@@ -179,7 +164,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 
 // apply creates or updates the given object with the set of toolchain labels. If the apply operation was successful, then it returns 'true, nil',
 // but if there was an error then it returns 'false, error'.
-func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, toApply applycl.ToolchainObject) (bool, error) {
+func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, toApply runtimeclient.Object) (bool, error) {
 	var labels = map[string]string{
 		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:        toolchainv1alpha1.ClusterResourcesTemplateType,
@@ -192,9 +177,9 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	logger.Info("applying cluster resource", "gvk", toApply.GetGvk())
-	if _, err := applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects([]applycl.ToolchainObject{toApply}, labels); err != nil {
-		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", toApply.GetGvk())
+	logger.Info("applying cluster resource", "gvk", toApply.GetObjectKind().GroupVersionKind())
+	if _, err := applycl.NewApplyClient(r.Client, r.Scheme).Apply([]runtimeclient.Object{toApply}, labels); err != nil {
+		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", toApply.GetObjectKind().GroupVersionKind())
 	}
 	return true, nil
 }
@@ -207,7 +192,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 // then it updates the resource and returns 'true, nil'
 //
 // If no resource to be updated or deleted was found then it returns 'false, nil'. In case of any errors 'false, error'
-func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, currentObjs []applycl.ComparableToolchainObject, newObjs []applycl.ToolchainObject, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
 CurrentObjects:
 	for _, currentObject := range currentObjs {
@@ -219,7 +204,7 @@ CurrentObjects:
 
 		// check if the object should still exist and should be updated
 		for _, newObject := range newObjs {
-			if newObject.HasSameName(currentObject) {
+			if newObject.GetName() == currentObject.GetName() {
 				// is found then let's check if we need to update it
 				if !isUpToDate(currentObject, newObject, tierTemplate) {
 					// let's update it
@@ -238,13 +223,13 @@ CurrentObjects:
 }
 
 // deleteClusterResource sets status to updating, deletes the given resource and returns 'true, nil'. In case of any errors 'false, error'.
-func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete applycl.ToolchainObject) (bool, error) {
+func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete runtimeclient.Object) (bool, error) {
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 		return false, err
 	}
-	if err := r.Client.Delete(context.TODO(), toDelete.GetClientObject()); err != nil {
+	if err := r.Client.Delete(context.TODO(), toDelete); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
-			toDelete.GetName(), toDelete.GetGvk())
+			toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 	}
 	return true, nil
 }
@@ -252,7 +237,7 @@ func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1al
 // createMissing takes the given currentObjs and newObjs and compares them if there is any that should be created.
 // If such a object is found, then it creates it and returns 'true, nil'. If no missing resource was found then returns 'false, nil'.
 // In case of any error 'false, error'
-func (r *clusterResourcesManager) createMissing(logger logr.Logger, currentObjs []applycl.ComparableToolchainObject, newObjs []applycl.ToolchainObject, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+func (r *clusterResourcesManager) createMissing(logger logr.Logger, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all new (expected) objects to check if all of them already exist or not
 NewObjects:
 	for _, newObject := range newObjs {
@@ -260,7 +245,7 @@ NewObjects:
 		// go through current objects to check if is one of the new (expected)
 		for _, currentObject := range currentObjs {
 			// if the name is the same, then it means that it already exist so just continue with the next new object
-			if newObject.HasSameName(currentObject) {
+			if newObject.GetName() == currentObject.GetName() {
 				continue NewObjects
 			}
 		}
@@ -301,17 +286,17 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 		}
 
 		for _, toDelete := range currentObjects {
-			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete.GetClientObject()); err != nil && !errors.IsNotFound(err) {
+			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err,
-					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetGvk())
+					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 			}
 			// ignore cluster resource that are already flagged for deletion
-			if errors.IsNotFound(err) || util.IsBeingDeleted(toDelete.GetClientObject()) {
+			if errors.IsNotFound(err) || util.IsBeingDeleted(toDelete) {
 				continue
 			}
 
-			logger.Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetGvk().Kind)
-			if err := r.Client.Delete(context.TODO(), toDelete.GetClientObject()); err != nil && errors.IsNotFound(err) {
+			logger.Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
+			if err := r.Client.Delete(context.TODO(), toDelete); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue
 			} else if err != nil {
@@ -326,7 +311,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 }
 
 // isUpToDate returns true if the currentObject uses the corresponding templateRef and equals to the new object
-func isUpToDate(currentObject, _ applycl.ToolchainObject, tierTemplate *tierTemplate) bool {
+func isUpToDate(currentObject, _ runtimeclient.Object, tierTemplate *tierTemplate) bool {
 	return currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
 		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
 	// && currentObject.IsSame(newObject)  <-- TODO Uncomment when IsSame is implemented for all ToolchainObjects!

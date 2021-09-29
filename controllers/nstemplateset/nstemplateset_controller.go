@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -50,11 +52,11 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
-	build := ctrl.NewControllerManagedBy(mgr).
+	var build = ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel).
-		Watches(source.NewKindWithCache(&rbac.Role{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel)
-
+		Watches(source.NewKindWithCache(&rbac.Role{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{})).
+		Watches(source.NewKindWithCache(&rbac.RoleBinding{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources
@@ -234,7 +236,80 @@ func listByOwnerLabel(username string) client.ListOption {
 	return client.MatchingLabels(labels)
 }
 
-func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {
-	return obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+// isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
+// If so, it processes the tier template to compare the lengths of the actual roles and rolebindings with the expected length from processed template.
+// If the lengths are equal, compare role and role-bindings with proper name check
+func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *namespacesManager) bool {
+	isLabelCorrect := obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
 		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
+
+	if isLabelCorrect {
+
+		newObjs, err := tierTemplate.process(r.Scheme, obj.GetName(), template.RetainAllButNamespaces)
+		if err != nil {
+			return false
+		}
+		processedRoles := []applycl.ToolchainObject{}
+		processedRoleBindings := []applycl.ToolchainObject{}
+		roleList := rbac.RoleList{}
+		rolebindingList := rbac.RoleBindingList{}
+		err = r.AllNamespacesClient.List(context.TODO(), &roleList, client.InNamespace(obj.GetName()))
+		if err != nil {
+			return false
+		}
+
+		err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, client.InNamespace(obj.GetName()))
+		if err != nil {
+			return false
+		}
+
+		for _, obj := range newObjs {
+			if obj.GetGvk().Kind == "Role" {
+				processedRoles = append(processedRoles, obj)
+			}
+			if obj.GetGvk().Kind == "RoleBinding" {
+				processedRoleBindings = append(processedRoleBindings, obj)
+			}
+		}
+		isEqualLength := len(roleList.Items) == len(processedRoles) && len(rolebindingList.Items) == len(processedRoleBindings)
+		if isEqualLength {
+			//Check the names of the roles and roleBindings as well
+			for _, role := range processedRoles {
+				if !containsRole(roleList.Items, role) {
+					return false
+				}
+			}
+
+			for _, rolebinding := range processedRoleBindings {
+				if !containsRoleBindings(rolebindingList.Items, rolebinding) {
+					return false
+				}
+			}
+
+			return true
+		}
+		return isEqualLength
+	}
+
+	return isLabelCorrect
+}
+
+func containsRole(list []rbac.Role, obj applycl.ToolchainObject) bool {
+	for _, val := range list {
+		if obj.GetGvk().Kind == "Role" && val.GetName() == obj.GetName() {
+			return true
+		}
+		continue
+	}
+	return false
+}
+
+func containsRoleBindings(list []rbac.RoleBinding, obj applycl.ToolchainObject) bool {
+	for _, val := range list {
+		if obj.GetGvk().Kind == "RoleBinding" && val.GetName() == obj.GetName() {
+			return true
+		}
+		continue
+	}
+	return false
 }

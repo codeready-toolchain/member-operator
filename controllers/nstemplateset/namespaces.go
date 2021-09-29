@@ -47,7 +47,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	}
 
 	// find next namespace for provisioning namespace resource
-	tierTemplate, userNamespace, found := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces)
+	tierTemplate, userNamespace, found := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces, r)
 	if !found {
 		logger.Info("no more namespaces to create", "username", nsTmplSet.GetName())
 		return false, nil
@@ -229,12 +229,12 @@ func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace,
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
 // either revision is not set or revision or tier doesn't equal to the current one.
 // It also returns namespace present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool) {
+func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace, r *namespacesManager) (*tierTemplate, *corev1.Namespace, bool) {
 	for _, nsTemplate := range tierTemplatesByType {
 		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				if !isUpToDateAndProvisioned(&namespace, nsTemplate) {
+				if !isUpToDateAndProvisioned(&namespace, nsTemplate, r) {
 					return nsTemplate, &namespace, true
 				}
 			}

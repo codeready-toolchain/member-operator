@@ -125,7 +125,11 @@ func main() {
 		setupLog.Error(err, "unable to start allNamespaceCluster")
 		os.Exit(1)
 	}
-	mgr.Add(allNamespacesCluster)
+	err = mgr.Add(allNamespacesCluster)
+	if err != nil {
+		setupLog.Error(err, "unable to add allNamespaceCluster to manager")
+		os.Exit(1)
+	}
 
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {

@@ -26,13 +26,13 @@ func TestGetTemplateObjects(t *testing.T) {
 	s := setScheme(t)
 
 	// when
-	toolchainObjects, err := getTemplateObjects(s, test.MemberOperatorNs, "8Gi", 3)
+	objs, err := getTemplateObjects(s, test.MemberOperatorNs, "8Gi", 3)
 
 	// then
 	require.NoError(t, err)
-	require.Len(t, toolchainObjects, 2)
-	priorityClassEquals(t, priorityClass(), toolchainObjects[0].GetClientObject())
-	deploymentEquals(t, deployment("8Gi", 3), toolchainObjects[1].GetClientObject())
+	require.Len(t, objs, 2)
+	priorityClassEquals(t, priorityClass(), objs[0])
+	deploymentEquals(t, deployment("8Gi", 3), objs[1])
 }
 
 func TestDeploy(t *testing.T) {

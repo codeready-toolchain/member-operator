@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"testing"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"os"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,6 +50,7 @@ func TestFindNamespace(t *testing.T) {
 
 func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	// given
+
 	userNamespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -85,12 +87,15 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			tierName:    "basic",
 		},
 	}
+	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
+	manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 	t.Run("return namespace whose revision is not set", func(t *testing.T) {
 		// when
-		tierTemplate, userNS, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
 
 		// then
+		assert.NoError(t, err)
 		assert.True(t, found)
 		assert.Equal(t, "code", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
@@ -101,9 +106,10 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-123"
 
 		// when
-		tierTemplate, userNS, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
 
 		// then
+		assert.NoError(t, err)
 		assert.True(t, found)
 		assert.Equal(t, "code", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
@@ -114,9 +120,10 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "advanced-code-abcde21"
 
 		// when
-		tierTemplate, userNS, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
 
 		// then
+		assert.NoError(t, err)
 		assert.True(t, found)
 		assert.Equal(t, "code", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
@@ -127,9 +134,10 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
 
 		// when
-		tierTemplate, userNS, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
 
 		// then
+		assert.NoError(t, err)
 		assert.True(t, found)
 		assert.Equal(t, "stage", tierTemplate.typeName)
 		assert.Nil(t, userNS)
@@ -149,9 +157,10 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		})
 
 		// when
-		_, _, found := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		_, _, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
 
 		// then
+		assert.NoError(t, err)
 		assert.False(t, found)
 	})
 }
@@ -324,7 +333,9 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
+		//ro := newRole(devNS.Name, "rbac-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit")
+		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, rb)
 
 		// when
 		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)

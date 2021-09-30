@@ -9,9 +9,10 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
-	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
+	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
+
 	"github.com/go-logr/logr"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -23,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -60,7 +61,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources
-		build = build.Watches(&source.Kind{Type: clusterResource.objectType}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+		build = build.Watches(&source.Kind{Type: clusterResource.object}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	}
 
 	r.AllNamespacesClient = allNamespaceCluster.GetClient()
@@ -68,10 +69,10 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 }
 
 type APIClient struct {
-	Client              client.Client
+	AllNamespacesClient runtimeclient.Client
+	Client              runtimeclient.Client
 	Scheme              *runtime.Scheme
 	GetHostCluster      cluster.GetHostClusterFunc
-	AllNamespacesClient client.Client
 }
 
 // Reconciler the NSTemplateSet reconciler
@@ -204,23 +205,24 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 // deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteRedundantObjects(logger logr.Logger, client client.Client, deleteOnlyOne bool, currentObjs []applycl.ToolchainObject, newObjects []applycl.ToolchainObject) (bool, error) {
+func deleteRedundantObjects(logger logr.Logger, client runtimeclient.Client, deleteOnlyOne bool, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
 	deleted := false
 	logger.Info("checking redundant objects", "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
-		logger.Info("checking redundant object", "objectName", currentObj.GetGvk().Kind+"/"+currentObj.GetName())
+		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
+		objectLogger.Info("checking redundant object")
 		for _, newObj := range newObjects {
-			if currentObj.HasSameGvkAndName(newObj) {
+			if commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
 			}
 		}
-		if err := client.Delete(context.TODO(), currentObj.GetClientObject()); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
-			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetGvk().Kind, currentObj.GetNamespace())
+		if err := client.Delete(context.TODO(), currentObj); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
+			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetObjectKind().GroupVersionKind().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted
 		}
-		logger.Info("deleted redundant object", "objectName", currentObj.GetGvk().Kind+"/"+currentObj.GetName())
+		logger.Info("deleted redundant object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		if deleteOnlyOne {
 			return true, nil
 		}
@@ -229,17 +231,17 @@ Current:
 	return deleted, nil
 }
 
-// listByOwnerLabel returns client.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
-func listByOwnerLabel(username string) client.ListOption {
+// listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
+func listByOwnerLabel(username string) runtimeclient.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 
-	return client.MatchingLabels(labels)
+	return runtimeclient.MatchingLabels(labels)
 }
 
 // isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
 // If so, it processes the tier template to compare the lengths of the actual roles and rolebindings with the expected length from processed template.
 // If the lengths are equal, compare role and role-bindings with proper name check
-func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *namespacesManager) bool {
+func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *namespacesManager) (bool, error) {
 	isLabelCorrect := obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
 		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
 
@@ -247,28 +249,28 @@ func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *
 
 		newObjs, err := tierTemplate.process(r.Scheme, obj.GetName(), template.RetainAllButNamespaces)
 		if err != nil {
-			return false
+			return false, err
 		}
-		processedRoles := []applycl.ToolchainObject{}
-		processedRoleBindings := []applycl.ToolchainObject{}
+		processedRoles := []runtimeclient.Object{}
+		processedRoleBindings := []runtimeclient.Object{}
 		roleList := rbac.RoleList{}
 		rolebindingList := rbac.RoleBindingList{}
-		err = r.AllNamespacesClient.List(context.TODO(), &roleList, client.InNamespace(obj.GetName()))
+		err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(obj.GetName()))
 		if err != nil {
-			return false
+			return false, err
 		}
 
-		err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, client.InNamespace(obj.GetName()))
+		err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(obj.GetName()))
 		if err != nil {
-			return false
+			return false, err
 		}
 
-		for _, obj := range newObjs {
-			if obj.GetGvk().Kind == "Role" {
-				processedRoles = append(processedRoles, obj)
+		for _, objt := range newObjs {
+			if objt.GetObjectKind().GroupVersionKind().Kind == "Role" {
+				processedRoles = append(processedRoles, objt)
 			}
-			if obj.GetGvk().Kind == "RoleBinding" {
-				processedRoleBindings = append(processedRoleBindings, obj)
+			if objt.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" {
+				processedRoleBindings = append(processedRoleBindings, objt)
 			}
 		}
 		isEqualLength := len(roleList.Items) == len(processedRoles) && len(rolebindingList.Items) == len(processedRoleBindings)
@@ -276,27 +278,27 @@ func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *
 			//Check the names of the roles and roleBindings as well
 			for _, role := range processedRoles {
 				if !containsRole(roleList.Items, role) {
-					return false
+					return false, nil
 				}
 			}
 
 			for _, rolebinding := range processedRoleBindings {
 				if !containsRoleBindings(rolebindingList.Items, rolebinding) {
-					return false
+					return false, nil
 				}
 			}
 
-			return true
+			return true, nil
 		}
-		return isEqualLength
+		return isEqualLength, nil
 	}
 
-	return isLabelCorrect
+	return isLabelCorrect, nil
 }
 
-func containsRole(list []rbac.Role, obj applycl.ToolchainObject) bool {
+func containsRole(list []rbac.Role, obj runtimeclient.Object) bool {
 	for _, val := range list {
-		if obj.GetGvk().Kind == "Role" && val.GetName() == obj.GetName() {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "Role" && val.GetName() == obj.GetName() {
 			return true
 		}
 		continue
@@ -304,9 +306,9 @@ func containsRole(list []rbac.Role, obj applycl.ToolchainObject) bool {
 	return false
 }
 
-func containsRoleBindings(list []rbac.RoleBinding, obj applycl.ToolchainObject) bool {
+func containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object) bool {
 	for _, val := range list {
-		if obj.GetGvk().Kind == "RoleBinding" && val.GetName() == obj.GetName() {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" && val.GetName() == obj.GetName() {
 			return true
 		}
 		continue

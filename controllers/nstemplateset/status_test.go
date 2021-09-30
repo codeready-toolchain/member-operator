@@ -198,7 +198,9 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
+		devRb := newRoleBinding(devNS.Name, "user-edit")
+		codeRb := newRoleBinding(codeNS.Name, "user-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRb, codeRb)
 
 		// when
 		_, err := r.Reconcile(context.TODO(), req)

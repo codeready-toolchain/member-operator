@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -13,9 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -27,9 +29,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestReconcileAddFinalizer(t *testing.T) {
@@ -90,7 +89,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
+		rb := newRoleBinding(devNS.Name, "user-edit")
+		rb2 := newRoleBinding(codeNS.Name, "user-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rb, rb2)
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -128,7 +129,13 @@ func TestReconcileProvisionOK(t *testing.T) {
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withClusterResources("abcde11"))
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS, crb, idlerDev, idlerCode, idlerStage)
+		devRole := newRole(devNS.Name, "rbac-edit")
+		devRb := newRoleBinding(devNS.Name, "user-edit")
+		devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
+		codeRole := newRole(codeNS.Name, "rbac-edit")
+		CodeRb := newRoleBinding(codeNS.Name, "user-edit")
+		CodeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS, crb, idlerDev, idlerCode, idlerStage, devRole, devRb, devRb2, codeRole, CodeRb, CodeRb2)
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -288,7 +295,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 					t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
-						r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+						r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 						// when
 						res, err := r.Reconcile(context.TODO(), req)
@@ -414,7 +421,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 										t.Run("provision inner resources of joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
 											// given - when host cluster is not ready, then it should use the cache
-											r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+											r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 											// when
 											res, err := r.Reconcile(context.TODO(), joeReq)
@@ -465,7 +472,11 @@ func TestReconcilePromotion(t *testing.T) {
 			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "rbac-edit")
 			codeRo := newRole(codeNS.Name, "rbac-edit")
-			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo)
+			devRb := newRoleBinding(devNS.Name, "user-edit")
+			devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
+			codeRb := newRoleBinding(codeNS.Name, "user-edit")
+			codeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit")
+			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo, devRb, devRb2, codeRb, codeRb2)
 
 			err := fakeClient.Update(context.TODO(), nsTmplSet)
 			require.NoError(t, err)
@@ -593,11 +604,24 @@ func TestReconcilePromotion(t *testing.T) {
 								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
 								HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 								HasLabel("toolchain.dev.openshift.com/type", "dev").
-								HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain")
+								HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+								HasResource("rbac-edit", &rbacv1.Role{}).
+								HasResource("user-edit", &rbacv1.RoleBinding{}).
+								HasResource("user-rbac-edit", &rbacv1.RoleBinding{})
 
 							t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
 								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-								r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+								////create resources
+								//devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+								//codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
+								//devRo := newRole(devNS.Name, "rbac-edit")
+								//codeRo := newRole(codeNS.Name, "rbac-edit")
+								//devRb := newRoleBinding(devNS.Name, "user-edit")
+								//devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
+								//codeRb := newRoleBinding(codeNS.Name, "user-edit")
+								//codeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit")
+								//r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo, devRb, codeRb, devRb2, codeRb2)
 
 								// when - should check if everything is OK and set status to provisioned
 								_, err = r.Reconcile(context.TODO(), req)
@@ -773,7 +797,7 @@ func TestReconcileUpdate(t *testing.T) {
 
 						t.Run("when nothing to update, then it should be provisioned", func(t *testing.T) {
 							// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-							r.GetHostCluster = NewGetHostCluster(fakeClient, true, v1.ConditionFalse)
+							r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 							// when - should check if everything is OK and set status to provisioned
 							_, err = r.Reconcile(context.TODO(), req)
@@ -922,7 +946,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 
 					t.Run("reconcile after cluster resource quota deletion triggers removal of the finalizer", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
-						r.GetHostCluster = NewGetHostCluster(r.Client, true, v1.ConditionFalse)
+						r.GetHostCluster = NewGetHostCluster(r.Client, true, corev1.ConditionFalse)
 
 						// when a last reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
 						_, err := r.Reconcile(context.TODO(), req)
@@ -1115,7 +1139,8 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		if err := test.Create(ctx, fakeClient, o, opts...); err != nil {
 			return err
 		}
-		return passGeneration(o, obj)
+		obj.SetGeneration(o.GetGeneration())
+		return nil
 	}
 	fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 		o, err := toStructured(obj, decoder)
@@ -1125,12 +1150,14 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		if err := test.Update(ctx, fakeClient, o, opts...); err != nil {
 			return err
 		}
-		return passGeneration(o, obj)
+		obj.SetGeneration(o.GetGeneration())
+		return nil
 	}
 	return &APIClient{
-		Client:         fakeClient,
-		Scheme:         s,
-		GetHostCluster: NewGetHostCluster(fakeClient, true, v1.ConditionTrue),
+		AllNamespacesClient: fakeClient,
+		Client:              fakeClient,
+		Scheme:              s,
+		GetHostCluster:      NewGetHostCluster(fakeClient, true, corev1.ConditionTrue),
 	}, fakeClient
 }
 
@@ -1160,19 +1187,6 @@ func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *
 	return NewReconciler(apiClient), fakeClient
 }
 
-func passGeneration(from, to runtime.Object) error {
-	fromMeta, err := meta.Accessor(from)
-	if err != nil {
-		return err
-	}
-	toMeta, err := meta.Accessor(to)
-	if err != nil {
-		return err
-	}
-	toMeta.SetGeneration(fromMeta.GetGeneration())
-	return nil
-}
-
 func toStructured(obj client.Object, decoder runtime.Decoder) (client.Object, error) {
 	if u, ok := obj.(*unstructured.Unstructured); ok {
 		data, err := u.MarshalJSON()
@@ -1189,7 +1203,7 @@ func toStructured(obj client.Object, decoder runtime.Decoder) (client.Object, er
 			_, _, err = decoder.Decode(data, nil, crb)
 			return crb, err
 		case "Namespace":
-			ns := &v1.Namespace{}
+			ns := &corev1.Namespace{}
 			_, _, err = decoder.Decode(data, nil, ns)
 			ns.Status = corev1.NamespaceStatus{Phase: corev1.NamespaceActive}
 			return ns, err
@@ -1197,6 +1211,14 @@ func toStructured(obj client.Object, decoder runtime.Decoder) (client.Object, er
 			idler := &toolchainv1alpha1.Idler{}
 			_, _, err = decoder.Decode(data, nil, idler)
 			return idler, err
+		case "Role":
+			rl := &rbacv1.Role{}
+			_, _, err = decoder.Decode(data, nil, rl)
+			return rl, err
+		case "RoleBinding":
+			rolebinding := &rbacv1.RoleBinding{}
+			_, _, err = decoder.Decode(data, nil, rolebinding)
+			return rolebinding, err
 		}
 	}
 	return obj, nil

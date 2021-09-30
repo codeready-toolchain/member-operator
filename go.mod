@@ -21,5 +21,6 @@ require (
 	k8s.io/metrics v0.20.2
 	sigs.k8s.io/controller-runtime v0.8.3
 )
+replace github.com/codeready-toolchain/toolchain-common => /Users/kanikarana/go/src/github.com/codeready-toolchain/toolchain-common
 
 go 1.16

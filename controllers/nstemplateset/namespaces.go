@@ -47,7 +47,10 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	}
 
 	// find next namespace for provisioning namespace resource
-	tierTemplate, userNamespace, found := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces, r)
+	tierTemplate, userNamespace, found, err := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces, r)
+	if err != nil {
+		return false, err
+	}
 	if !found {
 		logger.Info("no more namespaces to create", "username", nsTmplSet.GetName())
 		return false, nil
@@ -97,7 +100,7 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	_, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(objs, labels)
+	_, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(objs, labels)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tierTemplate.typeName)
 	}
@@ -136,7 +139,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 	}
-	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).ApplyToolchainObjects(newObjs, labels); err != nil {
+	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 
@@ -229,20 +232,24 @@ func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace,
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
 // either revision is not set or revision or tier doesn't equal to the current one.
 // It also returns namespace present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace, r *namespacesManager) (*tierTemplate, *corev1.Namespace, bool) {
+func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace, r *namespacesManager) (*tierTemplate, *corev1.Namespace, bool, error) {
 	for _, nsTemplate := range tierTemplatesByType {
 		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				if !isUpToDateAndProvisioned(&namespace, nsTemplate, r) {
-					return nsTemplate, &namespace, true
+				isProvisioned, err := isUpToDateAndProvisioned(&namespace, nsTemplate, r)
+				if err != nil {
+					return nsTemplate, &namespace, true, err
+				}
+				if !isProvisioned {
+					return nsTemplate, &namespace, true, nil
 				}
 			}
 		} else {
-			return nsTemplate, nil, true
+			return nsTemplate, nil, true, nil
 		}
 	}
-	return nil, nil, false
+	return nil, nil, false, nil
 }
 
 // nextNamespaceToDeprovision returns namespace (and information of it was found) that should be deprovisioned

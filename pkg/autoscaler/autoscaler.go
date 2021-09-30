@@ -15,18 +15,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func Deploy(cl client.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
-	toolchainObjects, err := getTemplateObjects(s, namespace, requestsMemory, replicas)
+func Deploy(cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
+	objs, err := getTemplateObjects(s, namespace, requestsMemory, replicas)
 	if err != nil {
 		return err
 	}
 
 	applyClient := applycl.NewApplyClient(cl, s)
 	// create all objects that are within the template, and update only when the object has changed.
-	for _, toolchainObject := range toolchainObjects {
-		if _, err := applyClient.ApplyObject(toolchainObject.GetClientObject()); err != nil {
+	for _, obj := range objs {
+		if _, err := applyClient.ApplyObject(obj); err != nil {
 			return errs.Wrap(err, "cannot deploy autoscaling buffer template")
 		}
 	}
@@ -36,15 +37,15 @@ func Deploy(cl client.Client, s *runtime.Scheme, namespace, requestsMemory strin
 // Delete deletes the autoscaling buffer app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
 func Delete(cl client.Client, s *runtime.Scheme, namespace string) (bool, error) {
-	toolchainObjects, err := getTemplateObjects(s, namespace, "0", 0)
+	objs, err := getTemplateObjects(s, namespace, "0", 0)
 	if err != nil {
 		return false, err
 	}
 
 	var deleted bool
-	for _, obj := range toolchainObjects {
+	for _, obj := range objs {
 		unst := &unstructured.Unstructured{}
-		unst.SetGroupVersionKind(obj.GetGvk())
+		unst.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 		if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}, unst); err != nil {
 			if !errors.IsNotFound(err) { // Ignore not found
 				return false, errs.Wrap(err, "cannot get autoscaling buffer object")
@@ -60,7 +61,7 @@ func Delete(cl client.Client, s *runtime.Scheme, namespace string) (bool, error)
 	return deleted, nil
 }
 
-func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, replicas int) ([]applycl.ToolchainObject, error) {
+func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, replicas int) ([]runtimeclient.Object, error) {
 	deployment, err := Asset("member-operator-autoscaler.yaml")
 	if err != nil {
 		return nil, err

@@ -239,7 +239,7 @@ func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, names
 			if namespace.Status.Phase == corev1.NamespaceActive {
 				isProvisioned, err := isUpToDateAndProvisioned(&namespace, nsTemplate, r)
 				if err != nil {
-					return nsTemplate, &namespace, true, err
+					return nsTemplate, nil, false, err
 				}
 				if !isProvisioned {
 					return nsTemplate, &namespace, true, nil

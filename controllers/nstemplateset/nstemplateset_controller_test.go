@@ -612,16 +612,6 @@ func TestReconcilePromotion(t *testing.T) {
 							t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
 								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
 								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
-								////create resources
-								//devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
-								//codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
-								//devRo := newRole(devNS.Name, "rbac-edit")
-								//codeRo := newRole(codeNS.Name, "rbac-edit")
-								//devRb := newRoleBinding(devNS.Name, "user-edit")
-								//devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
-								//codeRb := newRoleBinding(codeNS.Name, "user-edit")
-								//codeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit")
-								//r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo, devRb, codeRb, devRb2, codeRb2)
 
 								// when - should check if everything is OK and set status to provisioned
 								_, err = r.Reconcile(context.TODO(), req)

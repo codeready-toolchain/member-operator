@@ -239,8 +239,7 @@ func listByOwnerLabel(username string) runtimeclient.ListOption {
 }
 
 // isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
-// If so, it processes the tier template to compare the lengths of the actual roles and rolebindings with the expected length from processed template.
-// If the lengths are equal, compare role and role-bindings with proper name check
+// If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
 func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *namespacesManager) (bool, error) {
 	isLabelCorrect := obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
 		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
@@ -273,24 +272,20 @@ func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *
 				processedRoleBindings = append(processedRoleBindings, objt)
 			}
 		}
-		isEqualLength := len(roleList.Items) == len(processedRoles) && len(rolebindingList.Items) == len(processedRoleBindings)
-		if isEqualLength {
-			//Check the names of the roles and roleBindings as well
-			for _, role := range processedRoles {
-				if !containsRole(roleList.Items, role) {
-					return false, nil
-				}
+		//Check the names of the roles and roleBindings as well
+		for _, role := range processedRoles {
+			if !containsRole(roleList.Items, role) {
+				return false, nil
 			}
-
-			for _, rolebinding := range processedRoleBindings {
-				if !containsRoleBindings(rolebindingList.Items, rolebinding) {
-					return false, nil
-				}
-			}
-
-			return true, nil
 		}
-		return isEqualLength, nil
+
+		for _, rolebinding := range processedRoleBindings {
+			if !containsRoleBindings(rolebindingList.Items, rolebinding) {
+				return false, nil
+			}
+		}
+
+		return true, nil
 	}
 
 	return isLabelCorrect, nil

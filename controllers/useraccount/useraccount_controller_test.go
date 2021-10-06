@@ -327,9 +327,9 @@ func TestReconcile(t *testing.T) {
 				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 
-		t.Run("status_not_changed", func(t *testing.T) {
+		t.Run("status not changed when NSTemplateSet is being provisioned", func(t *testing.T) {
 			// given
-			userAcc := newUserAccountWithStatus(username, userID)
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "ShouldStay")
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "Provisioning", "")
 
 			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
@@ -340,7 +340,27 @@ func TestReconcile(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			useraccount.AssertThatUserAccount(t, req.Name, cl).
-				HasConditions(failed("", ""))
+				HasConditions(failed("ShouldStay", ""))
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		})
+
+		t.Run("status changed when NSTemplateSet is being updated and useraccount is Provisioned", func(t *testing.T) {
+			// given
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionTrue, "Provisioned")
+			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "Updating", "")
+
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(failed("Updating", ""))
 			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
 				HasTierName("basic").
 				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
@@ -349,7 +369,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("status_changed_with_error", func(t *testing.T) {
 			// given
-			userAcc := newUserAccountWithStatus(username, userID)
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "Provisioning")
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
 
 			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
@@ -367,9 +387,48 @@ func TestReconcile(t *testing.T) {
 				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
 		})
 
-		t.Run("status_changed_ready_ok", func(t *testing.T) {
+		t.Run("status changed from provisioning to ready", func(t *testing.T) {
 			// given
-			userAcc := newUserAccountWithStatus(username, userID)
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "Provisioning")
+
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioned())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		})
+
+		t.Run("status stays the same as is updating and set recently", func(t *testing.T) {
+			// given
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "Updating")
+
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(updating())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasTierName("basic").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		})
+
+		t.Run("status changed from updating to ready as was set more than 1 sec ago", func(t *testing.T) {
+			// given
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "Updating")
+			userAcc.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-time.Second))
 
 			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 
@@ -418,7 +477,7 @@ func TestReconcile(t *testing.T) {
 		})
 
 		t.Run("namespace provision status failed", func(t *testing.T) {
-			userAcc := newUserAccountWithStatus(username, userID)
+			userAcc := newUserAccountWithStatus(username, userID, corev1.ConditionFalse, "Provisioning")
 			preexistingNsTmplSetWithNS := newNSTmplSetWithStatus(userAcc.Name, "UnableToProvisionNamespace", "error message")
 
 			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSetWithNS)
@@ -1531,7 +1590,7 @@ func newDisabledUserAccountWithFinalizer(userName, userID string) *toolchainv1al
 	return userAcc
 }
 
-func newUserAccountWithStatus(userName, userID string) *toolchainv1alpha1.UserAccount {
+func newUserAccountWithStatus(userName, userID string, status corev1.ConditionStatus, reason string) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
@@ -1546,7 +1605,12 @@ func newUserAccountWithStatus(userName, userID string) *toolchainv1alpha1.UserAc
 		},
 		Status: toolchainv1alpha1.UserAccountStatus{
 			Conditions: []toolchainv1alpha1.Condition{
-				{Type: toolchainv1alpha1.ConditionReady, Status: corev1.ConditionFalse},
+				{
+					Type:               toolchainv1alpha1.ConditionReady,
+					Status:             status,
+					Reason:             reason,
+					LastTransitionTime: metav1.Now(),
+				},
 			},
 		},
 	}

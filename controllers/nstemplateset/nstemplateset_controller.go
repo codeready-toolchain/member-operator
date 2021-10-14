@@ -19,7 +19,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -240,13 +239,11 @@ func listByOwnerLabel(username string) runtimeclient.ListOption {
 
 // isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
-func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *namespacesManager) (bool, error) {
-	isLabelCorrect := obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
-		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef
+func isUpToDateAndProvisioned(ns *corev1.Namespace, tierTemplate *tierTemplate, r *namespacesManager) (bool, error) {
+	if ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
-	if isLabelCorrect {
-
-		newObjs, err := tierTemplate.process(r.Scheme, obj.GetName(), template.RetainAllButNamespaces)
+		newObjs, err := tierTemplate.process(r.Scheme, ns.GetName(), template.RetainAllButNamespaces)
 		if err != nil {
 			return false, err
 		}
@@ -254,22 +251,20 @@ func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *
 		processedRoleBindings := []runtimeclient.Object{}
 		roleList := rbac.RoleList{}
 		rolebindingList := rbac.RoleBindingList{}
-		err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(obj.GetName()))
-		if err != nil {
+		if err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(ns.GetName())); err != nil {
 			return false, err
 		}
 
-		err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(obj.GetName()))
-		if err != nil {
+		if err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(ns.GetName())); err != nil {
 			return false, err
 		}
 
-		for _, objt := range newObjs {
-			if objt.GetObjectKind().GroupVersionKind().Kind == "Role" {
-				processedRoles = append(processedRoles, objt)
-			}
-			if objt.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" {
-				processedRoleBindings = append(processedRoleBindings, objt)
+		for _, obj := range newObjs {
+			switch obj.GetObjectKind().GroupVersionKind().Kind {
+			case "Role":
+				processedRoles = append(processedRoles, obj)
+			case "RoleBinding":
+				processedRoleBindings = append(processedRoleBindings, obj)
 			}
 		}
 		//Check the names of the roles and roleBindings as well
@@ -284,11 +279,10 @@ func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate, r *
 				return false, nil
 			}
 		}
-
 		return true, nil
 	}
 
-	return isLabelCorrect, nil
+	return false, nil
 }
 
 func containsRole(list []rbac.Role, obj runtimeclient.Object) bool {

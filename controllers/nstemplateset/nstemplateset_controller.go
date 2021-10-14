@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/codeready-toolchain/toolchain-common/pkg/template"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -235,72 +233,4 @@ func listByOwnerLabel(username string) runtimeclient.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 
 	return runtimeclient.MatchingLabels(labels)
-}
-
-// isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
-// If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
-func isUpToDateAndProvisioned(ns *corev1.Namespace, tierTemplate *tierTemplate, r *namespacesManager) (bool, error) {
-	if ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
-		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
-
-		newObjs, err := tierTemplate.process(r.Scheme, ns.GetName(), template.RetainAllButNamespaces)
-		if err != nil {
-			return false, err
-		}
-		processedRoles := []runtimeclient.Object{}
-		processedRoleBindings := []runtimeclient.Object{}
-		roleList := rbac.RoleList{}
-		rolebindingList := rbac.RoleBindingList{}
-		if err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(ns.GetName())); err != nil {
-			return false, err
-		}
-
-		if err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(ns.GetName())); err != nil {
-			return false, err
-		}
-
-		for _, obj := range newObjs {
-			switch obj.GetObjectKind().GroupVersionKind().Kind {
-			case "Role":
-				processedRoles = append(processedRoles, obj)
-			case "RoleBinding":
-				processedRoleBindings = append(processedRoleBindings, obj)
-			}
-		}
-		//Check the names of the roles and roleBindings as well
-		for _, role := range processedRoles {
-			if !containsRole(roleList.Items, role) {
-				return false, nil
-			}
-		}
-
-		for _, rolebinding := range processedRoleBindings {
-			if !containsRoleBindings(rolebindingList.Items, rolebinding) {
-				return false, nil
-			}
-		}
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func containsRole(list []rbac.Role, obj runtimeclient.Object) bool {
-	for _, val := range list {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "Role" && val.GetName() == obj.GetName() {
-			return true
-		}
-		continue
-	}
-	return false
-}
-
-func containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object) bool {
-	for _, val := range list {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" && val.GetName() == obj.GetName() {
-			return true
-		}
-		continue
-	}
-	return false
 }

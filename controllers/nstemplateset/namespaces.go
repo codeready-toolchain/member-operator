@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 
+	rbac "k8s.io/api/rbac/v1"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -13,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -47,7 +50,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	}
 
 	// find next namespace for provisioning namespace resource
-	tierTemplate, userNamespace, found, err := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces, r)
+	tierTemplate, userNamespace, found, err := r.nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces)
 	if err != nil {
 		return false, err
 	}
@@ -232,12 +235,12 @@ func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace,
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
 // either revision is not set or revision or tier doesn't equal to the current one.
 // It also returns namespace present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace, r *namespacesManager) (*tierTemplate, *corev1.Namespace, bool, error) {
+func (r *namespacesManager) nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool, error) {
 	for _, nsTemplate := range tierTemplatesByType {
 		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				isProvisioned, err := isUpToDateAndProvisioned(&namespace, nsTemplate, r)
+				isProvisioned, err := r.isUpToDateAndProvisioned(&namespace, nsTemplate)
 				if err != nil {
 					return nsTemplate, nil, false, err
 				}
@@ -282,4 +285,82 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 		return configuration.GetWatchNamespace()
 	}
 	return namespace, nil
+}
+
+// isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
+// If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
+func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
+	if ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
+
+		newObjs, err := tierTemplate.process(r.Scheme, ns.GetName(), template.RetainAllButNamespaces)
+		if err != nil {
+			return false, err
+		}
+		processedRoles := []runtimeclient.Object{}
+		processedRoleBindings := []runtimeclient.Object{}
+		roleList := rbac.RoleList{}
+		rolebindingList := rbac.RoleBindingList{}
+		if err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(ns.GetName())); err != nil {
+			return false, err
+		}
+
+		if err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(ns.GetName())); err != nil {
+			return false, err
+		}
+
+		for _, obj := range newObjs {
+			switch obj.GetObjectKind().GroupVersionKind().Kind {
+			case "Role":
+				processedRoles = append(processedRoles, obj)
+			case "RoleBinding":
+				processedRoleBindings = append(processedRoleBindings, obj)
+			}
+		}
+		//Check the names of the roles and roleBindings as well
+		for _, role := range processedRoles {
+			if !r.containsRole(roleList.Items, role) {
+				return false, nil
+			}
+		}
+
+		for _, rolebinding := range processedRoleBindings {
+			if !r.containsRoleBindings(rolebindingList.Items, rolebinding) {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object) bool {
+	for _, val := range list {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "Role" && val.GetName() == obj.GetName() {
+			return true
+		}
+		continue
+	}
+	return false
+}
+
+func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object) bool {
+	for _, val := range list {
+		if obj.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" && val.GetName() == obj.GetName() {
+			return true
+		}
+		continue
+	}
+	return false
+}
+
+func (r *namespacesManager) containsObjectAndLabel(list []client.Object, obj runtimeclient.Object, objtype string) bool {
+	for _, val := range list {
+		if obj.GetObjectKind().GroupVersionKind().Kind == objtype && val.GetName() == obj.GetName() {
+			return true
+		}
+		continue
+	}
+	return false
 }

@@ -92,7 +92,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 	t.Run("return namespace whose revision is not set", func(t *testing.T) {
 		// when
-		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
 		assert.NoError(t, err)
@@ -106,7 +106,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-123"
 
 		// when
-		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
 		assert.NoError(t, err)
@@ -120,7 +120,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "advanced-code-abcde21"
 
 		// when
-		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
 		assert.NoError(t, err)
@@ -134,7 +134,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
 
 		// when
-		tierTemplate, userNS, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
 		assert.NoError(t, err)
@@ -157,7 +157,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		})
 
 		// when
-		_, _, found, err := nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces, manager)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
 		assert.NoError(t, err)

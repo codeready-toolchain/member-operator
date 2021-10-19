@@ -18,9 +18,8 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	runtimecluster "sigs.k8s.io/controller-runtime/pkg/cluster"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -30,6 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	runtimecluster "sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	//+kubebuilder:scaffold:imports
 )
@@ -75,6 +76,20 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{
 		Development: true,
+		Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{
+			TimeKey:        "ts",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			FunctionKey:    zapcore.OmitKey,
+			MessageKey:     "msg",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		}),
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

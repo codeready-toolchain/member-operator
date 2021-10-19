@@ -2,10 +2,10 @@ package useraccount
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"time"
-	"encoding/base64"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -266,7 +266,7 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 }
 
 func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, identityName string,
-	userAccount *toolchainv1alpha1.UserAccount,	user *userv1.User) (*userv1.Identity, bool, error) {
+	userAccount *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 	identity := &userv1.Identity{}
 
 	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity); err != nil {

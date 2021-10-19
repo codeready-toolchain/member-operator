@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+	"encoding/base64"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -236,32 +237,63 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 
 func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
+	identity, success, err := r.loadIdentityAndEnsureMapping(logger, config, name, userAcc, user)
+	if !success || err != nil {
+		return nil, success, err
+	}
+
+	// Check if the OriginalSub property is set, and if it is create additional identity/s as required
+	if userAcc.Spec.OriginalSub != "" {
+		// Encode the OriginalSub value as Base64 and ensure the identity is created
+		encodedName := fmt.Sprintf("b64:%s", base64.StdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
+		_, success, err := r.loadIdentityAndEnsureMapping(logger, config, encodedName, userAcc, user)
+		if !success || err != nil {
+			return nil, success, err
+		}
+
+		// Encoded the OriginalSub as an unpadded Base64 value, and if different to the standard-encoded value then
+		// create an additional identity for the unpadded value
+		unpaddedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
+		if unpaddedName != encodedName {
+			_, success, err := r.loadIdentityAndEnsureMapping(logger, config, unpaddedName, userAcc, user)
+			if !success || err != nil {
+				return nil, success, err
+			}
+		}
+	}
+
+	return identity, false, nil
+}
+
+func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, identityName string,
+	userAccount *toolchainv1alpha1.UserAccount,	user *userv1.User) (*userv1.Identity, bool, error) {
 	identity := &userv1.Identity{}
-	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name}, identity); err != nil {
+
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("creating a new identity", "name", name)
-			if err := r.setStatusProvisioning(userAcc); err != nil {
+			logger.Info("creating a new identity", "name", identityName)
+			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(userAcc, user, config)
-			setOwnerLabel(identity, userAcc.Name)
+			identity = newIdentity(userAccount, user, config)
+			setOwnerLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", name)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", identityName)
 			}
-			if err := r.setStatusProvisioning(userAcc); err != nil {
+			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
 			}
-			logger.Info("identity created successfully", "name", name)
+			logger.Info("identity created successfully", "name", identityName)
 			return identity, true, nil
 		}
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusIdentityCreationFailed, err, "failed to get identity '%s'", name)
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to get identity '%s'", identityName)
 	}
-	logger.Info("identity already exists", "name", name)
+	logger.Info("identity already exists", "name", identityName)
 
 	// ensure mapping
 	if identity.User.Name != user.Name || identity.User.UID != user.UID {
-		logger.Info("identity is missing a reference to user; updating the reference", "identity", name, "user", user.Name)
-		if err := r.setStatusProvisioning(userAcc); err != nil {
+		logger.Info("identity is missing a reference to user; updating the reference", "identity", identityName, "user", user.Name)
+		if err := r.setStatusProvisioning(userAccount); err != nil {
 			return nil, false, err
 		}
 		identity.User = corev1.ObjectReference{
@@ -269,12 +301,12 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 			UID:  user.UID,
 		}
 		if err := r.Client.Update(context.TODO(), identity); err != nil {
-			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update identity '%s'", name)
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusMappingCreationFailed, err, "failed to update identity '%s'", identityName)
 		}
-		if err := r.setStatusProvisioning(userAcc); err != nil {
+		if err := r.setStatusProvisioning(userAccount); err != nil {
 			return nil, false, err
 		}
-		logger.Info("identity updated successfully", "name", name)
+		logger.Info("identity updated successfully", "name", identityName)
 		return identity, true, nil
 	}
 

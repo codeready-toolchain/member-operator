@@ -290,7 +290,8 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 // isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
 func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
-	if ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] != "" &&
+	if ns.GetLabels() != nil &&
+		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
 		newObjs, err := tierTemplate.process(r.Scheme, ns.GetName(), template.RetainAllButNamespaces)

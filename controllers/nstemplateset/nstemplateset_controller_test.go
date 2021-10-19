@@ -122,9 +122,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// create cluster resources
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
-		idlerDev := newIdler(username, username+"-dev")
-		idlerCode := newIdler(username, username+"-code")
-		idlerStage := newIdler(username, username+"-stage")
+		idlerDev := newIdler(username, username+"-dev", "advanced")
+		idlerCode := newIdler(username, username+"-code", "advanced")
+		idlerStage := newIdler(username, username+"-stage", "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
@@ -1397,7 +1397,7 @@ func newClusterResourceQuota(username, tier string, options ...objectMetaOption)
 	return crq
 }
 
-func newIdler(username, name string) *toolchainv1alpha1.Idler {
+func newIdler(username, name, tierName string) *toolchainv1alpha1.Idler { // nolint
 	idler := &toolchainv1alpha1.Idler{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Idler",
@@ -1406,8 +1406,8 @@ func newIdler(username, name string) *toolchainv1alpha1.Idler {
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":        "basic",
-				"toolchain.dev.openshift.com/templateref": NewTierTemplateName("advanced", "clusterresources", "abcde11"),
+				"toolchain.dev.openshift.com/tier":        tierName,
+				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tierName, "clusterresources", "abcde11"),
 				"toolchain.dev.openshift.com/owner":       username,
 				"toolchain.dev.openshift.com/type":        "clusterresources",
 			},

@@ -355,13 +355,3 @@ func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj ru
 	}
 	return false
 }
-
-func (r *namespacesManager) containsObjectAndLabel(list []client.Object, obj runtimeclient.Object, objtype string) bool {
-	for _, val := range list {
-		if obj.GetObjectKind().GroupVersionKind().Kind == objtype && val.GetName() == obj.GetName() {
-			return true
-		}
-		continue
-	}
-	return false
-}

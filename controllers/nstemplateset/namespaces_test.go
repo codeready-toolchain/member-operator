@@ -1078,43 +1078,6 @@ func TestUpdateNamespaces(t *testing.T) {
 
 func TestIsUpToDateAndProvisioned(t *testing.T) {
 	// given
-
-	//userNamespaces := []corev1.Namespace{
-	//	{
-	//		ObjectMeta: metav1.ObjectMeta{
-	//			Name: "johnsmith-dev", Labels: map[string]string{
-	//				"toolchain.dev.openshift.com/type":        "dev",
-	//				"toolchain.dev.openshift.com/templateref": "basic-dev-abcde11",
-	//			},
-	//		},
-	//		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
-	//	},
-	//	{
-	//		ObjectMeta: metav1.ObjectMeta{
-	//			Name: "johnsmith-code", Labels: map[string]string{
-	//				"toolchain.dev.openshift.com/type": "code",
-	//			},
-	//		},
-	//		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
-	//	},
-	//}
-	//tierTemplates := []*tierTemplate{
-	//	{
-	//		templateRef: "basic-dev-abcde11",
-	//		typeName:    "dev",
-	//		tierName:    "basic",
-	//	},
-	//	{
-	//		templateRef: "basic-code-abcde21",
-	//		typeName:    "code",
-	//		tierName:    "basic",
-	//	},
-	//	{
-	//		templateRef: "basic-stage-abcde13",
-	//		typeName:    "stage",
-	//		tierName:    "basic",
-	//	},
-	//}
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
 	manager, _ := prepareNamespacesManager(t, nsTmplSet)
 

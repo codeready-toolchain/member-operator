@@ -175,6 +175,103 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasNoLabel("toolchain.dev.openshift.com/tier")
 	})
 
+	t.Run("should recreate rolebinding when missing", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		// create namespaces (and assume they are complete since they have the expected revision number)
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+
+			// another reconcile creates the missing rolebinding in dev namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+
+		// another reconcile creates the missing rolebinding in code namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Provisioned())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+	})
+
+	t.Run("should recreate role when missing", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"))
+		// create namespaces (and assume they are complete since they have the expected revision number)
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
+		rb := newRoleBinding(devNS.Name, "user-edit")
+		rb2 := newRoleBinding(codeNS.Name, "user-edit")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rb, rb2)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+
+		// another reconcile creates the missing rolebinding in dev namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("rbac-edit", &rbacv1.Role{})
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+
+		// another reconcile creates the missing rolebinding in code namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Provisioned())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("rbac-edit", &rbacv1.Role{})
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("rbac-edit", &rbacv1.Role{})
+	})
+
 	t.Run("no NSTemplateSet available", func(t *testing.T) {
 		// given
 		r, req, _ := prepareReconcile(t, namespaceName, username)

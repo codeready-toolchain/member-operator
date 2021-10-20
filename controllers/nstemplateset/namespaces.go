@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	rbac "k8s.io/api/rbac/v1"
@@ -320,8 +321,12 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 		}
 		//Check the names of the roles and roleBindings as well
 		for _, role := range processedRoles {
-			if !r.containsRole(roleList.Items, role) {
-				return false, nil
+			if owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; exists {
+				if found, err := r.containsRole(roleList.Items, role, owner); !found {
+					return false, err
+				}
+			} else {
+				return false, fmt.Errorf("namespace doesn't have owner label")
 			}
 		}
 
@@ -336,14 +341,24 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 	return false, nil
 }
 
-func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object) bool {
+func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object, owner string) (bool, error) {
 	for _, val := range list {
 		if obj.GetObjectKind().GroupVersionKind().Kind == "Role" && val.GetName() == obj.GetName() {
-			return true
+			// add owner label if doesn't exist
+			if _, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists {
+				if val.Labels == nil {
+					val.Labels = make(map[string]string)
+				}
+				val.Labels[toolchainv1alpha1.OwnerLabelKey] = owner
+				if err := r.Client.Update(context.TODO(), &val); err != nil {
+					return false, err
+				}
+			}
+			return true, nil
 		}
 		continue
 	}
-	return false
+	return false, nil
 }
 
 func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object) bool {

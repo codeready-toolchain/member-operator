@@ -89,8 +89,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit")
-		rb2 := newRoleBinding(codeNS.Name, "user-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", username)
+		rb2 := newRoleBinding(codeNS.Name, "user-edit", username)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rb, rb2)
 
 		// when
@@ -130,11 +130,11 @@ func TestReconcileProvisionOK(t *testing.T) {
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"), withClusterResources("abcde11"))
 		devRole := newRole(devNS.Name, "rbac-edit", username)
-		devRb := newRoleBinding(devNS.Name, "user-edit")
-		devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
+		devRb := newRoleBinding(devNS.Name, "user-edit", username)
+		devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit", username)
 		codeRole := newRole(codeNS.Name, "rbac-edit", username)
-		CodeRb := newRoleBinding(codeNS.Name, "user-edit")
-		CodeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit")
+		CodeRb := newRoleBinding(codeNS.Name, "user-edit", username)
+		CodeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit", username)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, crq, devNS, codeNS, crb, idlerDev, idlerCode, idlerStage, devRole, devRb, devRb2, codeRole, CodeRb, CodeRb2)
 
 		// when
@@ -224,8 +224,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit")
-		rb2 := newRoleBinding(codeNS.Name, "user-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", username)
+		rb2 := newRoleBinding(codeNS.Name, "user-edit", username)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rb, rb2)
 
 		// when
@@ -569,10 +569,10 @@ func TestReconcilePromotion(t *testing.T) {
 			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "rbac-edit", username)
 			codeRo := newRole(codeNS.Name, "rbac-edit", username)
-			devRb := newRoleBinding(devNS.Name, "user-edit")
-			devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
-			codeRb := newRoleBinding(codeNS.Name, "user-edit")
-			codeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit")
+			devRb := newRoleBinding(devNS.Name, "user-edit", username)
+			devRb2 := newRoleBinding(devNS.Name, "user-rbac-edit", username)
+			codeRb := newRoleBinding(codeNS.Name, "user-edit", username)
+			codeRb2 := newRoleBinding(codeNS.Name, "user-rbac-edit", username)
 			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRo, codeRo, devRb, devRb2, codeRb, codeRb2)
 
 			err := fakeClient.Update(context.TODO(), nsTmplSet)
@@ -754,13 +754,13 @@ func TestReconcileUpdate(t *testing.T) {
 
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "rbac-edit", username)
-			devRb := newRoleBinding(devNS.Name, "user-edit")
-			devRbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
+			devRb := newRoleBinding(devNS.Name, "user-edit", username)
+			devRbacRb := newRoleBinding(devNS.Name, "user-rbac-edit", username)
 
 			codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 			codeRo := newRole(codeNS.Name, "rbac-edit", username)
-			codeRb := newRoleBinding(codeNS.Name, "user-edit")
-			codeRbacRb := newRoleBinding(codeNS.Name, "user-rbac-edit")
+			codeRb := newRoleBinding(codeNS.Name, "user-edit", username)
+			codeRbacRb := newRoleBinding(codeNS.Name, "user-rbac-edit", username)
 
 			crb := newTektonClusterRoleBinding(username, "advanced")
 			crq := newClusterResourceQuota(username, "advanced")
@@ -1402,13 +1402,14 @@ func newNamespace(tier, username, typeName string, options ...objectMetaOption) 
 	return ns
 }
 
-func newRoleBinding(namespace, name string) *rbacv1.RoleBinding { //nolint: unparam
+func newRoleBinding(namespace, name, username string) *rbacv1.RoleBinding { //nolint: unparam
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+				"toolchain.dev.openshift.com/owner":    username,
 			},
 		},
 	}

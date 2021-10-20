@@ -377,7 +377,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		//ro := newRole(devNS.Name, "rbac-edit")
-		rb := newRoleBinding(devNS.Name, "user-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, rb)
 
 		// when
@@ -432,7 +432,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("", username, "code") // NS exist but it is not complete yet
-		rb := newRoleBinding(devNS.Name, "user-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS, rb)
 
 		// when
@@ -729,7 +729,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "rbac-edit", username)
-			rb := newRoleBinding(devNS.Name, "user-edit")
+			rb := newRoleBinding(devNS.Name, "user-edit", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
 
 			// when
@@ -759,7 +759,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			devNS.Labels["toolchain.dev.openshift.com/tier"] = "base"
 			ro := newRole(devNS.Name, "rbac-edit", username)
-			rb := newRoleBinding(devNS.Name, "user-edit")
+			rb := newRoleBinding(devNS.Name, "user-edit", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
 
 			// when
@@ -787,8 +787,8 @@ func TestPromoteNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			rb := newRoleBinding(devNS.Name, "user-edit")
-			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
+			rb := newRoleBinding(devNS.Name, "user-edit", username)
+			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit", username)
 			ro := newRole(devNS.Name, "rbac-edit", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, rbacRb, ro)
 
@@ -941,8 +941,8 @@ func TestUpdateNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "rbac-edit", username)
-			rb := newRoleBinding(devNS.Name, "user-edit")
-			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit")
+			rb := newRoleBinding(devNS.Name, "user-edit", username)
+			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rbacRb)
 
 			// when
@@ -971,7 +971,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde12"))
-			rb := newRoleBinding(devNS.Name, "user-edit")
+			rb := newRoleBinding(devNS.Name, "user-edit", username)
 			ro := newRole(devNS.Name, "rbac-edit", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, ro)
 
@@ -1108,8 +1108,8 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		}
-		rb := newRoleBinding(devNS.Name, "user-edit")
-		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
+		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
@@ -1119,7 +1119,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 	t.Run("namespace doesn't have the required rolebinding", func(t *testing.T) {
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		role := newRole(devNS.Name, "rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
@@ -1130,8 +1130,8 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 	t.Run("role doesn't have the owner label", func(t *testing.T) {
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit")
-		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit")
+		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
+		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: devNS.Name,
@@ -1151,5 +1151,28 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		err = manager.Client.Get(context.TODO(), types.NamespacedName{Namespace: role.Namespace, Name: role.Name}, role)
 		require.NoError(t, err)
 		require.Equal(t, "johnsmith", role.GetLabels()["toolchain.dev.openshift.com/owner"])
+	})
+
+	t.Run("rolebinding doesn't have the owner label", func(t *testing.T) {
+		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
+		rb := &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: devNS.Name,
+				Name:      "user-edit",
+				Labels: map[string]string{
+					"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+				},
+			},
+		}
+		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		require.NoError(t, err)
+		require.True(t, isProvisioned)
+
+		// the role should have been updated to have the label
+		err = manager.Client.Get(context.TODO(), types.NamespacedName{Namespace: rb.Namespace, Name: rb.Name}, rb)
+		require.NoError(t, err)
+		require.Equal(t, "johnsmith", rb.GetLabels()["toolchain.dev.openshift.com/owner"])
 	})
 }

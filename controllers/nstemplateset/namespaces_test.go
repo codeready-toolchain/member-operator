@@ -1138,6 +1138,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 				Name: "johnsmith-dev",
 				Labels: map[string]string{
 					"toolchain.dev.openshift.com/type":        "dev",
+					"toolchain.dev.openshift.com/tier":        "advanced",
 					"toolchain.dev.openshift.com/templateref": "advanced-dev-abcde11",
 				},
 			},
@@ -1158,6 +1159,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 				Name: "johnsmith-dev",
 				Labels: map[string]string{
 					"toolchain.dev.openshift.com/type":        "dev",
+					"toolchain.dev.openshift.com/tier":        "advanced",
 					"toolchain.dev.openshift.com/templateref": "advanced-dev-abcde11",
 				},
 			},

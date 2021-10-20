@@ -1170,7 +1170,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
 
-		// the role should have been updated to have the label
+		// the rolebinding should have been updated to have the label
 		err = manager.Client.Get(context.TODO(), types.NamespacedName{Namespace: rb.Namespace, Name: rb.Name}, rb)
 		require.NoError(t, err)
 		require.Equal(t, "johnsmith", rb.GetLabels()["toolchain.dev.openshift.com/owner"])

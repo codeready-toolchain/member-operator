@@ -4,11 +4,13 @@ service:
 run:
   # timeout for analysis, e.g. 30s, 5m, default is 1m
   timeout: 10m
-  
+
+
 linters:
   enable:
-    - gofmt
+    - gofmt 
     - unparam
+    - typecheck
 
 # all available settings of specific linters
 linters-settings:

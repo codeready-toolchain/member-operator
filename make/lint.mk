@@ -13,8 +13,11 @@ endif
 
 .PHONY: lint-go-code
 ## Checks the code with golangci-lint
-lint-go-code:
-ifeq (, $(shell which golangci-lint 2>/dev/null))
-	$(error "golangci-lint not found in PATH. Please install it using instructions on https://golangci-lint.run/usage/install/#local-installation")
-endif
-	golangci-lint ${V_FLAG} run -E gofmt,golint,megacheck,misspell
+lint-go-code: install-golangci-lint
+	# run with the same flags as on GitHub Actions 
+	$(Q)${GOPATH}/bin/golangci-lint ${V_FLAG} run --config=./.golangci.yml --verbose ./...
+
+.PHONY: install-golangci-lint
+## Install development tools.
+install-golangci-lint:
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.42.1

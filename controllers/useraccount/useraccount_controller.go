@@ -246,7 +246,7 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 	if userAcc.Spec.OriginalSub != "" {
 		// Encode the OriginalSub value as Base64 and ensure the identity is created
 		encodedName := fmt.Sprintf("b64:%s", base64.StdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
-		_, success, err := r.loadIdentityAndEnsureMapping(logger, config, encodedName, userAcc, user)
+		_, success, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(encodedName, config.Auth().Idp()), userAcc, user)
 		if !success || err != nil {
 			return nil, success, err
 		}
@@ -255,7 +255,7 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 		// create an additional identity for the unpadded value
 		unpaddedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
 		if unpaddedName != encodedName {
-			_, success, err := r.loadIdentityAndEnsureMapping(logger, config, unpaddedName, userAcc, user)
+			_, success, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(unpaddedName, config.Auth().Idp()), userAcc, user)
 			if !success || err != nil {
 				return nil, success, err
 			}

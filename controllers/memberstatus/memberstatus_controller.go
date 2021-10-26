@@ -23,7 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	metrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -201,8 +201,7 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 	if err != nil {
 		return err
 	}
-
-	nodeMetricsList := &v1beta1.NodeMetricsList{}
+	nodeMetricsList := &metrics.NodeMetricsList{}
 	if err := r.Client.List(context.TODO(), nodeMetricsList); err != nil {
 		return err
 	}
@@ -222,7 +221,7 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 				// let's remove the used allocatable value from the map so we can later check if all values were used
 				delete(allocatableValues, nodeMetric.Name)
 			} else {
-				reqLogger.Info("skipping NodeMetrics resource - there wasn't found corresponding node that would be monitored", "name", nodeMetric.Name)
+				reqLogger.Info("skipping NodeMetrics resource: no corresponding node to monitor", "name", nodeMetric.Name)
 			}
 			continue
 		}

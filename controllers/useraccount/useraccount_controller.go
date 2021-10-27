@@ -253,6 +253,7 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 
 		// Encoded the OriginalSub as an unpadded Base64 value, and if different to the standard-encoded value then
 		// create an additional identity for the unpadded value
+		// Why do we do this?  We describe the reasons in the PR for this change: https://github.com/codeready-toolchain/member-operator/pull/302
 		unpaddedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
 		if unpaddedName != encodedName {
 			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(unpaddedName, config.Auth().Idp()), userAcc, user)

@@ -276,7 +276,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(userAccount, user, config)
+			identity = newIdentity(identityName, user, config)
 			setOwnerLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", identityName)
@@ -627,14 +627,13 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configurat
 	return user
 }
 
-func newIdentity(userAcc *toolchainv1alpha1.UserAccount, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
-	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
+func newIdentity(identityName string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name: identityName,
 		},
 		ProviderName:     config.Auth().Idp(),
-		ProviderUserName: userAcc.Spec.UserID,
+		ProviderUserName: identityName,
 		User: corev1.ObjectReference{
 			Name: user.Name,
 			UID:  user.UID,

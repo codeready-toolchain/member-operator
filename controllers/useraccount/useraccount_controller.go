@@ -237,27 +237,27 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 
 func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
-	identity, success, err := r.loadIdentityAndEnsureMapping(logger, config, name, userAcc, user)
-	if !success || err != nil {
-		return nil, success, err
+	identity, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, name, userAcc, user)
+	if createdOrUpdated || err != nil {
+		return nil, createdOrUpdated, err
 	}
 
 	// Check if the OriginalSub property is set, and if it is create additional identity/s as required
 	if userAcc.Spec.OriginalSub != "" {
 		// Encode the OriginalSub value as Base64 and ensure the identity is created
 		encodedName := fmt.Sprintf("b64:%s", base64.StdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
-		_, success, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(encodedName, config.Auth().Idp()), userAcc, user)
-		if !success || err != nil {
-			return nil, success, err
+		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(encodedName, config.Auth().Idp()), userAcc, user)
+		if createdOrUpdated || err != nil {
+			return nil, createdOrUpdated, err
 		}
 
 		// Encoded the OriginalSub as an unpadded Base64 value, and if different to the standard-encoded value then
 		// create an additional identity for the unpadded value
 		unpaddedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
 		if unpaddedName != encodedName {
-			_, success, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(unpaddedName, config.Auth().Idp()), userAcc, user)
-			if !success || err != nil {
-				return nil, success, err
+			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(unpaddedName, config.Auth().Idp()), userAcc, user)
+			if createdOrUpdated || err != nil {
+				return nil, createdOrUpdated, err
 			}
 		}
 	}

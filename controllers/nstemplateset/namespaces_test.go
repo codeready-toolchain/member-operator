@@ -50,11 +50,21 @@ func TestFindNamespace(t *testing.T) {
 
 func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
-	manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
+	devNS := newNamespace("basic", "johnsmith", "dev")
+	codeNS := newNamespace("basic", "johnsmith", "code")
+	rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
+	rbCode := newRoleBinding(codeNS.Name, "user-edit", "johnsmith")
+	//tierTemplateDev := createTierTemplate("basic-dev-abcde11", "dev", "basic")
+	//tierTemplateCode := createTierTemplate("basic-code-abcde21", "code", "abcde21")
+	tierTemplateStage := newTierTemplate("basic", "stage", "abcde13")
+	manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS, rbDev, rbCode, tierTemplateStage)
 
 	t.Run("return namespace whose revision is not set", func(t *testing.T) {
 		// given
-		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
+		var userNamespaces []corev1.Namespace
+		userNamespaces = append(userNamespaces, *devNS, *codeNS)
+		tierTemplates, _ := manager.getTierTemplatesForAllNamespaces(nsTmplSet)
+
 		delete(userNamespaces[1].Labels, "toolchain.dev.openshift.com/templateref")
 
 		// when
@@ -114,8 +124,18 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 	t.Run("return namespace that is not part of user namespaces", func(t *testing.T) {
 		// given
+		//var userNamespaces []corev1.Namespace
+		//userNamespaces = append(userNamespaces, *devNS, *codeNS)
+		//userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde11"
+		//tierTemplates, _ := manager.getTierTemplatesForAllNamespaces(nsTmplSet)
+		//stageTierTemplate := tierTemplate{
+		//	templateRef: "basic-stage-abcde13",
+		//	typeName:    "stage",
+		//	tierName:    "basic",
+		//}
+		//tierTemplates = append(tierTemplates, &stageTierTemplate)
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde11"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -129,8 +149,9 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 	t.Run("namespace not found", func(t *testing.T) {
 		// given
-		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
+		var userNamespaces []corev1.Namespace
+		userNamespaces = append(userNamespaces, *devNS, *codeNS)
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde11"
 		userNamespaces = append(userNamespaces, corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-stage", Labels: map[string]string{
@@ -141,6 +162,9 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		})
+		tierTemplates, _ := manager.getTierTemplatesForAllNamespaces(nsTmplSet)
+		//userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
+		//userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
 
 		// when
 		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -161,7 +185,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 		// then
 		assert.Error(t, err)
-		assert.False(t, found)
+		assert.True(t, found)
 	})
 }
 
@@ -173,6 +197,7 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 					"toolchain.dev.openshift.com/type":        "dev",
 					"toolchain.dev.openshift.com/templateref": "basic-dev-abcde11",
 					"toolchain.dev.openshift.com/tier":        "basic",
+					"toolchain.dev.openshift.com/owner":       "johnsmith",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -182,7 +207,8 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 				Name: "johnsmith-code", Labels: map[string]string{
 					"toolchain.dev.openshift.com/type":        "code",
 					"toolchain.dev.openshift.com/tier":        "basic",
-					"toolchain.dev.openshift.com/templateref": "basic-code-abcde21",
+					"toolchain.dev.openshift.com/templateref": "basic-code-abcde11",
+					"toolchain.dev.openshift.com/owner":       "johnsmith",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -195,7 +221,7 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 			tierName:    "basic",
 		},
 		{
-			templateRef: "basic-code-abcde21",
+			templateRef: "basic-code-abcde11",
 			typeName:    "code",
 			tierName:    "basic",
 		},
@@ -1089,7 +1115,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		}
 
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11", manager.Scheme)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1111,7 +1137,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11", manager.Scheme)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1122,7 +1148,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		role := newRole(devNS.Name, "rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11", manager.Scheme)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1142,7 +1168,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11", manager.Scheme)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
@@ -1165,7 +1191,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11", manager.Scheme)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.True(t, isProvisioned)

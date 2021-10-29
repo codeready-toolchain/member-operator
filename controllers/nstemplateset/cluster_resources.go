@@ -103,7 +103,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		tierTemplate, err = getTierTemplate(r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
+		tierTemplate, err = getTierTemplate(r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef, r.Scheme)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierLogger, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)

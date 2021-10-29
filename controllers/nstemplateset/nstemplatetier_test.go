@@ -62,7 +62,7 @@ func TestGetTierTemplate(t *testing.T) {
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		defer resetCache()
 		// when
-		tierTmpl, err := getTierTemplate(hostCluster, "basic-code-abcdef")
+		tierTmpl, err := getTierTemplate(hostCluster, "basic-code-abcdef", cl.Scheme())
 
 		// then
 		require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestGetTierTemplate(t *testing.T) {
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		defer resetCache()
 		// when
-		tierTmpl, err := getTierTemplate(hostCluster, "advanced-dev-789012")
+		tierTmpl, err := getTierTemplate(hostCluster, "advanced-dev-789012", cl.Scheme())
 
 		// then
 		require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestGetTierTemplate(t *testing.T) {
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		defer resetCache()
 		// when
-		tierTmpl, err := getTierTemplate(hostCluster, "basic-clusterresources-aa11bb22")
+		tierTmpl, err := getTierTemplate(hostCluster, "basic-clusterresources-aa11bb22", cl.Scheme())
 
 		// then
 		require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestGetTierTemplate(t *testing.T) {
 		// given
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		defer resetCache()
-		_, err := getTierTemplate(hostCluster, "basic-code-abcdef")
+		_, err := getTierTemplate(hostCluster, "basic-code-abcdef", cl.Scheme())
 		require.NoError(t, err)
 
 		t.Run("return cached TierTemplate even when for the second call doesn't exist", func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestGetTierTemplate(t *testing.T) {
 			emptyHost := test.NewGetHostCluster(testcommon.NewFakeClient(t), true, apiv1.ConditionTrue)
 
 			// when
-			tierTmpl, err := getTierTemplate(emptyHost, "basic-code-abcdef")
+			tierTmpl, err := getTierTemplate(emptyHost, "basic-code-abcdef", cl.Scheme())
 
 			// then
 			require.NoError(t, err)
@@ -117,7 +117,7 @@ func TestGetTierTemplate(t *testing.T) {
 			noCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
 
 			// when
-			tierTmpl, err := getTierTemplate(noCluster, "basic-code-abcdef")
+			tierTmpl, err := getTierTemplate(noCluster, "basic-code-abcdef", cl.Scheme())
 
 			// then
 			require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestGetTierTemplate(t *testing.T) {
 			noCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
 
 			// when
-			tierTmpl, err := getTierTemplate(noCluster, "basic-code-abcdef")
+			tierTmpl, err := getTierTemplate(noCluster, "basic-code-abcdef", cl.Scheme())
 
 			// then
 			require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestGetTierTemplate(t *testing.T) {
 			noCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
 
 			// when
-			tierTmpl, err := getTierTemplate(noCluster, "basic-code-abcdef")
+			tierTmpl, err := getTierTemplate(noCluster, "basic-code-abcdef", cl.Scheme())
 
 			// then
 			require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestGetTierTemplate(t *testing.T) {
 		// given - no matter if one TierTemplate is cached
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 		defer resetCache()
-		_, err := getTierTemplate(hostCluster, "basic-code-abcdef")
+		_, err := getTierTemplate(hostCluster, "basic-code-abcdef", cl.Scheme())
 		require.NoError(t, err)
 
 		t.Run("host cluster not available", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestGetTierTemplate(t *testing.T) {
 			hostCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
 			resetCache()
 			// when
-			_, err := getTierTemplate(hostCluster, "advanced-dev-789012")
+			_, err := getTierTemplate(hostCluster, "advanced-dev-789012", cl.Scheme())
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to connect to the host cluster: unknown cluster")
@@ -172,7 +172,7 @@ func TestGetTierTemplate(t *testing.T) {
 			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
 			defer resetCache()
 			// when
-			_, err := getTierTemplate(hostCluster, "advanced-dev-789012")
+			_, err := getTierTemplate(hostCluster, "advanced-dev-789012", cl.Scheme())
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "the host cluster is not ready")
@@ -183,7 +183,7 @@ func TestGetTierTemplate(t *testing.T) {
 			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 			defer resetCache()
 			// when
-			_, err := getTierTemplate(hostCluster, "unknown")
+			_, err := getTierTemplate(hostCluster, "unknown", cl.Scheme())
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to retrieve the TierTemplate 'unknown' from 'Host' cluster")
@@ -194,7 +194,7 @@ func TestGetTierTemplate(t *testing.T) {
 			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 			defer resetCache()
 			// when
-			_, err := getTierTemplate(hostCluster, "other-other-other")
+			_, err := getTierTemplate(hostCluster, "other-other-other", cl.Scheme())
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unable to retrieve the TierTemplate 'other-other-other' from 'Host' cluster")
@@ -205,7 +205,7 @@ func TestGetTierTemplate(t *testing.T) {
 			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 			defer resetCache()
 			// when
-			_, err := getTierTemplate(hostCluster, "")
+			_, err := getTierTemplate(hostCluster, "", cl.Scheme())
 			// then
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
@@ -232,7 +232,7 @@ func TestGetTierTemplate(t *testing.T) {
 					}
 
 					// when
-					retrievedTierTemplate, err := getTierTemplate(hostCluster, tierTemplate.Name)
+					retrievedTierTemplate, err := getTierTemplate(hostCluster, tierTemplate.Name, cl.Scheme())
 
 					// then
 					assert.NoError(t, err)

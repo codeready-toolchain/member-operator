@@ -17,11 +17,12 @@ import (
 )
 
 var tierTemplatesCache = newTierTemplateCache()
+var processedTierTemplatesCache = newProcessedTierTemplateCache()
 
 // getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
-func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
+func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string, scheme *runtime.Scheme) (*tierTemplate, error) {
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 	}
@@ -39,7 +40,7 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 		template:    tmpl.Spec.Template,
 	}
 	tierTemplatesCache.add(tierTmpl)
-
+	processedTierTemplatesCache.add(scheme, tierTmpl)
 	return tierTmpl, nil
 }
 
@@ -73,6 +74,13 @@ type tierTemplate struct {
 	template    templatev1.Template
 }
 
+type processedTierTemplate struct {
+	templateRef      string
+	tierName         string
+	typeName         string
+	processedObjects []runtimeclient.Object
+}
+
 // process processes the template inside of the tierTemplate object and replaces the USERNAME variable with the given username.
 // Optionally, it also filters the result to return a subset of the template objects.
 func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
@@ -104,4 +112,59 @@ func (c *tierTemplateCache) add(tierTemplate *tierTemplate) {
 	c.Lock()
 	defer c.Unlock()
 	c.tierTemplatesByTemplateRef[tierTemplate.templateRef] = tierTemplate
+}
+
+type processedTierTemplateCache struct {
+	sync.RWMutex
+	// tierTemplatesByTemplateRef contains tierTemplatesByTemplateRef mapped by TemplateRef key
+	processedTemplatesByTemplateRef map[string]*processedTierTemplate
+}
+
+func newProcessedTierTemplateCache() *processedTierTemplateCache {
+	return &processedTierTemplateCache{
+		processedTemplatesByTemplateRef: map[string]*processedTierTemplate{},
+	}
+}
+
+func (c *processedTierTemplateCache) get(templateRef string) (*processedTierTemplate, bool) {
+	c.RLock()
+	defer c.RUnlock()
+	processedTierTemplate, ok := c.processedTemplatesByTemplateRef[templateRef]
+	return processedTierTemplate, ok
+}
+
+func (c *processedTierTemplateCache) add(scheme *runtime.Scheme, tierTemplate *tierTemplate) {
+	c.Lock()
+	defer c.Unlock()
+	tmplProcessor := template.NewProcessor(scheme)
+	objs, _ := tmplProcessor.Process(tierTemplate.template.DeepCopy(), nil)
+	c.processedTemplatesByTemplateRef[tierTemplate.templateRef] = &processedTierTemplate{
+		templateRef:      tierTemplate.templateRef,
+		tierName:         tierTemplate.tierName,
+		typeName:         tierTemplate.typeName,
+		processedObjects: objs,
+	}
+}
+
+func getProcessedTierFromCache(hostClusterFunc cluster.GetHostClusterFunc, templateRef string, scheme *runtime.Scheme) (*processedTierTemplate, error) {
+	if templateRef == "" {
+		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+	}
+	if tierTmpl, ok := processedTierTemplatesCache.get(templateRef); ok {
+		return tierTmpl, nil
+	}
+	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
+	if err != nil {
+		return nil, err
+	}
+	tierTmpl := &tierTemplate{
+		templateRef: templateRef,
+		tierName:    tmpl.Spec.TierName,
+		typeName:    tmpl.Spec.Type,
+		template:    tmpl.Spec.Template,
+	}
+	tierTemplatesCache.add(tierTmpl)
+	processedTierTemplatesCache.add(scheme, tierTmpl)
+	processedTierTmpl, _ := processedTierTemplatesCache.get(templateRef)
+	return processedTierTmpl, nil
 }

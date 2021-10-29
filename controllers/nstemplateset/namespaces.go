@@ -126,7 +126,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return err
 		}
-		currentTierTemplate, err := getTierTemplate(r.GetHostCluster, currentRef)
+		currentTierTemplate, err := getTierTemplate(r.GetHostCluster, currentRef, r.Scheme)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
 		}
@@ -199,7 +199,7 @@ func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolcha
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
 	var tmpls []*tierTemplate
 	for _, ns := range nsTmplSet.Spec.Namespaces {
-		nsTmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef)
+		nsTmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef, r.Scheme)
 		if err != nil {
 			return nil, err
 		}
@@ -243,7 +243,7 @@ func (r *namespacesManager) nextNamespaceToProvisionOrUpdate(tierTemplatesByType
 			if namespace.Status.Phase == corev1.NamespaceActive {
 				isProvisioned, err := r.isUpToDateAndProvisioned(&namespace, nsTemplate)
 				if err != nil {
-					return nsTemplate, nil, false, err
+					return nsTemplate, nil, true, err
 				}
 				if !isProvisioned {
 					return nsTemplate, &namespace, true, nil
@@ -295,7 +295,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
-		newObjs, err := tierTemplate.process(r.Scheme, ns.GetName(), template.RetainAllButNamespaces)
+		newObjs, err := getProcessedTierFromCache(r.GetHostCluster, tierTemplate.templateRef, r.Scheme)
 		if err != nil {
 			return false, err
 		}
@@ -311,7 +311,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 			return false, err
 		}
 
-		for _, obj := range newObjs {
+		for _, obj := range newObjs.processedObjects {
 			switch obj.GetObjectKind().GroupVersionKind().Kind {
 			case "Role":
 				processedRoles = append(processedRoles, obj)

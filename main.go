@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
+	metrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -275,6 +276,7 @@ func main() {
 func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, error) {
 	clusterAllNamespaces, err := runtimecluster.New(config, func(clusterOptions *runtimecluster.Options) {
 		clusterOptions.Scheme = scheme
+		clusterOptions.ClientDisableCacheFor = []client.Object{&metrics.NodeMetrics{}}
 	})
 	if err != nil {
 		return nil, nil, err

@@ -202,7 +202,7 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 		return err
 	}
 	nodeMetricsList := &metrics.NodeMetricsList{}
-	if err := r.AllNamespacesClient.List(context.TODO(), nodeMetricsList); err != nil {
+	if err := r.Client.List(context.TODO(), nodeMetricsList); err != nil {
 		return err
 	}
 

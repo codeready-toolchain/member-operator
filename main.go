@@ -149,6 +149,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "2fc71baf.toolchain.member.operator",
 		Namespace:              namespace,
+		ClientDisableCacheFor:  []client.Object{&metrics.NodeMetrics{}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -276,7 +277,6 @@ func main() {
 func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, error) {
 	clusterAllNamespaces, err := runtimecluster.New(config, func(clusterOptions *runtimecluster.Options) {
 		clusterOptions.Scheme = scheme
-		clusterOptions.ClientDisableCacheFor = []client.Object{&metrics.NodeMetrics{}}
 	})
 	if err != nil {
 		return nil, nil, err

@@ -98,14 +98,14 @@ func TestOverallStatusCondition(t *testing.T) {
 
 	restore := test.SetEnvVarsAndRestore(t, test.Env(commonconfig.OperatorNameEnvVar, defaultMemberOperatorName))
 	defer restore()
-	nodeAndMetrics := newNodesAndNodeMetrics(
+	nodes, metrics := newNodesAndNodeMetrics(
 		forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("1250000Ki")),
 		forNode("worker-345", []string{"worker"}, "6000000Ki", withMemoryUsage("2250000Ki")),
 		forNode("worker-567", []string{"worker"}, "6000000Ki", withMemoryUsage("500000Ki")),
 		forNode("master-123", []string{"master"}, "4000000Ki", withMemoryUsage("2000000Ki")),
 		forNode("master-456", []string{"master"}, "5000000Ki", withMemoryUsage("1000000Ki")))
-
-	allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(true))
+	allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(true))...)
+	config := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 	t.Run("All components ready", func(t *testing.T) {
 		// given
@@ -113,7 +113,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -128,9 +128,10 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when node has multiple roles", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(
+			nodes, metrics := newNodesAndNodeMetrics(
 				forNode("combined-123", []string{"master", "worker"}, "5000000Ki", withMemoryUsage("1000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(true))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -146,11 +147,12 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("ignore infra node", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(
+			nodes, metrics := newNodesAndNodeMetrics(
 				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
 				forNode("infra-123", []string{"infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
 				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(true))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -166,11 +168,12 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("ignore infra node when node is shared", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(
+			nodes, metrics := newNodesAndNodeMetrics(
 				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
 				forNode("infra-123", []string{"worker", "infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
 				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(true))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -191,7 +194,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotExist
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -212,7 +215,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -232,7 +235,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterProbeNotWorking
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -252,7 +255,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -273,7 +276,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -293,7 +296,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -313,7 +316,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -331,11 +334,11 @@ func TestOverallStatusCondition(t *testing.T) {
 		// given
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 
-		// let's create another pair of Node and NodeMetrics resources - the resulting array will contain Node as the first object and NodeMetrics as the second object
-		singleNodeAndMetrics := newNodesAndNodeMetrics(forNode("worker", []string{"worker"}, "3000000Ki"))
-		// now use only the first object - Node - and don't add the NodeMetrics so we can simulate a situation when one NodeMetrics is missing
+		// let's create another pair of Node and NodeMetrics resources
+		extraNode, _ := newNodeAndMetrics("worker", []string{"worker"}, "3000000Ki")
+		// now use only the the Node - and don't the associated Metric so we can simulate a situation when one NodeMetrics is missing
 		reconciler, req, fakeClient := prepareReconcile(t, defaultMemberStatusName, newGetHostClusterReady, allNamespacesCl,
-			append(nodeAndMetrics, singleNodeAndMetrics[0], memberOperatorDeployment, newMemberStatus())...)
+			append(nodes, extraNode, config, memberOperatorDeployment, newMemberStatus())...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -358,8 +361,9 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when missing memory item", func(t *testing.T) {
 			// given
-			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			nodes, metrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(true))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -375,7 +379,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when unable to list Nodes", func(t *testing.T) {
 			// given
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				if _, ok := list.(*corev1.NodeList); ok {
 					return fmt.Errorf("some error")
@@ -397,8 +401,8 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
 			// given
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
-			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				if _, ok := list.(*v1beta1.NodeMetricsList); ok {
 					return fmt.Errorf("some error")
 				}
@@ -421,13 +425,12 @@ func TestOverallStatusCondition(t *testing.T) {
 			// given
 
 			// let's the first pair of Node and NodeMetrics resources
-			singleNodeAndMetrics1 := newNodesAndNodeMetrics(forNode("worker-a", []string{"worker"}, "3000000Ki"))
+			node1, _ := newNodeAndMetrics("worker-a", []string{"worker"}, "3000000Ki")
 			// and lest' also create the second pair of Node and NodeMetrics resources
-			singleNodeAndMetrics2 := newNodesAndNodeMetrics(forNode("worker-b", []string{"worker"}, "3000000Ki"))
-			// since the arrays contain Node as the first object and NodeMetrics as the second object, we can now use only the first object from both of the arrays
-			// and don't add the NodeMetrics so we can simulate a situation when the NodeMetrics resources are missing for both of the Nodes
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl,
-				append(nodeAndMetrics, singleNodeAndMetrics1[0], singleNodeAndMetrics2[0], memberOperatorDeployment, memberStatus)...)
+			node2, _ := newNodeAndMetrics("worker-b", []string{"worker"}, "3000000Ki")
+			// by not adding the metrics in the AllNamespaceClient, we can simulate a situation when the NodeMetrics resources are missing
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(true))
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, node1, node2, memberOperatorDeployment, memberStatus)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -446,13 +449,13 @@ func TestOverallStatusCondition(t *testing.T) {
 		// given
 		requestName := defaultMemberStatusName
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
-		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
+		memberStatus := newMemberStatus()
 
 		t.Run("che not using tls", func(t *testing.T) {
 			// given
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(false))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -468,8 +471,8 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("console route unavailable", func(t *testing.T) {
 			// given
-			allNamespacesCl := test.NewFakeClient(t, cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, cheRoute(false))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -485,11 +488,12 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("che route unavailable", func(t *testing.T) {
 			// given
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute())...) // no route to Che
 
 			t.Run("when not required", func(t *testing.T) {
 				// given
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+				config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().Required(false))
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 				// when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -506,7 +510,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			t.Run("when required", func(t *testing.T) {
 				// given
 				config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().Required(true))
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 				// when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -539,8 +543,8 @@ func TestOverallStatusCondition(t *testing.T) {
 					Ref("test-secret").
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(false))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			defer gock.OffAll()
 			gock.New(testCheURL).
@@ -572,8 +576,8 @@ func TestOverallStatusCondition(t *testing.T) {
 					Ref("test-secret").
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(false))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -598,8 +602,8 @@ func TestOverallStatusCondition(t *testing.T) {
 					Ref("test-secret").
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute())...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -624,8 +628,8 @@ func TestOverallStatusCondition(t *testing.T) {
 					Ref("test-secret").
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
+			allNamespacesCl := test.NewFakeClient(t, append(metrics, consoleRoute(), cheRoute(false))...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodes, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 			defer gock.OffAll()
 			gock.New(testCheURL).
 				Get(cheUserPath).
@@ -729,6 +733,10 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 
 type nodeAndMetricsCreator func() (node *corev1.Node, nodeMetric *v1beta1.NodeMetrics)
 
+func newNodeAndMetrics(name string, roles []string, allocatableMemory string, metricsModifiers ...nodeMetricsModifier) (node *corev1.Node, nodeMetric *v1beta1.NodeMetrics) {
+	return forNode(name, roles, allocatableMemory, metricsModifiers...)()
+}
+
 func forNode(name string, roles []string, allocatableMemory string, metricsModifiers ...nodeMetricsModifier) nodeAndMetricsCreator {
 	return func() (*corev1.Node, *v1beta1.NodeMetrics) {
 		node := &corev1.Node{
@@ -776,13 +784,15 @@ func withMemoryUsage(usage string) nodeMetricsModifier {
 	}
 }
 
-func newNodesAndNodeMetrics(nodeAndMetricsCreators ...nodeAndMetricsCreator) []runtime.Object {
-	var objects []runtime.Object
+func newNodesAndNodeMetrics(nodeAndMetricsCreators ...nodeAndMetricsCreator) ([]runtime.Object, []runtime.Object) {
+	var nodes []runtime.Object
+	var metrics []runtime.Object
 	for _, create := range nodeAndMetricsCreators {
-		node, nodeMetrics := create()
-		objects = append(objects, node, nodeMetrics)
+		node, metric := create()
+		nodes = append(nodes, node)
+		metrics = append(metrics, metric)
 	}
-	return objects
+	return nodes, metrics
 }
 
 func consoleRouteUnavailable(msg string) toolchainv1alpha1.Condition {

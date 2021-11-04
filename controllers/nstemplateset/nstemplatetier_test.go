@@ -67,6 +67,7 @@ parameters:
   required: true
 `
 	_, _, err = decoder.Decode([]byte(tmplContent), nil, &tmpl)
+	require.NoError(t, err)
 	tierTemplate := &tierTemplate{
 		template: tmpl,
 	}

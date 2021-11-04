@@ -11,6 +11,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	quotav1 "github.com/openshift/api/quota/v1"
 	templatev1 "github.com/openshift/api/template/v1"
@@ -83,6 +84,10 @@ func TestReconcileProvisionOK(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	t.Run("status provisioned when cluster resources are missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
@@ -186,6 +191,9 @@ func TestProvisionTwoUsers(t *testing.T) {
 	// given
 	username := "john"
 	namespaceName := "toolchain-member"
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	t.Run("provision john's ClusterResourceQuota first", func(t *testing.T) {
 		// given
@@ -454,6 +462,9 @@ func TestReconcilePromotion(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	t.Run("upgrade from basic to advanced tier", func(t *testing.T) {
 
 		t.Run("create ClusterResourceQuota", func(t *testing.T) {
@@ -633,6 +644,9 @@ func TestReconcileUpdate(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	t.Run("upgrade from abcde11 to abcde12 as part of the advanced tier", func(t *testing.T) {
 

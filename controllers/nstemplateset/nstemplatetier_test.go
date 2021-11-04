@@ -4,6 +4,9 @@ import (
 	"sync"
 	"testing"
 
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
@@ -34,6 +37,51 @@ func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTem
 			},
 		},
 	}
+}
+
+func TestProcess(t *testing.T) {
+	// given
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	codecFactory := serializer.NewCodecFactory(s)
+	decoder := codecFactory.UniversalDeserializer()
+	tmpl := templatev1.Template{}
+	tmplContent := `
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: test
+objects:
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: ${USERNAME}
+    namespace: ${MEMBER_OPERATOR_NAMESPACE}
+  data:
+    test: test
+parameters:
+- name: USERNAME
+  required: true
+- name: MEMBER_OPERATOR_NAMESPACE
+  required: true
+`
+	_, _, err = decoder.Decode([]byte(tmplContent), nil, &tmpl)
+	tierTemplate := &tierTemplate{
+		template: tmpl,
+	}
+
+	restore := testcommon.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
+	// when
+	obj, err := tierTemplate.process(s, "johnsmith")
+
+	// then
+	require.NoError(t, err)
+	require.Len(t, obj, 1)
+	assert.Equal(t, obj[0].GetNamespace(), "my-member-operator-namespace")
+	assert.Equal(t, obj[0].GetName(), "johnsmith")
 }
 
 func TestGetTierTemplate(t *testing.T) {

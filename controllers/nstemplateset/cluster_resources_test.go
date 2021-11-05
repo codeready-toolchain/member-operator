@@ -10,6 +10,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -145,6 +146,9 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	t.Run("should create only CRQ and set status to provisioning", func(t *testing.T) {
 		// given
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
@@ -267,6 +271,9 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	t.Run("fail to list cluster resources", func(t *testing.T) {
 		// given
@@ -447,6 +454,9 @@ func TestDeleteClusterResources(t *testing.T) {
 }
 
 func TestPromoteClusterResources(t *testing.T) {
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
@@ -856,6 +866,9 @@ func TestPromoteClusterResources(t *testing.T) {
 }
 
 func TestUpdateClusterResources(t *testing.T) {
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given

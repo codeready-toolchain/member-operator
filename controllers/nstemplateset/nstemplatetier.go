@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
@@ -76,8 +78,15 @@ type tierTemplate struct {
 // process processes the template inside of the tierTemplate object and replaces the USERNAME variable with the given username.
 // Optionally, it also filters the result to return a subset of the template objects.
 func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+	ns, err := configuration.GetWatchNamespace()
+	if err != nil {
+		return nil, err
+	}
 	tmplProcessor := template.NewProcessor(scheme)
-	params := map[string]string{"USERNAME": username}
+	params := map[string]string{
+		"USERNAME":                  username,
+		"MEMBER_OPERATOR_NAMESPACE": ns,
+	}
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
 }
 

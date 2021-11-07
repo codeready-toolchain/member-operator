@@ -11,6 +11,11 @@ import (
 	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
+
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	. "github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -367,6 +372,9 @@ func TestGetNamespaceName(t *testing.T) {
 
 func TestEnsureNamespacesOK(t *testing.T) {
 
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	username := "johnsmith"
@@ -489,6 +497,9 @@ func TestEnsureNamespacesFail(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	t.Run("fail to create namespace", func(t *testing.T) {
 		// given
@@ -747,6 +758,9 @@ func TestPromoteNamespaces(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	t.Run("success", func(t *testing.T) {
 
 		t.Run("upgrade dev to advanced tier", func(t *testing.T) {
@@ -959,6 +973,9 @@ func TestUpdateNamespaces(t *testing.T) {
 	// given
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 
 	t.Run("success", func(t *testing.T) {
 

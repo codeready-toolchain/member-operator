@@ -141,7 +141,7 @@ func (c *processedTierTemplateCache) get(templateRef string) (*processedTierTemp
 	return processedTierTemplate, ok
 }
 
-func (c *processedTierTemplateCache) add(scheme *runtime.Scheme, processedTierTmpl *processedTierTemplate) {
+func (c *processedTierTemplateCache) add(processedTierTmpl *processedTierTemplate) {
 	c.Lock()
 	defer c.Unlock()
 	c.processedTemplatesByTemplateRef[processedTierTmpl.templateRef] = processedTierTmpl
@@ -154,7 +154,7 @@ func getProcessedTierFromCache(hostClusterFunc cluster.GetHostClusterFunc, templ
 	if tierTmpl, ok := processedTierTemplatesCache.get(templateRef); ok {
 		return tierTmpl, nil
 	}
-	tierTmpl := &tierTemplate{}
+	var tierTmpl *tierTemplate
 	if tmpl, ok := tierTemplatesCache.get(templateRef); ok {
 		tierTmpl = tmpl
 	} else {
@@ -180,6 +180,6 @@ func getProcessedTierFromCache(hostClusterFunc cluster.GetHostClusterFunc, templ
 		typeName:         tierTmpl.typeName,
 		processedObjects: processedObjs,
 	}
-	processedTierTemplatesCache.add(scheme, processedTierTmpl)
+	processedTierTemplatesCache.add(processedTierTmpl)
 	return processedTierTmpl, nil
 }

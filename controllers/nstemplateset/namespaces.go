@@ -126,7 +126,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return err
 		}
-		currentTierTemplate, err := getTierTemplate(r.GetHostCluster, currentRef, r.Scheme)
+		currentTierTemplate, err := getTierTemplate(r.GetHostCluster, currentRef)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
 		}
@@ -199,7 +199,7 @@ func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolcha
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
 	var tmpls []*tierTemplate
 	for _, ns := range nsTmplSet.Spec.Namespaces {
-		nsTmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef, r.Scheme)
+		nsTmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef)
 		if err != nil {
 			return nil, err
 		}

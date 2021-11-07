@@ -1115,7 +1115,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		}
 
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11", manager.Scheme)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1137,7 +1137,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11", manager.Scheme)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1148,7 +1148,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		role := newRole(devNS.Name, "rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11", manager.Scheme)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1168,7 +1168,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11", manager.Scheme)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
@@ -1191,7 +1191,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11", manager.Scheme)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.True(t, isProvisioned)

@@ -22,7 +22,7 @@ var processedTierTemplatesCache = newProcessedTierTemplateCache()
 // getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
-func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string, scheme *runtime.Scheme) (*tierTemplate, error) {
+func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 	}
@@ -40,7 +40,6 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 		template:    tmpl.Spec.Template,
 	}
 	tierTemplatesCache.add(tierTmpl)
-	processedTierTemplatesCache.add(scheme, tierTmpl)
 	return tierTmpl, nil
 }
 
@@ -133,17 +132,10 @@ func (c *processedTierTemplateCache) get(templateRef string) (*processedTierTemp
 	return processedTierTemplate, ok
 }
 
-func (c *processedTierTemplateCache) add(scheme *runtime.Scheme, tierTemplate *tierTemplate) {
+func (c *processedTierTemplateCache) add(scheme *runtime.Scheme, processedTierTmpl *processedTierTemplate) {
 	c.Lock()
 	defer c.Unlock()
-	tmplProcessor := template.NewProcessor(scheme)
-	objs, _ := tmplProcessor.Process(tierTemplate.template.DeepCopy(), nil)
-	c.processedTemplatesByTemplateRef[tierTemplate.templateRef] = &processedTierTemplate{
-		templateRef:      tierTemplate.templateRef,
-		tierName:         tierTemplate.tierName,
-		typeName:         tierTemplate.typeName,
-		processedObjects: objs,
-	}
+	c.processedTemplatesByTemplateRef[processedTierTmpl.templateRef] = processedTierTmpl
 }
 
 func getProcessedTierFromCache(hostClusterFunc cluster.GetHostClusterFunc, templateRef string, scheme *runtime.Scheme) (*processedTierTemplate, error) {
@@ -153,18 +145,32 @@ func getProcessedTierFromCache(hostClusterFunc cluster.GetHostClusterFunc, templ
 	if tierTmpl, ok := processedTierTemplatesCache.get(templateRef); ok {
 		return tierTmpl, nil
 	}
-	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
+	tierTmpl := &tierTemplate{}
+	if tmpl, ok := tierTemplatesCache.get(templateRef); ok {
+		tierTmpl = tmpl
+	} else {
+		tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
+		if err != nil {
+			return nil, err
+		}
+		tierTmpl = &tierTemplate{
+			templateRef: templateRef,
+			tierName:    tmpl.Spec.TierName,
+			typeName:    tmpl.Spec.Type,
+			template:    tmpl.Spec.Template,
+		}
+	}
+
+	processedObjs, err := tierTmpl.process(scheme, "toolchain-namespace-scoped-resources")
 	if err != nil {
 		return nil, err
 	}
-	tierTmpl := &tierTemplate{
-		templateRef: templateRef,
-		tierName:    tmpl.Spec.TierName,
-		typeName:    tmpl.Spec.Type,
-		template:    tmpl.Spec.Template,
+	processedTierTmpl := &processedTierTemplate{
+		templateRef:      tierTmpl.templateRef,
+		tierName:         tierTmpl.tierName,
+		typeName:         tierTmpl.typeName,
+		processedObjects: processedObjs,
 	}
-	tierTemplatesCache.add(tierTmpl)
-	processedTierTemplatesCache.add(scheme, tierTmpl)
-	processedTierTmpl, _ := processedTierTemplatesCache.get(templateRef)
+	processedTierTemplatesCache.add(scheme, processedTierTmpl)
 	return processedTierTmpl, nil
 }

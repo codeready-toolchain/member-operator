@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
+	metrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -149,6 +150,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "2fc71baf.toolchain.member.operator",
 		Namespace:              namespace,
+		ClientDisableCacheFor:  []client.Object{&metrics.NodeMetrics{}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

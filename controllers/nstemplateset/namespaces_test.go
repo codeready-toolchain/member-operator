@@ -11,10 +11,6 @@ import (
 	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
-
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	. "github.com/codeready-toolchain/member-operator/test"
-	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,6 +50,9 @@ func TestFindNamespace(t *testing.T) {
 }
 
 func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
 	devNS := newNamespace("basic", "johnsmith", "dev")
 	codeNS := newNamespace("basic", "johnsmith", "code")
@@ -1121,6 +1120,9 @@ func TestUpdateNamespaces(t *testing.T) {
 
 func TestIsUpToDateAndProvisioned(t *testing.T) {
 	// given
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
 	manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
@@ -1133,6 +1135,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		}
 
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		require.NoError(t, err)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1155,6 +1158,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		require.NoError(t, err)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1166,6 +1170,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		role := newRole(devNS.Name, "rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		require.NoError(t, err)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1186,6 +1191,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		require.NoError(t, err)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
@@ -1209,6 +1215,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		require.NoError(t, err)
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		require.NoError(t, err)
 		require.True(t, isProvisioned)

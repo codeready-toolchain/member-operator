@@ -295,7 +295,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
-		newObjs, err := getProcessedTierFromCache(r.GetHostCluster, tierTemplate.templateRef, r.Scheme)
+		newObjs, err := tierTemplate.process(r.Scheme, ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey], template.RetainAllButNamespaces)
 		if err != nil {
 			return false, err
 		}
@@ -311,7 +311,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 			return false, err
 		}
 
-		for _, obj := range newObjs.processedObjects {
+		for _, obj := range newObjs {
 			switch obj.GetObjectKind().GroupVersionKind().Kind {
 			case "Role":
 				processedRoles = append(processedRoles, obj)

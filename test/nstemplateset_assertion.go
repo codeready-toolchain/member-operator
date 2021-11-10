@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -39,6 +39,12 @@ func AssertThatNSTemplateSet(t test.T, namespace, name string, client client.Cli
 	}
 }
 
+func (a *NSTemplateSetAssertion) Exists() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	return a
+}
+
 func (a *NSTemplateSetAssertion) DoesNotExist() *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.Error(a.t, err)
@@ -57,6 +63,13 @@ func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Con
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
 	test.AssertConditionsMatch(a.t, a.nsTmplSet.Status.Conditions, expected...)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasNoOwnerReferences() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Empty(a.t, a.nsTmplSet.ObjectMeta.OwnerReferences)
 	return a
 }
 

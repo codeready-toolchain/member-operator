@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20210811194925-19aeb221d584
+	github.com/codeready-toolchain/api v0.0.0-20210930215026-da4da11421c7
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20210928071424-2ace1784e8d2
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.2
@@ -23,5 +23,9 @@ require (
 	k8s.io/metrics v0.20.2
 	sigs.k8s.io/controller-runtime v0.8.3
 )
+
+replace github.com/codeready-toolchain/api => github.com/xcoulon/api v0.0.0-20211110143945-dec71f4e5073
+
+replace github.com/codeready-toolchain/toolchain-common => github.com/xcoulon/toolchain-common v0.0.0-20211110171137-ac3d818a6a9a
 
 go 1.16

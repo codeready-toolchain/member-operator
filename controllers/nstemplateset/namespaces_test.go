@@ -128,16 +128,6 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 	t.Run("return namespace that is not part of user namespaces", func(t *testing.T) {
 		// given
-		//var userNamespaces []corev1.Namespace
-		//userNamespaces = append(userNamespaces, *devNS, *codeNS)
-		//userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde11"
-		//tierTemplates, _ := manager.getTierTemplatesForAllNamespaces(nsTmplSet)
-		//stageTierTemplate := tierTemplate{
-		//	templateRef: "basic-stage-abcde13",
-		//	typeName:    "stage",
-		//	tierName:    "basic",
-		//}
-		//tierTemplates = append(tierTemplates, &stageTierTemplate)
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde11"
 

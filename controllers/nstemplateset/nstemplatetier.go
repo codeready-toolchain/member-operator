@@ -41,6 +41,7 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 		template:    tmpl.Spec.Template,
 	}
 	tierTemplatesCache.add(tierTmpl)
+
 	return tierTmpl, nil
 }
 

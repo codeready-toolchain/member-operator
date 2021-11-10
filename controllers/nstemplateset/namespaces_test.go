@@ -610,6 +610,24 @@ func TestEnsureNamespacesFail(t *testing.T) {
 				"unable to retrieve the TierTemplate 'basic-fail-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-fail-abcde11\" not found"))
 	})
 
+	t.Run("fail to ensure when nextNamespaceToProvisionOrUpdate returns error", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		devNS := newNamespace("basic", username, "dev")
+		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
+		fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+			if _, ok := list.(*rbacv1.RoleList); ok {
+				return fmt.Errorf("mock error")
+			}
+			return fakeClient.Client.List(ctx, list, opts...)
+		}
+		// when
+		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		//then
+		require.Error(t, err)
+		assert.False(t, createdOrUpdated)
+	})
+
 }
 
 func TestDeleteNamespace(t *testing.T) {
@@ -1214,5 +1232,55 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		err = manager.Client.Get(context.TODO(), types.NamespacedName{Namespace: rb.Namespace, Name: rb.Name}, rb)
 		require.NoError(t, err)
 		require.Equal(t, "johnsmith", rb.GetLabels()["toolchain.dev.openshift.com/owner"])
+	})
+
+	t.Run("namespace doesn't have owner Label", func(t *testing.T) {
+		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
+		delete(devNS.Labels, toolchainv1alpha1.OwnerLabelKey)
+		manager, _ := prepareNamespacesManager(t, nsTmplSet)
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		require.NoError(t, err)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		require.Error(t, err, "namespace doesn't have owner label")
+		require.False(t, isProvisioned)
+
+	})
+
+	t.Run("unable to update rolebinding successfully", func(t *testing.T) {
+		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
+		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
+		delete(rbDev.GetLabels(), toolchainv1alpha1.OwnerLabelKey)
+		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev)
+		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+			if _, ok := obj.(*rbacv1.RoleBinding); ok {
+				return fmt.Errorf("mock update error")
+			}
+			return fakeClient.Client.Update(ctx, obj, opts...)
+		}
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		require.NoError(t, err)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		require.Error(t, err, "mock update error")
+		require.False(t, isProvisioned)
+	})
+
+	t.Run("unable to update role successfully", func(t *testing.T) {
+
+		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
+		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
+		ro := newRole(devNS.Name, "rbac-edit", "johnsmith")
+		delete(ro.GetLabels(), toolchainv1alpha1.OwnerLabelKey)
+		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev, ro)
+		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+			if _, ok := obj.(*rbacv1.Role); ok {
+				return fmt.Errorf("mock update error")
+			}
+			return fakeClient.Client.Update(ctx, obj, opts...)
+		}
+		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		require.NoError(t, err)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		require.Error(t, err, "mock update error")
+		require.False(t, isProvisioned)
 	})
 }

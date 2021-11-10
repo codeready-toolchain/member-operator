@@ -319,24 +319,21 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 				processedRoleBindings = append(processedRoleBindings, obj)
 			}
 		}
+		// get the owner name from namespace
+		owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
+		if !exists {
+			return false, fmt.Errorf("namespace doesn't have owner label")
+		}
 		//Check the names of the roles and roleBindings as well
 		for _, role := range processedRoles {
-			if owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; exists {
-				if found, err := r.containsRole(roleList.Items, role, owner); !found {
-					return false, err
-				}
-			} else {
-				return false, fmt.Errorf("namespace doesn't have owner label")
+			if found, err := r.containsRole(roleList.Items, role, owner); !found {
+				return false, err
 			}
 		}
 
 		for _, rolebinding := range processedRoleBindings {
-			if owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; exists {
-				if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, owner); !found {
-					return false, err
-				}
-			} else {
-				return false, fmt.Errorf("namespace doesn't have owner label")
+			if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, owner); !found {
+				return false, err
 			}
 		}
 		return true, nil

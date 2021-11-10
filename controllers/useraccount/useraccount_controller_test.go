@@ -1362,7 +1362,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	})
 
 	t.Run("disabled useraccount", func(t *testing.T) {
-		userAcc := newUserAccount(username, userID, disabled(true))
+		userAcc := newUserAccount(username, userID, disabled())
 
 		// given
 		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
@@ -1388,7 +1388,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("disabling useraccount without user", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID, disabled(true))
+		userAcc := newUserAccount(username, userID, disabled())
 		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingIdentity, preexistingNsTmplSet)
 
 		// when
@@ -1414,7 +1414,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("disabling useraccount without identity", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID, disabled(true))
+		userAcc := newUserAccount(username, userID, disabled())
 		r, req, cl, config := prepareReconcile(t, username, userAcc, preexistingUser, preexistingNsTmplSet)
 
 		// when
@@ -1439,7 +1439,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("deleting identity for disabled useraccount", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID, disabled(true), withFinalizer(toolchainv1alpha1.FinalizerName))
+		userAcc := newUserAccount(username, userID, disabled(), withFinalizer(toolchainv1alpha1.FinalizerName))
 		userAcc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 		r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet, preexistingUser, preexistingIdentity)
 
@@ -1651,9 +1651,9 @@ func assertIdentityNotFound(t *testing.T, r *Reconciler, userAcc *toolchainv1alp
 
 type userAccountOption func(*toolchainv1alpha1.UserAccount)
 
-func disabled(disabled bool) userAccountOption {
+func disabled() userAccountOption {
 	return func(userAcc *toolchainv1alpha1.UserAccount) {
-		userAcc.Spec.Disabled = disabled
+		userAcc.Spec.Disabled = true
 	}
 }
 
@@ -1915,7 +1915,7 @@ func gockTokenFail(calls *int) {
 		Reply(400)
 }
 
-func gockFindUserTimes(name string, times int, calls *int) {
+func gockFindUserTimes(name string, times int, calls *int) { //nolint: unparam
 	gock.New(testCheURL).
 		Get("api/user/find").
 		SetMatcher(SpyOnGockCalls(calls)).

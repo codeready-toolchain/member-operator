@@ -185,7 +185,7 @@ func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config member
 			return nil
 		}
 
-		deleted, err = r.deleteNSTemplateSet(logger, config, userAcc)
+		deleted, err = r.deleteNSTemplateSet(logger, userAcc)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete the NSTemplateSet")
 		}
@@ -456,7 +456,7 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, config membercfg.Configu
 
 // deleteNSTemplateSet deletes the NSTemplateSet associated with the given UserAccount.
 // Returns bool and error indicating that whether the resource were deleted.
-func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
 	// Get the NSTemplateSet associated with the UserAccount
 	nstmplSet := &toolchainv1alpha1.NSTemplateSet{}
 	err := r.Client.Get(context.TODO(),

@@ -236,38 +236,29 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 }
 
 func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	name := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
-	identity, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, name, userAcc, user)
+	identity, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, userAcc.Spec.UserID, userAcc, user)
 	if createdOrUpdated || err != nil {
 		return nil, createdOrUpdated, err
 	}
 
 	// Check if the OriginalSub property is set, and if it is create additional identity/s as required
 	if userAcc.Spec.OriginalSub != "" {
-		// Encode the OriginalSub value as Base64 and ensure the identity is created
-		encodedName := fmt.Sprintf("b64:%s", base64.StdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
-		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(encodedName, config.Auth().Idp()), userAcc, user)
+
+		// Encoded the OriginalSub as an unpadded Base64 value
+		encodedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
+		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, encodedName, userAcc, user)
 		if createdOrUpdated || err != nil {
 			return nil, createdOrUpdated, err
-		}
-
-		// Encoded the OriginalSub as an unpadded Base64 value, and if different to the standard-encoded value then
-		// create an additional identity for the unpadded value
-		// Why do we do this?  We describe the reasons in the PR for this change: https://github.com/codeready-toolchain/member-operator/pull/302
-		unpaddedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
-		if unpaddedName != encodedName {
-			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, ToIdentityName(unpaddedName, config.Auth().Idp()), userAcc, user)
-			if createdOrUpdated || err != nil {
-				return nil, createdOrUpdated, err
-			}
 		}
 	}
 
 	return identity, false, nil
 }
 
-func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, identityName string,
+func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, username string,
 	userAccount *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
+	identityName := ToIdentityName(username, config.Auth().Idp())
+
 	identity := &userv1.Identity{}
 
 	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity); err != nil {
@@ -276,7 +267,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(identityName, user, config)
+			identity = newIdentity(username, user, config)
 			setOwnerLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", identityName)
@@ -627,13 +618,14 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configurat
 	return user
 }
 
-func newIdentity(identityName string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
+func newIdentity(username string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
+	identityName := ToIdentityName(username, config.Auth().Idp())
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: identityName,
 		},
 		ProviderName:     config.Auth().Idp(),
-		ProviderUserName: identityName,
+		ProviderUserName: username,
 		User: corev1.ObjectReference{
 			Name: user.Name,
 			UID:  user.UID,

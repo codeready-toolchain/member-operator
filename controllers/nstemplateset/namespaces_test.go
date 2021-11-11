@@ -407,7 +407,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-		//ro := newRole(devNS.Name, "rbac-edit")
 		rb := newRoleBinding(devNS.Name, "user-edit", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, rb)
 
@@ -1143,6 +1142,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 	t.Run("namespace doesn't have the type and templateref label", func(t *testing.T) {
+		//given
 		devNS := corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev",
@@ -1152,12 +1152,15 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
+		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("namespace doesn't have the required role", func(t *testing.T) {
+		//given namespace doesnt have role
 		devNS := corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev",
@@ -1175,24 +1178,30 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("namespace doesn't have the required rolebinding", func(t *testing.T) {
+		//given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		role := newRole(devNS.Name, "rbac-edit", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("role doesn't have the owner label", func(t *testing.T) {
+		//given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
@@ -1208,7 +1217,9 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
 
@@ -1219,6 +1230,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	})
 
 	t.Run("rolebinding doesn't have the owner label", func(t *testing.T) {
+		//given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := &rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1232,7 +1244,9 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
 
@@ -1243,18 +1257,22 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	})
 
 	t.Run("namespace doesn't have owner Label", func(t *testing.T) {
+		//given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		delete(devNS.Labels, toolchainv1alpha1.OwnerLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.Error(t, err, "namespace doesn't have owner label")
 		require.False(t, isProvisioned)
 
 	})
 
 	t.Run("unable to update rolebinding successfully", func(t *testing.T) {
+		//given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		delete(rbDev.GetLabels(), toolchainv1alpha1.OwnerLabelKey)
@@ -1267,13 +1285,15 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		}
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.Error(t, err, "mock update error")
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("unable to update role successfully", func(t *testing.T) {
-
+		//given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		ro := newRole(devNS.Name, "rbac-edit", "johnsmith")
@@ -1287,12 +1307,15 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		}
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.Error(t, err, "mock update error")
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("adds owner label to rolebinding even when no labels exist", func(t *testing.T) {
+		//given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rbDev := &rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1303,7 +1326,9 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
 		err = fakeClient.Client.Get(context.TODO(), types.NamespacedName{Namespace: devNS.Name, Name: "user-edit"}, rbDev)
@@ -1312,6 +1337,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	})
 
 	t.Run("add owner label to role even when no labels exist", func(t *testing.T) {
+		//given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
 		rbacDev := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
@@ -1324,7 +1350,9 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev, rbacDev, ro)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
+		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		//then
 		require.NoError(t, err)
 		require.True(t, isProvisioned)
 		err = fakeClient.Client.Get(context.TODO(), types.NamespacedName{Namespace: devNS.Name, Name: "rbac-edit"}, ro)

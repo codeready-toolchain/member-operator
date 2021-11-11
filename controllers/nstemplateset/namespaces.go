@@ -326,13 +326,13 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 		}
 		//Check the names of the roles and roleBindings as well
 		for _, role := range processedRoles {
-			if found, err := r.containsRole(roleList.Items, role, owner); !found {
+			if found, err := r.containsRole(roleList.Items, role, owner); !found || err != nil {
 				return false, err
 			}
 		}
 
 		for _, rolebinding := range processedRoleBindings {
-			if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, owner); !found {
+			if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, owner); !found || err != nil {
 				return false, err
 			}
 		}
@@ -357,7 +357,6 @@ func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Obj
 			}
 			return true, nil
 		}
-		continue
 	}
 	return false, nil
 }
@@ -377,7 +376,6 @@ func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj ru
 			}
 			return true, nil
 		}
-		continue
 	}
 	return false, nil
 }

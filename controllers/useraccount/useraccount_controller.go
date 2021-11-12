@@ -217,12 +217,29 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 	logger.Info("user already exists", "name", userAcc.Name)
 
 	// ensure mapping
-	if user.Identities == nil || len(user.Identities) < 1 || user.Identities[0] != ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()) {
+	expectedIdentities := []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}
+	if userAcc.Spec.OriginalSub != "" {
+		expectedIdentities = append(expectedIdentities, ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), config.Auth().Idp()))
+	}
+
+	stringSlicesEqual := func(a, b []string) bool {
+		if len(a) != len(b) {
+		return false
+		}
+		for i, v := range a {
+			if v != b[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	if !stringSlicesEqual(expectedIdentities, user.Identities) {
 		logger.Info("user is missing a reference to identity; updating the reference", "name", userAcc.Name)
 		if err := r.setStatusProvisioning(userAcc); err != nil {
 			return nil, false, err
 		}
-		user.Identities = []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}
+		user.Identities = expectedIdentities
 		if err := r.Client.Update(context.TODO(), user); err != nil {
 			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusMappingCreationFailed, err, "failed to update user '%s'", userAcc.Name)
 		}
@@ -232,6 +249,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 		logger.Info("user updated successfully", "name", userAcc.Name)
 		return user, true, nil
 	}
+
 	return user, false, nil
 }
 

@@ -1052,7 +1052,6 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-
 	// Test UserAccount with OriginalSub property set
 	// TODO remove this test after migration is complete
 	t.Run("create or update identities from OriginalSub OK", func(t *testing.T) {
@@ -1749,7 +1748,7 @@ func newReconcileRequest(name string) reconcile.Request {
 	}
 }
 
-func checkMapping(t *testing.T, user *userv1.User, identities... *userv1.Identity) {
+func checkMapping(t *testing.T, user *userv1.User, identities ...*userv1.Identity) {
 	require.Len(t, user.Identities, len(identities))
 
 	for i, identity := range identities {

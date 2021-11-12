@@ -224,7 +224,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 
 	stringSlicesEqual := func(a, b []string) bool {
 		if len(a) != len(b) {
-		return false
+			return false
 		}
 		for i, v := range a {
 			if v != b[i] {

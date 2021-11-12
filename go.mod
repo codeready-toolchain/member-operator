@@ -26,6 +26,6 @@ require (
 
 replace github.com/codeready-toolchain/api => github.com/xcoulon/api v0.0.0-20211110143945-dec71f4e5073
 
-replace github.com/codeready-toolchain/toolchain-common => github.com/xcoulon/toolchain-common v0.0.0-20211112094801-195db272da93
+replace github.com/codeready-toolchain/toolchain-common => github.com/xcoulon/toolchain-common v0.0.0-20211112102125-7cd9c79c4c42
 
 go 1.16

@@ -826,7 +826,7 @@ func TestReconcile(t *testing.T) {
 			memberOperatorSecret := newSecretWithCheAdminCreds()
 			userAcc := newUserAccount(username, userID, withoutNSTemplateSet())
 			util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-			r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 			t.Run("first reconcile deletes identity", func(t *testing.T) {
 				// given

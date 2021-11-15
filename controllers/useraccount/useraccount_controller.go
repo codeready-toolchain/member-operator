@@ -324,8 +324,7 @@ func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 	logger.Info("NSTemplateSet already exists")
 
 	// update if not same
-	if userAcc.Spec.NSTemplateSet != nil &&
-		!reflect.DeepEqual(nsTmplSet.Spec, *userAcc.Spec.NSTemplateSet) {
+	if !reflect.DeepEqual(nsTmplSet.Spec, *userAcc.Spec.NSTemplateSet) {
 		return r.updateNSTemplateSet(logger, userAcc, nsTmplSet)
 	}
 	logger.Info("NSTemplateSet is up-to-date", "name", name)

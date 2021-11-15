@@ -518,8 +518,11 @@ func TestReconcile(t *testing.T) {
 		})
 
 		t.Run("no nstemplateset to update", func(t *testing.T) {
-			userAcc := newUserAccount(username, userID, withoutNSTemplateSet())
+			userAcc := newUserAccount(username, userID, withoutNSTemplateSet(), withFinalizer(toolchainv1alpha1.FinalizerName))
 			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+			cl.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				return fmt.Errorf("schouldn't be called")
+			}
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -530,8 +533,9 @@ func TestReconcile(t *testing.T) {
 				HasConditions(provisioned())
 			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
 				Exists(). // existed before
-				HasNoOwnerReferences()
-
+				HasNoOwnerReferences().
+				HasNamespaceTemplateRefs(devTemplateRef,codeTemplateRef).
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef)
 		})
 
 	})

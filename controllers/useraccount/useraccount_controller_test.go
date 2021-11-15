@@ -61,7 +61,7 @@ func TestReconcile(t *testing.T) {
 	preexistingIdentity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-			UID:  types.UID(username + "identity"),
+			UID:  types.UID(userAcc.Name + "identity"),
 		},
 		User: corev1.ObjectReference{
 			Name: username,
@@ -70,7 +70,7 @@ func TestReconcile(t *testing.T) {
 	}
 	preexistingUser := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   username,
+			Name:   userAcc.Name,
 			UID:    userUID,
 			Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
 		},
@@ -513,6 +513,23 @@ func TestReconcile(t *testing.T) {
 			useraccount.AssertThatUserAccount(t, req.Name, cl).
 				HasConditions(provisioned())
 			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).DoesNotExist()
+
+		})
+
+		t.Run("no nstemplateset to update", func(t *testing.T) {
+			userAcc := newUserAccount(username, userID, withoutNSTemplateSet())
+			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioned())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				Exists(). // existed before
+				HasNoOwnerReferences()
 
 		})
 

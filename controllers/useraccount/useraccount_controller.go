@@ -49,7 +49,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, mapToOwnerByName).
+		Watches(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, &handler.EnqueueRequestForObject{}).
 		Watches(&source.Kind{Type: &userv1.User{}}, mapToOwnerByLabel).
 		Watches(&source.Kind{Type: &userv1.Identity{}}, mapToOwnerByLabel).
 		Complete(r)

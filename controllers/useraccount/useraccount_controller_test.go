@@ -2,6 +2,7 @@ package useraccount
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1229,6 +1230,88 @@ func TestReconcile(t *testing.T) {
 		assert.Equal(t, reconcile.Result{}, res)
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, preexistingNsTmplSet.Namespace, preexistingNsTmplSet.Name, fakeClient).HasNoOwnerReferences()
+	})
+
+	// Test UserAccount with OriginalSub property set
+	// TODO remove this test after migration is complete
+	t.Run("create or update identities from OriginalSub OK", func(t *testing.T) {
+		userAcc := newUserAccount(username, userID)
+		userAcc.Spec.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
+
+		t.Run("create user identity mapping", func(t *testing.T) {
+			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
+			//when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+
+			updatedUser := &userv1.User{}
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: "", Name: userAcc.Name}, updatedUser)
+			require.NoError(t, err)
+
+			t.Run("create first identity", func(t *testing.T) {
+				r, req, _, _ := prepareReconcile(t, username, userAcc, updatedUser)
+				//when
+				res, err := r.Reconcile(context.TODO(), req)
+
+				//then
+				require.NoError(t, err)
+				assert.Equal(t, reconcile.Result{}, res)
+
+				// Check that the user account status is now "provisioning"
+				updatedAcc := &toolchainv1alpha1.UserAccount{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+				require.NoError(t, err)
+				test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+					toolchainv1alpha1.Condition{
+						Type:   toolchainv1alpha1.ConditionReady,
+						Status: corev1.ConditionFalse,
+						Reason: "Provisioning",
+					})
+
+				// Check the created/updated identity
+				identity1 := &userv1.Identity{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity1)
+				require.NoError(t, err)
+				assert.Equal(t, fmt.Sprintf("%s:%s", config.Auth().Idp(), userAcc.Spec.UserID), identity1.Name)
+				require.Equal(t, userAcc.Name, identity1.Labels["toolchain.dev.openshift.com/owner"])
+				assert.Empty(t, identity1.OwnerReferences) // Identity has no explicit owner reference.
+
+				t.Run("create second identity", func(t *testing.T) {
+
+					r, req, _, _ := prepareReconcile(t, username, userAcc, updatedUser, identity1)
+					//when
+					res, err := r.Reconcile(context.TODO(), req)
+					//then
+					require.NoError(t, err)
+					assert.Equal(t, reconcile.Result{}, res)
+
+					// Check the second created/updated identity
+					identity2 := &userv1.Identity{}
+					err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(
+						fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))),
+						config.Auth().Idp())}, identity2)
+					require.NoError(t, err)
+					assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), identity2.Name)
+					require.Equal(t, userAcc.Name, identity2.Labels["toolchain.dev.openshift.com/owner"])
+					assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
+
+					t.Run("reconcile once more to ensure the users", func(t *testing.T) {
+						r, req, _, _ := prepareReconcile(t, username, userAcc, updatedUser, identity1, identity2)
+						//when
+						res, err := r.Reconcile(context.TODO(), req)
+						//then
+						require.NoError(t, err)
+						assert.Equal(t, reconcile.Result{}, res)
+
+						// Check the user identity mapping
+						checkMapping(t, updatedUser, identity1, identity2)
+					})
+				})
+			})
+		})
 
 	})
 }
@@ -1678,7 +1761,6 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 		})
 
 	})
-
 }
 
 func assertUserNotFound(t *testing.T, r *Reconciler, account *toolchainv1alpha1.UserAccount) {
@@ -1819,11 +1901,14 @@ func newReconcileRequest(name string) reconcile.Request {
 	}
 }
 
-func checkMapping(t *testing.T, user *userv1.User, identity *userv1.Identity) {
-	assert.Equal(t, user.Name, identity.User.Name)
-	assert.Equal(t, user.UID, identity.User.UID)
-	require.Len(t, user.Identities, 1)
-	assert.Equal(t, identity.Name, user.Identities[0])
+func checkMapping(t *testing.T, user *userv1.User, identities ...*userv1.Identity) {
+	require.Len(t, user.Identities, len(identities))
+
+	for i, identity := range identities {
+		assert.Equal(t, user.Name, identity.User.Name)
+		assert.Equal(t, user.UID, identity.User.UID)
+		assert.Equal(t, identity.Name, user.Identities[i])
+	}
 }
 
 func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, membercfg.Configuration) {

@@ -663,7 +663,6 @@ func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1
 		},
 		Spec: *userAcc.Spec.NSTemplateSet,
 	}
-	setOwnerLabel(nsTmplSet, userAcc.Name)
 	return nsTmplSet
 }
 

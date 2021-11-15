@@ -977,62 +977,66 @@ func TestReconcile(t *testing.T) {
 		require.NoError(t, err)
 
 		// trigger the deletion of the `User` resource
-		t.Log("Reconcile #1 with Deletion timestamp: deleting the User resource")
-		res, err = r.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
-			HasConditions(notReady("Terminating", "deleting user/identity"))
+		t.Run("first reconcile with Deletion timestamp: deleting the User resource", func(t *testing.T) {
+			res, err = r.Reconcile(context.TODO(), req)
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+				HasConditions(notReady("Terminating", "deleting user/identity"))
 
-		// trigger the deletion of the `Identity` resource
-		t.Log("Reconcile #2 with Deletion timestamp: deleting the Identity resource")
-		res, err = r.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
-			HasConditions(notReady("Terminating", "deleting user/identity"))
+			// trigger the deletion of the `Identity` resource
+			t.Run("second reconcile with Deletion timestamp: deleting the Identity resource", func(t *testing.T) {
+				res, err = r.Reconcile(context.TODO(), req)
+				require.NoError(t, err)
+				assert.Equal(t, reconcile.Result{}, res)
+				useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+					HasConditions(notReady("Terminating", "deleting user/identity"))
 
-		// trigger the deletion of the `NSTemplateSet` resource
-		t.Log("Reconcile #3 with Deletion timestamp: deleting the NSTemplateSet")
-		res, err = r.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
-			HasConditions(notReady("Terminating", "deleting NSTemplateSet"))
+				// trigger the deletion of the `NSTemplateSet` resource
+				t.Run("Reconcile #3 with Deletion timestamp: deleting the NSTemplateSet", func(t *testing.T) {
+					res, err = r.Reconcile(context.TODO(), req)
+					require.NoError(t, err)
+					assert.Equal(t, reconcile.Result{}, res)
+					useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+						HasConditions(notReady("Terminating", "deleting NSTemplateSet"))
 
-		t.Log("Reconcile #4 with Deletion timestamp: attempt to delete the UserAccount")
-		// Mock finalizer removal failure
-		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-			if userAcc, ok := obj.(*toolchainv1alpha1.UserAccount); ok {
-				userAcc.Finalizers = []string{toolchainv1alpha1.FinalizerName} // restore finalizers
-				return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
-			}
-			return fakeClient.Client.Update(ctx, obj, opts...)
-		}
-		res, err = r.Reconcile(context.TODO(), req)
-		assert.Equal(t, reconcile.Result{}, res)
-		require.EqualError(t, err, fmt.Sprintf("failed to remove finalizer: unable to remove finalizer for user account %s", userAcc.Name))
+					t.Run("fourth reconcile with Deletion timestamp: attempt to delete the UserAccount", func(t *testing.T) {
+						// Mock finalizer removal failure
+						fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+							if userAcc, ok := obj.(*toolchainv1alpha1.UserAccount); ok {
+								userAcc.Finalizers = []string{toolchainv1alpha1.FinalizerName} // restore finalizers
+								return fmt.Errorf("unable to remove finalizer for user account %s", userAcc.Name)
+							}
+							return fakeClient.Client.Update(ctx, obj, opts...)
+						}
+						res, err = r.Reconcile(context.TODO(), req)
+						assert.Equal(t, reconcile.Result{}, res)
+						require.EqualError(t, err, fmt.Sprintf("failed to remove finalizer: unable to remove finalizer for user account %s", userAcc.Name))
 
-		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
-			HasConditions(notReady("Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name)))
+						useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+							HasConditions(notReady("Terminating", fmt.Sprintf("unable to remove finalizer for user account %s", userAcc.Name)))
 
-		// Check that the associated identity has been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
+						// Check that the associated identity has been deleted
+						// when reconciling the useraccount with a deletion timestamp
+						identity := &userv1.Identity{}
+						err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
+						require.Error(t, err)
+						assert.True(t, apierros.IsNotFound(err))
 
-		// Check that the associated user has been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		user := &userv1.User{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
-		require.Error(t, err)
-		assert.True(t, apierros.IsNotFound(err))
+						// Check that the associated user has been deleted
+						// when reconciling the useraccount with a deletion timestamp
+						user := &userv1.User{}
+						err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+						require.Error(t, err)
+						assert.True(t, apierros.IsNotFound(err))
 
-		// Check that the user account finalizer has not been removed
-		// when reconciling the useraccount with a deletion timestamp
-		useraccount.AssertThatUserAccount(t, username, r.Client).HasFinalizer(toolchainv1alpha1.FinalizerName)
+						// Check that the user account finalizer has not been removed
+						// when reconciling the useraccount with a deletion timestamp
+						useraccount.AssertThatUserAccount(t, username, r.Client).HasFinalizer(toolchainv1alpha1.FinalizerName)
+					})
+				})
+			})
+		})
 	})
 
 	// delete Che user fails

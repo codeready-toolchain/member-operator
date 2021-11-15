@@ -36,16 +36,6 @@ import (
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
-	mapToOwnerByName := handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
-		return []reconcile.Request{
-			{
-				NamespacedName: types.NamespacedName{
-					Namespace: obj.GetNamespace(),
-					Name:      obj.GetName(),
-				},
-			},
-		}
-	})
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -454,9 +444,13 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, config membercfg.Configu
 	return true, nil
 }
 
-// deleteNSTemplateSet deletes the NSTemplateSet associated with the given UserAccount.
+// deleteNSTemplateSet deletes the NSTemplateSet associated with the given UserAccount (if specified)
 // Returns bool and error indicating that whether the resource were deleted.
 func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	if userAcc.Spec.NSTemplateSet == nil {
+		logger.Info("no NSTemplateSet associated with the UserAccount to delete")
+		return false, nil
+	}
 	// Get the NSTemplateSet associated with the UserAccount
 	nstmplSet := &toolchainv1alpha1.NSTemplateSet{}
 	err := r.Client.Get(context.TODO(),
@@ -469,6 +463,10 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, userAcc *toolchainv
 			return false, err
 		}
 		return false, nil
+	}
+	if util.IsBeingDeleted(nstmplSet) {
+		logger.Info("the NSTemplateSet resource is already being deleted")
+		return true, nil
 	}
 	logger.Info("deleting the NSTemplateSet resource")
 	// Delete NSTemplateSet associated with UserAccount

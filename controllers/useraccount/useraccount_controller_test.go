@@ -1098,6 +1098,7 @@ func TestReconcile(t *testing.T) {
 		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
 			HasConditions(notReady("Terminating", `request to find Che user 'johnsmith' failed, Response status: '400 Bad Request' Body: ''`))
 	})
+
 	// delete identity fails
 	t.Run("delete identity fails", func(t *testing.T) {
 		// given
@@ -1138,6 +1139,7 @@ func TestReconcile(t *testing.T) {
 		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
 			HasConditions(notReady("Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name)))
 	})
+
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given
@@ -1183,6 +1185,34 @@ func TestReconcile(t *testing.T) {
 		user := &userv1.User{}
 		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 		require.NoError(t, err)
+	})
+
+	t.Run("remove OwnerReferences on NSTemplateSet", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		preexistingNsTmplSet := &toolchainv1alpha1.NSTemplateSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      userAcc.Name,
+				Namespace: test.MemberOperatorNs,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Kind: userAcc.Kind,
+						Name: userAcc.Name,
+					},
+				},
+			},
+			Spec: newNSTmplSetSpec(),
+		}
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet)
+
+		//when
+		res, err := r.Reconcile(context.TODO(), req)
+
+		//then
+		assert.Equal(t, reconcile.Result{}, res)
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, preexistingNsTmplSet.Namespace, preexistingNsTmplSet.Name, fakeClient).HasNoOwnerReferences()
+
 	})
 }
 

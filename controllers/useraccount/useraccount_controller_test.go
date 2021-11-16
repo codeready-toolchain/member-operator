@@ -196,7 +196,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			// given
-			userAcc := newUserAccount(username, userID, withFinalizer(toolchainv1alpha1.FinalizerName))
+			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
 				Name:   username,
 				UID:    userUID,
@@ -286,7 +286,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			// given
-			userAcc := newUserAccount(username, userID, withFinalizer(toolchainv1alpha1.FinalizerName))
+			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name:   ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
 				UID:    types.UID(uuid.NewV4().String()),
@@ -518,7 +518,7 @@ func TestReconcile(t *testing.T) {
 		})
 
 		t.Run("no nstemplateset to update", func(t *testing.T) {
-			userAcc := newUserAccount(username, userID, withoutNSTemplateSet(), withFinalizer(toolchainv1alpha1.FinalizerName))
+			userAcc := newUserAccount(username, userID, withoutNSTemplateSet(), withFinalizer())
 			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity, preexistingNsTmplSet)
 			cl.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return fmt.Errorf("schouldn't be called")
@@ -534,7 +534,7 @@ func TestReconcile(t *testing.T) {
 			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
 				Exists(). // existed before
 				HasNoOwnerReferences().
-				HasNamespaceTemplateRefs(devTemplateRef,codeTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef).
 				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef)
 		})
 
@@ -1577,7 +1577,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 	t.Run("deleting identity for disabled useraccount", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID, disabled(), withFinalizer(toolchainv1alpha1.FinalizerName))
+		userAcc := newUserAccount(username, userID, disabled(), withFinalizer())
 		userAcc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 		r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingNsTmplSet, preexistingUser, preexistingIdentity)
 
@@ -1794,9 +1794,9 @@ func disabled() userAccountOption {
 	}
 }
 
-func withFinalizer(name string) userAccountOption {
+func withFinalizer() userAccountOption {
 	return func(userAcc *toolchainv1alpha1.UserAccount) {
-		userAcc.Finalizers = []string{name}
+		userAcc.Finalizers = []string{toolchainv1alpha1.FinalizerName}
 	}
 }
 

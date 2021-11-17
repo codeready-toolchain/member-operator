@@ -169,11 +169,13 @@ func (r *Reconciler) migrateNStemplateSetIfNecessary(logger logr.Logger, userAcc
 		return false, err
 	}
 	// ensure that the NSTemplateSet `OwnerReferences` is empty
-	if len(nsTmplSet.OwnerReferences) == 0 {
-		return false, nil
+	if len(nsTmplSet.OwnerReferences) > 0 {
+		logger.Info("removing OwnerReferences in the associated NSTemplateSet")
+		nsTmplSet.OwnerReferences = nil
+		return true, r.Client.Update(context.TODO(), nsTmplSet)
 	}
-	nsTmplSet.OwnerReferences = nil
-	return true, r.Client.Update(context.TODO(), nsTmplSet)
+	// no change on the NSTemplateSet
+	return false, nil
 }
 
 func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {

@@ -226,7 +226,6 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("should recreate role when missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"))
-		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "user-edit", username)
@@ -275,6 +274,186 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, username+"-code", fakeClient).
 			HasResource("user-edit", &rbacv1.RoleBinding{}).
 			HasResource("rbac-edit", &rbacv1.Role{})
+	})
+
+	t.Run("should add owner label to role when missing", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
+		rb := newRoleBinding(devNS.Name, "user-edit", username)
+		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", username)
+		rbCode := newRoleBinding(codeNS.Name, "user-edit", username)
+		rb2Code := newRoleBinding(codeNS.Name, "user-rbac-edit", username)
+		ro := newRole(devNS.Name, "rbac-edit", username)
+		delete(ro.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		roCode := newRole(codeNS.Name, "rbac-edit", username)
+		delete(roCode.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rb, rb2, ro, roCode, rbCode, rb2Code)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			ResourceHasOwnerLabel("rbac-edit", &rbacv1.Role{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			HasResource("rbac-edit", &rbacv1.Role{})
+
+		//second reconcile adds owner label to role in code namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			ResourceHasOwnerLabel("rbac-edit", &rbacv1.Role{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			ResourceHasOwnerLabel("rbac-edit", &rbacv1.Role{}, username)
+	})
+
+	t.Run("should add owner label to rolebinding when missing", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
+		rbDev := newRoleBinding(devNS.Name, "user-edit", username)
+		rbCode := newRoleBinding(codeNS.Name, "user-edit", username)
+		delete(rbDev.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		delete(rbCode.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rbDev, rbCode)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			ResourceHasOwnerLabel("user-edit", &rbacv1.RoleBinding{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+
+		//second reconcile adds owner label to rolebinding in code namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			ResourceHasOwnerLabel("user-edit", &rbacv1.RoleBinding{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			ResourceHasOwnerLabel("user-edit", &rbacv1.RoleBinding{}, username)
+	})
+
+	t.Run("should correct the value of owner in label of rolebinding when incorrect", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
+		rbDev := newRoleBinding(devNS.Name, "user-edit", "wrong-owner")
+		rbCode := newRoleBinding(codeNS.Name, "user-edit", "wrong-owner")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rbDev, rbCode)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			ResourceHasOwnerLabel("user-edit", &rbacv1.RoleBinding{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{})
+
+		//second reconcile adds owner label to rolebinding in code namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			ResourceHasOwnerLabel("user-edit", &rbacv1.RoleBinding{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			ResourceHasOwnerLabel("user-edit", &rbacv1.RoleBinding{}, username)
+	})
+
+	t.Run("should correct the value of owner in label of role when incorrect", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "code"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
+		rb := newRoleBinding(devNS.Name, "user-edit", username)
+		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", username)
+		rbCode := newRoleBinding(codeNS.Name, "user-edit", username)
+		rb2Code := newRoleBinding(codeNS.Name, "user-rbac-edit", username)
+		ro := newRole(devNS.Name, "rbac-edit", "wrong-username")
+		roCode := newRole(codeNS.Name, "rbac-edit", "wrong-username")
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, rb, rb2, ro, roCode, rbCode, rb2Code)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			ResourceHasOwnerLabel("rbac-edit", &rbacv1.Role{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			HasResource("rbac-edit", &rbacv1.Role{})
+
+		//second reconcile adds owner label to role in code namespace
+		res, err = r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "code").
+			HasConditions(Updating())
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			ResourceHasOwnerLabel("rbac-edit", &rbacv1.Role{}, username)
+		AssertThatNamespace(t, username+"-code", fakeClient).
+			HasResource("user-edit", &rbacv1.RoleBinding{}).
+			HasResource("user-rbac-edit", &rbacv1.RoleBinding{}).
+			ResourceHasOwnerLabel("rbac-edit", &rbacv1.Role{}, username)
 	})
 
 	t.Run("no NSTemplateSet available", func(t *testing.T) {

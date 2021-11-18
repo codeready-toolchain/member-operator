@@ -343,17 +343,14 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 }
 
 func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object, owner string) (bool, error) {
+	if obj.GetObjectKind().GroupVersionKind().Kind != "Role" {
+		return false, fmt.Errorf("object is not a role")
+	}
 	for _, val := range list {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "Role" && val.GetName() == obj.GetName() {
-			// add owner label if doesn't exist
-			if _, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists {
-				if val.Labels == nil {
-					val.Labels = make(map[string]string)
-				}
-				val.Labels[toolchainv1alpha1.OwnerLabelKey] = owner
-				if err := r.Client.Update(context.TODO(), &val); err != nil {
-					return false, err
-				}
+		if val.GetName() == obj.GetName() {
+			// check if owner label exists
+			if ownerValue, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists || ownerValue != owner {
+				return false, nil
 			}
 			return true, nil
 		}
@@ -362,18 +359,16 @@ func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Obj
 }
 
 func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object, owner string) (bool, error) {
+	if obj.GetObjectKind().GroupVersionKind().Kind != "RoleBinding" {
+		return false, fmt.Errorf("object is not a rolebinding")
+	}
 	for _, val := range list {
-		if obj.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" && val.GetName() == obj.GetName() {
-			// add owner label if doesn't exist
-			if _, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists {
-				if val.Labels == nil {
-					val.Labels = make(map[string]string)
-				}
-				val.Labels[toolchainv1alpha1.OwnerLabelKey] = owner
-				if err := r.Client.Update(context.TODO(), &val); err != nil {
-					return false, err
-				}
+		if val.GetName() == obj.GetName() {
+			// check if owner label exists
+			if ownerValue, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists || ownerValue != owner {
+				return false, nil
 			}
+
 			return true, nil
 		}
 	}

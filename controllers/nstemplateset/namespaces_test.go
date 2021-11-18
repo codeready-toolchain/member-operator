@@ -1221,12 +1221,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
-		require.True(t, isProvisioned)
-
-		// the role should have been updated to have the label
-		err = manager.Client.Get(context.TODO(), types.NamespacedName{Namespace: role.Namespace, Name: role.Name}, role)
-		require.NoError(t, err)
-		require.Equal(t, "johnsmith", role.GetLabels()["toolchain.dev.openshift.com/owner"])
+		require.False(t, isProvisioned)
 	})
 
 	t.Run("rolebinding doesn't have the owner label", func(t *testing.T) {
@@ -1248,12 +1243,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
-		require.True(t, isProvisioned)
-
-		// the rolebinding should have been updated to have the label
-		err = manager.Client.Get(context.TODO(), types.NamespacedName{Namespace: rb.Namespace, Name: rb.Name}, rb)
-		require.NoError(t, err)
-		require.Equal(t, "johnsmith", rb.GetLabels()["toolchain.dev.openshift.com/owner"])
+		require.False(t, isProvisioned)
 	})
 
 	t.Run("namespace doesn't have owner Label", func(t *testing.T) {
@@ -1269,94 +1259,5 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		require.Error(t, err, "namespace doesn't have owner label")
 		require.False(t, isProvisioned)
 
-	})
-
-	t.Run("unable to update rolebinding successfully", func(t *testing.T) {
-		//given
-		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
-		delete(rbDev.GetLabels(), toolchainv1alpha1.OwnerLabelKey)
-		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev)
-		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-			if _, ok := obj.(*rbacv1.RoleBinding); ok {
-				return fmt.Errorf("mock update error")
-			}
-			return fakeClient.Client.Update(ctx, obj, opts...)
-		}
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
-		require.NoError(t, err)
-		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
-		//then
-		require.Error(t, err, "mock update error")
-		require.False(t, isProvisioned)
-	})
-
-	t.Run("unable to update role successfully", func(t *testing.T) {
-		//given
-		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
-		ro := newRole(devNS.Name, "rbac-edit", "johnsmith")
-		delete(ro.GetLabels(), toolchainv1alpha1.OwnerLabelKey)
-		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev, ro)
-		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-			if _, ok := obj.(*rbacv1.Role); ok {
-				return fmt.Errorf("mock update error")
-			}
-			return fakeClient.Client.Update(ctx, obj, opts...)
-		}
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
-		require.NoError(t, err)
-		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
-		//then
-		require.Error(t, err, "mock update error")
-		require.False(t, isProvisioned)
-	})
-
-	t.Run("adds owner label to rolebinding even when no labels exist", func(t *testing.T) {
-		//given
-		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rbDev := &rbacv1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: devNS.Name,
-				Name:      "user-edit",
-			},
-		}
-		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
-		require.NoError(t, err)
-		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
-		//then
-		require.NoError(t, err)
-		require.True(t, isProvisioned)
-		err = fakeClient.Client.Get(context.TODO(), types.NamespacedName{Namespace: devNS.Name, Name: "user-edit"}, rbDev)
-		require.NoError(t, err)
-		require.Equal(t, "johnsmith", rbDev.GetLabels()[toolchainv1alpha1.OwnerLabelKey])
-	})
-
-	t.Run("add owner label to role even when no labels exist", func(t *testing.T) {
-		//given
-		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rbDev := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
-		rbacDev := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
-		ro := &rbacv1.Role{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: devNS.Name,
-				Name:      "rbac-edit",
-			},
-		}
-		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, rbDev, rbacDev, ro)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
-		require.NoError(t, err)
-		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
-		//then
-		require.NoError(t, err)
-		require.True(t, isProvisioned)
-		err = fakeClient.Client.Get(context.TODO(), types.NamespacedName{Namespace: devNS.Name, Name: "rbac-edit"}, ro)
-		require.NoError(t, err)
-		require.Equal(t, "johnsmith", ro.GetLabels()[toolchainv1alpha1.OwnerLabelKey])
 	})
 }

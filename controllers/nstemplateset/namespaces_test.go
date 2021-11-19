@@ -1260,4 +1260,26 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		require.False(t, isProvisioned)
 
 	})
+
+	t.Run("containsRole returns error", func(t *testing.T) {
+		ro := newRole("johnsmith-dev", "user-edit", "johnsmith")
+		ro2 := newRole("johnsmith-dev", "user-rbac-edit", "johnsmith")
+		rb := newRoleBinding("johnsmith-dev", "user-edit", "johnsmith")
+		roleList := []rbacv1.Role{}
+		roleList = append(roleList, *ro, *ro2)
+		found, err := manager.containsRole(roleList, rb, "johnsmith")
+		require.Error(t, err)
+		require.False(t, found)
+	})
+
+	t.Run("containsRole returns error", func(t *testing.T) {
+		rb := newRoleBinding("johnsmith-dev", "user-edit", "johnsmith")
+		rb2 := newRoleBinding("johnsmith-dev", "user-rbac-edit", "johnsmith")
+		ro := newRole("johnsmith-dev", "user-edit", "johnsmith")
+		roleBindingList := []rbacv1.RoleBinding{}
+		roleBindingList = append(roleBindingList, *rb, *rb2)
+		found, err := manager.containsRoleBindings(roleBindingList, ro, "johnsmith")
+		require.Error(t, err)
+		require.False(t, found)
+	})
 }

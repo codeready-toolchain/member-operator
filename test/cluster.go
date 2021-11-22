@@ -27,7 +27,7 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 				OperatorNamespace: test.HostOperatorNs,
 				OwnerClusterName:  test.MemberClusterName,
 			},
-			Client:            cl,
+			Client: cl,
 			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
 				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
 					Type:   toolchainv1alpha1.ToolchainClusterReady,
@@ -55,7 +55,7 @@ func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionSt
 				OperatorNamespace: test.HostOperatorNs,
 				OwnerClusterName:  test.MemberClusterName,
 			},
-			Client:            cl,
+			Client: cl,
 			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
 				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
 					Type:          toolchainv1alpha1.ToolchainClusterReady,

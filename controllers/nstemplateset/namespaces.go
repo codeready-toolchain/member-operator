@@ -2,7 +2,10 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 	"sort"
+
+	rbac "k8s.io/api/rbac/v1"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -13,6 +16,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -47,7 +51,10 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	}
 
 	// find next namespace for provisioning namespace resource
-	tierTemplate, userNamespace, found := nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces)
+	tierTemplate, userNamespace, found, err := r.nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces)
+	if err != nil {
+		return false, err
+	}
 	if !found {
 		logger.Info("no more namespaces to create", "username", nsTmplSet.GetName())
 		return false, nil
@@ -134,6 +141,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 	}
 	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
@@ -228,20 +236,24 @@ func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace,
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
 // either revision is not set or revision or tier doesn't equal to the current one.
 // It also returns namespace present in tcNamespaces but not found in given namespaces
-func nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool) {
+func (r *namespacesManager) nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool, error) {
 	for _, nsTemplate := range tierTemplatesByType {
 		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				if !isUpToDateAndProvisioned(&namespace, nsTemplate) {
-					return nsTemplate, &namespace, true
+				isProvisioned, err := r.isUpToDateAndProvisioned(&namespace, nsTemplate)
+				if err != nil {
+					return nsTemplate, nil, true, err
+				}
+				if !isProvisioned {
+					return nsTemplate, &namespace, true, nil
 				}
 			}
 		} else {
-			return nsTemplate, nil, true
+			return nsTemplate, nil, true, nil
 		}
 	}
-	return nil, nil, false
+	return nil, nil, false, nil
 }
 
 // nextNamespaceToDeprovision returns namespace (and information of it was found) that should be deprovisioned
@@ -274,4 +286,91 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 		return configuration.GetWatchNamespace()
 	}
 	return namespace, nil
+}
+
+// isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
+// If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
+func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
+	if ns.GetLabels() != nil &&
+		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
+		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
+
+		newObjs, err := tierTemplate.process(r.Scheme, ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey], template.RetainAllButNamespaces)
+		if err != nil {
+			return false, err
+		}
+		processedRoles := []runtimeclient.Object{}
+		processedRoleBindings := []runtimeclient.Object{}
+		roleList := rbac.RoleList{}
+		rolebindingList := rbac.RoleBindingList{}
+		if err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(ns.GetName())); err != nil {
+			return false, err
+		}
+
+		if err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(ns.GetName())); err != nil {
+			return false, err
+		}
+
+		for _, obj := range newObjs {
+			switch obj.GetObjectKind().GroupVersionKind().Kind {
+			case "Role":
+				processedRoles = append(processedRoles, obj)
+			case "RoleBinding":
+				processedRoleBindings = append(processedRoleBindings, obj)
+			}
+		}
+		// get the owner name from namespace
+		owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
+		if !exists {
+			return false, fmt.Errorf("namespace doesn't have owner label")
+		}
+		//Check the names of the roles and roleBindings as well
+		for _, role := range processedRoles {
+			if found, err := r.containsRole(roleList.Items, role, owner); !found || err != nil {
+				return false, err
+			}
+		}
+
+		for _, rolebinding := range processedRoleBindings {
+			if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, owner); !found || err != nil {
+				return false, err
+			}
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object, owner string) (bool, error) {
+	if obj.GetObjectKind().GroupVersionKind().Kind != "Role" {
+		return false, fmt.Errorf("object is not a role")
+	}
+	for _, val := range list {
+		if val.GetName() == obj.GetName() {
+			// check if owner label exists
+			if ownerValue, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists || ownerValue != owner {
+				return false, nil
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object, owner string) (bool, error) {
+	if obj.GetObjectKind().GroupVersionKind().Kind != "RoleBinding" {
+		return false, fmt.Errorf("object is not a rolebinding")
+	}
+	for _, val := range list {
+		if val.GetName() == obj.GetName() {
+			// check if owner label exists
+			if ownerValue, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists || ownerValue != owner {
+				return false, nil
+			}
+
+			return true, nil
+		}
+	}
+	return false, nil
 }

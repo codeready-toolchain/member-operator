@@ -77,6 +77,7 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
 	opts := zap.Options{
 		Development: true,
 		Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{
@@ -156,6 +157,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	allNamespacesCluster, err := runtimecluster.New(ctrl.GetConfigOrDie(), func(options *runtimecluster.Options) {
+		options.Scheme = scheme
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start allNamespaceCluster")
+		os.Exit(1)
+	}
+	err = mgr.Add(allNamespacesCluster)
+	if err != nil {
+		setupLog.Error(err, "unable to add allNamespaceCluster to manager")
+		os.Exit(1)
+	}
+
 	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
 	if err != nil {
 		setupLog.Error(err, "")
@@ -193,10 +207,11 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		GetHostCluster: cluster.GetHostCluster,
-	})).SetupWithManager(mgr); err != nil {
+		Client:              mgr.GetClient(),
+		AllNamespacesClient: allNamespacesClient,
+		Scheme:              mgr.GetScheme(),
+		GetHostCluster:      cluster.GetHostCluster,
+	})).SetupWithManager(mgr, allNamespacesCluster); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
 		os.Exit(1)
 	}
@@ -268,6 +283,7 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+
 }
 
 // newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.

@@ -101,3 +101,16 @@ func (a *NamespaceAssertion) HasNoResource(name string, obj client.Object) *Name
 	assert.True(a.t, errors.IsNotFound(err))
 	return a
 }
+
+func (a *NamespaceAssertion) ResourceHasOwnerLabel(name string, obj client.Object, owner string) *NamespaceAssertion {
+	err := a.loadNamespace()
+	require.NoError(a.t, err)
+	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
+	require.NoError(a.t, err)
+
+	// check for toolchain.dev.openshift.com/owner label
+	labels := obj.GetLabels()
+	assert.Equal(a.t, labels[toolchainv1alpha1.ProviderLabelKey], toolchainv1alpha1.ProviderLabelValue)
+	assert.Equal(a.t, labels[toolchainv1alpha1.OwnerLabelKey], owner)
+	return a
+}

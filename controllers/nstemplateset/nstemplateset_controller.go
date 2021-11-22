@@ -15,13 +15,14 @@ import (
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
+	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -47,26 +48,28 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
-
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel)
-
+		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel).
+		Watches(source.NewKindWithCache(&rbac.Role{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{})).
+		Watches(source.NewKindWithCache(&rbac.RoleBinding{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources
 		build = build.Watches(&source.Kind{Type: clusterResource.object}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	}
 
+	r.AllNamespacesClient = allNamespaceCluster.GetClient()
 	return build.Complete(r)
 }
 
 type APIClient struct {
-	Client         runtimeclient.Client
-	Scheme         *runtime.Scheme
-	GetHostCluster cluster.GetHostClusterFunc
+	AllNamespacesClient runtimeclient.Client
+	Client              runtimeclient.Client
+	Scheme              *runtime.Scheme
+	GetHostCluster      cluster.GetHostClusterFunc
 }
 
 // Reconciler the NSTemplateSet reconciler
@@ -230,10 +233,4 @@ func listByOwnerLabel(username string) runtimeclient.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
 
 	return runtimeclient.MatchingLabels(labels)
-}
-
-func isUpToDateAndProvisioned(obj metav1.Object, tierTemplate *tierTemplate) bool {
-	return obj.GetLabels() != nil &&
-		obj.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
-		obj.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName
 }

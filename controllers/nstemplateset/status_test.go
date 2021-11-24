@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"testing"
 
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -169,6 +172,8 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
 	failed := toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
@@ -198,7 +203,9 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS)
+		devRb := newRoleBinding(devNS.Name, "user-edit", username)
+		codeRb := newRoleBinding(codeNS.Name, "user-edit", username)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRb, codeRb)
 
 		// when
 		_, err := r.Reconcile(context.TODO(), req)

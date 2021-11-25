@@ -1,10 +1,9 @@
 TMP_DIR?=/tmp
 IMAGE_BUILDER?=podman
 INDEX_IMAGE_NAME?=member-operator-index
-FIRST_RELEASE=false
+FIRST_RELEASE?=false
 CHANNEL=staging
 INDEX_IMAGE_TAG=latest
-ENV=dev
 NEXT_VERSION=0.0.1
 COMPONENT_IMAGE=${WEBHOOK_IMAGE}
 BUNDLE_TAG=""
@@ -16,7 +15,7 @@ push-to-quay-staging: generate-cd-release-manifests push-bundle-and-index-image
 .PHONY: generate-cd-release-manifests
 ## Generates a new version of operator manifests
 generate-cd-release-manifests:
-	$(MAKE) run-cicd-script SCRIPT_PATH=scripts/cd/generate-cd-release-manifests.sh SCRIPT_PARAMS="-pr ../member-operator/ -qn ${QUAY_NAMESPACE} -td ${TMP_DIR} -ci ${COMPONENT_IMAGE} -fr ${FIRST_RELEASE} -ch ${CHANNEL} -il ${IMAGE} -e ${ENV}"
+	$(MAKE) run-cicd-script SCRIPT_PATH=scripts/cd/generate-cd-release-manifests.sh SCRIPT_PARAMS="-pr ../member-operator/ -qn ${QUAY_NAMESPACE} -td ${TMP_DIR} -ci ${COMPONENT_IMAGE} -fr ${FIRST_RELEASE} -ch ${CHANNEL} -il ${IMAGE}"
 
 .PHONY: push-bundle-and-index-image
 ## Pushes generated manifests as a bundle image to quay and adds is to the image index

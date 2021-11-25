@@ -18,7 +18,7 @@ spec:
   versions:
   - additionalPrinterColumns:
     - jsonPath: .spec.tierName
-      name: Tier Name
+      name: Tier
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready

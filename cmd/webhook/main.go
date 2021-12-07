@@ -9,6 +9,7 @@ import (
 
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -20,6 +21,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutate)
+	mux.HandleFunc("/validate-users-rolebindings", validatingwebhook.HandleValidate)
 
 	webhookServer := &http.Server{
 		Addr:    ":8443",

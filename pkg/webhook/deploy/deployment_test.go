@@ -35,11 +35,12 @@ func TestGetTemplateObjects(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	require.Len(t, objs, 4)
+	require.Len(t, objs, 5)
 	contains(t, objs, priorityClass())
 	contains(t, objs, service(test.MemberOperatorNs))
 	contains(t, objs, deployment(test.MemberOperatorNs, imgLoc))
 	contains(t, objs, mutatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
+	contains(t, objs, validatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
 }
 
 func TestDeployWebhook(t *testing.T) {
@@ -185,4 +186,8 @@ func deployment(namespace, image string) string {
 
 func mutatingWebhookConfig(namespace, caBundle string) string {
 	return fmt.Sprintf(`{"apiVersion":"admissionregistration.k8s.io/v1","kind":"MutatingWebhookConfiguration","metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"webhooks":[{"name":"users.pods.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%s","service":{"name":"member-operator-webhook","namespace":"%s","path":"/mutate-users-pods","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE","UPDATE"],"apiGroups":[""],"apiVersions":["v1"],"resources":["pods"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Ignore","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}}]}`, caBundle, namespace)
+}
+
+func validatingWebhookConfig(namespace, caBundle string) string {
+	return fmt.Sprintf(`{"apiVersion":"admissionregistration.k8s.io/v1","kind":"ValidatingWebhookConfiguration","metadata":{"name":"member-operator-validating-webhook","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"webhooks":[{"name":"users.rolebindings.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%s","service":{"name":"member-operator-webhook","namespace":"%s","path":"/validate-users-rolebindings","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE","UPDATE"],"apiGroups":[""],"apiVersions":["v1"],"resources":["rolebindings"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Fail","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}}]}`, caBundle, namespace)
 }

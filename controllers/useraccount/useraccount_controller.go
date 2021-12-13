@@ -114,15 +114,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 
 	if !userAcc.Spec.Disabled {
 		logger.Info("ensuring user and identity associated with UserAccount")
-		var createdOrUpdated bool
-		var user *userv1.User
-		if user, createdOrUpdated, err = r.ensureUser(logger, config, userAcc); err != nil || createdOrUpdated {
+		if createdOrUpdated, err := r.ensureUserAndIdentity(logger, userAcc, config); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
-		if _, createdOrUpdated, err = r.ensureIdentity(logger, config, userAcc, user); err != nil || createdOrUpdated {
-			return reconcile.Result{}, err
-		}
-		if _, createdOrUpdated, err = r.ensureNSTemplateSet(logger, userAcc); err != nil || createdOrUpdated {
+		if _, createdOrUpdated, err := r.ensureNSTemplateSet(logger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
 	} else {
@@ -154,6 +149,34 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 	logger.Info("All provisioned - setting status to ready.")
 	return reconcile.Result{}, r.setStatusReady(userAcc)
+}
+
+func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) (bool, error) {
+	var createdOrUpdated bool
+	var user *userv1.User
+	var err error
+	// for AppStudio use-case - create User & Identity resources if user is not used appstudio tier
+	if userAcc.Spec.NSTemplateSet == nil || userAcc.Spec.NSTemplateSet.TierName != "appstudio" {
+		if user, createdOrUpdated, err = r.ensureUser(logger, config, userAcc); err != nil || createdOrUpdated {
+			return createdOrUpdated, err
+		}
+		_, createdOrUpdated, err = r.ensureIdentity(logger, config, userAcc, user)
+		return createdOrUpdated, err
+	}
+	// we don't expect User nor Identity resources to be present for AppStudio tier
+	// This can be removed as soon as we don't create UserAccounts in AppStudio environment.
+	deleted, err := r.deleteIdentityAndUser(logger, config, userAcc)
+	if err != nil {
+		return deleted, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to delete redundant user or identity")
+	}
+	if deleted {
+		if err := r.setStatusProvisioning(userAcc); err != nil {
+			logger.Error(err, "error updating status")
+			return deleted, err
+		}
+		return deleted, nil
+	}
+	return false, nil
 }
 
 // (optional) migration step:

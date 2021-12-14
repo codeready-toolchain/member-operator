@@ -96,6 +96,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		}
 		return reconcile.Result{}, err
 	}
+	if userAcc.Spec.NSTemplateSet == nil {
+		logger = logger.WithValues("NSTemplateSet", "empty")
+	} else {
+		logger = logger.WithValues("tierName", userAcc.Spec.NSTemplateSet.TierName)
+	}
 
 	// If the UserAccount has not been deleted, create or update user and Identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.

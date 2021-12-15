@@ -86,15 +86,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
 	nextTime := nextPodToBeKilledAfter(logger, idler)
 	if nextTime == nil {
-		logger.Info("requeueing for next pod to check", "duration", nextTime)
 		after := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
+		logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
 		return reconcile.Result{
 			Requeue:      true,
 			RequeueAfter: after,
 		}, r.setStatusReady(idler)
 
 	}
-	logger.Info("requeueing for next pod to kill", "duration", nextTime)
+	logger.Info("requeueing for next pod to kill", "after_seconds", nextTime.Seconds())
 	return reconcile.Result{
 		Requeue:      true,
 		RequeueAfter: *nextTime,
@@ -109,12 +109,11 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		podLogger := logger.WithValues("Pod.Name", pod.Name)
-		podLogger.Info("Pod", "Pod.Phase", pod.Status.Phase)
+		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
-				podLogger.Info("Pod running for too long. Killing the pod.")
+				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
 				if err != nil {

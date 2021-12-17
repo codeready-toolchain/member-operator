@@ -449,7 +449,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 
-		t.Run("che not using tls", func(t *testing.T) {
+		t.Run("che not using tls with path", func(t *testing.T) {
 			// given
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
@@ -464,6 +464,27 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+		})
+
+		t.Run("che and console without path", func(t *testing.T) {
+			// given
+			cheRoute := cheRoute(false)
+			cheRoute.Spec.Path = ""
+			consoleRoute := consoleRoute()
+			consoleRoute.Spec.Path = ""
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute, cheRoute)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+
+			// when
+			res, err := reconciler.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("https://console.member-cluster/", "http://codeready-codeready-workspaces-operator.member-cluster/", routesAvailable())
 		})
 
 		t.Run("console route unavailable", func(t *testing.T) {
@@ -852,4 +873,30 @@ func cheAdminUserNotConfigured(msg string) toolchainv1alpha1.Condition {
 
 func cheUserAPICheckError(msg string) toolchainv1alpha1.Condition {
 	return *status.NewComponentErrorCondition("CheUserAPICheckFailed", msg)
+}
+
+func TestSanitizeURL(t *testing.T) {
+	t.Run("ends with single slash", func(t *testing.T) {
+		// when
+		sanitized := sanitizeURL("https://some/url/")
+
+		// then
+		assert.Equal(t, "https://some/url/", sanitized)
+	})
+
+	t.Run("ends with double slashes", func(t *testing.T) {
+		// when
+		sanitized := sanitizeURL("https://some/url//")
+
+		// then
+		assert.Equal(t, "https://some/url/", sanitized)
+	})
+
+	t.Run("ends without any slash", func(t *testing.T) {
+		// when
+		sanitized := sanitizeURL("https://some/url")
+
+		// then
+		assert.Equal(t, "https://some/url", sanitized)
+	})
 }

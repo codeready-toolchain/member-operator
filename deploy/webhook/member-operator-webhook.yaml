@@ -116,7 +116,7 @@ objects:
       matchPolicy: Equivalent
       rules:
         - operations: ["CREATE", "UPDATE"]
-          apiGroups: [""]
+          apiGroups: ["rbac.authorization.k8s.io","authorization.openshift.io"]
           apiVersions: ["v1"]
           resources: ["rolebindings"]
           scope: "Namespaced"

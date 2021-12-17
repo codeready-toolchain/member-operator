@@ -3,6 +3,7 @@ package memberstatus
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -406,7 +407,7 @@ func (r *Reconciler) consoleURL(config membercfg.Configuration) (string, error) 
 	if err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path), nil
+	return sanitizeURL(fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path)), nil
 }
 
 func (r *Reconciler) cheDashboardURL(config membercfg.Configuration) (string, error) {
@@ -420,7 +421,14 @@ func (r *Reconciler) cheDashboardURL(config membercfg.Configuration) (string, er
 	if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
 		scheme = "http"
 	}
-	return fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path), nil
+	return sanitizeURL(fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path)), nil
+}
+
+func sanitizeURL(url string) string {
+	if strings.HasSuffix(url, "//") {
+		return sanitizeURL(strings.TrimSuffix(url, "/")) // remove the extra `/`
+	}
+	return url
 }
 
 // isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.

@@ -22,10 +22,12 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 	}
 	return func() (toolchainCluster *cluster.CachedToolchainCluster, b bool) {
 		return &cluster.CachedToolchainCluster{
-			Client:            cl,
-			Type:              cluster.Host,
-			OperatorNamespace: test.HostOperatorNs,
-			OwnerClusterName:  test.MemberClusterName,
+			Config: &cluster.Config{
+				Type:              cluster.Host,
+				OperatorNamespace: test.HostOperatorNs,
+				OwnerClusterName:  test.MemberClusterName,
+			},
+			Client: cl,
 			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
 				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
 					Type:   toolchainv1alpha1.ToolchainClusterReady,
@@ -48,10 +50,12 @@ func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionSt
 	}
 	return func() (toolchainCluster *cluster.CachedToolchainCluster, b bool) {
 		return &cluster.CachedToolchainCluster{
-			Client:            cl,
-			Type:              cluster.Host,
-			OperatorNamespace: test.HostOperatorNs,
-			OwnerClusterName:  test.MemberClusterName,
+			Config: &cluster.Config{
+				Type:              cluster.Host,
+				OperatorNamespace: test.HostOperatorNs,
+				OwnerClusterName:  test.MemberClusterName,
+			},
+			Client: cl,
 			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
 				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
 					Type:          toolchainv1alpha1.ToolchainClusterReady,

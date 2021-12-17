@@ -911,6 +911,74 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
+	t.Run("for AppStudio tier", func(t *testing.T) {
+		// given
+		appStudioAccount := userAcc.DeepCopy()
+		appStudioAccount.Spec.NSTemplateSet.TierName = "appstudio"
+
+		t.Run("tiername is appstudio - no user nor identity", func(t *testing.T) {
+			// given
+			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+
+			assertUserNotFound(t, r, userAcc)
+			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
+
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioning())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				HasNoOwnerReferences().
+				HasTierName("appstudio").
+				HasClusterResourcesTemplateRef(clusterResourcesTemplateRef).
+				HasNamespaceTemplateRefs(devTemplateRef, codeTemplateRef)
+		})
+
+		t.Run("user & identity are there - it should remove identity", func(t *testing.T) {
+			// given
+			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount, preexistingUser, preexistingIdentity)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+
+			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
+			user := &userv1.User{}
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+			require.NoError(t, err)
+
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioning())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				DoesNotExist()
+		})
+
+		t.Run("user is there - it should remove the user", func(t *testing.T) {
+			// given
+			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount, preexistingIdentity)
+
+			// when
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+
+			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
+			assertUserNotFound(t, r, userAcc)
+
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(provisioning())
+			AssertThatNSTemplateSet(t, req.Namespace, req.Name, cl).
+				DoesNotExist()
+		})
+	})
+
 	t.Run("useraccount is being deleted and delete calls returns not found - then it should just remove finalizer", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)

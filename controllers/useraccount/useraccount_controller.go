@@ -501,6 +501,11 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 		}
 		return false, nil
 	}
+	if _, exist := user.Labels[toolchainv1alpha1.OwnerLabelKey]; !exist {
+		logger.Info("the User resource wasn't created by Toolchain Member operator - skipping", "user", userAcc.Name)
+		return false, nil
+	}
+
 	logger.Info("deleting the User resource")
 	// Delete User associated with UserAccount
 	if err := r.Client.Delete(context.TODO(), user); err != nil {
@@ -528,6 +533,11 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, config membercfg.Configu
 		}
 		return false, nil
 	}
+	if _, exist := identity.Labels[toolchainv1alpha1.OwnerLabelKey]; !exist {
+		logger.Info("the Identity resource wasn't created by Toolchain Member operator - skipping", "identity", identityName)
+		return false, nil
+	}
+
 	logger.Info("deleting the Identity resource")
 	// Delete Identity associated with UserAccount
 	if err := r.Client.Delete(context.TODO(), identity); err != nil {

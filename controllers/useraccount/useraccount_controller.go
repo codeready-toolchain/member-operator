@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"reflect"
+	"regexp"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -33,6 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+const (
+	dns1123Value string = "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
+)
+
+var dns1123ValueRegexp = regexp.MustCompile("^" + dns1123Value + "$")
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
@@ -279,9 +286,21 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 	logger.Info("user already exists")
 
 	// ensure mapping
-	expectedIdentities := []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}
+
+	// If the UserID contains invalid characters, then we will base64-encode it here
+	var userID string
+	if isIdentityNameCompliant(userAcc.Spec.UserID) {
+		userID = ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
+	} else {
+		userID = ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.UserID))), config.Auth().Idp())
+	}
+
+	expectedIdentities := []string{userID}
+
+	// If the OriginalSub property has been set also, then an additional identity is required to be created
 	if userAcc.Spec.OriginalSub != "" {
-		expectedIdentities = append(expectedIdentities, ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), config.Auth().Idp()))
+		expectedIdentities = append(expectedIdentities, ToIdentityName(fmt.Sprintf("b64:%s",
+			base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), config.Auth().Idp()))
 	}
 
 	stringSlicesEqual := func(a, b []string) bool {
@@ -810,4 +829,17 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 	}
 
 	return nil
+}
+
+// isIdentityNameCompliant returns true if the specified name is RFC-1123 compliant, otherwise it returns false
+func isIdentityNameCompliant(name string) bool {
+	if len(name) > 253 {
+		return false
+	}
+
+	if !dns1123ValueRegexp.MatchString(name) {
+		return false
+	}
+
+	return true
 }

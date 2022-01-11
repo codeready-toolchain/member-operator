@@ -1373,6 +1373,61 @@ func TestReconcile(t *testing.T) {
 		})
 
 	})
+
+	// Test UserAccount with UserID containing invalid chars
+	t.Run("create or update identities from UserID with invalid chars OK", func(t *testing.T) {
+		userAcc := newUserAccount(username, userID)
+		userAcc.Spec.UserID = "01234:ABCDEF"
+
+		t.Run("create user identity mapping", func(t *testing.T) {
+			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
+			//when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+
+			updatedUser := assertUser(t, r, userAcc)
+
+			t.Run("create first identity", func(t *testing.T) {
+				r, req, _, _ := prepareReconcile(t, username, userAcc, updatedUser)
+				//when
+				res, err := r.Reconcile(context.TODO(), req)
+
+				//then
+				require.NoError(t, err)
+				assert.Equal(t, reconcile.Result{}, res)
+
+				// Check that the user account status is now "provisioning"
+				updatedAcc := &toolchainv1alpha1.UserAccount{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: req.Namespace, Name: userAcc.Name}, updatedAcc)
+				require.NoError(t, err)
+				test.AssertConditionsMatch(t, updatedAcc.Status.Conditions,
+					toolchainv1alpha1.Condition{
+						Type:   toolchainv1alpha1.ConditionReady,
+						Status: corev1.ConditionFalse,
+						Reason: "Provisioning",
+					})
+
+				// Check the created/updated identity
+				identity1 := assertIdentity(t, r, userAcc, config.Auth().Idp())
+
+				t.Run("reconcile once more to ensure the users", func(t *testing.T) {
+					r, req, _, _ := prepareReconcile(t, username, userAcc, updatedUser, identity1)
+					//when
+					res, err := r.Reconcile(context.TODO(), req)
+					//then
+					require.NoError(t, err)
+					assert.Equal(t, reconcile.Result{}, res)
+
+					// Check the user identity mapping
+					checkMapping(t, updatedUser, identity1)
+				})
+			})
+		})
+
+	})
 }
 
 func TestUpdateStatus(t *testing.T) {
@@ -1882,7 +1937,13 @@ func assertIdentityNotFound(t *testing.T, r *Reconciler, userAcc *toolchainv1alp
 }
 
 func assertIdentity(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAccount, idp string) *userv1.Identity {
-	identityName := ToIdentityName(userAcc.Spec.UserID, idp)
+	var identityName string
+	if isIdentityNameCompliant(userAcc.Spec.UserID) {
+		identityName = ToIdentityName(userAcc.Spec.UserID, idp)
+	} else {
+		identityName = ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.UserID))), idp)
+	}
+
 	identity := &userv1.Identity{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
 	require.NoError(t, err)

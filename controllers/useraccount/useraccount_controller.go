@@ -344,8 +344,8 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 	if userAcc.Spec.OriginalSub != "" {
 
 		// Encoded the OriginalSub as an unpadded Base64 value
-		encodedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
-		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, encodedName, userAcc, user)
+		//encodedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
+		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, userAcc.Spec.OriginalSub, userAcc, user)
 		if createdOrUpdated || err != nil {
 			return nil, createdOrUpdated, err
 		}
@@ -356,7 +356,14 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 
 func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, username string,
 	userAccount *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	identityName := ToIdentityName(username, config.Auth().Idp())
+
+	// If the username contains invalid characters, then we will base64-encode it here
+	var identityName string
+	if isIdentityNameCompliant(username) {
+		identityName = ToIdentityName(username, config.Auth().Idp())
+	} else {
+		identityName = ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(username))), config.Auth().Idp())
+	}
 
 	identity := &userv1.Identity{}
 
@@ -366,7 +373,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(username, user, config)
+			identity = newIdentity(identityName, username, user, config)
 			setOwnerLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", identityName)
@@ -765,8 +772,8 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configurat
 	return user
 }
 
-func newIdentity(username string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
-	identityName := ToIdentityName(username, config.Auth().Idp())
+func newIdentity(identityName, username string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
+	//identityName := ToIdentityName(username, config.Auth().Idp())
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: identityName,

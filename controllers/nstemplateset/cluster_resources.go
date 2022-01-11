@@ -117,7 +117,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 
 		// get all objects of the resource kind from the template (if the template is specified)
 		if tierTemplate != nil {
-			newObjs, err = tierTemplate.process(r.Scheme, username, retainObjectsOfSameGVK(clusterResourceKind.gvk))
+			newObjs, err = tierTemplate.process(r.Scheme, map[string]string{"USERNAME": username}, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
 				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 					"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)

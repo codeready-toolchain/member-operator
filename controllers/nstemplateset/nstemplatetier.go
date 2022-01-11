@@ -77,16 +77,13 @@ type tierTemplate struct {
 
 // process processes the template inside of the tierTemplate object and replaces the USERNAME variable with the given username.
 // Optionally, it also filters the result to return a subset of the template objects.
-func (t *tierTemplate) process(scheme *runtime.Scheme, username string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	ns, err := configuration.GetWatchNamespace()
 	if err != nil {
 		return nil, err
 	}
 	tmplProcessor := template.NewProcessor(scheme)
-	params := map[string]string{
-		"USERNAME":                  username,
-		"MEMBER_OPERATOR_NAMESPACE": ns,
-	}
+	params["MEMBER_OPERATOR_NAMESPACE"] = ns // add (or enforce)
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
 }
 

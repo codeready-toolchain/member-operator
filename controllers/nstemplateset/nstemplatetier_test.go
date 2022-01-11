@@ -76,7 +76,7 @@ parameters:
 	t.Cleanup(restore)
 
 	// when
-	obj, err := tierTemplate.process(s, "johnsmith")
+	obj, err := tierTemplate.process(s, map[string]string{"USERNAME": "johnsmith"})
 
 	// then
 	require.NoError(t, err)

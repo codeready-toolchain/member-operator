@@ -75,7 +75,12 @@ type tierTemplate struct {
 	template    templatev1.Template
 }
 
-// process processes the template inside of the tierTemplate object and replaces the USERNAME variable with the given username.
+const (
+	MemberOperatorNS = "MEMBER_OPERATOR_NAMESPACE"
+	Username         = "USERNAME"
+)
+
+// process processes the template inside of the tierTemplate object with the given parameters.
 // Optionally, it also filters the result to return a subset of the template objects.
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	ns, err := configuration.GetWatchNamespace()
@@ -83,7 +88,7 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 		return nil, err
 	}
 	tmplProcessor := template.NewProcessor(scheme)
-	params["MEMBER_OPERATOR_NAMESPACE"] = ns // add (or enforce)
+	params[MemberOperatorNS] = ns // add (or enforce)
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
 }
 

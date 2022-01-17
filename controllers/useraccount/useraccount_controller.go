@@ -773,7 +773,10 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configurat
 }
 
 func newIdentity(identityName, username string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
-	//identityName := ToIdentityName(username, config.Auth().Idp())
+	if !isIdentityNameCompliant(username) {
+		username = fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(username)))
+	}
+
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: identityName,

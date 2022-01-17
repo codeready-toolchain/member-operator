@@ -11,7 +11,6 @@ import (
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -87,8 +86,7 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 // ensureNamespaceResource ensures that the namespace exists.
 func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate) error {
 	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
-
-	objs, err := tierTemplate.process(r.Scheme, nsTmplSet.GetName(), template.RetainNamespaces)
+	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: nsTmplSet.GetName()}, template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tierTemplate.typeName)
 	}
@@ -116,8 +114,7 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, namespace *corev1.Namespace) error {
 	logger.Info("ensuring namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 	nsName := namespace.GetName()
-	username := nsTmplSet.GetName()
-	newObjs, err := tierTemplate.process(r.Scheme, username, template.RetainAllButNamespaces)
+	newObjs, err := tierTemplate.process(r.Scheme, map[string]string{Username: nsTmplSet.GetName()}, template.RetainAllButNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
@@ -130,7 +127,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
 		}
-		currentObjs, err := currentTierTemplate.process(r.Scheme, username, template.RetainAllButNamespaces)
+		currentObjs, err := currentTierTemplate.process(r.Scheme, map[string]string{Username: nsTmplSet.GetName()}, template.RetainAllButNamespaces)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to process template for TierTemplate with name '%s'", currentRef)
 		}
@@ -210,10 +207,10 @@ func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchai
 
 // fetchNamespaces returns all current namespaces belonging to the given user
 // i.e., labeled with `"toolchain.dev.openshift.com/owner":<username>`
-func fetchNamespaces(client client.Client, username string) ([]corev1.Namespace, error) {
+func fetchNamespaces(cl runtimeclient.Client, username string) ([]corev1.Namespace, error) {
 	// fetch all namespace with owner=username label
 	userNamespaceList := &corev1.NamespaceList{}
-	if err := client.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
+	if err := cl.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
 		return nil, err
 	}
 	names := make([]string, len(userNamespaceList.Items))
@@ -295,7 +292,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
-		newObjs, err := tierTemplate.process(r.Scheme, ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey], template.RetainAllButNamespaces)
+		newObjs, err := tierTemplate.process(r.Scheme, map[string]string{Username: ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainAllButNamespaces)
 		if err != nil {
 			return false, err
 		}

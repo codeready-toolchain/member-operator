@@ -1403,7 +1403,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 	require.NoError(t, err)
 	codecFactory := serializer.NewCodecFactory(s)
 	decoder := codecFactory.UniversalDeserializer()
-	tierTemplates, err := getTemplateTiers(decoder)
+	tierTemplates, err := prepareTemplateTiers(decoder)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
 	resetCache()
@@ -1566,15 +1566,27 @@ func withClusterResources(revision string) nsTmplSetOption {
 	}
 }
 
+func withSpaceRoles(roles map[string][]string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Spec.SpaceRoles = make([]toolchainv1alpha1.NSTemplateSetSpaceRole, 0, len(roles))
+		for ref, usernames := range roles {
+			nsTmplSet.Spec.SpaceRoles = append(nsTmplSet.Spec.SpaceRoles, toolchainv1alpha1.NSTemplateSetSpaceRole{
+				TemplateRef: ref,
+				Usernames:   usernames,
+			})
+		}
+	}
+}
+
 func withConditions(conditions ...toolchainv1alpha1.Condition) nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		nsTmplSet.Status.Conditions = conditions
 	}
 }
 
-func newNamespace(tier, username, typeName string, options ...objectMetaOption) *corev1.Namespace {
+func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *corev1.Namespace {
 	labels := map[string]string{
-		"toolchain.dev.openshift.com/owner":    username,
+		"toolchain.dev.openshift.com/owner":    owner,
 		"toolchain.dev.openshift.com/type":     typeName,
 		"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 	}
@@ -1584,7 +1596,7 @@ func newNamespace(tier, username, typeName string, options ...objectMetaOption) 
 	}
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("%s-%s", username, typeName),
+			Name:   fmt.Sprintf("%s-%s", owner, typeName),
 			Labels: labels,
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -1595,27 +1607,34 @@ func newNamespace(tier, username, typeName string, options ...objectMetaOption) 
 	return ns
 }
 
-func newRoleBinding(namespace, name, username string) *rbacv1.RoleBinding { //nolint: unparam
+func withWorkspaceLabel(value string) objectMetaOption { // nolint: unparam
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		meta.Labels[toolchainv1alpha1.WorkspaceLabelKey] = value
+		return meta
+	}
+}
+
+func newRoleBinding(namespace, name, owner string) *rbacv1.RoleBinding { //nolint: unparam
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/owner":    owner,
 			},
 		},
 	}
 }
 
-func newRole(namespace, name, username string) *rbacv1.Role { //nolint: unparam
+func newRole(namespace, name, owner string) *rbacv1.Role { //nolint: unparam
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/owner":    owner,
 			},
 		},
 	}
@@ -1722,9 +1741,10 @@ func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	}
 }
 
-func getTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
+func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	var tierTemplates []runtime.Object
 
+	// devsandbox templates
 	for _, tierName := range []string{"advanced", "basic", "team", "withemptycrq"} {
 		for _, revision := range []string{"abcde11", "abcde12"} {
 			for _, typeName := range []string{"code", "dev", "stage", "clusterresources"} {
@@ -1766,30 +1786,63 @@ func getTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 					default:
 						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
 					}
+
 				}
-				tmplContent = strings.ReplaceAll(tmplContent, "nsType", typeName)
-				tmpl := templatev1.Template{}
-				_, _, err := decoder.Decode([]byte(tmplContent), nil, &tmpl)
+				tierTmpl, err := createTierTemplate(decoder, tmplContent, tierName, typeName, revision)
 				if err != nil {
 					return nil, err
-				}
-				tierTmpl := &toolchainv1alpha1.TierTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      strings.ToLower(fmt.Sprintf("%s-%s-%s", tierName, typeName, revision)),
-						Namespace: test.HostOperatorNs,
-					},
-					Spec: toolchainv1alpha1.TierTemplateSpec{
-						TierName: tierName,
-						Type:     typeName,
-						Revision: revision,
-						Template: tmpl,
-					},
 				}
 				tierTemplates = append(tierTemplates, tierTmpl)
 			}
 		}
 	}
+	// ---- appstudio templates ----
+	// namespace template
+	tierTmpl, err := createTierTemplate(decoder,
+		test.CreateTemplate(test.WithObjects(ns), test.WithParams(namespace, username)),
+		"appstudio", "appstudio", "abcde11")
+	if err != nil {
+		return nil, err
+	}
+	tierTemplates = append(tierTemplates, tierTmpl)
+	// space roles templates
+	tierTmpl, err = createTierTemplate(decoder,
+		test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+		"admin", "appstudio", "abcde11")
+	if err != nil {
+		return nil, err
+	}
+	tierTemplates = append(tierTemplates, tierTmpl)
+	tierTmpl, err = createTierTemplate(decoder,
+		test.CreateTemplate(test.WithObjects(spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
+		"viewer", "appstudio", "abcde11")
+	if err != nil {
+		return nil, err
+	}
+	tierTemplates = append(tierTemplates, tierTmpl)
+
 	return tierTemplates, nil
+}
+
+func createTierTemplate(decoder runtime.Decoder, tmplContent string, tierName, typeName, revision string) (*toolchainv1alpha1.TierTemplate, error) {
+	tmplContent = strings.ReplaceAll(tmplContent, "NSTYPE", typeName)
+	tmpl := templatev1.Template{}
+	_, _, err := decoder.Decode([]byte(tmplContent), nil, &tmpl)
+	if err != nil {
+		return nil, err
+	}
+	return &toolchainv1alpha1.TierTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.ToLower(fmt.Sprintf("%s-%s-%s", tierName, typeName, revision)),
+			Namespace: test.HostOperatorNs,
+		},
+		Spec: toolchainv1alpha1.TierTemplateSpec{
+			TierName: tierName,
+			Type:     typeName,
+			Revision: revision,
+			Template: tmpl,
+		},
+	}, nil
 }
 
 var (
@@ -1797,14 +1850,14 @@ var (
 - apiVersion: v1
   kind: Namespace
   metadata:
-    name: ${USERNAME}-nsType
+    name: ${USERNAME}-NSTYPE
 `
 	rb test.TemplateObject = `
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: RoleBinding
   metadata:
     name: user-edit
-    namespace: ${USERNAME}-nsType
+    namespace: ${USERNAME}-NSTYPE
   roleRef:
     name: edit
   subjects:
@@ -1818,7 +1871,7 @@ var (
   kind: RoleBinding
   metadata:
     name: user-rbac-edit
-    namespace: ${USERNAME}-nsType
+    namespace: ${USERNAME}-NSTYPE
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: Role
@@ -1832,7 +1885,7 @@ var (
   kind: Role
   metadata:
     name: rbac-edit
-    namespace: ${USERNAME}-nsType
+    namespace: ${USERNAME}-NSTYPE
   rules:
   - apiGroups:
     - authorization.openshift.io
@@ -1843,6 +1896,9 @@ var (
     verbs:
     - '*'`
 
+	namespace test.TemplateParam = `
+- name: NAMESPACE
+  required: true`
 	username test.TemplateParam = `
 - name: USERNAME
   value: johnsmith`
@@ -1923,4 +1979,67 @@ var (
   spec:
     timeoutSeconds: 28800 # 8 hours
   `
+
+	spaceAdmin test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: space-admin
+    namespace: ${NAMESPACE}
+  rules:
+    # examples
+    - apiGroups:
+        - ""
+      resources:
+        - "secrets"
+        - "serviceaccounts"
+      verbs:
+        - get
+        - list
+  `
+	spaceAdminRb test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: ${USERNAME}-space-admin
+    namespace: ${NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: space-admin
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+`
+	spaceViewer test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: space-viewer
+    namespace: ${NAMESPACE}
+  rules:
+    # examples
+    - apiGroups:
+        - ""
+      resources:
+        - "secrets"
+        - "serviceaccounts"
+      verbs:
+        - get
+        - list
+  `
+	spaceViewerRb test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: ${USERNAME}-space-viewer
+    namespace: ${NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: space-viewer
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+`
 )

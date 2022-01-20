@@ -88,7 +88,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
-				_, err := mgr.ensure(logger, nsTmplSet)
+				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
 				// add `user3` in admin space roles
 				nsTmplSet.Spec.SpaceRoles[0].Usernames = append(nsTmplSet.Spec.SpaceRoles[0].Usernames, "user3")
@@ -116,7 +116,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
-				_, err := mgr.ensure(logger, nsTmplSet)
+				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
 				// remove `user1` from admin space roles
 				nsTmplSet.Spec.SpaceRoles[0].Usernames = []string{"user2"}
@@ -143,7 +143,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
-				_, err := mgr.ensure(logger, nsTmplSet)
+				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
 
 				// when calling without any change in the NSTemplateSet vs existing resources

@@ -77,18 +77,16 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
 		changed = changed || applied
-		if changed {
-			// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
-			// diffs when the space roles are changed (users added or removed, etc.)
-			sr, _ := json.Marshal(nsTmplSet.Spec.SpaceRoles)
-			if ns.Annotations == nil {
-				ns.Annotations = map[string]string{}
-			}
-			ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
-			if err := r.Client.Update(context.TODO(), &ns); err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
-					"failed update namespace annotation")
-			}
+		// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
+		// diffs when the space roles are changed (users added or removed, etc.)
+		sr, _ := json.Marshal(nsTmplSet.Spec.SpaceRoles)
+		if ns.Annotations == nil {
+			ns.Annotations = map[string]string{}
+		}
+		ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
+		if err := r.Client.Update(context.TODO(), &ns); err != nil {
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+				"failed update namespace annotation")
 		}
 	}
 	return changed, nil

@@ -110,7 +110,7 @@ func (r *statusManager) setStatusClusterResourcesProvisionFailed(nsTmplSet *tool
 		})
 }
 
-func (r *statusManager) setStatuSpaceRolesProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+func (r *statusManager) setStatusSpaceRolesProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 	return r.updateStatusConditions(
 		nsTmplSet,
 		toolchainv1alpha1.Condition{

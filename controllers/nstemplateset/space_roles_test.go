@@ -26,7 +26,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 
-		t.Run("create roles", func(t *testing.T) {
+		t.Run("create admin and viewer roles and rolebindings", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio",
 				withSpaceRoles(map[string][]string{
@@ -74,6 +74,30 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			require.NoError(t, err)
 			AssertThatNamespace(t, "oddity-appstudio", memberClient.Client).
 				HasAnnotation(toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(lastApplied))
+
+			t.Run("remove admin role and rolebindings", func(t *testing.T) {
+				// given
+				nsTmplSet.Spec.SpaceRoles = []toolchainv1alpha1.NSTemplateSetSpaceRole{
+					{
+						TemplateRef: "appstudio-viewer-abcde11",
+						Usernames:   []string{"user3", "user4"},
+					},
+				}
+				// when
+				createdOrUpdated, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, createdOrUpdated) // outdated objs deleted
+				// verify that `admin` role and rolebinding for `user1` and `user2` were deleted, but nothing changed for the viewer role and rolebindings
+				AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).DoesNotExist()              // deleted
+				AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).DoesNotExist() // deleted
+				AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).DoesNotExist() // deleted
+				AssertThatRole(t, "oddity-appstudio", "space-viewer", memberClient).Exists()                   // unchanged
+				AssertThatRoleBinding(t, "oddity-appstudio", "user3-space-viewer", memberClient).Exists()      // unchanged
+				AssertThatRoleBinding(t, "oddity-appstudio", "user4-space-viewer", memberClient).Exists()      // unchanged
+
+			})
 		})
 
 		t.Run("update roles", func(t *testing.T) {
@@ -157,6 +181,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists() // created
 			})
 		})
+
 	})
 
 	t.Run("failures", func(t *testing.T) {

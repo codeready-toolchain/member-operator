@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -37,6 +38,12 @@ func AssertThatRole(t test.T, namespace, name string, client client.Client) *Rol
 func (a *RoleAssertion) Exists() *RoleAssertion {
 	err := a.loadRole()
 	require.NoError(a.t, err)
+	return a
+}
+
+func (a *RoleAssertion) DoesNotExist() *RoleAssertion {
+	err := a.loadRole()
+	require.EqualError(a.t, err, fmt.Sprintf(`roles.rbac.authorization.k8s.io "%s" not found`, a.namespacedName.Name))
 	return a
 }
 

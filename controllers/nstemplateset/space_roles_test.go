@@ -30,8 +30,8 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio",
 				withSpaceRoles(map[string][]string{
-					"admin-appstudio-abcde11":  {"user1", "user2"},
-					"viewer-appstudio-abcde11": {"user3", "user4"},
+					"appstudio-admin-abcde11":  {"user1", "user2"},
+					"appstudio-viewer-abcde11": {"user3", "user4"},
 				}))
 			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
 				withTemplateRefUsingRevision("abcde10"), // starting with an older revision
@@ -80,11 +80,11 @@ func TestEnsureSpaceRoles(t *testing.T) {
 
 			t.Run("add admin user", func(t *testing.T) {
 				// given
-				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio",
+				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "basic",
 					withSpaceRoles(map[string][]string{
-						"admin-appstudio-abcde11": {"user1", "user2"},
+						"basic-admin-abcde11": {"user1", "user2"},
 					}))
-				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
+				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "basic", // ns.name=oddity=basic
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
@@ -100,19 +100,19 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				require.NoError(t, err)
 				assert.True(t, createdOrUpdated)
 				// verify that role bindings for `user1` and `user2`` still exist and thet one was added for `user3`
-				AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).Exists()              // unchanged
-				AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).Exists() // unchanged
-				AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).Exists() // unchanged
-				AssertThatRoleBinding(t, "oddity-appstudio", "user3-space-admin", memberClient).Exists() // created
+				AssertThatRole(t, "oddity-basic", "space-admin", memberClient).Exists()              // unchanged
+				AssertThatRoleBinding(t, "oddity-basic", "user1-space-admin", memberClient).Exists() // unchanged
+				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists() // unchanged
+				AssertThatRoleBinding(t, "oddity-basic", "user3-space-admin", memberClient).Exists() // created
 			})
 
 			t.Run("remove admin user", func(t *testing.T) {
 				// given
-				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio",
+				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "basic",
 					withSpaceRoles(map[string][]string{
-						"admin-appstudio-abcde11": {"user1", "user2"},
+						"basic-admin-abcde11": {"user1", "user2"},
 					}))
-				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
+				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "basic", // ns.name=oddity=basic
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
@@ -128,18 +128,18 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				require.NoError(t, err)
 				assert.True(t, createdOrUpdated) // outdated objs deleted
 				// verify that rolebinding for `user1` was removed but the one for `user2` was not changed
-				AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).Exists()                    // unchanged
-				AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).DoesNotExist() // deleted
-				AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).Exists()       // unchanged
+				AssertThatRole(t, "oddity-basic", "space-admin", memberClient).Exists()                    // unchanged
+				AssertThatRoleBinding(t, "oddity-basic", "user1-space-admin", memberClient).DoesNotExist() // deleted
+				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists()       // unchanged
 			})
 
 			t.Run("no change", func(t *testing.T) {
 				// given
-				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio",
+				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "basic",
 					withSpaceRoles(map[string][]string{
-						"admin-appstudio-abcde11": {"user1", "user2"},
+						"basic-admin-abcde11": {"user1", "user2"},
 					}))
-				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
+				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "basic", // ns.name=oddity-basic
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
@@ -152,9 +152,9 @@ func TestEnsureSpaceRoles(t *testing.T) {
 
 				// then verify that roles and rolebindings still exist, but nothing changed
 				assert.False(t, createdOrUpdated)
-				AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).Exists()              // created
-				AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).Exists() // created
-				AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).Exists() // created
+				AssertThatRole(t, "oddity-basic", "space-admin", memberClient).Exists()              // created
+				AssertThatRoleBinding(t, "oddity-basic", "user1-space-admin", memberClient).Exists() // created
+				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists() // created
 			})
 		})
 	})
@@ -163,7 +163,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 
 		t.Run("error while listing namespaces", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio", withNamespaces("abcde11", "appstudio"))
+			nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "basic", withNamespaces("abcde11", "basic"))
 			mgr, cl := prepareSpaceRolesManager(t, nsTmplSet)
 			cl.MockList = func(ctx context.Context, list runtimeclient.ObjectList, opts ...runtimeclient.ListOption) error {
 				if _, ok := list.(*corev1.NamespaceList); ok {

@@ -1403,7 +1403,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 	require.NoError(t, err)
 	codecFactory := serializer.NewCodecFactory(s)
 	decoder := codecFactory.UniversalDeserializer()
-	tierTemplates, err := prepareTemplateTiers(decoder)
+	tierTemplates, err := prepareTemplateTiers(t, decoder)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
 	resetCache()
@@ -1734,86 +1734,119 @@ func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	}
 }
 
-func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
+func prepareTemplateTiers(t *testing.T, decoder runtime.Decoder) ([]runtime.Object, error) {
 	var tierTemplates []runtime.Object
 
-	// devsandbox templates
-	for _, tierName := range []string{"advanced", "basic", "team", "withemptycrq"} {
-		for _, revision := range []string{"abcde11", "abcde12"} {
-			for _, typeName := range []string{"code", "dev", "stage", "clusterresources"} {
-				var tmplContent string
-				switch tierName {
-				case "advanced": // assume that this tier has a "cluster resources" template
-					switch typeName {
-					case "clusterresources":
-						if revision == "abcde11" {
-							tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerCode, idlerStage), test.WithParams(username))
-						} else {
-							tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
-						}
-					default:
-						if revision == "abcde11" {
-							tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
-						} else {
-							tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
-						}
-					}
-				case "basic":
-					switch typeName {
-					case "clusterresources": // assume that this tier has no "cluster resources" template
-						continue
-					default:
-						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
-					}
-				case "team": // assume that this tier has a "cluster resources" template
-					switch typeName {
-					case "clusterresources":
-						tmplContent = test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username))
-					default:
-						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
-					}
-				case "withemptycrq":
-					switch typeName {
-					case "clusterresources":
-						tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username))
-					default:
-						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
-					}
-
-				}
-				tierTmpl, err := createTierTemplate(decoder, tmplContent, tierName, typeName, revision)
+	// templates
+	tmpls := map[string]map[string]map[string]string{
+		"advanced": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerCode, idlerStage), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username)),
+			},
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"basic": {
+			// no clusterresources
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"team": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username)),
+			},
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"withemptycrq": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username)),
+			},
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"appstudio": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerCode, idlerStage), test.WithParams(username)),
+			},
+			"appstudio": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+			"viewer": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
+			},
+		},
+	}
+	for tierName, tierTmpls := range tmpls {
+		for typeName, typeTmpls := range tierTmpls {
+			for revision, tmpl := range typeTmpls {
+				tierTmpl, err := createTierTemplate(decoder, tmpl, tierName, typeName, revision)
 				if err != nil {
 					return nil, err
 				}
+				t.Logf("adding tiertemplate '%s", tierTmpl.Name)
 				tierTemplates = append(tierTemplates, tierTmpl)
 			}
 		}
 	}
-	// ---- appstudio templates ----
-	// namespace template
-	tierTmpl, err := createTierTemplate(decoder,
-		test.CreateTemplate(test.WithObjects(ns), test.WithParams(namespace, username)),
-		"appstudio", "appstudio", "abcde11")
-	if err != nil {
-		return nil, err
-	}
-	tierTemplates = append(tierTemplates, tierTmpl)
-	// space roles templates
-	tierTmpl, err = createTierTemplate(decoder,
-		test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
-		"admin", "appstudio", "abcde11")
-	if err != nil {
-		return nil, err
-	}
-	tierTemplates = append(tierTemplates, tierTmpl)
-	tierTmpl, err = createTierTemplate(decoder,
-		test.CreateTemplate(test.WithObjects(spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
-		"viewer", "appstudio", "abcde11")
-	if err != nil {
-		return nil, err
-	}
-	tierTemplates = append(tierTemplates, tierTmpl)
-
 	return tierTemplates, nil
 }
 

@@ -22,7 +22,6 @@ type spaceRolesManager struct {
 
 // ensure ensures that the space roles for the users exist.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
-// TODO: support update/removal/outdated
 func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	logger = logger.WithValues("nstemplateset_name", nsTmplSet.Name)
 

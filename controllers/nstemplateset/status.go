@@ -30,7 +30,7 @@ func (r *statusManager) wrapErrorWithStatusUpdateForSpaceRolesFailure(logger log
 	if found && readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdatingReason || readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdateFailedReason {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, format, args...)
 	}
-	return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatuSpaceRolesProvisionFailed, err, format, args...)
+	return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusSpaceRolesProvisionFailed, err, format, args...)
 }
 
 func (r *statusManager) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, updateStatus statusUpdater, err error, format string, args ...interface{}) error {

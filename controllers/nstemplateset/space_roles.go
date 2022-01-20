@@ -51,7 +51,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		// labels to apply on all new objects
 		var labels = map[string]string{
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-			toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(), // TODO: is it needed?
+			toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 		}
 		logger.Info("creating space role objects")
 		for _, obj := range spaceRoleObjs {

@@ -47,12 +47,12 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			logger.Info("no space role to update", "namespace", ns.Name)
 			continue
 		}
-		lastAppliedSpaceRoleObjs, err := r.getSpaceRoles(&ns, lastAppliedSpaceRoles)
+		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(&ns, lastAppliedSpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve last applied space roles")
 		}
 		// space roles to apply now
-		spaceRoleObjs, err := r.getSpaceRoles(&ns, nsTmplSet.Spec.SpaceRoles)
+		spaceRoleObjs, err := r.getSpaceRolesObjects(&ns, nsTmplSet.Spec.SpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve space roles to apply")
 		}
@@ -93,8 +93,8 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 }
 
 // Get the space role objects from the templates specified in the given `spaceRoles`
-// Returns the objects indexed by kind and name, or an error if something wrong happened when processing the templates
-func (r *spaceRolesManager) getSpaceRoles(ns *corev1.Namespace, spaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) ([]runtimeclient.Object, error) {
+// Returns the objects, or an error if something wrong happened when processing the templates
+func (r *spaceRolesManager) getSpaceRolesObjects(ns *corev1.Namespace, spaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) ([]runtimeclient.Object, error) {
 	// store by kind and name
 	spaceRoleObjects := []runtimeclient.Object{}
 	for _, spaceRole := range spaceRoles {

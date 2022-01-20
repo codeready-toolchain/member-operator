@@ -73,7 +73,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			lastApplied, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
 			require.NoError(t, err)
 			AssertThatNamespace(t, "oddity-appstudio", memberClient.Client).
-				HasAnnotation(toolchainv1alpha1.LastSpaceRolesAnnotationKey, string(lastApplied))
+				HasAnnotation(toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(lastApplied))
 		})
 
 		t.Run("update roles", func(t *testing.T) {

@@ -1607,13 +1607,6 @@ func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *co
 	return ns
 }
 
-func withWorkspaceLabel(value string) objectMetaOption { // nolint: unparam
-	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
-		meta.Labels[toolchainv1alpha1.WorkspaceLabelKey] = value
-		return meta
-	}
-}
-
 func newRoleBinding(namespace, name, owner string) *rbacv1.RoleBinding { //nolint: unparam
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{

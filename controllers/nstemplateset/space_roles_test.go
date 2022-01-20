@@ -35,7 +35,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				}))
 			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
 				withTemplateRefUsingRevision("abcde10"), // starting with an older revision
-				withWorkspaceLabel("oddity"))
+			)
 			mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 
 			// when
@@ -86,7 +86,6 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					}))
 				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
-					withWorkspaceLabel("oddity"),
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet)
@@ -115,7 +114,6 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					}))
 				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
-					withWorkspaceLabel("oddity"),
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet)
@@ -143,7 +141,6 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					}))
 				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
-					withWorkspaceLabel("oddity"),
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet)
@@ -189,7 +186,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				withSpaceRoles(map[string][]string{ // at least 1 space role is needed here
 					"admin-unknown-abcde11": {"user1", "user2"},
 				}))
-			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity-unknown", "unknown", withWorkspaceLabel("oddity"))
+			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "unknown")
 			mgr, _ := prepareSpaceRolesManager(t, nsTmplSet, ns)
 			// when
 			_, err := mgr.ensure(logger, nsTmplSet)

@@ -25,7 +25,7 @@ type spaceRolesManager struct {
 func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	logger = logger.WithValues("nstemplateset_name", nsTmplSet.Name)
 
-	nss, err := fetchNamespacesByWorkspace(r.Client, nsTmplSet.Name)
+	nss, err := fetchNamespacesByOwner(r.Client, nsTmplSet.Name)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
 			"failed to list namespaces for workspace '%s'", nsTmplSet.Name)
@@ -113,22 +113,4 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ns *corev1.Namespace, spaceRole
 		}
 	}
 	return spaceRoleObjects, nil
-}
-
-// fetchNamespacesByOwner returns all current namespaces belonging to the given user
-// i.e., labeled with `"toolchain.dev.openshift.com/workspace":<workspace>`
-// (see https://github.com/codeready-toolchain/host-operator/blob/master/deploy/templates/nstemplatetiers/appstudio/ns_appstudio.yaml)
-func fetchNamespacesByWorkspace(cl runtimeclient.Client, workspace string) ([]corev1.Namespace, error) {
-	// fetch all namespace with owner=username label
-	namespaces := &corev1.NamespaceList{}
-	if err := cl.List(context.TODO(), namespaces, listByWorkspaceLabel(workspace)); err != nil {
-		return nil, err
-	}
-	return namespaces.Items, nil
-}
-
-// listByWorkspaceLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/workspace equal to the given workspace name
-func listByWorkspaceLabel(w string) runtimeclient.ListOption {
-	labels := map[string]string{toolchainv1alpha1.WorkspaceLabelKey: w}
-	return runtimeclient.MatchingLabels(labels)
 }

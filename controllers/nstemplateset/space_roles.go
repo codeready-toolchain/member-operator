@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -33,11 +34,24 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	logger.Info("ensuring space roles", "namespace_count", len(nss), "role_count", len(nsTmplSet.Spec.SpaceRoles))
 	changed := false
 	for _, ns := range nss {
-		// space roles to apply now
-		lastAppliedSpaceRoleObjs, err := r.getLastAppliedSpaceRoles(&ns)
+		// space roles previously applied
+		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all outdated resources (based on their kind/names)
+		lastAppliedSpaceRoles := []toolchainv1alpha1.NSTemplateSetSpaceRole{}
+		if currentSpaceRolesAnnotation, exists := ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey]; exists && currentSpaceRolesAnnotation != "" {
+			if err := json.Unmarshal([]byte(currentSpaceRolesAnnotation), &lastAppliedSpaceRoles); err != nil {
+				return false, errors.Wrap(err, "unable to decode current space roles in annotation")
+			}
+		}
+		// compare last-applied vs spec to see if there's anything obsolete to do
+		if reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
+			logger.Info("no space role to update", "namespace", ns.Name)
+			continue
+		}
+		lastAppliedSpaceRoleObjs, err := r.getSpaceRoles(&ns, lastAppliedSpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve last applied space roles")
 		}
+		// space roles to apply now
 		spaceRoleObjs, err := r.getSpaceRoles(&ns, nsTmplSet.Spec.SpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve space roles to apply")
@@ -102,19 +116,6 @@ func (r *spaceRolesManager) getSpaceRoles(ns *corev1.Namespace, spaceRoles []too
 		}
 	}
 	return spaceRoleObjects, nil
-}
-
-// looks-up the `toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey` annotation on the namespace to find the last-applied space roles
-// Returns the objects indexed by kind and name, or an error
-func (r *spaceRolesManager) getLastAppliedSpaceRoles(ns *corev1.Namespace) ([]runtimeclient.Object, error) {
-	// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all outdated resources (based on their kind/names)
-	spaceRoles := []toolchainv1alpha1.NSTemplateSetSpaceRole{}
-	if currentSpaceRolesAnnotation, exists := ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey]; exists && currentSpaceRolesAnnotation != "" {
-		if err := json.Unmarshal([]byte(currentSpaceRolesAnnotation), &spaceRoles); err != nil {
-			return nil, errors.Wrap(err, "unable to decode current space roles in annotation")
-		}
-	}
-	return r.getSpaceRoles(ns, spaceRoles)
 }
 
 // fetchNamespacesByOwner returns all current namespaces belonging to the given user

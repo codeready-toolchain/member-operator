@@ -344,7 +344,6 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 	if userAcc.Spec.OriginalSub != "" {
 
 		// Encoded the OriginalSub as an unpadded Base64 value
-		//encodedName := fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub)))
 		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, userAcc.Spec.OriginalSub, userAcc, user)
 		if createdOrUpdated || err != nil {
 			return nil, createdOrUpdated, err
@@ -846,10 +845,5 @@ func isIdentityNameCompliant(name string) bool {
 	if len(name) > 253 {
 		return false
 	}
-
-	if !dns1123ValueRegexp.MatchString(name) {
-		return false
-	}
-
-	return true
+	return dns1123ValueRegexp.MatchString(name)
 }

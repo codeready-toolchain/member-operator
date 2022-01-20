@@ -211,10 +211,10 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	return reconcile.Result{}, nil
 }
 
-// deleteOutdatedObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
+// deleteObsoleteObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteOutdatedObjects(logger logr.Logger, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
+func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
 	deleted := false
 	logger.Info("looking for outdated objects", "count", len(currentObjs))
 Current:

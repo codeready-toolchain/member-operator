@@ -72,11 +72,11 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			logger.Info(fmt.Sprintf("creating/updating %s/%s", obj.GetNamespace(), obj.GetName()))
 		}
 		// create (or update existing) objects based the tier template
-		deleted, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(spaceRoleObjs, labels)
+		applied, err := applycl.NewApplyClient(r.Client, r.Scheme).Apply(spaceRoleObjs, labels)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
-		changed = changed || deleted
+		changed = changed || applied
 		if changed {
 			// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
 			// diffs when the space roles are changed (users added or removed, etc.)

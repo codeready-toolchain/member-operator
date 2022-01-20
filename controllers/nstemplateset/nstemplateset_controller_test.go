@@ -1991,6 +1991,7 @@ var (
     - apiGroups:
         - ""
       resources:
+        - "configmaps"
         - "secrets"
         - "serviceaccounts"
       verbs:
@@ -2022,8 +2023,7 @@ var (
     - apiGroups:
         - ""
       resources:
-        - "secrets"
-        - "serviceaccounts"
+        - "configmaps"
       verbs:
         - get
         - list

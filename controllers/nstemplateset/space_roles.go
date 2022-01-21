@@ -34,7 +34,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	changed := false
 	for _, ns := range nss {
 		// space roles previously applied
-		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all outdated resources (based on their kind/names)
+		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all obsolete resources (based on their kind/names)
 		lastAppliedSpaceRoles := []toolchainv1alpha1.NSTemplateSetSpaceRole{}
 		if currentSpaceRolesAnnotation, exists := ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey]; exists && currentSpaceRolesAnnotation != "" {
 			if err := json.Unmarshal([]byte(currentSpaceRolesAnnotation), &lastAppliedSpaceRoles); err != nil {

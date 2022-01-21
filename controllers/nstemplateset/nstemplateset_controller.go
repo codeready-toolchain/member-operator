@@ -216,22 +216,22 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
 func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
 	deleted := false
-	logger.Info("looking for outdated objects", "count", len(currentObjs))
+	logger.Info("looking for obsolete objects", "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
-		objectLogger.Info("checking outdated object")
+		objectLogger.Info("checking obsolete object")
 		for _, newObj := range newObjects {
 			if commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
 			}
 		}
 		if err := client.Delete(context.TODO(), currentObj); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
-			return false, errs.Wrapf(err, "failed to delete outdated object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetObjectKind().GroupVersionKind().Kind, currentObj.GetNamespace())
+			return false, errs.Wrapf(err, "failed to delete obsolete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetObjectKind().GroupVersionKind().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted
 		}
-		logger.Info("deleted outdated object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
+		logger.Info("deleted obsolete object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		deleted = true
 	}
 	return deleted, nil

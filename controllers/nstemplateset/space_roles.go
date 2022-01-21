@@ -3,7 +3,6 @@ package nstemplateset
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -68,9 +67,6 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 		}
 		logger.Info("creating space role objects")
-		for _, obj := range spaceRoleObjs {
-			logger.Info(fmt.Sprintf("creating/updating %s/%s", obj.GetNamespace(), obj.GetName()))
-		}
 		// create (or update existing) objects based the tier template
 		_, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(spaceRoleObjs, labels)
 		if err != nil {

@@ -1737,7 +1737,7 @@ func withTemplateRefUsingRevision(revision string) objectMetaOption {
 func prepareTemplateTiers(t *testing.T, decoder runtime.Decoder) ([]runtime.Object, error) {
 	var tierTemplates []runtime.Object
 
-	// templates
+	// templates indexed by tiername / type / revision
 	tmpls := map[string]map[string]map[string]string{
 		"advanced": {
 			"clusterresources": {

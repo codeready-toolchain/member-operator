@@ -31,11 +31,10 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			"failed to list namespaces for workspace '%s'", nsTmplSet.Name)
 	}
 	logger.Info("ensuring space roles", "namespace_count", len(nss), "role_count", len(nsTmplSet.Spec.SpaceRoles))
-	changed := false
 	for _, ns := range nss {
 		// space roles previously applied
 		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all obsolete resources (based on their kind/names)
-		lastAppliedSpaceRoles := []toolchainv1alpha1.NSTemplateSetSpaceRole{}
+		var lastAppliedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole
 		if currentSpaceRolesAnnotation, exists := ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey]; exists && currentSpaceRolesAnnotation != "" {
 			if err := json.Unmarshal([]byte(currentSpaceRolesAnnotation), &lastAppliedSpaceRoles); err != nil {
 				return false, errors.Wrap(err, "unable to decode current space roles in annotation")
@@ -59,11 +58,10 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve space roles to apply")
 		}
 
-		deleted, err := deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs)
+		_, err = deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
 		}
-		changed = changed || deleted
 		// labels to apply on all new objects
 		var labels = map[string]string{
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
@@ -74,11 +72,10 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			logger.Info(fmt.Sprintf("creating/updating %s/%s", obj.GetNamespace(), obj.GetName()))
 		}
 		// create (or update existing) objects based the tier template
-		applied, err := applycl.NewApplyClient(r.Client, r.Scheme).Apply(spaceRoleObjs, labels)
+		_, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(spaceRoleObjs, labels)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
-		changed = changed || applied
 		// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
 		// diffs when the space roles are changed (users added or removed, etc.)
 		sr, _ := json.Marshal(nsTmplSet.Spec.SpaceRoles)

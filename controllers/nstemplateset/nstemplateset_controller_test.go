@@ -88,7 +88,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	t.Run("status provisioned when cluster resources are missing", func(t *testing.T) {
+	t.Run("status provisioned when cluster resources and space roles are missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
 		// create namespaces (and assume they are complete since they have the expected revision number)

@@ -57,10 +57,6 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve space roles to apply")
 		}
 
-		err = deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs)
-		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
-		}
 		// labels to apply on all new objects
 		var labels = map[string]string{
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
@@ -72,6 +68,12 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
+
+		err = deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs)
+		if err != nil {
+			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
+		}
+
 		// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
 		// diffs when the space roles are changed (users added or removed, etc.)
 		sr, _ := json.Marshal(nsTmplSet.Spec.SpaceRoles)

@@ -46,6 +46,9 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			logger.Info("no space role to update", "namespace", ns.Name)
 			continue
 		}
+		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
+			return false, err
+		}
 		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(&ns, lastAppliedSpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve last applied space roles")

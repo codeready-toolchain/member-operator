@@ -1842,7 +1842,6 @@ func prepareTemplateTiers(t *testing.T, decoder runtime.Decoder) ([]runtime.Obje
 				if err != nil {
 					return nil, err
 				}
-				t.Logf("adding tiertemplate '%s", tierTmpl.Name)
 				tierTemplates = append(tierTemplates, tierTmpl)
 			}
 		}

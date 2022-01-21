@@ -1403,7 +1403,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 	require.NoError(t, err)
 	codecFactory := serializer.NewCodecFactory(s)
 	decoder := codecFactory.UniversalDeserializer()
-	tierTemplates, err := prepareTemplateTiers(t, decoder)
+	tierTemplates, err := prepareTemplateTiers(decoder)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
 	resetCache()
@@ -1734,7 +1734,7 @@ func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	}
 }
 
-func prepareTemplateTiers(t *testing.T, decoder runtime.Decoder) ([]runtime.Object, error) {
+func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	var tierTemplates []runtime.Object
 
 	// templates indexed by tiername / type / revision

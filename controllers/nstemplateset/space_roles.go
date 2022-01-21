@@ -87,8 +87,9 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
 				"failed update namespace annotation")
 		}
+		return true, nil
 	}
-	return changed, nil
+	return false, nil
 }
 
 // Get the space role objects from the templates specified in the given `spaceRoles`

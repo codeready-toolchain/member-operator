@@ -1259,6 +1259,28 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		})
 	})
 
+	t.Run("failed to delete cluster resources", func(t *testing.T) {
+		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withDeletionTs(), withClusterResources("abcde11"))
+		crq := newClusterResourceQuota(username, "advanced")
+		r, fakeClient := prepareController(t, nsTmplSet, crq)
+		req := newReconcileRequest(namespaceName, username)
+
+		// only add deletion timestamp, but not delete
+		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+			t.Logf("deleting resource of kind %T '%s'", obj, obj.GetName())
+			if _, ok := obj.(*quotav1.ClusterResourceQuota); ok {
+				return fmt.Errorf("mock error")
+			}
+			return fakeClient.Client.Delete(ctx, obj, opts...)
+		}
+
+		// first reconcile, deletion is triggered and fails
+		result, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.EqualError(t, err, "failed to delete cluster resource 'for-johnsmith': mock error")
+		require.Empty(t, result)
+	})
+
 	t.Run("delete when there is no finalizer", func(t *testing.T) {
 		// given an NSTemplateSet resource which is being deleted and whose finalizer was already removed
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withoutFinalizer(), withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))

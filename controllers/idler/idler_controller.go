@@ -179,7 +179,7 @@ func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string,
 		}
 		return false, err
 	}
-	var zero int32 = 0
+	zero := int32(0)
 	d.Spec.Replicas = &zero
 	if err := r.AllNamespacesClient.Update(context.TODO(), d); err != nil {
 		return false, err
@@ -205,7 +205,7 @@ func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string,
 	}
 	if !deletedByController {
 		// There is no controller that owns the ReplicaSet. Scale the ReplicaSet to zero.
-		var zero int32 = 0
+		zero := int32(0)
 		rs.Spec.Replicas = &zero
 		if err := r.AllNamespacesClient.Update(context.TODO(), rs); err != nil {
 			return false, err
@@ -241,7 +241,7 @@ func (r *Reconciler) scaleStatefulSetToZero(logger logr.Logger, namespace string
 		}
 		return false, err
 	}
-	var zero int32 = 0
+	zero := int32(0)
 	s.Spec.Replicas = &zero
 	if err := r.AllNamespacesClient.Update(context.TODO(), s); err != nil {
 		return false, err
@@ -280,7 +280,7 @@ func (r *Reconciler) scaleReplicationControllerToZero(logger logr.Logger, namesp
 	}
 	if !deletedByController {
 		// There is no controller who owns the ReplicationController. Scale the ReplicationController to zero.
-		var zero int32 = 0
+		zero := int32(0)
 		rc.Spec.Replicas = &zero
 		if err := r.AllNamespacesClient.Update(context.TODO(), rc); err != nil {
 			return false, err

@@ -186,7 +186,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user
 	deletedAny, err := r.clusterResources.delete(logger, nsTmplSet)
 	if err != nil || deletedAny {
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, err
 	}
 
 	// if nothing was to be deleted, then we can remove the finalizer and we're done

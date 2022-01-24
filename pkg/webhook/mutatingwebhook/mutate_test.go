@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 )
 
 func TestHandleMutateSuccess(t *testing.T) {
@@ -19,7 +19,7 @@ func TestHandleMutateSuccess(t *testing.T) {
 	defer ts.Close()
 
 	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON))
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON)) // nolint:noctx
 
 	// then
 	assert.NoError(t, err)

@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const tokenPath = "auth/realms/codeready/protocol/openid-connect/token"
+const tokenPath = "auth/realms/codeready/protocol/openid-connect/token" //nolint: gosec
 
 // TokenCache manages retrieving, caching and renewing the authentication token required for invoking Che APIs
 type TokenCache struct {
@@ -90,11 +90,10 @@ func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg membercfg.Con
 
 	authURL := cheKeycloakURL + tokenPath
 	log.Info("Obtaining new token", "URL", authURL)
-	res, err := tc.httpClient.PostForm(authURL, reqData)
+	res, err := tc.httpClient.PostForm(authURL, reqData) // nolint:noctx
 	if err != nil {
 		return TokenSet{}, err
 	}
-
 	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK {
 		bodyString, readError := rest.ReadBody(res.Body)
@@ -163,7 +162,7 @@ func newHTTPClient() *http.Client {
 			Timeout: 5 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 5 * time.Second,
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, // nolint: gosec
 	}
 	var httpClient = &http.Client{
 		Timeout:   time.Second * 10,

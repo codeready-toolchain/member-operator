@@ -108,7 +108,8 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 		return err
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
-	for _, pod := range podList.Items {
+	for i := range podList.Items {
+		pod := podList.Items[i] // avoids the "G601: Implicit memory aliasing in for loop. (gosec)" problem
 		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.

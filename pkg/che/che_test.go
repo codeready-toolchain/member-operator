@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codeready-toolchain/member-operator/pkg/utils/rest"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
@@ -418,7 +419,8 @@ func TestCheRequest(t *testing.T) {
 		}
 
 		// when
-		res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{})
+		res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+		defer rest.CloseResponse(res)
 
 		// then
 		require.EqualError(t, err, "the che admin username and/or password are not configured")
@@ -445,7 +447,8 @@ func TestCheRequest(t *testing.T) {
 			}
 
 			// when
-			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{})
+			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			defer rest.CloseResponse(res)
 
 			// then
 			require.EqualError(t, err, `routes.route.openshift.io "codeready" not found`)
@@ -462,7 +465,8 @@ func TestCheRequest(t *testing.T) {
 			}
 
 			// when
-			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{})
+			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			defer rest.CloseResponse(res)
 
 			// then
 			require.EqualError(t, err, `routes.route.openshift.io "keycloak" not found`)
@@ -486,7 +490,8 @@ func TestCheRequest(t *testing.T) {
 				Persist().
 				Reply(400).
 				BodyString(`{"error":"che error"}`)
-			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, nil)
+			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, nil) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			defer rest.CloseResponse(res)
 
 			// then
 			require.NoError(t, err)
@@ -510,7 +515,8 @@ func TestCheRequest(t *testing.T) {
 				Persist().
 				Reply(400).
 				BodyString(`{"error":"che error"}`)
-			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, url.Values{})
+			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			defer rest.CloseResponse(res)
 
 			// then
 			require.NoError(t, err)

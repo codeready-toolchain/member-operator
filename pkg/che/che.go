@@ -56,7 +56,7 @@ func NewCheClient(httpCl *http.Client, cl client.Client, tc *TokenCache) *Client
 func (c *Client) UserExists(username string) (bool, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
-	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 	if err != nil {
 		return false, errors.Wrapf(err, "request to find Che user '%s' failed", username)
 	}
@@ -102,7 +102,7 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 // DeleteUser deletes the Che user with the given user ID
 func (c *Client) DeleteUser(userID string) error {
 	log.Info("Deleting user", "userID", userID)
-	res, err := c.cheRequest(http.MethodDelete, path.Join(cheUserPath, userID), nil) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+	res, err := c.cheRequest(http.MethodDelete, path.Join(cheUserPath, userID), nil) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Che user with ID '%s'", userID)
 	}
@@ -122,7 +122,7 @@ func (c *Client) DeleteUser(userID string) error {
 // UserAPICheck returns an error if the Che user API cannot be reached successfully, returns nil otherwise
 func (c *Client) UserAPICheck() error {
 	reqData := url.Values{}
-	res, err := c.cheRequest(http.MethodGet, cheUserPath, reqData) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+	res, err := c.cheRequest(http.MethodGet, cheUserPath, reqData) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 	if err != nil {
 		return errors.Wrapf(err, "che user API check failed")
 	}

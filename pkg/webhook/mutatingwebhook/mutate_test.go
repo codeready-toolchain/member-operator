@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
 )
 
 func TestHandleMutateSuccess(t *testing.T) {
@@ -19,7 +19,7 @@ func TestHandleMutateSuccess(t *testing.T) {
 	defer ts.Close()
 
 	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON)) // nolint:noctx
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON))
 
 	// then
 	assert.NoError(t, err)
@@ -44,7 +44,7 @@ func verifySuccessfulResponse(t *testing.T, response []byte) {
 	assert.Equal(t, `[{"op":"replace","path":"/spec/priorityClassName","value":"sandbox-users-pods"},{"op":"replace","path":"/spec/priority","value":-3}]`, string(reviewResponse.Patch))
 	assert.Contains(t, "the sandbox-users-pods PriorityClass was set", reviewResponse.AuditAnnotations["users_pods_mutating_webhook"])
 	assert.True(t, reviewResponse.Allowed)
-	assert.Equal(t, v1.PatchTypeJSONPatch, *reviewResponse.PatchType)
+	assert.Equal(t, admissionv1.PatchTypeJSONPatch, *reviewResponse.PatchType)
 	assert.Empty(t, reviewResponse.Result)
 	assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
 }
@@ -87,8 +87,8 @@ func verifyFailedResponse(t *testing.T, response []byte, errMsg string) {
 	assert.Contains(t, reviewResponse.Result.Message, errMsg)
 }
 
-func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
-	r := v1.AdmissionReview{}
+func toReviewResponse(t *testing.T, content []byte) *admissionv1.AdmissionResponse {
+	r := admissionv1.AdmissionReview{}
 	err := json.Unmarshal(content, &r)
 	require.NoError(t, err)
 	return r.Response

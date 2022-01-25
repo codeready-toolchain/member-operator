@@ -90,7 +90,7 @@ func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg membercfg.Con
 
 	authURL := cheKeycloakURL + tokenPath
 	log.Info("Obtaining new token", "URL", authURL)
-	res, err := tc.httpClient.PostForm(authURL, reqData) // nolint:noctx
+	res, err := tc.httpClient.PostForm(authURL, reqData)
 	if err != nil {
 		return TokenSet{}, err
 	}
@@ -162,7 +162,7 @@ func newHTTPClient() *http.Client {
 			Timeout: 5 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 5 * time.Second,
-		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, // nolint: gosec
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true}, // nolint:gosec
 	}
 	var httpClient = &http.Client{
 		Timeout:   time.Second * 10,

@@ -419,7 +419,7 @@ func TestCheRequest(t *testing.T) {
 		}
 
 		// when
-		res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+		res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 		defer rest.CloseResponse(res)
 
 		// then
@@ -447,7 +447,7 @@ func TestCheRequest(t *testing.T) {
 			}
 
 			// when
-			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 			defer rest.CloseResponse(res)
 
 			// then
@@ -465,7 +465,7 @@ func TestCheRequest(t *testing.T) {
 			}
 
 			// when
-			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			res, err := cheClient.cheRequest(http.MethodGet, "", url.Values{}) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 			defer rest.CloseResponse(res)
 
 			// then
@@ -490,7 +490,7 @@ func TestCheRequest(t *testing.T) {
 				Persist().
 				Reply(400).
 				BodyString(`{"error":"che error"}`)
-			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, nil) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, nil) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 			defer rest.CloseResponse(res)
 
 			// then
@@ -515,7 +515,7 @@ func TestCheRequest(t *testing.T) {
 				Persist().
 				Reply(400).
 				BodyString(`{"error":"che error"}`)
-			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, url.Values{}) // nolint: bodyclose // see `defer rest.CloseResponse(res)`
+			res, err := cheClient.cheRequest(http.MethodGet, cheUserFindPath, url.Values{}) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
 			defer rest.CloseResponse(res)
 
 			// then

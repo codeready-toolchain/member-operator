@@ -88,7 +88,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	t.Run("status provisioned when cluster resources are missing", func(t *testing.T) {
+	t.Run("status provisioned when cluster resources and space roles are missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
 		// create namespaces (and assume they are complete since they have the expected revision number)
@@ -1425,7 +1425,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 	require.NoError(t, err)
 	codecFactory := serializer.NewCodecFactory(s)
 	decoder := codecFactory.UniversalDeserializer()
-	tierTemplates, err := getTemplateTiers(decoder)
+	tierTemplates, err := prepareTemplateTiers(decoder)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
 	resetCache()
@@ -1588,15 +1588,27 @@ func withClusterResources(revision string) nsTmplSetOption {
 	}
 }
 
+func withSpaceRoles(roles map[string][]string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Spec.SpaceRoles = make([]toolchainv1alpha1.NSTemplateSetSpaceRole, 0, len(roles))
+		for ref, usernames := range roles {
+			nsTmplSet.Spec.SpaceRoles = append(nsTmplSet.Spec.SpaceRoles, toolchainv1alpha1.NSTemplateSetSpaceRole{
+				TemplateRef: ref,
+				Usernames:   usernames,
+			})
+		}
+	}
+}
+
 func withConditions(conditions ...toolchainv1alpha1.Condition) nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		nsTmplSet.Status.Conditions = conditions
 	}
 }
 
-func newNamespace(tier, username, typeName string, options ...objectMetaOption) *corev1.Namespace {
+func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *corev1.Namespace {
 	labels := map[string]string{
-		"toolchain.dev.openshift.com/owner":    username,
+		"toolchain.dev.openshift.com/owner":    owner,
 		"toolchain.dev.openshift.com/type":     typeName,
 		"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 	}
@@ -1606,7 +1618,7 @@ func newNamespace(tier, username, typeName string, options ...objectMetaOption) 
 	}
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("%s-%s", username, typeName),
+			Name:   fmt.Sprintf("%s-%s", owner, typeName),
 			Labels: labels,
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -1617,27 +1629,27 @@ func newNamespace(tier, username, typeName string, options ...objectMetaOption) 
 	return ns
 }
 
-func newRoleBinding(namespace, name, username string) *rbacv1.RoleBinding { //nolint: unparam
+func newRoleBinding(namespace, name, owner string) *rbacv1.RoleBinding { //nolint: unparam
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/owner":    owner,
 			},
 		},
 	}
 }
 
-func newRole(namespace, name, username string) *rbacv1.Role { //nolint: unparam
+func newRole(namespace, name, owner string) *rbacv1.Role { //nolint: unparam
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    username,
+				"toolchain.dev.openshift.com/owner":    owner,
 			},
 		},
 	}
@@ -1744,68 +1756,113 @@ func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	}
 }
 
-func getTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
+func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	var tierTemplates []runtime.Object
 
-	for _, tierName := range []string{"advanced", "basic", "team", "withemptycrq"} {
-		for _, revision := range []string{"abcde11", "abcde12"} {
-			for _, typeName := range []string{"code", "dev", "stage", "clusterresources"} {
-				var tmplContent string
-				switch tierName {
-				case "advanced": // assume that this tier has a "cluster resources" template
-					switch typeName {
-					case "clusterresources":
-						if revision == "abcde11" {
-							tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerCode, idlerStage), test.WithParams(username))
-						} else {
-							tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username))
-						}
-					default:
-						if revision == "abcde11" {
-							tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
-						} else {
-							tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
-						}
-					}
-				case "basic":
-					switch typeName {
-					case "clusterresources": // assume that this tier has no "cluster resources" template
-						continue
-					default:
-						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username))
-					}
-				case "team": // assume that this tier has a "cluster resources" template
-					switch typeName {
-					case "clusterresources":
-						tmplContent = test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username))
-					default:
-						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username))
-					}
-				case "withemptycrq":
-					switch typeName {
-					case "clusterresources":
-						tmplContent = test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username))
-					default:
-						tmplContent = test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username))
-					}
-				}
-				tmplContent = strings.ReplaceAll(tmplContent, "nsType", typeName)
-				tmpl := templatev1.Template{}
-				_, _, err := decoder.Decode([]byte(tmplContent), nil, &tmpl)
+	// templates indexed by tiername / type / revision
+	tmpls := map[string]map[string]map[string]string{
+		"advanced": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerCode, idlerStage), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username)),
+			},
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"basic": {
+			// no clusterresources
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"team": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(teamCrq, clusterTektonRb), test.WithParams(username)),
+			},
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"withemptycrq": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq, emptyCrq, clusterTektonRb), test.WithParams(username)),
+			},
+			"code": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, rb, role), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"appstudio": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerCode, idlerStage), test.WithParams(username)),
+			},
+			"appstudio": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, rb, role, rbacRb), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+			"viewer": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
+			},
+		},
+	}
+	for tierName, tierTmpls := range tmpls {
+		for typeName, typeTmpls := range tierTmpls {
+			for revision, tmpl := range typeTmpls {
+				tierTmpl, err := createTierTemplate(decoder, tmpl, tierName, typeName, revision)
 				if err != nil {
 					return nil, err
-				}
-				tierTmpl := &toolchainv1alpha1.TierTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      strings.ToLower(fmt.Sprintf("%s-%s-%s", tierName, typeName, revision)),
-						Namespace: test.HostOperatorNs,
-					},
-					Spec: toolchainv1alpha1.TierTemplateSpec{
-						TierName: tierName,
-						Type:     typeName,
-						Revision: revision,
-						Template: tmpl,
-					},
 				}
 				tierTemplates = append(tierTemplates, tierTmpl)
 			}
@@ -1814,19 +1871,40 @@ func getTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	return tierTemplates, nil
 }
 
+func createTierTemplate(decoder runtime.Decoder, tmplContent string, tierName, typeName, revision string) (*toolchainv1alpha1.TierTemplate, error) {
+	tmplContent = strings.ReplaceAll(tmplContent, "NSTYPE", typeName)
+	tmpl := templatev1.Template{}
+	_, _, err := decoder.Decode([]byte(tmplContent), nil, &tmpl)
+	if err != nil {
+		return nil, err
+	}
+	return &toolchainv1alpha1.TierTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.ToLower(fmt.Sprintf("%s-%s-%s", tierName, typeName, revision)),
+			Namespace: test.HostOperatorNs,
+		},
+		Spec: toolchainv1alpha1.TierTemplateSpec{
+			TierName: tierName,
+			Type:     typeName,
+			Revision: revision,
+			Template: tmpl,
+		},
+	}, nil
+}
+
 var (
 	ns test.TemplateObject = `
 - apiVersion: v1
   kind: Namespace
   metadata:
-    name: ${USERNAME}-nsType
+    name: ${USERNAME}-NSTYPE
 `
 	rb test.TemplateObject = `
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: RoleBinding
   metadata:
     name: user-edit
-    namespace: ${USERNAME}-nsType
+    namespace: ${USERNAME}-NSTYPE
   roleRef:
     name: edit
   subjects:
@@ -1840,7 +1918,7 @@ var (
   kind: RoleBinding
   metadata:
     name: user-rbac-edit
-    namespace: ${USERNAME}-nsType
+    namespace: ${USERNAME}-NSTYPE
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: Role
@@ -1854,7 +1932,7 @@ var (
   kind: Role
   metadata:
     name: rbac-edit
-    namespace: ${USERNAME}-nsType
+    namespace: ${USERNAME}-NSTYPE
   rules:
   - apiGroups:
     - authorization.openshift.io
@@ -1865,6 +1943,9 @@ var (
     verbs:
     - '*'`
 
+	namespace test.TemplateParam = `
+- name: NAMESPACE
+  required: true`
 	username test.TemplateParam = `
 - name: USERNAME
   value: johnsmith`
@@ -1945,4 +2026,67 @@ var (
   spec:
     timeoutSeconds: 28800 # 8 hours
   `
+
+	spaceAdmin test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: space-admin
+    namespace: ${NAMESPACE}
+  rules:
+    # examples
+    - apiGroups:
+        - ""
+      resources:
+        - "configmaps"
+        - "secrets"
+        - "serviceaccounts"
+      verbs:
+        - get
+        - list
+  `
+	spaceAdminRb test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: ${USERNAME}-space-admin
+    namespace: ${NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: space-admin
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+`
+	spaceViewer test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    name: space-viewer
+    namespace: ${NAMESPACE}
+  rules:
+    # examples
+    - apiGroups:
+        - ""
+      resources:
+        - "configmaps"
+      verbs:
+        - get
+        - list
+  `
+	spaceViewerRb test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: ${USERNAME}-space-viewer
+    namespace: ${NAMESPACE}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: space-viewer
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+`
 )

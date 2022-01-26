@@ -30,7 +30,8 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			"failed to list namespaces for workspace '%s'", nsTmplSet.Name)
 	}
 	logger.Info("ensuring space roles", "namespace_count", len(nss), "role_count", len(nsTmplSet.Spec.SpaceRoles))
-	for _, ns := range nss {
+	for i := range nss {
+		ns := &nss[i] // avoids the `G601: Implicit memory aliasing in for loop. (gosec)` problem
 		// space roles previously applied
 		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all obsolete resources (based on their kind/names)
 		var lastAppliedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole
@@ -47,12 +48,12 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return false, err
 		}
-		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(&ns, lastAppliedSpaceRoles)
+		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(ns, lastAppliedSpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve last applied space roles")
 		}
 		// space roles to apply now
-		spaceRoleObjs, err := r.getSpaceRolesObjects(&ns, nsTmplSet.Spec.SpaceRoles)
+		spaceRoleObjs, err := r.getSpaceRolesObjects(ns, nsTmplSet.Spec.SpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve space roles to apply")
 		}
@@ -81,7 +82,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			ns.Annotations = map[string]string{}
 		}
 		ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
-		if err := r.Client.Update(context.TODO(), &ns); err != nil {
+		if err := r.Client.Update(context.TODO(), ns); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
 				"failed update namespace annotation")
 		}

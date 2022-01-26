@@ -78,6 +78,7 @@ type tierTemplate struct {
 const (
 	MemberOperatorNS = "MEMBER_OPERATOR_NAMESPACE"
 	Username         = "USERNAME"
+	Namespace        = "NAMESPACE"
 )
 
 // process processes the template inside of the tierTemplate object with the given parameters.

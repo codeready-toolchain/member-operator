@@ -44,6 +44,9 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 		clusterResources: &clusterResourcesManager{
 			statusManager: status,
 		},
+		spaceRoles: &spaceRolesManager{
+			statusManager: status,
+		},
 	}
 }
 
@@ -77,6 +80,7 @@ type Reconciler struct {
 	*APIClient
 	namespaces       *namespacesManager
 	clusterResources *clusterResourcesManager
+	spaceRoles       *spaceRolesManager
 	status           *statusManager
 }
 
@@ -107,6 +111,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			logger.Error(err, "failed to get NSTemplateSet")
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "failed to get NSTemplateSet")
@@ -120,18 +125,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	// we proceed with the cluster-scoped resources template before all namespaces
+	// we proceed with the cluster-scoped resources template, then all namespaces and finally space roles
 	// as we want ot be sure that cluster scoped resources such as quotas are set
 	// even before the namespaces exist
 	if createdOrUpdated, err := r.clusterResources.ensure(logger, nsTmplSet); err != nil {
+		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
 		return reconcile.Result{}, nil // wait for cluster resources to be created
 	}
 
-	createdOrUpdated, err := r.namespaces.ensure(logger, nsTmplSet)
-	if err != nil {
+	if createdOrUpdated, err := r.namespaces.ensure(logger, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update user namespaces")
+		return reconcile.Result{}, err
+	} else if createdOrUpdated {
+		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
+	}
+
+	if createdOrUpdated, err := r.spaceRoles.ensure(logger, nsTmplSet); err != nil {
+		logger.Error(err, "failed to either provision or update roles in space")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
 		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
@@ -199,38 +211,32 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	return reconcile.Result{}, nil
 }
 
-// deleteRedundantObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
+// deleteObsoleteObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteRedundantObjects(logger logr.Logger, client runtimeclient.Client, deleteOnlyOne bool, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) (bool, error) {
-	deleted := false
-	logger.Info("checking redundant objects", "count", len(currentObjs))
+func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) error {
+	logger.Info("looking for obsolete objects", "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
-		objectLogger.Info("checking redundant object")
+		objectLogger.Info("checking obsolete object")
 		for _, newObj := range newObjects {
 			if commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
 			}
 		}
 		if err := client.Delete(context.TODO(), currentObj); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
-			return false, errs.Wrapf(err, "failed to delete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetObjectKind().GroupVersionKind().Kind, currentObj.GetNamespace())
+			return errs.Wrapf(err, "failed to delete obsolete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetObjectKind().GroupVersionKind().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted
 		}
-		logger.Info("deleted redundant object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
-		if deleteOnlyOne {
-			return true, nil
-		}
-		deleted = true
+		logger.Info("deleted obsolete object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 	}
-	return deleted, nil
+	return nil
 }
 
 // listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
 func listByOwnerLabel(username string) runtimeclient.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
-
 	return runtimeclient.MatchingLabels(labels)
 }

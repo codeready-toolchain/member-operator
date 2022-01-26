@@ -250,7 +250,7 @@ NewObjects:
 			}
 		}
 		// if there was no existing object found that would match with the new one, then set the status appropriately
-		namespaces, err := fetchNamespaces(r.Client, nsTmplSet.Name)
+		namespaces, err := fetchNamespacesByOwner(r.Client, nsTmplSet.Name)
 		if err != nil {
 			return false, errs.Wrapf(err, "unable to fetch user's namespaces")
 		}

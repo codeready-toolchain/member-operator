@@ -26,18 +26,28 @@ import (
 
 func TestFindNamespace(t *testing.T) {
 	namespaces := []corev1.Namespace{
-		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-dev", Labels: map[string]string{
-			"toolchain.dev.openshift.com/type": "dev",
-		}}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "johnsmith-code", Labels: map[string]string{
-			"toolchain.dev.openshift.com/type": "code",
-		}}},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "johnsmith-dev",
+				Labels: map[string]string{
+					"toolchain.dev.openshift.com/type": "dev",
+				},
+			},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "johnsmith-code",
+				Labels: map[string]string{
+					"toolchain.dev.openshift.com/type": "code",
+				},
+			},
+		},
 	}
 
 	t.Run("found", func(t *testing.T) {
 		typeName := "dev"
 		namespace, found := findNamespace(namespaces, typeName)
-		assert.True(t, found)
+		require.True(t, found)
 		assert.NotNil(t, namespace)
 		assert.Equal(t, typeName, namespace.GetLabels()["toolchain.dev.openshift.com/type"])
 	})
@@ -66,8 +76,8 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
-		assert.NoError(t, err)
-		assert.True(t, found)
+		require.NoError(t, err)
+		require.True(t, found)
 		assert.Equal(t, "code", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
 	})
@@ -81,8 +91,8 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
-		assert.NoError(t, err)
-		assert.True(t, found)
+		require.NoError(t, err)
+		require.True(t, found)
 		assert.Equal(t, "code", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
 	})
@@ -96,8 +106,8 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
-		assert.NoError(t, err)
-		assert.True(t, found)
+		require.NoError(t, err)
+		require.True(t, found)
 		assert.Equal(t, "dev", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-dev", userNS.GetName())
 	})
@@ -111,8 +121,8 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
-		assert.NoError(t, err)
-		assert.True(t, found)
+		require.NoError(t, err)
+		require.True(t, found)
 		assert.Equal(t, "code", tierTemplate.typeName)
 		assert.Equal(t, "johnsmith-code", userNS.GetName())
 	})
@@ -126,8 +136,8 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
-		assert.NoError(t, err)
-		assert.True(t, found)
+		require.NoError(t, err)
+		require.True(t, found)
 		assert.Equal(t, "stage", tierTemplate.typeName)
 		assert.Nil(t, userNS)
 	})
@@ -152,7 +162,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
 
 		// then
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, found)
 	})
 
@@ -170,7 +180,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 		// then
 		assert.Error(t, err, "mock List error")
-		assert.True(t, found)
+		require.True(t, found)
 	})
 
 	t.Run("error in listing roles", func(t *testing.T) {
@@ -269,7 +279,7 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 		namespace, found := nextNamespaceToDeprovision(tierTemplates, userNamespaces)
 
 		// then
-		assert.True(t, found)
+		require.True(t, found)
 		assert.Equal(t, "johnsmith-code", namespace.Name)
 	})
 

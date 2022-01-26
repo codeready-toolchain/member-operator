@@ -26,8 +26,9 @@ type namespacesManager struct {
 // ensure ensures that all expected namespaces exists and they contain all the expected resources
 // return `true, nil` when something changed, `false, nil` or `false, err` otherwise
 func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (createdOrUpdated bool, err error) {
+	logger.Info("ensuring namespaces")
 	username := nsTmplSet.GetName()
-	userNamespaces, err := fetchNamespaces(r.Client, username)
+	userNamespaces, err := fetchNamespacesByOwner(r.Client, username)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err, "failed to list namespaces with label owner '%s'", username)
 	}
@@ -131,7 +132,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to process template for TierTemplate with name '%s'", currentRef)
 		}
-		if _, err := deleteRedundantObjects(logger, r.Client, false, currentObjs, newObjs); err != nil {
+		if err := deleteObsoleteObjects(logger, r.Client, currentObjs, newObjs); err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
 		}
 	}
@@ -173,7 +174,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// now, we can delete all "child" namespaces explicitly
 	username := nsTmplSet.Name
-	userNamespaces, err := fetchNamespaces(r.Client, username)
+	userNamespaces, err := fetchNamespacesByOwner(r.Client, username)
 	if err != nil {
 		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to list namespace with label owner '%s'", username)
 	}
@@ -205,9 +206,9 @@ func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchai
 	return tmpls, nil
 }
 
-// fetchNamespaces returns all current namespaces belonging to the given user
+// fetchNamespacesByOwner returns all current namespaces belonging to the given user
 // i.e., labeled with `"toolchain.dev.openshift.com/owner":<username>`
-func fetchNamespaces(cl runtimeclient.Client, username string) ([]corev1.Namespace, error) {
+func fetchNamespacesByOwner(cl runtimeclient.Client, username string) ([]corev1.Namespace, error) {
 	// fetch all namespace with owner=username label
 	userNamespaceList := &corev1.NamespaceList{}
 	if err := cl.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {

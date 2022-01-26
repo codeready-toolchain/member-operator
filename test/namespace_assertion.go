@@ -65,6 +65,14 @@ func (a *NamespaceAssertion) HasNoDeletionTimestamp() *NamespaceAssertion {
 	return a
 }
 
+func (a *NamespaceAssertion) HasAnnotation(key, value string) *NamespaceAssertion {
+	err := a.loadNamespace()
+	require.NoError(a.t, err)
+	require.Contains(a.t, a.namespace.Annotations, key)
+	assert.Equal(a.t, value, a.namespace.Annotations[key])
+	return a
+}
+
 func (a *NamespaceAssertion) HasLabel(key, value string) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)

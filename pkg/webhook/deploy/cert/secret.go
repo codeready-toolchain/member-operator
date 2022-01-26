@@ -25,7 +25,7 @@ const (
 	CACert = "ca-cert.pem"
 
 	// certSecretName is a name of the secret
-	certSecretName = "webhook-certs"
+	certSecretName = "webhook-certs" // nolint:gosec
 
 	// Expiration is a default duration after which the certificates should expire
 	Expiration = 365 * 24 * time.Hour

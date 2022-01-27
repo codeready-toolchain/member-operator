@@ -8,14 +8,26 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	userv1 "github.com/openshift/api/user/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/admission/v1"
 )
 
 func TestHandleValidateBlocked(t *testing.T) {
+	s := scheme.Scheme
+	cl := fake.NewClientBuilder().WithScheme(s).Build()
+	validator := &Validator{
+		Client: cl,
+	}
 	// given
-	ts := httptest.NewServer(http.HandlerFunc(HandleValidate))
+	ts := httptest.NewServer(http.HandlerFunc(validator.HandleValidate))
 	defer ts.Close()
 
 	// when
@@ -32,16 +44,28 @@ func TestHandleValidateBlocked(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
+	s := scheme.Scheme
+	userv1.AddToScheme(s)
+	testUser := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "johnsmith",
+			Labels: map[string]string{
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+			},
+		},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
 	// when
-	response := validate(rawJSON)
-
+	response := validate(rawJSON, cl)
 	// then
 	verifyRequestBlocked(t, response)
 }
 
 func TestValidateAllow(t *testing.T) {
+	s := scheme.Scheme
+	cl := fake.NewClientBuilder().WithScheme(s).Build()
 	// when user is kubeadmin
-	response := validate(allowedJSON)
+	response := validate(allowedJSON, cl)
 
 	// then
 	verifyRequestAllowed(t, response)

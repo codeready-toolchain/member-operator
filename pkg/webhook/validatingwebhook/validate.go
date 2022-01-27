@@ -8,9 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+
 	userv1 "github.com/openshift/api/user/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/apimachinery/pkg/types"
 
@@ -31,11 +32,13 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 
 	log = logf.Log.WithName("users_rolebindings_validating_webhook")
-	//client = runtimeclient.Client
-
 )
 
-func HandleValidate(w http.ResponseWriter, r *http.Request) {
+type Validator struct {
+	Client runtimeClient.Client
+}
+
+func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
 	body, err := ioutil.ReadAll(r.Body)
 	defer func() {
@@ -49,7 +52,7 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 		respBody = []byte(fmt.Sprintf("unable to read the body of the request: %s", err))
 	} else {
 		// validate the request
-		respBody = validate(body)
+		respBody = validate(body, v.Client)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := w.Write(respBody); err != nil {
@@ -57,7 +60,7 @@ func HandleValidate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func validate(body []byte) []byte {
+func validate(body []byte, client runtimeClient.Client) []byte {
 	admReview := v1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", body)
@@ -81,15 +84,10 @@ func validate(body []byte) []byte {
 		Name:     "system:authenticated",
 		APIGroup: "rbac.authorization.k8s.io",
 	}
-	cfg, err := config.GetConfig()
-	err = userv1.AddToScheme(runtimeScheme)
-	cl, err := client.New(cfg, client.Options{
-		Scheme: runtimeScheme,
-	})
 	//check the requesting user is not a system user
 	if !strings.Contains(requestingUser.Username, "system:") {
 		user := &userv1.User{}
-		err := cl.Get(context.TODO(), types.NamespacedName{
+		err := client.Get(context.TODO(), types.NamespacedName{
 			Name: admReview.Request.UserInfo.Username,
 		}, user)
 		if err != nil {
@@ -97,10 +95,14 @@ func validate(body []byte) []byte {
 			errVal := err.Error()
 			fmt.Printf(errVal)
 		}
-		for _, sub := range subjects {
-			if sub == allUsersSubject || sub == allServiceAccountsSubject {
-				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-				admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+		if user.GetLabels()[toolchainv1alpha1.ProviderLabelKey] != toolchainv1alpha1.ProviderLabelValue {
+			admReview.Response = createAdmissionReviewResponse(admReview)
+		} else {
+			for _, sub := range subjects {
+				if sub == allUsersSubject || sub == allServiceAccountsSubject {
+					log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
+					admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+				}
 			}
 		}
 	} else {

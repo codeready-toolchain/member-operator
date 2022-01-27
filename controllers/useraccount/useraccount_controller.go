@@ -762,11 +762,16 @@ func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccou
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
+	username := userAcc.Spec.UserID
+	if !isIdentityNameCompliant(username) {
+		username = fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(username)))
+	}
+
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())},
+		Identities: []string{ToIdentityName(username, config.Auth().Idp())},
 	}
 	return user
 }

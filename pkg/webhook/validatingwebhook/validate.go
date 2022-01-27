@@ -1,11 +1,16 @@
 package validatingwebhook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	userv1 "github.com/openshift/api/user/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"k8s.io/apimachinery/pkg/types"
 
@@ -26,6 +31,8 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 
 	log = logf.Log.WithName("users_rolebindings_validating_webhook")
+	//client = runtimeclient.Client
+
 )
 
 func HandleValidate(w http.ResponseWriter, r *http.Request) {
@@ -74,9 +81,22 @@ func validate(body []byte) []byte {
 		Name:     "system:authenticated",
 		APIGroup: "rbac.authorization.k8s.io",
 	}
-
+	cfg, err := config.GetConfig()
+	err = userv1.AddToScheme(runtimeScheme)
+	cl, err := client.New(cfg, client.Options{
+		Scheme: runtimeScheme,
+	})
 	//check the requesting user is not a system user
 	if !strings.Contains(requestingUser.Username, "system:") {
+		user := &userv1.User{}
+		err := cl.Get(context.TODO(), types.NamespacedName{
+			Name: admReview.Request.UserInfo.Username,
+		}, user)
+		if err != nil {
+			fmt.Errorf("Cannot find the user: %s", err.Error())
+			errVal := err.Error()
+			fmt.Printf(errVal)
+		}
 		for _, sub := range subjects {
 			if sub == allUsersSubject || sub == allServiceAccountsSubject {
 				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)

@@ -307,7 +307,7 @@ func TestGetToken(t *testing.T) {
 func TestTokenExpired(t *testing.T) {
 	t.Run("nil token", func(t *testing.T) {
 		// given
-		var token *TokenSet = nil
+		var token *TokenSet
 
 		// when
 		result := tokenExpired(token)

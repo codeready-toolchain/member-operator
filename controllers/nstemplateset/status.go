@@ -25,6 +25,14 @@ func (r *statusManager) wrapErrorWithStatusUpdateForClusterResourceFailure(logge
 	return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed, err, format, args...)
 }
 
+func (r *statusManager) wrapErrorWithStatusUpdateForSpaceRolesFailure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, err error, format string, args ...interface{}) error {
+	readyCondition, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
+	if found && readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdatingReason || readyCondition.Reason == toolchainv1alpha1.NSTemplateSetUpdateFailedReason {
+		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, format, args...)
+	}
+	return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusSpaceRolesProvisionFailed, err, format, args...)
+}
+
 func (r *statusManager) wrapErrorWithStatusUpdate(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, updateStatus statusUpdater, err error, format string, args ...interface{}) error {
 	if err == nil {
 		return nil
@@ -98,6 +106,17 @@ func (r *statusManager) setStatusClusterResourcesProvisionFailed(nsTmplSet *tool
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionClusterResourcesReason,
+			Message: message,
+		})
+}
+
+func (r *statusManager) setStatusSpaceRolesProvisionFailed(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+	return r.updateStatusConditions(
+		nsTmplSet,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.ConditionReady,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionSpaceRolesReason,
 			Message: message,
 		})
 }

@@ -15,7 +15,9 @@ func ReadBody(body io.ReadCloser) (string, error) {
 }
 
 // CloseResponse reads the body and close the response. To be used to prevent file descriptor leaks.
-func CloseResponse(response *http.Response) {
-	_, _ = ioutil.ReadAll(response.Body)
-	response.Body.Close()
+func CloseResponse(res *http.Response) {
+	if res != nil {
+		io.Copy(ioutil.Discard, res.Body) //nolint: errcheck
+		defer res.Body.Close()
+	}
 }

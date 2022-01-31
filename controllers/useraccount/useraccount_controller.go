@@ -168,7 +168,7 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	var user *userv1.User
 	var err error
 	// for non-AppStudio use-case - create User & Identity resources if user is not using appstudio tier
-	if userAcc.Spec.NSTemplateSet == nil || (userAcc.Labels != nil && userAcc.Labels[toolchainv1alpha1.TierLabelKey] != "appstudio") {
+	if userAcc.Labels == nil || userAcc.Labels[toolchainv1alpha1.TierLabelKey] != "appstudio" {
 		if user, createdOrUpdated, err = r.ensureUser(logger, config, userAcc); err != nil || createdOrUpdated {
 			return createdOrUpdated, err
 		}

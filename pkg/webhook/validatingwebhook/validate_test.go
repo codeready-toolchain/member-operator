@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -21,8 +23,7 @@ import (
 )
 
 func TestHandleValidateBlocked(t *testing.T) {
-	s := scheme.Scheme
-	cl := fake.NewClientBuilder().WithScheme(s).Build()
+	cl := createFakeClient()
 	validator := &Validator{
 		Client: cl,
 	}
@@ -44,17 +45,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	s := scheme.Scheme
-	userv1.AddToScheme(s)
-	testUser := &userv1.User{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "johnsmith",
-			Labels: map[string]string{
-				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-			},
-		},
-	}
-	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
+	cl := createFakeClient()
 	// when
 	response := validate(rawJSON, cl)
 	// then
@@ -62,8 +53,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestValidateAllow(t *testing.T) {
-	s := scheme.Scheme
-	cl := fake.NewClientBuilder().WithScheme(s).Build()
+	cl := createFakeClient()
 	// when user is kubeadmin
 	response := validate(allowedJSON, cl)
 
@@ -91,6 +81,23 @@ func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
 	err := json.Unmarshal(content, &r)
 	require.NoError(t, err)
 	return r.Response
+}
+
+func createFakeClient() runtimeclient.Client {
+	s := scheme.Scheme
+	err := userv1.AddToScheme(s)
+	if err != nil {
+		return nil
+	}
+	testUser := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "johnsmith",
+			Labels: map[string]string{
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+			},
+		},
+	}
+	return fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
 }
 
 var rawJSON = []byte(`{

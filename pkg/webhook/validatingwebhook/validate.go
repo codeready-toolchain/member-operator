@@ -72,7 +72,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		log.Error(err, "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
 		admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
-	requestingUser := admReview.Request.UserInfo
+	requestingUsername := admReview.Request.UserInfo.Username
 	subjects := rb.Subjects
 	allServiceAccountsSubject := rbac.Subject{
 		Kind:     "Group",
@@ -84,25 +84,21 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		Name:     "system:authenticated",
 		APIGroup: "rbac.authorization.k8s.io",
 	}
-	//check the requesting user is not a system user
-	if !strings.Contains(requestingUser.Username, "system:") {
-		user := &userv1.User{}
-		err := client.Get(context.TODO(), types.NamespacedName{
-			Name: admReview.Request.UserInfo.Username,
-		}, user)
-		if err != nil {
-			fmt.Errorf("Cannot find the user: %s", err.Error())
-			errVal := err.Error()
-			fmt.Printf(errVal)
-		}
-		if user.GetLabels()[toolchainv1alpha1.ProviderLabelKey] != toolchainv1alpha1.ProviderLabelValue {
-			admReview.Response = createAdmissionReviewResponse(admReview)
-		} else {
-			for _, sub := range subjects {
-				if sub == allUsersSubject || sub == allServiceAccountsSubject {
-					log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-					admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
-				}
+	requestingUser := &userv1.User{}
+	err := client.Get(context.TODO(), types.NamespacedName{
+		Name: admReview.Request.UserInfo.Username,
+	}, requestingUser)
+
+	if err != nil {
+		log.Error(fmt.Errorf("Cannot find the user: %w", err), "unable to find the user requesting creation")
+		return []byte(fmt.Sprintf("unable to find the user requesting creation: %s", err))
+	}
+	//check if the requesting user is a sandbox user
+	if !strings.Contains(requestingUsername, "system:") && requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
+		for _, sub := range subjects {
+			if sub == allUsersSubject || sub == allServiceAccountsSubject {
+				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
+				admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 			}
 		}
 	} else {

@@ -23,7 +23,7 @@ import (
 )
 
 func TestHandleValidateBlocked(t *testing.T) {
-	cl := createFakeClient()
+	cl := createFakeClient("johnsmith")
 	validator := &Validator{
 		Client: cl,
 	}
@@ -45,7 +45,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	cl := createFakeClient()
+	cl := createFakeClient("johnsmith")
 	// when
 	response := validate(rawJSON, cl)
 	// then
@@ -53,7 +53,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestValidateAllow(t *testing.T) {
-	cl := createFakeClient()
+	cl := createFakeClient("system:kubeadmin")
 	// when user is kubeadmin
 	response := validate(allowedJSON, cl)
 
@@ -83,7 +83,7 @@ func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
 	return r.Response
 }
 
-func createFakeClient() runtimeclient.Client {
+func createFakeClient(username string) runtimeclient.Client {
 	s := scheme.Scheme
 	err := userv1.AddToScheme(s)
 	if err != nil {
@@ -91,7 +91,7 @@ func createFakeClient() runtimeclient.Client {
 	}
 	testUser := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "johnsmith",
+			Name: username,
 			Labels: map[string]string{
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},

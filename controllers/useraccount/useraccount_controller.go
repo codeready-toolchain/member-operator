@@ -253,11 +253,11 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 	logger.Info("user already exists")
 
 	// ensure mapping
-	expectedIdentities := []string{identity2.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
+	expectedIdentities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
 
 	// If the OriginalSub property has been set also, then an additional identity is required to be created
 	if userAcc.Spec.OriginalSub != "" {
-		expectedIdentities = append(expectedIdentities, identity2.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
+		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
 	stringSlicesEqual := func(a, b []string) bool {
@@ -312,7 +312,7 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, username string,
 	userAccount *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 
-	ins := identity2.NewIdentityNamingStandard(username, config.Auth().Idp())
+	ins := commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp())
 
 	identity := &userv1.Identity{}
 
@@ -323,7 +323,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 				return nil, false, err
 			}
 			identity = newIdentity(user)
-			identity2.NewIdentityNamingStandard(username, config.Auth().Idp()).ApplyToIdentity(identity)
+			commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp()).ApplyToIdentity(identity)
 
 			setOwnerLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
@@ -718,7 +718,7 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configurat
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{identity2.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()},
+		Identities: []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()},
 	}
 	return user
 }

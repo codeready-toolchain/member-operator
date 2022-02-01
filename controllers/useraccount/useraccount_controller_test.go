@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	identity2 "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 	"net/http"
 	"os"
 	"testing"
@@ -1937,15 +1938,8 @@ func assertIdentityNotFound(t *testing.T, r *Reconciler, userAcc *toolchainv1alp
 }
 
 func assertIdentity(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAccount, idp string) *userv1.Identity {
-	var identityName string
-	if isIdentityNameCompliant(userAcc.Spec.UserID) {
-		identityName = ToIdentityName(userAcc.Spec.UserID, idp)
-	} else {
-		identityName = ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.UserID))), idp)
-	}
-
 	identity := &userv1.Identity{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identity2.NewIdentityNamingStandard(userAcc.Spec.UserID, idp).IdentityName()}, identity)
 	require.NoError(t, err)
 	require.NotNil(t, identity.Labels)
 	assert.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])

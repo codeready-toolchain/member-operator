@@ -64,13 +64,13 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	admReview := v1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", body)
-		admReview.Response = responseWithError(admReview.Request.UID, err)
+		return responseWithError(admReview, err)
 	}
 	// let's unmarshal the object to be sure that it's a rolebinding
 	var rb *rbac.RoleBinding
 	if err := json.Unmarshal(admReview.Request.Object.Raw, &rb); err != nil {
 		log.Error(err, "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-		admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+		return responseWithError(admReview, errors.Wrapf(err, "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	requestingUsername := admReview.Request.UserInfo.Username
 	subjects := rb.Subjects
@@ -98,7 +98,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		for _, sub := range subjects {
 			if sub == allUsersSubject || sub == allServiceAccountsSubject {
 				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-				admReview.Response = responseWithError(admReview.Request.UID, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+				return responseWithError(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 			}
 		}
 	} else {
@@ -112,21 +112,34 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	return responseBody
 }
 
-func responseWithError(uid types.UID, err error) *v1.AdmissionResponse {
-	return &v1.AdmissionResponse{
-		UID:     uid,
+func responseWithError(admReview v1.AdmissionReview, err error) []byte {
+	response := &v1.AdmissionResponse{
+		UID:     admReview.Request.UID,
 		Allowed: false,
 		Result: &metav1.Status{
 			Message: err.Error(),
 		},
 	}
+	admReview.Response = response
+	responseBody, err := json.Marshal(admReview)
+	if err != nil {
+		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
+	}
+	return responseBody
+
 }
 
 func createAdmissionReviewResponse(admReview v1.AdmissionReview) *v1.AdmissionResponse {
 	if admReview.Request == nil {
 		err := fmt.Errorf("admission review request is nil")
 		log.Error(err, "cannot read the admission review request", "AdmissionReview", admReview)
-		return responseWithError(admReview.Request.UID, err)
+		return &v1.AdmissionResponse{
+			UID:     admReview.Request.UID,
+			Allowed: false,
+			Result: &metav1.Status{
+				Message: err.Error(),
+			},
+		}
 	}
 
 	resp := &v1.AdmissionResponse{

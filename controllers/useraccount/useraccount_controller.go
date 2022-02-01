@@ -3,7 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
-	identity2 "github.com/codeready-toolchain/toolchain-common/pkg/identity"
+	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 	"reflect"
 	"time"
 

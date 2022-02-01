@@ -120,10 +120,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.ensureUserAccountDeletion(logger, config, userAcc)
 	}
 
-	if done, err := r.migrateNStemplateSetIfNecessary(logger, userAcc); err != nil || done {
-		return reconcile.Result{}, err
-	}
-
 	if !userAcc.Spec.Disabled {
 		logger.Info("ensuring user and identity associated with UserAccount")
 		if createdOrUpdated, err := r.ensureUserAndIdentity(logger, userAcc, config); err != nil || createdOrUpdated {
@@ -188,28 +184,6 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 		}
 		return deleted, nil
 	}
-	return false, nil
-}
-
-// (optional) migration step:
-// - remove the OwnerReferences between the UserAccount and its associated NSTemplateSet (part of decoupling/CRT1305)
-func (r *Reconciler) migrateNStemplateSetIfNecessary(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	// create if not found
-	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: userAcc.Namespace}, nsTmplSet); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("NSTemplateSet not found")
-			return false, nil
-		}
-		return false, err
-	}
-	// ensure that the NSTemplateSet `OwnerReferences` is empty
-	if len(nsTmplSet.OwnerReferences) > 0 {
-		logger.Info("removing OwnerReferences in the associated NSTemplateSet")
-		nsTmplSet.OwnerReferences = nil
-		return true, r.Client.Update(context.TODO(), nsTmplSet)
-	}
-	// no change on the NSTemplateSet
 	return false, nil
 }
 

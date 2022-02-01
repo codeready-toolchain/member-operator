@@ -893,6 +893,7 @@ func TestReconcile(t *testing.T) {
 		// given
 		appStudioAccount := userAcc.DeepCopy()
 		appStudioAccount.Spec.NSTemplateSet.TierName = "appstudio"
+		appStudioAccount.Labels[toolchainv1alpha1.TierLabelKey] = "appstudio"
 
 		t.Run("tiername is appstudio - no user nor identity", func(t *testing.T) {
 			// given
@@ -2009,6 +2010,9 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 			Name:      userName,
 			Namespace: test.MemberOperatorNs,
 			UID:       types.UID(uuid.NewV4().String()),
+			Labels: map[string]string{
+				toolchainv1alpha1.TierLabelKey: "basic",
+			},
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID: userID,

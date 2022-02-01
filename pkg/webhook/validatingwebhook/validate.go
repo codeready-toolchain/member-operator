@@ -94,7 +94,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		return []byte(fmt.Sprintf("unable to find the user requesting creation: %s", err))
 	}
 	//check if the requesting user is a sandbox user
-	if !strings.Contains(requestingUsername, "system:") && requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
+	if !strings.HasPrefix(requestingUsername, "system:") && requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
 		for _, sub := range subjects {
 			if sub == allUsersSubject || sub == allServiceAccountsSubject {
 				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)

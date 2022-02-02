@@ -23,7 +23,7 @@ import (
 )
 
 func TestHandleValidateBlocked(t *testing.T) {
-	cl := createFakeClient("johnsmith")
+	cl := createFakeClient("johnsmith", true)
 	validator := &Validator{
 		Client: cl,
 	}
@@ -32,7 +32,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 	defer ts.Close()
 
 	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON))
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(sandboxUserJSON))
 
 	// then
 	assert.NoError(t, err)
@@ -45,20 +45,34 @@ func TestHandleValidateBlocked(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	cl := createFakeClient("johnsmith")
-	// when
-	response := validate(rawJSON, cl)
-	// then
-	verifyRequestBlocked(t, response)
+	t.Run("sandbox user trying to create rolebinding is denied", func(t *testing.T) {
+		cl := createFakeClient("johnsmith", true)
+		// when
+		response := validate(sandboxUserJSON, cl)
+		// then
+		verifyRequestBlocked(t, response)
+	})
 }
 
 func TestValidateAllow(t *testing.T) {
-	cl := createFakeClient("system:kubeadmin")
-	// when user is kubeadmin
-	response := validate(allowedJSON, cl)
 
-	// then
-	verifyRequestAllowed(t, response)
+	t.Run("SA or kubeadmin trying to create rolebinding is allowed", func(t *testing.T) {
+		cl := createFakeClient("system:kubeadmin", false)
+		// when user is kubeadmin
+		response := validate(allowedUserJSON, cl)
+
+		// then
+		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6g7")
+	})
+
+	t.Run("non sandbox user trying to create rolebinding is allowed", func(t *testing.T) {
+		cl := createFakeClient("nonsandbox", false)
+		// when
+		response := validate(nonSandboxUserJSON, cl)
+		// then
+		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f7")
+	})
+
 }
 
 func verifyRequestBlocked(t *testing.T, response []byte) {
@@ -69,11 +83,11 @@ func verifyRequestBlocked(t *testing.T, response []byte) {
 	assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
 }
 
-func verifyRequestAllowed(t *testing.T, response []byte) {
+func verifyRequestAllowed(t *testing.T, response []byte, UID string) {
 	reviewResponse := toReviewResponse(t, response)
 	assert.True(t, reviewResponse.Allowed)
 	assert.Empty(t, reviewResponse.Result)
-	assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6g7", string(reviewResponse.UID))
+	assert.Equal(t, UID, string(reviewResponse.UID))
 }
 
 func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
@@ -83,7 +97,7 @@ func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
 	return r.Response
 }
 
-func createFakeClient(username string) runtimeclient.Client {
+func createFakeClient(username string, sandboxUser bool) runtimeclient.Client {
 	s := scheme.Scheme
 	err := userv1.AddToScheme(s)
 	if err != nil {
@@ -92,15 +106,17 @@ func createFakeClient(username string) runtimeclient.Client {
 	testUser := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: username,
-			Labels: map[string]string{
-				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-			},
 		},
+	}
+	if sandboxUser {
+		testUser.Labels = map[string]string{
+			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+		}
 	}
 	return fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
 }
 
-var rawJSON = []byte(`{
+var sandboxUserJSON = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",
 	"request": {
@@ -166,7 +182,73 @@ var rawJSON = []byte(`{
 	}
 }`)
 
-var allowedJSON = []byte(`{
+var nonSandboxUserJSON = []byte(`{
+	"kind": "AdmissionReview",
+	"apiVersion": "admission.k8s.io/v1",
+	"request": {
+		"uid": "a68769e5-d817-4617-bec5-90efa2bad6f7",
+		"kind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"resource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"requestKind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"requestResource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"name": "busybox1",
+		"namespace": "nonsandbox-test",
+		"operation": "CREATE",
+		"userInfo": {
+			"username": "nonsandbox",
+			"groups": [
+				"system:authenticated"
+			],
+			"extra": {
+				"scopes.authorization.openshift.io": [
+					"user:full"
+				]
+			}
+		},
+		"object": {
+			"kind": "RoleBinding",
+			"apiVersion": "v1",
+			"metadata": {
+				"name": "busybox1",
+				"namespace": "nonsandbox-test"
+			},
+			"subjects": [{
+				"kind": "Group",
+				"name": "system:serviceaccounts",
+				"apiGroup": "rbac.authorization.k8s.io"
+			}],
+			"roleRef": {
+				"kind": "Role",
+				"apiGroup": "rbac.authorization.k8s.io",
+				"name": "rbac-edit"
+			}
+		},
+		"oldObject": null,
+		"dryRun": false,
+		"options": {
+			"kind": "CreateOptions",
+			"apiVersion": "meta.k8s.io/v1"
+		}
+	}
+}`)
+
+var allowedUserJSON = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",
 	"request": {

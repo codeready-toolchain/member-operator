@@ -64,15 +64,19 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	admReview := v1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", body)
-		return responseWithError(admReview, err)
+		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", body))
 	}
 	// let's unmarshal the object to be sure that it's a rolebinding
 	var rb *rbac.RoleBinding
 	if err := json.Unmarshal(admReview.Request.Object.Raw, &rb); err != nil {
 		log.Error(err, "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-		return responseWithError(admReview, errors.Wrapf(err, "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	requestingUsername := admReview.Request.UserInfo.Username
+	// allow admission request if the user is a system user
+	if strings.HasPrefix(requestingUsername, "system:") {
+		return allowAdmissionRequest(admReview)
+	}
 	subjects := rb.Subjects
 	allServiceAccountsSubject := rbac.Subject{
 		Kind:     "Group",
@@ -84,35 +88,29 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		Name:     "system:authenticated",
 		APIGroup: "rbac.authorization.k8s.io",
 	}
-	requestingUser := &userv1.User{}
-	err := client.Get(context.TODO(), types.NamespacedName{
-		Name: admReview.Request.UserInfo.Username,
-	}, requestingUser)
+	for _, sub := range subjects {
+		if sub == allUsersSubject || sub == allServiceAccountsSubject {
+			requestingUser := &userv1.User{}
+			err := client.Get(context.TODO(), types.NamespacedName{
+				Name: admReview.Request.UserInfo.Username,
+			}, requestingUser)
 
-	if err != nil {
-		log.Error(fmt.Errorf("Cannot find the user: %w", err), "unable to find the user requesting creation")
-		return []byte(fmt.Sprintf("unable to find the user requesting creation: %s", err))
-	}
-	//check if the requesting user is a sandbox user
-	if !strings.HasPrefix(requestingUsername, "system:") && requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
-		for _, sub := range subjects {
-			if sub == allUsersSubject || sub == allServiceAccountsSubject {
-				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-				return responseWithError(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+			if err != nil {
+				log.Error(fmt.Errorf("Cannot find the user: %w", err), "unable to find the user requesting creation")
+				return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to find the user requesting creation: %s", requestingUsername))
 			}
-		}
-	} else {
-		admReview.Response = createAdmissionReviewResponse(admReview)
-	}
+			//check if the requesting user is a sandbox user
+			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
+				log.Error(fmt.Errorf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
+				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+			}
 
-	responseBody, err := json.Marshal(admReview)
-	if err != nil {
-		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
+		}
 	}
-	return responseBody
+	return allowAdmissionRequest(admReview)
 }
 
-func responseWithError(admReview v1.AdmissionReview, err error) []byte {
+func denyAdmissionRequest(admReview v1.AdmissionReview, err error) []byte {
 	response := &v1.AdmissionResponse{
 		UID:     admReview.Request.UID,
 		Allowed: false,
@@ -129,22 +127,15 @@ func responseWithError(admReview v1.AdmissionReview, err error) []byte {
 
 }
 
-func createAdmissionReviewResponse(admReview v1.AdmissionReview) *v1.AdmissionResponse {
-	if admReview.Request == nil {
-		err := fmt.Errorf("admission review request is nil")
-		log.Error(err, "cannot read the admission review request", "AdmissionReview", admReview)
-		return &v1.AdmissionResponse{
-			UID:     admReview.Request.UID,
-			Allowed: false,
-			Result: &metav1.Status{
-				Message: err.Error(),
-			},
-		}
-	}
-
+func allowAdmissionRequest(admReview v1.AdmissionReview) []byte {
 	resp := &v1.AdmissionResponse{
 		Allowed: true,
 		UID:     admReview.Request.UID,
 	}
-	return resp
+	admReview.Response = resp
+	responseBody, err := json.Marshal(admReview)
+	if err != nil {
+		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
+	}
+	return responseBody
 }

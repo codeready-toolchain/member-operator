@@ -2,10 +2,9 @@ package useraccount
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
+	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 	"reflect"
-	"regexp"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -34,12 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-const (
-	dns1123Value string = "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
-)
-
-var dns1123ValueRegexp = regexp.MustCompile("^" + dns1123Value + "$")
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
@@ -260,21 +253,11 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 	logger.Info("user already exists")
 
 	// ensure mapping
-
-	// If the UserID contains invalid characters, then we will base64-encode it here
-	var userID string
-	if isIdentityNameCompliant(userAcc.Spec.UserID) {
-		userID = ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
-	} else {
-		userID = ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.UserID))), config.Auth().Idp())
-	}
-
-	expectedIdentities := []string{userID}
+	expectedIdentities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
 
 	// If the OriginalSub property has been set also, then an additional identity is required to be created
 	if userAcc.Spec.OriginalSub != "" {
-		expectedIdentities = append(expectedIdentities, ToIdentityName(fmt.Sprintf("b64:%s",
-			base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), config.Auth().Idp()))
+		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
 	stringSlicesEqual := func(a, b []string) bool {
@@ -316,7 +299,6 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 
 	// Check if the OriginalSub property is set, and if it is create additional identity/s as required
 	if userAcc.Spec.OriginalSub != "" {
-
 		// Encoded the OriginalSub as an unpadded Base64 value
 		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, userAcc.Spec.OriginalSub, userAcc, user)
 		if createdOrUpdated || err != nil {
@@ -330,26 +312,22 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config membercfg.Configuration, username string,
 	userAccount *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
 
-	// If the username contains invalid characters, then we will base64-encode it here
-	var identityName string
-	if isIdentityNameCompliant(username) {
-		identityName = ToIdentityName(username, config.Auth().Idp())
-	} else {
-		identityName = ToIdentityName(fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(username))), config.Auth().Idp())
-	}
+	ins := commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp())
 
 	identity := &userv1.Identity{}
 
-	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity); err != nil {
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: ins.IdentityName()}, identity); err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("creating a new identity")
 			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
 			}
-			identity = newIdentity(identityName, username, user, config)
+			identity = newIdentity(user)
+			commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp()).ApplyToIdentity(identity)
+
 			setOwnerLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", identityName)
+				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", ins.IdentityName())
 			}
 			if err := r.setStatusProvisioning(userAccount); err != nil {
 				return nil, false, err
@@ -357,13 +335,13 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			logger.Info("identity created successfully")
 			return identity, true, nil
 		}
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to get identity '%s'", identityName)
+		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to get identity '%s'", ins.IdentityName())
 	}
 	logger.Info("identity already exists")
 
 	// ensure mapping
 	if identity.User.Name != user.Name || identity.User.UID != user.UID {
-		logger.Info("identity is missing a reference to user; updating the reference", "identity", identityName, "user", user.Name)
+		logger.Info("identity is missing a reference to user; updating the reference", "identity", ins.IdentityName(), "user", user.Name)
 		if err := r.setStatusProvisioning(userAccount); err != nil {
 			return nil, false, err
 		}
@@ -372,7 +350,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			UID:  user.UID,
 		}
 		if err := r.Client.Update(context.TODO(), identity); err != nil {
-			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusMappingCreationFailed, err, "failed to update identity '%s'", identityName)
+			return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusMappingCreationFailed, err, "failed to update identity '%s'", ins.IdentityName())
 		}
 		if err := r.setStatusProvisioning(userAccount); err != nil {
 			return nil, false, err
@@ -736,31 +714,18 @@ func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccou
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
-	username := userAcc.Spec.UserID
-	if !isIdentityNameCompliant(username) {
-		username = fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(username)))
-	}
-
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{ToIdentityName(username, config.Auth().Idp())},
+		Identities: []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()},
 	}
 	return user
 }
 
-func newIdentity(identityName, username string, user *userv1.User, config membercfg.Configuration) *userv1.Identity {
-	if !isIdentityNameCompliant(username) {
-		username = fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(username)))
-	}
-
+func newIdentity(user *userv1.User) *userv1.Identity {
 	identity := &userv1.Identity{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: identityName,
-		},
-		ProviderName:     config.Auth().Idp(),
-		ProviderUserName: username,
+		ObjectMeta: metav1.ObjectMeta{},
 		User: corev1.ObjectReference{
 			Name: user.Name,
 			UID:  user.UID,
@@ -817,12 +782,4 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 	}
 
 	return nil
-}
-
-// isIdentityNameCompliant returns true if the specified name is RFC-1123 compliant, otherwise it returns false
-func isIdentityNameCompliant(name string) bool {
-	if len(name) > 253 {
-		return false
-	}
-	return dns1123ValueRegexp.MatchString(name)
 }

@@ -29,7 +29,7 @@ func main() {
 		log.Error(err, "getting config failed")
 		os.Exit(1)
 	}
-	err = userv1.AddToScheme(runtimeScheme)
+	err = userv1.Install(runtimeScheme)
 	if err != nil {
 		log.Error(err, "adding user to scheme failed")
 		os.Exit(1)

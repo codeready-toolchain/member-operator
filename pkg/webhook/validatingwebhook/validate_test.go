@@ -99,7 +99,7 @@ func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
 
 func createFakeClient(username string, sandboxUser bool) runtimeclient.Client {
 	s := scheme.Scheme
-	err := userv1.AddToScheme(s)
+	err := userv1.Install(s)
 	if err != nil {
 		return nil
 	}

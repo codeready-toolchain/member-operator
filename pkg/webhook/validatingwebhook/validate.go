@@ -101,7 +101,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 			}
 			//check if the requesting user is a sandbox user
 			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
-				log.Info(fmt.Sprintf("trying to give access which is restricted"), "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
+				log.Info("trying to give access which is restricted", "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
 				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 			}
 

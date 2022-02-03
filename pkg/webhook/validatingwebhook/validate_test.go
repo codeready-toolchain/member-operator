@@ -98,6 +98,14 @@ func TestValidateFailsOnInvalidJson(t *testing.T) {
 	verifyRequestBlocked(t, response, "cannot unmarshal string into Go value of type struct", "")
 }
 
+func TestValidateFailsOnInvalidObjectJson(t *testing.T) {
+	// when
+	response := validate(incorrectRequestObjectJSON, nil)
+
+	// then
+	verifyRequestBlocked(t, response, "unable to unmarshal object or object is not a rolebinding", "a68769e5-d817-4617-bec5-90efa2bad6f8")
+}
+
 func verifyRequestBlocked(t *testing.T, response []byte, msg string, UID string) {
 	reviewResponse := toReviewResponse(t, response)
 	assert.False(t, reviewResponse.Allowed)
@@ -139,6 +147,23 @@ func createFakeClient(username string, sandboxUser bool) runtimeclient.Client {
 	return fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
 }
 
+var incorrectRequestObjectJSON = []byte(`{
+	"kind": "AdmissionReview",
+	"apiVersion": "admission.k8s.io/v1",
+	"request": {
+		"uid": "a68769e5-d817-4617-bec5-90efa2bad6f8",
+		"name": "busybox1",
+		"namespace": "johnsmith-dev",
+		"object": {
+			"kind": "asbasbf",
+			"apiVersion": "v1",
+			"metadata": {
+				"name": "busybox1",
+				"namespace": "johnsmith-dev"
+			}
+		}
+	}
+}`)
 var sandboxUserJSON = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",

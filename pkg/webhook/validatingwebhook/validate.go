@@ -67,10 +67,13 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", body))
 	}
 	// let's unmarshal the object to be sure that it's a rolebinding
-	var rb *rbac.RoleBinding
-	if err := json.Unmarshal(admReview.Request.Object.Raw, &rb); err != nil {
+	rb := rbac.RoleBinding{}
+	if err := json.Unmarshal(admReview.Request.Object.Raw, &rb); err != nil || rb.Kind != "RoleBinding" {
+		if err == nil {
+			err = fmt.Errorf("request Object is not a rolebinding")
+		}
 		log.Error(err, "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable unmarshal rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to unmarshal object or object is not a rolebinding - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	requestingUsername := admReview.Request.UserInfo.Username
 	// allow admission request if the user is a system user

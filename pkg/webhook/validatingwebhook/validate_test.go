@@ -41,7 +41,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 		require.NoError(t, resp.Body.Close())
 	}()
 	assert.NoError(t, err)
-	verifyRequestBlocked(t, body)
+	verifyRequestBlocked(t, body, "Unauthorized request to create rolebinding json object", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 }
 
 func TestValidate(t *testing.T) {
@@ -50,7 +50,19 @@ func TestValidate(t *testing.T) {
 		// when
 		response := validate(sandboxUserJSON, cl)
 		// then
-		verifyRequestBlocked(t, response)
+		verifyRequestBlocked(t, response, "trying to give access which is restricted", "a68769e5-d817-4617-bec5-90efa2bad6f6")
+	})
+
+	t.Run("unable to find the requesting user", func(t *testing.T) {
+		cl := createFakeClient("random-user", true)
+		// when
+		response := validate(sandboxUserJSON, cl)
+		// then
+		reviewResponse := toReviewResponse(t, response)
+		assert.False(t, reviewResponse.Allowed)
+		assert.NotEmpty(t, reviewResponse.Result)
+		assert.Contains(t, reviewResponse.Result.Message, "unable to find the user requesting creation")
+		assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
 	})
 }
 
@@ -75,12 +87,23 @@ func TestValidateAllow(t *testing.T) {
 
 }
 
-func verifyRequestBlocked(t *testing.T, response []byte) {
+func TestValidateFailsOnInvalidJson(t *testing.T) {
+	// given
+	rawJSON := []byte(`something wrong !`)
+
+	// when
+	response := validate(rawJSON, nil)
+
+	// then
+	verifyRequestBlocked(t, response, "cannot unmarshal string into Go value of type struct", "")
+}
+
+func verifyRequestBlocked(t *testing.T, response []byte, msg string, UID string) {
 	reviewResponse := toReviewResponse(t, response)
 	assert.False(t, reviewResponse.Allowed)
 	assert.NotEmpty(t, reviewResponse.Result)
-	assert.Contains(t, reviewResponse.Result.Message, "trying to give access which is restricted")
-	assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
+	assert.Contains(t, reviewResponse.Result.Message, msg)
+	assert.Equal(t, UID, string(reviewResponse.UID))
 }
 
 func verifyRequestAllowed(t *testing.T, response []byte, UID string) {

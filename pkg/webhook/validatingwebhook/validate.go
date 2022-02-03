@@ -102,7 +102,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 			//check if the requesting user is a sandbox user
 			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
 				log.Info("trying to give access which is restricted", "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
+				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "Unauthorized request to create rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 			}
 
 		}
@@ -112,19 +112,21 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 
 func denyAdmissionRequest(admReview v1.AdmissionReview, err error) []byte {
 	response := &v1.AdmissionResponse{
-		UID:     admReview.Request.UID,
 		Allowed: false,
 		Result: &metav1.Status{
 			Message: err.Error(),
 		},
 	}
+	if admReview.Request != nil {
+		response.UID = admReview.Request.UID
+	}
 	admReview.Response = response
 	responseBody, err := json.Marshal(admReview)
 	if err != nil {
 		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
+		return []byte("unable to marshal the admission review with response")
 	}
 	return responseBody
-
 }
 
 func allowAdmissionRequest(admReview v1.AdmissionReview) []byte {
@@ -136,6 +138,7 @@ func allowAdmissionRequest(admReview v1.AdmissionReview) []byte {
 	responseBody, err := json.Marshal(admReview)
 	if err != nil {
 		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
+		return []byte("unable to marshal the admission review with response")
 	}
 	return responseBody
 }

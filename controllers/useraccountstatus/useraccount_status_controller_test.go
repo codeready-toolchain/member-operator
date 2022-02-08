@@ -45,7 +45,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			assert.Equal(t, "222222", currentMur.Spec.UserAccounts[0].SyncIndex)
 		})
 
-		t.Run("should change the syncIndex when deletion timestamp is set", func(t *testing.T) {
+		t.Run("should change the syncIndex to 0 when deletion timestamp is set", func(t *testing.T) {
 			// given
 			userAcc := newUserAccount("foo")
 			now := metav1.Now()
@@ -61,7 +61,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			currentMur := &toolchainv1alpha1.MasterUserRecord{}
 			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 			require.NoError(t, err)
-			assert.Equal(t, "333333", currentMur.Spec.UserAccounts[0].SyncIndex)
+			assert.Equal(t, "0", currentMur.Spec.UserAccounts[0].SyncIndex)
 		})
 
 		t.Run("should reset the syncIndex when UserAccount is missing", func(t *testing.T) {
@@ -76,7 +76,7 @@ func TestUpdateMasterUserRecordWithSingleEmbeddedUserAccount(t *testing.T) {
 			currentMur := &toolchainv1alpha1.MasterUserRecord{}
 			err = hostClient.Get(context.TODO(), namespacedName(mur.ObjectMeta), currentMur)
 			require.NoError(t, err)
-			assert.Equal(t, "0", currentMur.Spec.UserAccounts[0].SyncIndex)
+			assert.Equal(t, "deleted", currentMur.Spec.UserAccounts[0].SyncIndex)
 		})
 	})
 

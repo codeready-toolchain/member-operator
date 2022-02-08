@@ -107,7 +107,8 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 				log.Info("trying to give access which is restricted", "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
 				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "Unauthorized request to create rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 			}
-
+			//At this point, it is clear the user isn't a sandbox user,
+			break
 		}
 	}
 	return allowAdmissionRequest(admReview)

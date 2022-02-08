@@ -12,6 +12,10 @@ objects:
   value: -3
   globalDefault: false
   description: "Priority class for pods in users' namespaces"
+-apiVersion: v1
+  Kind: ServiceAccount
+  metadata:
+    name: member-operator-webhook-sa
 - apiVersion: v1
   kind: Service
   metadata:

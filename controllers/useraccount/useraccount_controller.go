@@ -3,9 +3,10 @@ package useraccount
 import (
 	"context"
 	"fmt"
-	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 	"reflect"
 	"time"
+
+	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -238,7 +239,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 				return nil, false, err
 			}
 			user = newUser(userAcc, config)
-			setOwnerLabel(user, userAcc.Name)
+			setOwnerAndProviderLabel(user, userAcc.Name)
 			if err := r.Client.Create(context.TODO(), user); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to create user '%s'", userAcc.Name)
 			}
@@ -251,7 +252,9 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to get user '%s'", userAcc.Name)
 	}
 	logger.Info("user already exists")
-
+	// migration step - add provider label to existing users if it doesn't exist
+	//TODO - remove this after migration complete
+	addProviderLabel(user, r.Client)
 	// ensure mapping
 	expectedIdentities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
 
@@ -325,7 +328,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			identity = newIdentity(user)
 			commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp()).ApplyToIdentity(identity)
 
-			setOwnerLabel(identity, userAccount.Name)
+			setOwnerAndProviderLabel(identity, userAccount.Name)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", ins.IdentityName())
 			}
@@ -338,6 +341,9 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to get identity '%s'", ins.IdentityName())
 	}
 	logger.Info("identity already exists")
+
+	// add provider label if missing
+	addProviderLabel(identity, r.Client)
 
 	// ensure mapping
 	if identity.User.Name != user.Name || identity.User.UID != user.UID {
@@ -362,13 +368,22 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 	return identity, false, nil
 }
 
-func setOwnerLabel(object metav1.Object, owner string) {
+func setOwnerAndProviderLabel(object metav1.Object, owner string) {
 	labels := object.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 	labels[toolchainv1alpha1.OwnerLabelKey] = owner
+	labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 	object.SetLabels(labels)
+}
+
+func addProviderLabel(object client.Object, cl client.Client) {
+	if _, exists := object.GetLabels()[toolchainv1alpha1.ProviderLabelKey]; !exists {
+		labels := object.GetLabels()
+		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+		cl.Update(context.TODO(), object)
+	}
 }
 
 func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.NSTemplateSet, bool, error) {

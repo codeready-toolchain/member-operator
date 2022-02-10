@@ -52,18 +52,6 @@ func TestValidate(t *testing.T) {
 		// then
 		verifyRequestBlocked(t, response, "trying to give access which is restricted", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
-
-	t.Run("unable to find the requesting user", func(t *testing.T) {
-		cl := createFakeClient("random-user", true)
-		// when
-		response := validate(sandboxUserJSON, cl)
-		// then
-		reviewResponse := toReviewResponse(t, response)
-		assert.False(t, reviewResponse.Allowed)
-		assert.NotEmpty(t, reviewResponse.Result)
-		assert.Contains(t, reviewResponse.Result.Message, "unable to find the user requesting creation")
-		assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
-	})
 }
 
 func TestValidateAllow(t *testing.T) {
@@ -83,6 +71,19 @@ func TestValidateAllow(t *testing.T) {
 		response := validate(nonSandboxUserJSON, cl)
 		// then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f7")
+	})
+
+	t.Run("unable to find the requesting user, allow request", func(t *testing.T) {
+		cl := createFakeClient("random-user", true)
+		// when
+		response := validate(sandboxUserJSON, cl)
+		// then
+		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f6")
+		//reviewResponse := toReviewResponse(t, response)
+		//assert.True(t, reviewResponse.Allowed)
+		//assert.NotEmpty(t, reviewResponse.Result)
+		//assert.Contains(t, reviewResponse.Result.Message, "unable to find the user requesting creation")
+		//assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
 	})
 
 }

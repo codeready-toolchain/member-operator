@@ -35,7 +35,7 @@ func TestGetTemplateObjects(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	require.Len(t, objs, 5)
+	require.Len(t, objs, 8)
 	contains(t, objs, priorityClass())
 	contains(t, objs, service(test.MemberOperatorNs))
 	contains(t, objs, deployment(test.MemberOperatorNs, imgLoc))

@@ -81,18 +81,9 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		return allowAdmissionRequest(admReview)
 	}
 	subjects := rb.Subjects
-	allServiceAccountsSubject := rbac.Subject{
-		Kind:     "Group",
-		Name:     "system:serviceaccounts",
-		APIGroup: "rbac.authorization.k8s.io",
-	}
-	allUsersSubject := rbac.Subject{
-		Kind:     "Group",
-		Name:     "system:authenticated",
-		APIGroup: "rbac.authorization.k8s.io",
-	}
+	subjectsList := getBlockSubjectList()
 	for _, sub := range subjects {
-		if sub == allUsersSubject || sub == allServiceAccountsSubject {
+		if containsSubject(subjectsList, sub) {
 			requestingUser := &userv1.User{}
 			err := client.Get(context.TODO(), types.NamespacedName{
 				Name: admReview.Request.UserInfo.Username,
@@ -100,14 +91,15 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 
 			if err != nil {
 				log.Error(fmt.Errorf("Cannot find the user: %w", err), "unable to find the user requesting creation")
-				return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to find the user requesting creation: %s", requestingUsername))
+				// We do not want to deny if it's an unknown user, continue to make another attempt to get user. at the end of loop request is allowed
+				continue
 			}
 			//check if the requesting user is a sandbox user
 			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
 				log.Info("trying to give access which is restricted", "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
 				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("trying to give access which is restricted"), "Unauthorized request to create rolebinding json object - raw request object: %v", admReview.Request.Object.Raw))
 			}
-			//At this point, it is clear the user isn't a sandbox user,
+			//At this point, it is clear the user isn't a sandbox user, allow request
 			break
 		}
 	}
@@ -145,4 +137,40 @@ func allowAdmissionRequest(admReview v1.AdmissionReview) []byte {
 		return []byte("unable to marshal the admission review with response")
 	}
 	return responseBody
+}
+
+func getBlockSubjectList() []rbac.Subject {
+
+	allServiceAccountsSubject := rbac.Subject{
+		Kind:     "Group",
+		Name:     "system:serviceaccounts",
+		APIGroup: "rbac.authorization.k8s.io",
+	}
+	allUsersSubject := rbac.Subject{
+		Kind:     "Group",
+		Name:     "system:authenticated",
+		APIGroup: "rbac.authorization.k8s.io",
+	}
+	allServiceAccountsSubjectColon := rbac.Subject{
+		Kind:     "Group",
+		Name:     "system:serviceaccounts:",
+		APIGroup: "rbac.authorization.k8s.io",
+	}
+	allUsersSubjectColon := rbac.Subject{
+		Kind:     "Group",
+		Name:     "system:authenticated:",
+		APIGroup: "rbac.authorization.k8s.io",
+	}
+
+	subjectList := []rbac.Subject{allServiceAccountsSubject, allUsersSubject, allServiceAccountsSubjectColon, allUsersSubjectColon}
+	return subjectList
+}
+
+func containsSubject(subjectList []rbac.Subject, subject rbac.Subject) bool {
+	for _, sub := range subjectList {
+		if sub == subject {
+			return true
+		}
+	}
+	return false
 }

@@ -48,7 +48,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Updating MUR after UserAccount deletion")
-			syncIndex = "0"
+			syncIndex = "deleted"
 		} else {
 			// Error reading the object - requeue the request.
 			return reconcile.Result{}, err
@@ -56,10 +56,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	} else {
 		if userAcc.DeletionTimestamp != nil {
 			logger.Info("Updating MUR during UserAccount deletion")
+			syncIndex = "0"
 		} else {
 			logger.Info("Updating MUR")
+			syncIndex = userAcc.ResourceVersion
 		}
-		syncIndex = userAcc.ResourceVersion
 	}
 
 	mur, err := r.updateMasterUserRecord(request.Name, syncIndex)

@@ -32,6 +32,7 @@ objects:
   kind: ServiceAccount
   metadata:
     name: member-operator-webhook-sa
+    namespace: ${NAMESPACE}
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:

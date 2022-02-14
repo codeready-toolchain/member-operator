@@ -76,6 +76,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to unmarshal object or object is not a rolebinding - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	requestingUsername := admReview.Request.UserInfo.Username
+	fmt.Printf(">>>>>>>>>> username: %s", requestingUsername)
 	// allow admission request if the user is a system user
 	if strings.HasPrefix(requestingUsername, "system:") {
 		return allowAdmissionRequest(admReview)

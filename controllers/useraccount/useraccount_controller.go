@@ -254,7 +254,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 	logger.Info("user already exists")
 	// migration step - add provider label to existing users if it doesn't exist
 	//TODO - remove this after migration complete
-	err := addProviderLabel(user, r.Client)
+	err := addOwnerAndProviderLabels(user, r.Client, userAcc.Name)
 	if err != nil {
 		logger.Error(err, "Unable to update labels to add provider")
 	}
@@ -347,7 +347,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 	logger.Info("identity already exists")
 
 	// add provider label if missing
-	err := addProviderLabel(identity, r.Client)
+	err := addOwnerAndProviderLabels(identity, r.Client, userAccount.Name)
 	if err != nil {
 		logger.Error(err, "Unable to update label to add provider")
 	}
@@ -385,13 +385,29 @@ func setOwnerAndProviderLabel(object metav1.Object, owner string) {
 	object.SetLabels(labels)
 }
 
-func addProviderLabel(object client.Object, cl client.Client) error {
+func addOwnerAndProviderLabels(object client.Object, cl client.Client, owner string) error {
+	var changed bool
 	if _, exists := object.GetLabels()[toolchainv1alpha1.ProviderLabelKey]; !exists {
 		labels := object.GetLabels()
 		if labels == nil {
 			labels = make(map[string]string)
 		}
 		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
+		object.SetLabels(labels)
+		changed = true
+	}
+
+	if _, exists := object.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists {
+		labels := object.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
+		labels[toolchainv1alpha1.OwnerLabelKey] = owner
+		object.SetLabels(labels)
+		changed = true
+	}
+
+	if changed {
 		err := cl.Update(context.TODO(), object)
 		if err != nil {
 			return err

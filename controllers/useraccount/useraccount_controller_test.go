@@ -1439,33 +1439,69 @@ func TestReconcile(t *testing.T) {
 
 	// Test existing User and Identity without provider label
 	t.Run("existing User without provider label has the label added", func(t *testing.T) {
-		// given
-		withoutLabel := preexistingUser.DeepCopy()
-		delete(withoutLabel.Labels, toolchainv1alpha1.ProviderLabelKey)
-		r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingIdentity)
 
-		// when
-		res, err := r.Reconcile(context.TODO(), req)
+		t.Run("User with nil labels", func(t *testing.T) {
+			// given
+			withoutAnyLabel := preexistingUser.DeepCopy()
+			withoutAnyLabel.Labels = nil
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyLabel, preexistingIdentity)
 
-		//then
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-		assertUser(t, r, userAcc)
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			assertUser(t, r, userAcc)
+		})
+
+		t.Run("User with another label defined", func(t *testing.T) {
+			// given
+			withoutLabel := preexistingUser.DeepCopy()
+			delete(withoutLabel.Labels, toolchainv1alpha1.ProviderLabelKey)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingIdentity)
+
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			assertUser(t, r, userAcc)
+		})
 	})
 
 	t.Run("existing Identity without provider label has the label added", func(t *testing.T) {
-		// given
-		withoutLabel := preexistingIdentity.DeepCopy()
-		delete(withoutLabel.Labels, toolchainv1alpha1.ProviderLabelKey)
-		r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingUser)
 
-		// when
-		res, err := r.Reconcile(context.TODO(), req)
+		t.Run("Identity with nil labels", func(t *testing.T) {
+			// given
+			withoutLabel := preexistingIdentity.DeepCopy()
+			withoutLabel.Labels = nil
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingUser)
 
-		//then
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-		assertIdentity(t, r, userAcc, config.Auth().Idp())
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			assertIdentity(t, r, userAcc, config.Auth().Idp())
+		})
+
+		t.Run("Identity with another label defined", func(t *testing.T) {
+			// given
+			withoutLabel := preexistingIdentity.DeepCopy()
+			delete(withoutLabel.Labels, toolchainv1alpha1.ProviderLabelKey)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingUser)
+
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			assertIdentity(t, r, userAcc, config.Auth().Idp())
+		})
 	})
 }
 

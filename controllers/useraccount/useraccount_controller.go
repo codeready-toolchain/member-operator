@@ -6,14 +6,13 @@ import (
 	"reflect"
 	"time"
 
-	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 
 	"github.com/go-logr/logr"
 	userv1 "github.com/openshift/api/user/v1"
@@ -239,7 +238,7 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 				return nil, false, err
 			}
 			user = newUser(userAcc, config)
-			setOwnerAndProviderLabel(user, userAcc.Name)
+			setLabelsAndAnnotations(user, userAcc, true)
 			if err := r.Client.Create(context.TODO(), user); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to create user '%s'", userAcc.Name)
 			}
@@ -252,9 +251,9 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to get user '%s'", userAcc.Name)
 	}
 	logger.Info("user already exists")
-	// migration step - add provider label to existing users if it doesn't exist
-	//TODO - remove this after migration complete
-	err := addOwnerAndProviderLabels(user, r.Client, userAcc.Name)
+
+	// migration step - add missing labels and annotations to existing users if they are not set yet
+	err := addLabelsAndAnnotations(user, r.Client, userAcc, true)
 	if err != nil {
 		logger.Error(err, "Unable to update labels to add provider")
 	}
@@ -332,7 +331,7 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 			identity = newIdentity(user)
 			commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp()).ApplyToIdentity(identity)
 
-			setOwnerAndProviderLabel(identity, userAccount.Name)
+			setLabelsAndAnnotations(identity, userAccount, false)
 			if err := r.Client.Create(context.TODO(), identity); err != nil {
 				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAccount, r.setStatusIdentityCreationFailed, err, "failed to create identity '%s'", ins.IdentityName())
 			}
@@ -346,8 +345,8 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 	}
 	logger.Info("identity already exists")
 
-	// add provider label if missing
-	err := addOwnerAndProviderLabels(identity, r.Client, userAccount.Name)
+	// migration step - add missing labels and annotations to existing identity if they are not set yet
+	err := addLabelsAndAnnotations(identity, r.Client, userAccount, false)
 	if err != nil {
 		logger.Error(err, "Unable to update label to add provider")
 	}
@@ -375,43 +374,41 @@ func (r *Reconciler) loadIdentityAndEnsureMapping(logger logr.Logger, config mem
 	return identity, false, nil
 }
 
-func setOwnerAndProviderLabel(object metav1.Object, owner string) {
+func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.UserAccount, isUserResource bool) bool {
+	var changed bool
 	labels := object.GetLabels()
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	labels[toolchainv1alpha1.OwnerLabelKey] = owner
-	labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
-	object.SetLabels(labels)
-}
-
-func addOwnerAndProviderLabels(object client.Object, cl client.Client, owner string) error {
-	var changed bool
-	if _, exists := object.GetLabels()[toolchainv1alpha1.ProviderLabelKey]; !exists {
-		labels := object.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
+	if _, exists := labels[toolchainv1alpha1.ProviderLabelKey]; !exists {
 		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 		object.SetLabels(labels)
 		changed = true
 	}
 
-	if _, exists := object.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists {
-		labels := object.GetLabels()
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		labels[toolchainv1alpha1.OwnerLabelKey] = owner
+	if _, exists := labels[toolchainv1alpha1.OwnerLabelKey]; !exists {
+		labels[toolchainv1alpha1.OwnerLabelKey] = userAcc.Name
 		object.SetLabels(labels)
 		changed = true
 	}
 
-	if changed {
-		err := cl.Update(context.TODO(), object)
-		if err != nil {
-			return err
+	if isUserResource {
+		annotations := object.GetAnnotations()
+		if _, exists := annotations[toolchainv1alpha1.UserEmailAnnotationKey]; !exists {
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations[toolchainv1alpha1.UserEmailAnnotationKey] = userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey]
+			object.SetAnnotations(annotations)
+			changed = true
 		}
+	}
+	return changed
+}
+
+func addLabelsAndAnnotations(object client.Object, cl client.Client, userAcc *toolchainv1alpha1.UserAccount, isUserResource bool) error {
+	if setLabelsAndAnnotations(object, userAcc, isUserResource) {
+		return cl.Update(context.TODO(), object)
 	}
 	return nil
 }

@@ -388,6 +388,9 @@ func setOwnerAndProviderLabel(object metav1.Object, owner string) {
 func addProviderLabel(object client.Object, cl client.Client) error {
 	if _, exists := object.GetLabels()[toolchainv1alpha1.ProviderLabelKey]; !exists {
 		labels := object.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
+		}
 		labels[toolchainv1alpha1.ProviderLabelKey] = toolchainv1alpha1.ProviderLabelValue
 		err := cl.Update(context.TODO(), object)
 		if err != nil {

@@ -83,6 +83,9 @@ func TestReconcile(t *testing.T) {
 				"toolchain.dev.openshift.com/owner": username,
 				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
 			},
+			Annotations: map[string]string{
+				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
+			},
 		},
 		Identities: []string{
 			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
@@ -1469,6 +1472,36 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, reconcile.Result{}, res)
 			assertUser(t, r, userAcc)
 		})
+
+		t.Run("User with nil annotations", func(t *testing.T) {
+			// given
+			withoutAnyAnnotation := preexistingUser.DeepCopy()
+			withoutAnyAnnotation.Annotations = nil
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyAnnotation, preexistingIdentity)
+
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			assertUser(t, r, userAcc)
+		})
+
+		t.Run("User with another annotation defined", func(t *testing.T) {
+			// given
+			withoutAnyAnnotation := preexistingUser.DeepCopy()
+			withoutAnyAnnotation.Annotations = map[string]string{"dummy-email": "foo@bar.com"}
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyAnnotation, preexistingIdentity)
+
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			//then
+			require.NoError(t, err)
+			assert.Equal(t, reconcile.Result{}, res)
+			assertUser(t, r, userAcc)
+		})
 	})
 
 	t.Run("existing Identity without provider label has the label added", func(t *testing.T) {
@@ -1995,9 +2028,14 @@ func assertUser(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAcco
 	user := &userv1.User{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 	require.NoError(t, err)
+
 	require.NotNil(t, user.Labels)
 	assert.Equal(t, userAcc.Name, user.Labels["toolchain.dev.openshift.com/owner"])
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, user.Labels[toolchainv1alpha1.ProviderLabelKey])
+
+	assert.NotNil(t, user.Annotations)
+	assert.Equal(t, userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey], user.Annotations[toolchainv1alpha1.UserEmailAnnotationKey])
+
 	assert.Empty(t, user.OwnerReferences) // User has no explicit owner reference.// Check the user identity mapping
 	return user
 }
@@ -2019,6 +2057,7 @@ func assertIdentity(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.User
 	require.NotNil(t, identity.Labels)
 	assert.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, identity.Labels[toolchainv1alpha1.ProviderLabelKey])
+	assert.Nil(t, identity.Annotations)
 	assert.Empty(t, identity.OwnerReferences) // User has no explicit owner reference.// Check the user identity mapping
 	return identity
 }
@@ -2082,6 +2121,9 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 			UID:       types.UID(uuid.NewV4().String()),
 			Labels: map[string]string{
 				toolchainv1alpha1.TierLabelKey: "basic",
+			},
+			Annotations: map[string]string{
+				toolchainv1alpha1.UserEmailAnnotationKey: userName + "@acme.com",
 			},
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{

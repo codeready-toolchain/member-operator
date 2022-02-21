@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"testing"
 
+	rbac "k8s.io/api/rbac/v1"
+
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -24,7 +26,10 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const imgLoc = "quay.io/cool/member-operator-webhook:123"
+const (
+	imgLoc = "quay.io/cool/member-operator-webhook:123"
+	saname = "member-operator-webhook-sa"
+)
 
 func TestGetTemplateObjects(t *testing.T) {
 	// given
@@ -38,9 +43,12 @@ func TestGetTemplateObjects(t *testing.T) {
 	require.Len(t, objs, 8)
 	contains(t, objs, priorityClass())
 	contains(t, objs, service(test.MemberOperatorNs))
-	contains(t, objs, deployment(test.MemberOperatorNs, imgLoc))
+	contains(t, objs, deployment(test.MemberOperatorNs, saname, imgLoc))
 	contains(t, objs, mutatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
 	contains(t, objs, validatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
+	contains(t, objs, serviceAccount(test.MemberOperatorNs))
+	contains(t, objs, clusterRole())
+	contains(t, objs, clusterRoleBinding(test.MemberOperatorNs))
 }
 
 func TestDeployWebhook(t *testing.T) {
@@ -71,7 +79,7 @@ func TestDeployWebhook(t *testing.T) {
 		serviceObj.Spec.Selector = nil
 
 		deploymentObj := &appsv1.Deployment{}
-		unmarshalObj(t, deployment(test.MemberOperatorNs, "quay.io/some/cool:unknown"), deploymentObj)
+		unmarshalObj(t, deployment(test.MemberOperatorNs, saname, "quay.io/some/cool:unknown"), deploymentObj)
 		deploymentObj.Spec.Template.Spec.Containers[0].Command = []string{"./some-dummy"}
 		deploymentObj.Spec.Template.Spec.Containers[0].VolumeDevices = nil
 
@@ -123,8 +131,30 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 		assert.Equal(t, expService.Spec, actualService.Spec)
 	})
 
+	expServiceAcc := &v1.ServiceAccount{}
+	unmarshalObj(t, serviceAccount(test.MemberOperatorNs), expServiceAcc)
+	actualServiceAcc := &v1.ServiceAccount{}
+	AssertMemberObject(t, fakeClient, "member-operator-webhook-sa", actualServiceAcc, func() {
+		assert.Equal(t, expServiceAcc.Namespace, actualServiceAcc.Namespace)
+	})
+
+	expClusterRole := &rbac.ClusterRole{}
+	unmarshalObj(t, clusterRole(), expClusterRole)
+	actualClusterRole := &rbac.ClusterRole{}
+	AssertObject(t, fakeClient, "", "webhook-role", actualClusterRole, func() {
+		assert.Equal(t, expClusterRole.Rules, actualClusterRole.Rules)
+	})
+
+	expClusterRb := &rbac.ClusterRoleBinding{}
+	unmarshalObj(t, clusterRoleBinding(test.MemberOperatorNs), expClusterRb)
+	actualClusterRb := &rbac.ClusterRoleBinding{}
+	AssertObject(t, fakeClient, "", "webhook-rolebinding", actualClusterRb, func() {
+		assert.Equal(t, expClusterRb.Subjects, actualClusterRb.Subjects)
+		assert.Equal(t, expClusterRb.RoleRef, actualClusterRb.RoleRef)
+	})
+
 	expDeployment := &appsv1.Deployment{}
-	unmarshalObj(t, deployment(test.MemberOperatorNs, imgLoc), expDeployment)
+	unmarshalObj(t, deployment(test.MemberOperatorNs, saname, imgLoc), expDeployment)
 	actualDeployment := &appsv1.Deployment{}
 	AssertMemberObject(t, fakeClient, "member-operator-webhook", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
@@ -141,6 +171,14 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	AssertObject(t, fakeClient, "", "member-operator-webhook", actualMutWbhConf, func() {
 		assert.Equal(t, expMutWbhConf.Labels, actualMutWbhConf.Labels)
 		assert.Equal(t, expMutWbhConf.Webhooks, actualMutWbhConf.Webhooks)
+	})
+
+	expValWbhConf := &admv1.ValidatingWebhookConfiguration{}
+	unmarshalObj(t, validatingWebhookConfig(test.MemberOperatorNs, base64.StdEncoding.EncodeToString(secret.Data["ca-cert.pem"])), expValWbhConf)
+	actualValWbhConf := &admv1.ValidatingWebhookConfiguration{}
+	AssertObject(t, fakeClient, "", "member-operator-validating-webhook", actualValWbhConf, func() {
+		assert.Equal(t, expValWbhConf.Labels, actualValWbhConf.Labels)
+		assert.Equal(t, expValWbhConf.Webhooks, actualValWbhConf.Webhooks)
 	})
 }
 
@@ -180,8 +218,8 @@ func service(namespace string) string {
 	return fmt.Sprintf(`{"apiVersion":"v1","kind":"Service","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"ports":[{"port":443,"targetPort":8443}],"selector":{"app":"member-operator-webhook"}}}`, namespace)
 }
 
-func deployment(namespace, image string) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"member-operator-webhook"}},"template":{"metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook"}},"spec":{"containers":[{"name":"mutator","image":"%s","command":["member-operator-webhook"],"imagePullPolicy":"IfNotPresent","resources":{"requests":{"cpu":"75m","memory":"128Mi"}},"volumeMounts":[{"name":"webhook-certs","mountPath":"/etc/webhook/certs","readOnly":true}]}],"volumes":[{"name":"webhook-certs","secret":{"secretName":"webhook-certs"}}]}}}}`, namespace, image)
+func deployment(namespace, sa string, image string) string {
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"member-operator-webhook"}},"template":{"metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook"}},"spec":{"serviceAccountName": "%s","containers":[{"name":"mutator","image":"%s","command":["member-operator-webhook"],"imagePullPolicy":"IfNotPresent","resources":{"requests":{"cpu":"75m","memory":"128Mi"}},"volumeMounts":[{"name":"webhook-certs","mountPath":"/etc/webhook/certs","readOnly":true}]}],"volumes":[{"name":"webhook-certs","secret":{"secretName":"webhook-certs"}}]}}}}`, namespace, sa, image)
 }
 
 func mutatingWebhookConfig(namespace, caBundle string) string {
@@ -190,4 +228,16 @@ func mutatingWebhookConfig(namespace, caBundle string) string {
 
 func validatingWebhookConfig(namespace, caBundle string) string {
 	return fmt.Sprintf(`{"apiVersion":"admissionregistration.k8s.io/v1","kind":"ValidatingWebhookConfiguration","metadata":{"name":"member-operator-validating-webhook","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"webhooks":[{"name":"users.rolebindings.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%s","service":{"name":"member-operator-webhook","namespace":"%s","path":"/validate-users-rolebindings","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE","UPDATE"],"apiGroups":["rbac.authorization.k8s.io","authorization.openshift.io"],"apiVersions":["v1"],"resources":["rolebindings"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Fail","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}}]}`, caBundle, namespace)
+}
+
+func serviceAccount(namespace string) string {
+	return fmt.Sprintf(`{"apiVersion": "v1","kind": "ServiceAccount", "metadata":{"name": "member-operator-webhook-sa", "namespace": "%s"}}`, namespace)
+}
+
+func clusterRole() string {
+	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRole","metadata": {"creationTimestamp": null,"name": "webhook-role"}, "rules": [{"apiGroups": ["user.openshift.io"],"resources": ["identities","useridentitymappings","users"],"verbs": ["get","list","watch"]}]}`)
+}
+
+func clusterRoleBinding(namespace string) string {
+	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRoleBinding", "metadata": {"name": "webhook-rolebinding"},"roleRef": {"apiGroup": "rbac.authorization.k8s.io","kind": "ClusterRole","name": "webhook-role"},"subjects": [{"kind": "ServiceAccount","name": "member-operator-webhook-sa","namespace": "%s"}]}`, namespace)
 }

@@ -97,7 +97,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 			//check if the requesting user is a sandbox user
 			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
 				log.Info("trying to give access which is restricted", "sandbox user is trying to create a rolebinding giving wider access", "AdmissionReview", admReview)
-				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("please create a rolebinding for a specific user or service account to avoid this error"), "this is a sandbox enforced restriction. you are trying to create a rolebinding giving access to a larger audience, i.e : %v", sub.Name))
+				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("please create a rolebinding for a specific user or service account to avoid this error"), "this is a Dev Sandbox enforced restriction. you are trying to create a rolebinding giving access to a larger audience, i.e : %v", sub.Name))
 			}
 			//At this point, it is clear the user isn't a sandbox user, allow request
 			break

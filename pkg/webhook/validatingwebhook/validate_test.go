@@ -79,11 +79,14 @@ func TestValidateAllow(t *testing.T) {
 		response := validate(sandboxUserJSON, cl)
 		// then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f6")
-		//reviewResponse := toReviewResponse(t, response)
-		//assert.True(t, reviewResponse.Allowed)
-		//assert.NotEmpty(t, reviewResponse.Result)
-		//assert.Contains(t, reviewResponse.Result.Message, "unable to find the user requesting creation")
-		//assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
+	})
+
+	t.Run("sandbox user creating a rolebinding for a specific user is allowed", func(t *testing.T) {
+		cl := createFakeClient("laracroft", true)
+		//when
+		response := validate(allowedRbJSON, cl)
+		//then
+		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad8g8")
 	})
 
 }
@@ -346,6 +349,72 @@ var allowedUserJSON = []byte(`{
 			"subjects": [{
 				"kind": "Group",
 				"name": "system:serviceaccounts",
+				"apiGroup": "rbac.authorization.k8s.io"
+			}],
+			"roleRef": {
+				"kind": "Role",
+				"apiGroup": "rbac.authorization.k8s.io",
+				"name": "rbac-edit"
+			}
+		},
+		"oldObject": null,
+		"dryRun": false,
+		"options": {
+			"kind": "CreateOptions",
+			"apiVersion": "meta.k8s.io/v1"
+		}
+	}
+}`)
+
+var allowedRbJSON = []byte(`{
+	"kind": "AdmissionReview",
+	"apiVersion": "admission.k8s.io/v1",
+	"request": {
+		"uid": "a68769e5-d817-4617-bec5-90efa2bad8g8",
+		"kind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"resource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"requestKind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"requestResource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"name": "busybox1",
+		"namespace": "laracroft-dev",
+		"operation": "CREATE",
+		"userInfo": {
+			"username": "laracroft",
+			"groups": [
+				"system:authenticated"
+			],
+			"extra": {
+				"scopes.authorization.openshift.io": [
+					"user:full"
+				]
+			}
+		},
+		"object": {
+			"kind": "RoleBinding",
+			"apiVersion": "v1",
+			"metadata": {
+				"name": "busybox1",
+				"namespace": "laracroft-dev"
+			},
+			"subjects": [{
+				"kind": "User",
+				"name": "crt-admin",
 				"apiGroup": "rbac.authorization.k8s.io"
 			}],
 			"roleRef": {

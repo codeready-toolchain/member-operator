@@ -41,7 +41,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 		require.NoError(t, resp.Body.Close())
 	}()
 	assert.NoError(t, err)
-	verifyRequestBlocked(t, body, "Unauthorized request to create rolebinding json object", "a68769e5-d817-4617-bec5-90efa2bad6f6")
+	verifyRequestBlocked(t, body, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 }
 
 func TestValidate(t *testing.T) {
@@ -50,7 +50,7 @@ func TestValidate(t *testing.T) {
 		// when
 		response := validate(sandboxUserJSON, cl)
 		// then
-		verifyRequestBlocked(t, response, "trying to give access which is restricted", "a68769e5-d817-4617-bec5-90efa2bad6f6")
+		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
 }
 

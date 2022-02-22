@@ -127,7 +127,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 			logger.Error(err, "error updating status")
 			return reconcile.Result{}, err
 		}
-		deleted, err := r.deleteIdentityAndUser(logger, config, userAcc)
+		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
 			return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusDisabling, err, "failed to delete user/identity")
 		}
@@ -166,7 +166,7 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	}
 	// we don't expect User nor Identity resources to be present for AppStudio tier
 	// This can be removed as soon as we don't create UserAccounts in AppStudio environment.
-	deleted, err := r.deleteIdentityAndUser(logger, config, userAcc)
+	deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 	if err != nil {
 		return deleted, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to delete redundant user or identity")
 	}
@@ -193,7 +193,7 @@ func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config member
 			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete Che user data")
 		}
 
-		deleted, err := r.deleteIdentityAndUser(logger, config, userAcc)
+		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete user/identity")
 		}
@@ -496,8 +496,8 @@ func (r *Reconciler) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1
 
 // deleteIdentityAndUser deletes the identity and user.
 // Returns bool and error indicating that whether the user/identity were deleted.
-func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	if deleted, err := r.deleteIdentity(logger, config, userAcc); err != nil || deleted {
+func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	if deleted, err := r.deleteIdentity(logger, userAcc); err != nil || deleted {
 		return deleted, err
 	}
 	if deleted, err := r.deleteUser(logger, userAcc); err != nil || deleted {
@@ -506,66 +506,56 @@ func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, config membercfg.
 	return false, nil
 }
 
-// deleteUser deletes the user resource.
-// Returns `true` if the user was deleted, `false` otherwise, with the underlying error
-// if the user existed and something wrong happened. If the user did not exist,
+// deleteUser deletes the user resources associated with the specified UserAccount.
+// Returns `true` if the users were deleted, `false` otherwise, with the underlying error
+// if the user existed and something wrong happened. If the users don't exist,
 // this func returns `false, nil`
 func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	// Get the User associated with the UserAccount
-	user := &userv1.User{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+	userList := &userv1.UserList{}
+	err := r.Client.List(context.TODO(), userList, listByOwnerLabel(userAcc.Name))
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			return false, err
-		}
-		return false, nil
+		return false, err
 	}
-	if _, exist := user.Labels[toolchainv1alpha1.OwnerLabelKey]; !exist {
-		logger.Info("the User resource wasn't created by Toolchain Member operator - skipping", "user", userAcc.Name)
+
+	if len(userList.Items) == 0 {
 		return false, nil
 	}
 
-	logger.Info("deleting the User resource")
-	// Delete User associated with UserAccount
-	if err := r.Client.Delete(context.TODO(), user); err != nil {
-		if !errors.IsNotFound(err) {
+	logger.Info("deleting the User resources")
+	for _, user := range userList.Items {
+		// Delete User associated with UserAccount
+		if err := r.Client.Delete(context.TODO(), &user); err != nil {
 			return false, err
 		}
-		return false, nil
+
 	}
-	logger.Info("deleted the User resource")
+	logger.Info("deleted the User resources")
 	return true, nil
 }
 
-// deleteIdentity deletes the Identity resource.
-// Returns `true` if the identity was deleted, `false` otherwise, with the underlying error
-// if the identity existed and something wrong happened. If the identity did not exist,
-// this func returns `false, nil`
-func (r *Reconciler) deleteIdentity(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	// Get the Identity associated with the UserAccount
-	identity := &userv1.Identity{}
-	identityName := ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identityName}, identity)
+// deleteIdentity deletes the Identity resources owned by the specified UserAccount.
+// Returns `true` if one or more identities were deleted, `false` otherwise, with the underlying error
+// if the identity existed and something wrong happened.
+func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
+	identityList := &userv1.IdentityList{}
+	err := r.Client.List(context.TODO(), identityList, listByOwnerLabel(userAcc.Name))
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			return false, err
-		}
-		return false, nil
+		return false, err
 	}
-	if _, exist := identity.Labels[toolchainv1alpha1.OwnerLabelKey]; !exist {
-		logger.Info("the Identity resource wasn't created by Toolchain Member operator - skipping", "identity", identityName)
+
+	if len(identityList.Items) == 0 {
 		return false, nil
 	}
 
-	logger.Info("deleting the Identity resource")
-	// Delete Identity associated with UserAccount
-	if err := r.Client.Delete(context.TODO(), identity); err != nil {
-		if !errors.IsNotFound(err) {
+	logger.Info("deleting the Identity resources")
+	for _, identity := range identityList.Items {
+		// Delete Identity associated with UserAccount
+		if err := r.Client.Delete(context.TODO(), &identity); err != nil {
 			return false, err
 		}
-		return false, nil
+
 	}
-	logger.Info("deleted the Identity resource")
+	logger.Info("deleted the Identity resources")
 	return true, nil
 }
 
@@ -824,4 +814,10 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 	}
 
 	return nil
+}
+
+// listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given owner name
+func listByOwnerLabel(owner string) client.ListOption {
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: owner}
+	return client.MatchingLabels(labels)
 }

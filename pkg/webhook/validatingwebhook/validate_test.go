@@ -45,12 +45,36 @@ func TestHandleValidateBlocked(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	t.Run("sandbox user trying to create rolebinding is denied", func(t *testing.T) {
+	t.Run("sandbox user trying to create rolebinding for all serviceaccounts is denied", func(t *testing.T) {
 		cl := createFakeClient("johnsmith", true)
 		// when
 		response := validate(sandboxUserJSON, cl)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
+	})
+
+	t.Run("sandbox user trying to create rolebinding for all serviceaccounts: is denied", func(t *testing.T) {
+		cl := createFakeClient("johnsmith", true)
+		// when
+		response := validate(sandboxUserJSON2, cl)
+		// then
+		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad7g8")
+	})
+
+	t.Run("sandbox user trying to create rolebinding for all authenticated users is denied", func(t *testing.T) {
+		cl := createFakeClient("johnsmith", true)
+		// when
+		response := validate(sandboxUserJSON3, cl)
+		// then
+		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad8k8")
+	})
+
+	t.Run("sandbox user trying to create rolebinding for all authenticated: is denied", func(t *testing.T) {
+		cl := createFakeClient("johnsmith", true)
+		// when
+		response := validate(sandboxUserJSON4, cl)
+		// then
+		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad9l9")
 	})
 }
 
@@ -217,6 +241,204 @@ var sandboxUserJSON = []byte(`{
 			"subjects": [{
 				"kind": "Group",
 				"name": "system:serviceaccounts",
+				"apiGroup": "rbac.authorization.k8s.io"
+			}],
+			"roleRef": {
+				"kind": "Role",
+				"apiGroup": "rbac.authorization.k8s.io",
+				"name": "rbac-edit"
+			}
+		},
+		"oldObject": null,
+		"dryRun": false,
+		"options": {
+			"kind": "CreateOptions",
+			"apiVersion": "meta.k8s.io/v1"
+		}
+	}
+}`)
+
+var sandboxUserJSON2 = []byte(`{
+	"kind": "AdmissionReview",
+	"apiVersion": "admission.k8s.io/v1",
+	"request": {
+		"uid": "a68769e5-d817-4617-bec5-90efa2bad7g8",
+		"kind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"resource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"requestKind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"requestResource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"name": "busybox1",
+		"namespace": "johnsmith-dev",
+		"operation": "CREATE",
+		"userInfo": {
+			"username": "johnsmith",
+			"groups": [
+				"system:authenticated"
+			],
+			"extra": {
+				"scopes.authorization.openshift.io": [
+					"user:full"
+				]
+			}
+		},
+		"object": {
+			"kind": "RoleBinding",
+			"apiVersion": "v1",
+			"metadata": {
+				"name": "busybox1",
+				"namespace": "johnsmith-dev"
+			},
+			"subjects": [{
+				"kind": "Group",
+				"name": "system:serviceaccounts:",
+				"apiGroup": "rbac.authorization.k8s.io"
+			}],
+			"roleRef": {
+				"kind": "Role",
+				"apiGroup": "rbac.authorization.k8s.io",
+				"name": "rbac-edit"
+			}
+		},
+		"oldObject": null,
+		"dryRun": false,
+		"options": {
+			"kind": "CreateOptions",
+			"apiVersion": "meta.k8s.io/v1"
+		}
+	}
+}`)
+
+var sandboxUserJSON3 = []byte(`{
+	"kind": "AdmissionReview",
+	"apiVersion": "admission.k8s.io/v1",
+	"request": {
+		"uid": "a68769e5-d817-4617-bec5-90efa2bad8k8",
+		"kind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"resource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"requestKind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"requestResource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"name": "busybox1",
+		"namespace": "johnsmith-dev",
+		"operation": "CREATE",
+		"userInfo": {
+			"username": "johnsmith",
+			"groups": [
+				"system:authenticated"
+			],
+			"extra": {
+				"scopes.authorization.openshift.io": [
+					"user:full"
+				]
+			}
+		},
+		"object": {
+			"kind": "RoleBinding",
+			"apiVersion": "v1",
+			"metadata": {
+				"name": "busybox1",
+				"namespace": "johnsmith-dev"
+			},
+			"subjects": [{
+				"kind": "Group",
+				"name": "system:authenticated",
+				"apiGroup": "rbac.authorization.k8s.io"
+			}],
+			"roleRef": {
+				"kind": "Role",
+				"apiGroup": "rbac.authorization.k8s.io",
+				"name": "rbac-edit"
+			}
+		},
+		"oldObject": null,
+		"dryRun": false,
+		"options": {
+			"kind": "CreateOptions",
+			"apiVersion": "meta.k8s.io/v1"
+		}
+	}
+}`)
+
+var sandboxUserJSON4 = []byte(`{
+	"kind": "AdmissionReview",
+	"apiVersion": "admission.k8s.io/v1",
+	"request": {
+		"uid": "a68769e5-d817-4617-bec5-90efa2bad9l9",
+		"kind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"resource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"requestKind": {
+			"group": "",
+			"version": "v1",
+			"kind": "RoleBinding"
+		},
+		"requestResource": {
+			"group": "",
+			"version": "v1",
+			"resource": "rolebindings"
+		},
+		"name": "busybox1",
+		"namespace": "johnsmith-dev",
+		"operation": "CREATE",
+		"userInfo": {
+			"username": "johnsmith",
+			"groups": [
+				"system:authenticated"
+			],
+			"extra": {
+				"scopes.authorization.openshift.io": [
+					"user:full"
+				]
+			}
+		},
+		"object": {
+			"kind": "RoleBinding",
+			"apiVersion": "v1",
+			"metadata": {
+				"name": "busybox1",
+				"namespace": "johnsmith-dev"
+			},
+			"subjects": [{
+				"kind": "Group",
+				"name": "system:authenticated:",
 				"apiGroup": "rbac.authorization.k8s.io"
 			}],
 			"roleRef": {

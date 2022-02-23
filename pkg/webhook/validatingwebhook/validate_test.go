@@ -32,7 +32,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 	defer ts.Close()
 
 	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(sandboxUserJSON))
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(sandboxUserForAllServiceAccountsJSON))
 
 	// then
 	assert.NoError(t, err)
@@ -48,7 +48,7 @@ func TestValidate(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts is denied", func(t *testing.T) {
 		cl := createFakeClient("johnsmith", true)
 		// when
-		response := validate(sandboxUserJSON, cl)
+		response := validate(sandboxUserForAllServiceAccountsJSON, cl)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
@@ -56,7 +56,7 @@ func TestValidate(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts: is denied", func(t *testing.T) {
 		cl := createFakeClient("johnsmith", true)
 		// when
-		response := validate(sandboxUserJSON2, cl)
+		response := validate(sandboxUserForAllServiceAccountsJSON2, cl)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad7g8")
 	})
@@ -64,7 +64,7 @@ func TestValidate(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all authenticated users is denied", func(t *testing.T) {
 		cl := createFakeClient("johnsmith", true)
 		// when
-		response := validate(sandboxUserJSON3, cl)
+		response := validate(sandboxUserForAllUsersJSON, cl)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad8k8")
 	})
@@ -72,7 +72,7 @@ func TestValidate(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all authenticated: is denied", func(t *testing.T) {
 		cl := createFakeClient("johnsmith", true)
 		// when
-		response := validate(sandboxUserJSON4, cl)
+		response := validate(sandboxUserForAllUsersJSON2, cl)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad9l9")
 	})
@@ -100,7 +100,7 @@ func TestValidateAllow(t *testing.T) {
 	t.Run("unable to find the requesting user, allow request", func(t *testing.T) {
 		cl := createFakeClient("random-user", true)
 		// when
-		response := validate(sandboxUserJSON, cl)
+		response := validate(sandboxUserForAllServiceAccountsJSON, cl)
 		// then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
@@ -192,7 +192,7 @@ var incorrectRequestObjectJSON = []byte(`{
 		}
 	}
 }`)
-var sandboxUserJSON = []byte(`{
+var sandboxUserForAllServiceAccountsJSON = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",
 	"request": {
@@ -258,7 +258,7 @@ var sandboxUserJSON = []byte(`{
 	}
 }`)
 
-var sandboxUserJSON2 = []byte(`{
+var sandboxUserForAllServiceAccountsJSON2 = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",
 	"request": {
@@ -324,7 +324,7 @@ var sandboxUserJSON2 = []byte(`{
 	}
 }`)
 
-var sandboxUserJSON3 = []byte(`{
+var sandboxUserForAllUsersJSON = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",
 	"request": {
@@ -390,7 +390,7 @@ var sandboxUserJSON3 = []byte(`{
 	}
 }`)
 
-var sandboxUserJSON4 = []byte(`{
+var sandboxUserForAllUsersJSON2 = []byte(`{
 	"kind": "AdmissionReview",
 	"apiVersion": "admission.k8s.io/v1",
 	"request": {

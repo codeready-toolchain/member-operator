@@ -1358,31 +1358,6 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
-	// Test UserAccount with UserID exceeding length limit
-	t.Run("create or update identities from excessive length UserID encoded OK", func(t *testing.T) {
-		tooLongUserID := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789" +
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-		userAcc := newUserAccount(username, tooLongUserID)
-		r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
-		//when
-		res, err := r.Reconcile(context.TODO(), req)
-
-		//then
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-
-		// User is expected to be created in first reconcile
-		updatedUser := assertUser(t, r, userAcc)
-		// Ensure that the user ID has been encoded
-		require.Equal(t, "rhd:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"+
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"+
-			"abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"+
-			"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", updatedUser.Identities[0])
-	})
-
 	// Test UserAccount with UserID containing invalid chars
 	t.Run("create or update identities from UserID with invalid chars OK", func(t *testing.T) {
 		userAcc := newUserAccount(username, userID)

@@ -806,10 +806,10 @@ func TestReconcile(t *testing.T) {
 							assert.Equal(t, reconcile.Result{}, res)
 							require.NoError(t, err)
 
-							// Check that the user account finalizer has been removed
+							// Check that the user account was deleted as the finalizer was removed
 							// when reconciling the useraccount with a deletion timestamp
 							useraccount.AssertThatUserAccount(t, username, r.Client).
-								HasNoFinalizer()
+								DoesNotExist()
 							require.Equal(t, 7, *mockCallsCounter)
 						})
 					})
@@ -881,7 +881,7 @@ func TestReconcile(t *testing.T) {
 					assertUserNotFound(t, r, userAcc)
 					useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
 
-					t.Run("third reconcile removes finalizer", func(t *testing.T) {
+					t.Run("third reconcile removes finalizer and triggers the deletion", func(t *testing.T) {
 						// when
 						res, err = r.Reconcile(context.TODO(), req)
 
@@ -889,10 +889,10 @@ func TestReconcile(t *testing.T) {
 						assert.Equal(t, reconcile.Result{}, res)
 						require.NoError(t, err)
 
-						// Check that the user account finalizer has been removed
+						// Check that the user account has been removed since the finalizer was deleted
 						// when reconciling the useraccount with a deletion timestamp
 						useraccount.AssertThatUserAccount(t, username, r.Client).
-							HasNoFinalizer()
+							DoesNotExist()
 						require.Equal(t, 6, *mockCallsCounter)
 					})
 				})
@@ -1001,7 +1001,7 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
-	t.Run("useraccount is being deleted and has no users or identities - then it should just remove finalizer", func(t *testing.T) {
+	t.Run("useraccount is being deleted and has no users or identities - delete calls returns not found - then it should just remove finalizer and be removed from the client", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
@@ -1023,30 +1023,7 @@ func TestReconcile(t *testing.T) {
 
 		// then
 		useraccount.AssertThatUserAccount(t, username, r.Client).
-			HasNoFinalizer().
-			HasNoConditions()
-
-		t.Run("when useraccount is being deleted and doesn't have finalizer, then status should stay the same", func(t *testing.T) {
-			// given
-			userAcc := newUserAccount(username, userID)
-			r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
-			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-				return apierros.NewNotFound(toolchainv1alpha1.GroupVersion.WithResource("UserAccount").GroupResource(), userAcc.Name)
-			}
-			now := metav1.NewTime(time.Now())
-			userAcc.DeletionTimestamp = &now
-			err = r.Client.Update(context.TODO(), userAcc)
-			require.NoError(t, err)
-
-			// when
-			_, err := r.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			useraccount.AssertThatUserAccount(t, username, r.Client).
-				HasNoFinalizer().
-				HasNoConditions()
-		})
+			DoesNotExist()
 	})
 
 	// Add finalizer fails
@@ -1926,13 +1903,13 @@ func TestDisabledUserAccount(t *testing.T) {
 				// Check that the associated NSTemplateSet has been deleted
 				AssertThatNSTemplateSet(t, userAcc.Namespace, userAcc.Name, r.Client).DoesNotExist()
 
-				t.Run("removing finalizer for disabled useraccount", func(t *testing.T) {
+				t.Run("remove finalizer and thus delete for disabled useraccount", func(t *testing.T) {
 					// when
 					_, err := r.Reconcile(context.TODO(), req)
 
 					// then
 					require.NoError(t, err)
-					useraccount.AssertThatUserAccount(t, username, r.Client).HasNoFinalizer()
+					useraccount.AssertThatUserAccount(t, username, r.Client).DoesNotExist()
 				})
 			})
 		})

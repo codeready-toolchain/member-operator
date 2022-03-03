@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -56,12 +57,14 @@ func TestClusterResourceKinds(t *testing.T) {
 		anotherObject.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
+		apiGroups := newAPIGroups("apps", "", clusterResourceKind.gvk.Group)
+
 		t.Run("listExistingResources should return one resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny", apiGroups)
 
 			// then
 			require.NoError(t, err)
@@ -74,7 +77,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny", apiGroups)
 
 			// then
 			require.NoError(t, err)
@@ -88,7 +91,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny", apiGroups)
 
 			// then
 			require.NoError(t, err)
@@ -103,10 +106,22 @@ func TestClusterResourceKinds(t *testing.T) {
 			}
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny")
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny", apiGroups)
 
 			// then
 			require.Error(t, err)
+			require.Len(t, existingResources, 0)
+		})
+
+		t.Run("listExistingResources should return not return any resource when APIGroup is missin for gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
+			// given
+			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
+
+			// when
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny", newAPIGroups("apps", ""))
+
+			// then
+			require.NoError(t, err)
 			require.Len(t, existingResources, 0)
 		})
 	}
@@ -136,6 +151,15 @@ func TestClusterResourceKinds(t *testing.T) {
 		// then
 		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.object)
 		assert.Equal(t, toolchainv1alpha1.GroupVersion.WithKind("Idler"), clusterResource.gvk)
+	})
+
+	t.Run("verify DBaaSTenant is in clusterResourceKinds", func(t *testing.T) {
+		// given
+		clusterResource := clusterResourceKinds[3]
+
+		// then
+		assert.Equal(t, &dbaasv1alpha1.DBaaSTenant{}, clusterResource.object)
+		assert.Equal(t, dbaasv1alpha1.GroupVersion.WithKind("DBaaSTenant"), clusterResource.gvk)
 	})
 }
 

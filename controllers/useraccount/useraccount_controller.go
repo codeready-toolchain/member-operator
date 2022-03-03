@@ -522,14 +522,13 @@ func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.U
 	}
 
 	logger.Info("deleting the User resources")
-	for _, user := range userList.Items {
-		// Delete User associated with UserAccount
-		if err := r.Client.Delete(context.TODO(), &user); err != nil {
-			return false, err
-		}
 
+	// Delete User associated with UserAccount
+	if err := r.Client.Delete(context.TODO(), &userList.Items[0]); err != nil {
+		return false, err
 	}
-	logger.Info("deleted the User resources")
+	// Return here, as deleting the user should cause another reconcile of the UserAccount
+	logger.Info(fmt.Sprintf("deleted User resource [%s]", userList.Items[0].Name))
 	return true, nil
 }
 
@@ -547,15 +546,14 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alph
 		return false, nil
 	}
 
-	logger.Info("deleting the Identity resources")
-	for _, identity := range identityList.Items {
-		// Delete Identity associated with UserAccount
-		if err := r.Client.Delete(context.TODO(), &identity); err != nil {
-			return false, err
-		}
+	logger.Info("deleting Identity resources")
 
+	// Delete first Identity in the list associated with UserAccount
+	if err := r.Client.Delete(context.TODO(), &identityList.Items[0]); err != nil {
+		return false, err
 	}
-	logger.Info("deleted the Identity resources")
+	// Return here, as deleting the identity should cause another reconcile of the UserAccount
+	logger.Info(fmt.Sprintf("deleted Identity resource [%s]", identityList.Items[0].Name))
 	return true, nil
 }
 

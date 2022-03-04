@@ -1243,6 +1243,95 @@ func TestReconcile(t *testing.T) {
 			HasConditions(notReady("Terminating", fmt.Sprintf("unable to delete identity for user account %s", userAcc.Name)))
 	})
 
+	// delete identity fails when list identity call returns error
+	t.Run("delete identity fails when list identity client call returns error", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		// then
+		userAcc = useraccount.AssertThatUserAccount(t, username, r.Client).
+			HasFinalizer(toolchainv1alpha1.FinalizerName).
+			Get()
+
+		// Set the deletionTimestamp
+		now := metav1.NewTime(time.Now())
+		userAcc.DeletionTimestamp = &now
+		err = r.Client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		// Mock deleting identity failure
+		fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+			return fmt.Errorf("unable to list identities for user account %s", userAcc.Name)
+		}
+
+		res, err = r.Reconcile(context.TODO(), req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to list identities for user account %s", userAcc.Name))
+
+		// Check that the associated identity has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		assertIdentity(t, r, userAcc, config.Auth().Idp())
+
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(notReady("Terminating", fmt.Sprintf("unable to list identities for user account %s", userAcc.Name)))
+	})
+
+	// delete user fails when list user call returns error
+	t.Run("delete user fails when list user call returns error", func(t *testing.T) {
+		// given
+		userAcc := newUserAccount(username, userID)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+
+		//when
+		res, err := r.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+
+		// then
+		userAcc = useraccount.AssertThatUserAccount(t, username, r.Client).
+			HasFinalizer(toolchainv1alpha1.FinalizerName).
+			Get()
+
+		// Set the deletionTimestamp
+		now := metav1.NewTime(time.Now())
+		userAcc.DeletionTimestamp = &now
+		err = r.Client.Update(context.TODO(), userAcc)
+		require.NoError(t, err)
+
+		// Mock deleting user failure
+		fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+			switch v := list.(type) {
+			case *userv1.IdentityList:
+				return nil
+			case *userv1.UserList:
+				return fmt.Errorf("unable to list users for user account %s", userAcc.Name)
+			default:
+				return fmt.Errorf("Unknown Type %T", v)
+			}
+		}
+
+		res, err = r.Reconcile(context.TODO(), req)
+		assert.Equal(t, reconcile.Result{}, res)
+		require.EqualError(t, err, fmt.Sprintf("failed to delete user/identity: unable to list users for user account %s", userAcc.Name))
+
+		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
+			HasConditions(notReady("Terminating", fmt.Sprintf("unable to list users for user account %s", userAcc.Name)))
+
+		// Check that the associated identity has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		assertIdentity(t, r, userAcc, config.Auth().Idp())
+
+		// Check that the associated user has not been deleted
+		// when reconciling the useraccount with a deletion timestamp
+		assertUser(t, r, userAcc)
+	})
+
 	// delete user fails
 	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given

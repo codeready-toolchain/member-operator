@@ -34,7 +34,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		apiClient, fakeClient := prepareAPIClient(t)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, objects(role, devNs), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -45,11 +45,11 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when create only one, the second is present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(objects(role), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, objects(role, devNs), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -60,11 +60,11 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(objects(role, devNs), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, objects(dBaaSTenant), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(dBaaSTenant), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -76,11 +76,11 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, metav1.APIGroup{Name: "dbaas.redhat.com"})
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(objects(role, devNs), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, objects(dBaaSTenant), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(dBaaSTenant), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	})
 }
 
-func objects(objects ...runtimeclient.Object) []runtimeclient.Object {
+func copyObjects(objects ...runtimeclient.Object) []runtimeclient.Object {
 	var objs []runtimeclient.Object
 	for i := range objects {
 		objs = append(objs, objects[i].DeepCopyObject().(runtimeclient.Object))

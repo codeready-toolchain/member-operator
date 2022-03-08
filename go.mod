@@ -1,6 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
+	github.com/RHEcosystemAppEng/dbaas-operator v0.1.4-0.20220222181358-34f519992531
 	github.com/codeready-toolchain/api v0.0.0-20220304110911-0727a0adecdc
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20220307143744-81636a33ef62
 	github.com/go-logr/logr v0.4.0

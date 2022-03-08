@@ -18,6 +18,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"k8s.io/client-go/discovery"
 
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -142,6 +143,12 @@ func main() {
 	}
 	crtConfig.Print()
 
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(ctrl.GetConfigOrDie())
+	if err != nil {
+		setupLog.Error(err, "failed to create discovery client")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
@@ -211,7 +218,7 @@ func main() {
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
-	})).SetupWithManager(mgr, allNamespacesCluster); err != nil {
+	})).SetupWithManager(mgr, allNamespacesCluster, discoveryClient); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
 		os.Exit(1)
 	}

@@ -8,8 +8,8 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
+	"k8s.io/client-go/discovery"
 
 	"github.com/go-logr/logr"
 	errs "github.com/pkg/errors"
@@ -17,7 +17,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -51,7 +50,12 @@ func NewReconciler(apiClient *APIClient) *Reconciler {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
+func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster, discoveryClient *discovery.DiscoveryClient) error {
+	apiGroupList, err := discoveryClient.ServerGroups()
+	if err != nil {
+		return err
+	}
+
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -60,19 +64,16 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 		Watches(source.NewKindWithCache(&rbac.RoleBinding{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
-		// only reconcile generation changes for cluster resources
-		build = build.Watches(&source.Kind{Type: clusterResource.object}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+		// only reconcile generation changes for cluster resources and only when the API group is present in the cluster
+		if apiGroupIsPresent(apiGroupList.Groups, clusterResource.gvk) {
+			build = build.Watches(&source.Kind{Type: clusterResource.object}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+		}
 	}
 
 	r.AllNamespacesClient = allNamespaceCluster.GetClient()
-	return build.Complete(r)
-}
+	r.AvailableAPIGroups = apiGroupList.Groups
 
-type APIClient struct {
-	AllNamespacesClient runtimeclient.Client
-	Client              runtimeclient.Client
-	Scheme              *runtime.Scheme
-	GetHostCluster      cluster.GetHostClusterFunc
+	return build.Complete(r)
 }
 
 // Reconciler the NSTemplateSet reconciler
@@ -92,6 +93,7 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io;authorization.openshift.io,resources=rolebindings;roles;clusterroles;clusterrolebindings,verbs=*
 //+kubebuilder:rbac:groups=quota.openshift.io,resources=clusterresourcequotas,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=dbaas.redhat.com,resources=dbaastenants,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile reads that state of the cluster for a NSTemplateSet object and makes changes based on the state read
 // and what is in the NSTemplateSet.Spec

@@ -136,7 +136,7 @@ func TestClusterResourceKinds(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			require.Len(t, existingResources, 0)
+			require.Empty(t, existingResources)
 		})
 	}
 

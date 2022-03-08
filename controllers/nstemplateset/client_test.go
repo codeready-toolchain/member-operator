@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
@@ -72,10 +73,27 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
+	t.Run("when only DBaaSTenant is supposed to be applied, the group for DBaaS is present, but not the version", func(t *testing.T) {
+		// given
+		apiClient, fakeClient := prepareAPIClient(t)
+		// the version is different
+		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha2"))
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
+		require.NoError(t, err)
+
+		// when
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(dBaaSTenant), additionalLabel)
+
+		// then
+		require.NoError(t, err)
+		assert.False(t, changed)
+		assertObjects(t, fakeClient, false)
+	})
+
 	t.Run("when only DBaaSTenant is supposed to be applied and the group for DBaaS is present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, metav1.APIGroup{Name: "dbaas.redhat.com"})
+		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha1"))
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
 		require.NoError(t, err)
 
@@ -184,16 +202,31 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		Client:              fakeClient,
 		Scheme:              s,
 		GetHostCluster:      NewGetHostCluster(fakeClient, true, corev1.ConditionTrue),
-		AvailableAPIGroups:  newAPIGroups("quota.openshift.io", "rbac.authorization.k8s.io", "toolchain.dev.openshift.com", ""),
+		AvailableAPIGroups: newAPIGroups(
+			newAPIGroup("quota.openshift.io", "v1"),
+			newAPIGroup("rbac.authorization.k8s.io", "v1"),
+			newAPIGroup("toolchain.dev.openshift.com", "v1alpha1"),
+			newAPIGroup("", "v1")),
 	}, fakeClient
 }
 
-func newAPIGroups(groups ...string) []metav1.APIGroup {
+func newAPIGroup(name string, version ...string) metav1.APIGroup {
+	group := metav1.APIGroup{
+		Name: name,
+	}
+	for _, version := range version {
+		group.Versions = append(group.Versions, metav1.GroupVersionForDiscovery{
+			GroupVersion: fmt.Sprintf("%s/%s", name, version),
+			Version:      version,
+		})
+	}
+	return group
+}
+
+func newAPIGroups(groups ...metav1.APIGroup) []metav1.APIGroup {
 	var apiGroups []metav1.APIGroup
 	for _, group := range groups {
-		apiGroups = append(apiGroups, metav1.APIGroup{
-			Name: group,
-		})
+		apiGroups = append(apiGroups, group)
 	}
 	return apiGroups
 }

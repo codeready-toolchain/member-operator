@@ -46,7 +46,11 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 func apiGroupIsPresent(availableAPIGroups []metav1.APIGroup, gvk schema.GroupVersionKind) bool {
 	for _, group := range availableAPIGroups {
 		if group.Name == gvk.Group {
-			return true
+			for _, version := range group.Versions {
+				if version.Version == gvk.Version {
+					return true
+				}
+			}
 		}
 	}
 	return false

@@ -57,7 +57,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		anotherObject.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
-		apiGroups := newAPIGroups("apps", "", clusterResourceKind.gvk.Group)
+		apiGroups := newAPIGroups(newAPIGroup("apps", "v1"), newAPIGroup("", "v1"), newAPIGroup(clusterResourceKind.gvk.Group, clusterResourceKind.gvk.Version))
 
 		t.Run("listExistingResources should return one resource of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
@@ -113,12 +113,26 @@ func TestClusterResourceKinds(t *testing.T) {
 			require.Len(t, existingResources, 0)
 		})
 
-		t.Run("listExistingResources should return not return any resource when APIGroup is missin for gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
+		t.Run("listExistingResources should not return any resource when APIGroup is missing for gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
 			// given
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny", newAPIGroups("apps", ""))
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny",
+				newAPIGroups(newAPIGroup("apps", "v1"), newAPIGroup("", "v1")))
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, existingResources, 0)
+		})
+
+		t.Run("listExistingResources should not return any resource when APIGroup is present but is missing the version "+clusterResourceKind.gvk.String(), func(t *testing.T) {
+			// given
+			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
+
+			// when
+			existingResources, err := clusterResourceKind.listExistingResources(fakeClient, "johny",
+				newAPIGroups(newAPIGroup("apps", "v1"), newAPIGroup("", "v1"), newAPIGroup(clusterResourceKind.gvk.Group, "old")))
 
 			// then
 			require.NoError(t, err)

@@ -39,7 +39,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.True(t, changed)
-		assertObject(t, fakeClient, false)
+		assertObjects(t, fakeClient, false)
 	})
 
 	t.Run("when create only one, the second is present", func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.True(t, changed)
-		assertObject(t, fakeClient, false)
+		assertObjects(t, fakeClient, false)
 	})
 
 	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.False(t, changed)
-		assertObject(t, fakeClient, false)
+		assertObjects(t, fakeClient, false)
 	})
 
 	t.Run("when only DBaaSTenant is supposed to be applied and the group for DBaaS is present", func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.True(t, changed)
-		assertObject(t, fakeClient, true)
+		assertObjects(t, fakeClient, true)
 	})
 }
 
@@ -97,7 +97,7 @@ func copyObjects(objects ...runtimeclient.Object) []runtimeclient.Object {
 	return objs
 }
 
-func assertObject(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool) {
+func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool) {
 	AssertThatRole(t, "john-dev", "edit-john", client).
 		Exists(). // created
 		HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).

@@ -42,7 +42,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
-	t.Run("when create only one, the second is present", func(t *testing.T) {
+	t.Run("when creating only one object because the other one already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role), additionalLabel)

@@ -224,9 +224,5 @@ func newAPIGroup(name string, version ...string) metav1.APIGroup {
 }
 
 func newAPIGroups(groups ...metav1.APIGroup) []metav1.APIGroup {
-	var apiGroups []metav1.APIGroup
-	for _, group := range groups {
-		apiGroups = append(apiGroups, group)
-	}
-	return apiGroups
+	return groups
 }

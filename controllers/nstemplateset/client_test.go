@@ -29,7 +29,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		"foo": "bar",
 	}
 
-	t.Run("when create two", func(t *testing.T) {
+	t.Run("when creating two objects", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 

@@ -26,7 +26,7 @@ type clusterResourcesManager struct {
 	*statusManager
 }
 
-// listExistingResources returns a list of comparable Objects representing existing resources in the cluster
+// listExistingResourcesIfAvailable returns a list of comparable Objects representing existing resources in the cluster
 type listExistingResources func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error)
 
 // listExistingResourcesIfAvailable checks if the API group is available in the cluster and returns a list of comparable Objects representing existing resources in the cluster
@@ -38,16 +38,16 @@ type listExistingResourcesIfAvailable func(cl runtimeclient.Client, username str
 // It is expected that the template contains only the kinds that are being watched and there is an instance of
 // toolchainObjectKind type created in clusterResourceKinds list
 type toolchainObjectKind struct {
-	gvk                   schema.GroupVersionKind
-	object                runtimeclient.Object
-	listExistingResources listExistingResourcesIfAvailable
+	gvk                              schema.GroupVersionKind
+	object                           runtimeclient.Object
+	listExistingResourcesIfAvailable listExistingResourcesIfAvailable
 }
 
 func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject runtimeclient.Object, listExistingResources listExistingResources) toolchainObjectKind {
 	return toolchainObjectKind{
 		gvk:    gvk,
 		object: emptyObject,
-		listExistingResources: func(cl runtimeclient.Client, username string, availableAPIGroups []metav1.APIGroup) (objects []runtimeclient.Object, e error) {
+		listExistingResourcesIfAvailable: func(cl runtimeclient.Client, username string, availableAPIGroups []metav1.APIGroup) (objects []runtimeclient.Object, e error) {
 			if !apiGroupIsPresent(availableAPIGroups, gvk) {
 				return []runtimeclient.Object{}, nil
 			}
@@ -149,7 +149,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		}
 
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResources(r.Client, username, r.AvailableAPIGroups)
+		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(r.Client, username, r.AvailableAPIGroups)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
@@ -304,7 +304,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 	}
 	for _, clusterResourceKind := range clusterResourceKinds {
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResources(r.Client, nsTmplSet.Name, r.AvailableAPIGroups)
+		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(r.Client, nsTmplSet.Name, r.AvailableAPIGroups)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)

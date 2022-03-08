@@ -47,7 +47,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, caCert)
 		actualSecret := &v1.Secret{}
-		AssertMemberObject(t, fakeClient, "webhook-certs", actualSecret, func() {
+		AssertObject(t, fakeClient, test.MemberOperatorNs, "webhook-certs", actualSecret, func() {
 			assert.NotEmpty(t, actualSecret.Data[ServerKey])
 			assert.NotEmpty(t, actualSecret.Data[ServerCert])
 			assert.Equal(t, caCert, actualSecret.Data[CACert])
@@ -75,7 +75,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEqual(t, "ca-cert-data", string(caCert))
 		actualSecret := &v1.Secret{}
-		AssertMemberObject(t, fakeClient, "webhook-certs", actualSecret, func() {
+		AssertObject(t, fakeClient, test.MemberOperatorNs, "webhook-certs", actualSecret, func() {
 			assert.NotEmpty(t, actualSecret.Data[ServerKey])
 			assert.NotEmpty(t, actualSecret.Data[ServerCert])
 			assert.Equal(t, caCert, actualSecret.Data[CACert])
@@ -101,7 +101,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEqual(t, secret.Data[CACert], caCert)
 		actualSecret := &v1.Secret{}
-		AssertMemberObject(t, fakeClient, "webhook-certs", actualSecret, func() {
+		AssertObject(t, fakeClient, test.MemberOperatorNs, "webhook-certs", actualSecret, func() {
 			assert.NotEmpty(t, actualSecret.Data[ServerKey])
 			assert.NotEmpty(t, actualSecret.Data[ServerCert])
 			assert.Equal(t, caCert, actualSecret.Data[CACert])
@@ -125,7 +125,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, secret.Data[CACert], caCert)
 		actualSecret := &v1.Secret{}
-		AssertMemberObject(t, fakeClient, "webhook-certs", actualSecret, func() {
+		AssertObject(t, fakeClient, test.MemberOperatorNs, "webhook-certs", actualSecret, func() {
 			assert.Equal(t, secret.Data[ServerKey], actualSecret.Data[ServerKey])
 			assert.Equal(t, secret.Data[ServerCert], actualSecret.Data[ServerCert])
 			assert.Equal(t, secret.Data[CACert], actualSecret.Data[CACert])
@@ -148,7 +148,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		require.Error(t, err)
 		assert.Empty(t, caCert)
 		actualSecret := &v1.Secret{}
-		AssertMemberObject(t, fakeClient, "webhook-certs", actualSecret, nil)
+		AssertObjectNotFound(t, fakeClient, test.MemberOperatorNs, "webhook-certs", actualSecret)
 	})
 
 	t.Run("when cannot create the secret", func(t *testing.T) {
@@ -165,6 +165,6 @@ func TestEnsureCertSecret(t *testing.T) {
 		require.Error(t, err)
 		assert.Empty(t, caCert)
 		actualSecret := &v1.Secret{}
-		AssertMemberObject(t, fakeClient, "webhook-certs", actualSecret, nil)
+		AssertObjectNotFound(t, fakeClient, test.MemberOperatorNs, "webhook-certs", actualSecret)
 	})
 }

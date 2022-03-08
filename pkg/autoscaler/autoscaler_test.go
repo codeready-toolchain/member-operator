@@ -163,7 +163,7 @@ func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient, memor
 
 	expDeployment := unmarshalDeployment(t, deployment(memory, replicas))
 	actualDeployment := &appsv1.Deployment{}
-	AssertMemberObject(t, fakeClient, "autoscaling-buffer", actualDeployment, func() {
+	AssertObject(t, fakeClient, test.MemberOperatorNs, "autoscaling-buffer", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
 		assert.Equal(t, expDeployment.Spec, actualDeployment.Spec)
 	})

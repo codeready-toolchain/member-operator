@@ -138,7 +138,7 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool
 		})
 	} else {
 		// should not exist
-		AssertObject(t, client, "john-dev", "john-dev-tenant", dBaaSTenant, nil)
+		AssertObjectNotFound(t, client, "john-dev", "john-dev-tenant", dBaaSTenant)
 	}
 }
 

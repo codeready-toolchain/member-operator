@@ -117,7 +117,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expService := &v1.Service{}
 	unmarshalObj(t, service(test.MemberOperatorNs), expService)
 	actualService := &v1.Service{}
-	AssertMemberObject(t, fakeClient, "member-operator-webhook", actualService, func() {
+	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-webhook", actualService, func() {
 		assert.Equal(t, expService.Labels, actualService.Labels)
 		assert.Equal(t, expService.Spec, actualService.Spec)
 	})
@@ -125,7 +125,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expDeployment := &appsv1.Deployment{}
 	unmarshalObj(t, deployment(test.MemberOperatorNs, imgLoc), expDeployment)
 	actualDeployment := &appsv1.Deployment{}
-	AssertMemberObject(t, fakeClient, "member-operator-webhook", actualDeployment, func() {
+	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-webhook", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
 		assert.Equal(t, expDeployment.Spec, actualDeployment.Spec)
 	})

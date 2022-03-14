@@ -134,7 +134,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expServiceAcc := &v1.ServiceAccount{}
 	unmarshalObj(t, serviceAccount(test.MemberOperatorNs), expServiceAcc)
 	actualServiceAcc := &v1.ServiceAccount{}
-	AssertMemberObject(t, fakeClient, "member-operator-webhook-sa", actualServiceAcc, func() {
+	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-webhook-sa", actualServiceAcc, func() {
 		assert.Equal(t, expServiceAcc.Namespace, actualServiceAcc.Namespace)
 	})
 

@@ -734,11 +734,10 @@ func TestDeleteNamespace(t *testing.T) {
 	})
 	t.Run("wait for namespace to be completely deleted", func(t *testing.T) {
 		// given namespace with deletion timestamp
-		manager, cl := prepareNamespacesManager(t, nsTmplSet, codeNS)
 		timeStamp := metav1.Now()
-		codeNS.DeletionTimestamp = &timeStamp
-		err := cl.Client.Update(context.TODO(), codeNS)
-		require.NoError(t, err)
+		deletedNS := codeNS.DeepCopy()
+		deletedNS.DeletionTimestamp = &timeStamp
+		manager, _ := prepareNamespacesManager(t, nsTmplSet, deletedNS)
 
 		// then namespace should not be deleted
 		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)

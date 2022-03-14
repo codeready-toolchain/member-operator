@@ -8,7 +8,6 @@ import (
 	rbac "k8s.io/api/rbac/v1"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
@@ -103,7 +102,7 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated namespaces that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	_, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(objs, labels)
+	_, err = r.ApplyToolchainObjects(logger, objs, labels)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to create namespace with type '%s'", tierTemplate.typeName)
 	}
@@ -141,7 +140,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 	}
-	if _, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(newObjs, labels); err != nil {
+	if _, err = r.ApplyToolchainObjects(logger, newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 

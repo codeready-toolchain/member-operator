@@ -9,7 +9,6 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -23,9 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -198,7 +195,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "code").
 			HasConditions(Updating())
 
-			// another reconcile creates the missing rolebinding in dev namespace
+		// another reconcile creates the missing rolebinding in dev namespace
 		res, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
@@ -1224,7 +1221,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 					AssertThatCluster(t, r.Client).
 						HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{}) // resource was deleted
 
-					t.Run("reconcile after cluster resource quota deletion triggers removal of the finalizer", func(t *testing.T) {
+					t.Run("reconcile after cluster resource quota deletion triggers removal of the finalizer and thus successful deletion", func(t *testing.T) {
 						// given - when host cluster is not ready, then it should use the cache
 						r.GetHostCluster = NewGetHostCluster(r.Client, true, corev1.ConditionFalse)
 
@@ -1235,24 +1232,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 						require.NoError(t, err)
 						// get the NSTemplateSet resource again and check its finalizers and status
 						AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
-							DoesNotHaveFinalizer(). // the finalizer should have been removed now
-							HasConditions(Terminating())
+							DoesNotExist()
 						AssertThatCluster(t, r.Client).HasNoResource("for-"+username, &quotav1.ClusterResourceQuota{})
-
-						t.Run("final reconcile after successful deletion", func(t *testing.T) {
-							// given
-							req := newReconcileRequest(namespaceName, username)
-
-							// when
-							_, err := r.Reconcile(context.TODO(), req)
-
-							// then
-							require.NoError(t, err)
-							// get the NSTemplateSet resource again and check its finalizers and status
-							AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
-								DoesNotHaveFinalizer(). // the finalizer should have been removed now
-								HasConditions(Terminating())
-						})
 					})
 				})
 			})
@@ -1335,8 +1316,14 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// only add deletion timestamp, but not delete
 		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			if obj, ok := obj.(*corev1.Namespace); ok {
-				deletionTs := metav1.Now()
-				obj.DeletionTimestamp = &deletionTs
+				if len(obj.Finalizers) == 0 {
+					deletionTs := metav1.Now()
+					obj.DeletionTimestamp = &deletionTs
+					// we need to set finalizer, otherwise, the fakeclient would delete it as soon as the deletion timestamp is set
+					obj.Finalizers = []string{"kubernetes"}
+				} else {
+					obj.Finalizers = nil
+				}
 				if err := r.Client.Update(context.TODO(), obj); err != nil {
 					return err
 				}
@@ -1365,9 +1352,6 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			HasFinalizer().
 			HasConditions(Terminating())
 
-		// set MockDelete to nil
-		fakeClient.MockDelete = nil //now removing the mockDelete
-
 		//reconcile to check there is no change, ns still exists
 		result, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
@@ -1385,8 +1369,11 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		ns := &corev1.Namespace{}
 		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: firstNSName}, ns)
 		require.NoError(t, err)
-		err = r.Client.Delete(context.TODO(), ns)
+		err = fakeClient.Delete(context.TODO(), ns)
 		require.NoError(t, err)
+
+		// set MockDelete to nil
+		fakeClient.MockDelete = nil //now removing the mockDelete
 
 		// deletion of firstNS would trigger another reconcile deleting secondNS
 		result, err = r.Reconcile(context.TODO(), req)
@@ -1407,9 +1394,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.NoError(t, err)
 
 		AssertThatNamespace(t, secondNSName, r.Client).DoesNotExist()
-		// Check that nsTemplateSet is set to delete
+		// Check that nsTemplateSet is gone as well
 		AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
-			DoesNotHaveFinalizer().HasConditions(Terminating())
+			DoesNotExist()
 
 	})
 }
@@ -1417,50 +1404,6 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	r, fakeClient := prepareController(t, initObjs...)
 	return r, newReconcileRequest(namespaceName, name), fakeClient
-}
-
-func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *test.FakeClient) {
-	s := scheme.Scheme
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
-	codecFactory := serializer.NewCodecFactory(s)
-	decoder := codecFactory.UniversalDeserializer()
-	tierTemplates, err := prepareTemplateTiers(decoder)
-	require.NoError(t, err)
-	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
-	resetCache()
-
-	// objects created from OpenShift templates are `*unstructured.Unstructured`,
-	// which causes troubles when calling the `List` method on the fake client,
-	// so we're explicitly converting the objects during their creation and update
-	fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-		o, err := toStructured(obj, decoder)
-		if err != nil {
-			return err
-		}
-		if err := test.Create(ctx, fakeClient, o, opts...); err != nil {
-			return err
-		}
-		obj.SetGeneration(o.GetGeneration())
-		return nil
-	}
-	fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-		o, err := toStructured(obj, decoder)
-		if err != nil {
-			return err
-		}
-		if err := test.Update(ctx, fakeClient, o, opts...); err != nil {
-			return err
-		}
-		obj.SetGeneration(o.GetGeneration())
-		return nil
-	}
-	return &APIClient{
-		AllNamespacesClient: fakeClient,
-		Client:              fakeClient,
-		Scheme:              s,
-		GetHostCluster:      NewGetHostCluster(fakeClient, true, corev1.ConditionTrue),
-	}, fakeClient
 }
 
 func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {

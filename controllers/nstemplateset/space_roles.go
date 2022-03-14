@@ -6,7 +6,6 @@ import (
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/pkg/errors"
 
 	corev1 "k8s.io/api/core/v1"
@@ -64,7 +63,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		}
 		logger.Info("creating space role objects")
 		// create (or update existing) objects based the tier template
-		if _, err = applycl.NewApplyClient(r.Client, r.Scheme).Apply(spaceRoleObjs, labels); err != nil {
+		if _, err = r.ApplyToolchainObjects(logger, spaceRoleObjs, labels); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
 

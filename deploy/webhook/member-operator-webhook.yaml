@@ -157,7 +157,7 @@ objects:
       sideEffects: None
       timeoutSeconds: 5
       reinvocationPolicy: Never
-      failurePolicy: Fail
+      failurePolicy: Ignore
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain

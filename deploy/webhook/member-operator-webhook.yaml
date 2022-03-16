@@ -12,6 +12,39 @@ objects:
   value: -3
   globalDefault: false
   description: "Priority class for pods in users' namespaces"
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    creationTimestamp: null
+    name: webhook-role
+  rules:
+    - apiGroups:
+        - user.openshift.io
+      resources:
+        - identities
+        - useridentitymappings
+        - users
+      verbs:
+        - get
+        - list
+        - watch
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: member-operator-webhook-sa
+    namespace: ${NAMESPACE}
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    name: webhook-rolebinding
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: webhook-role
+  subjects:
+    - kind: ServiceAccount
+      name: member-operator-webhook-sa
+      namespace: ${NAMESPACE}
 - apiVersion: v1
   kind: Service
   metadata:
@@ -45,6 +78,7 @@ objects:
         labels:
           app: member-operator-webhook
       spec:
+        serviceAccountName: member-operator-webhook-sa
         containers:
         - name: mutator
           image: ${IMAGE}
@@ -95,6 +129,38 @@ objects:
     namespaceSelector:
       matchLabels:
         toolchain.dev.openshift.com/provider: codeready-toolchain
+- apiVersion: admissionregistration.k8s.io/v1
+  kind: ValidatingWebhookConfiguration
+  metadata:
+    name: member-operator-validating-webhook
+    labels:
+      app: member-operator-webhook
+      toolchain.dev.openshift.com/provider: codeready-toolchain
+  webhooks:
+    - name: users.rolebindings.webhook.sandbox
+      admissionReviewVersions:
+        - v1
+      clientConfig:
+        caBundle: ${CA_BUNDLE}
+        service:
+          name: member-operator-webhook
+          namespace: ${NAMESPACE}
+          path: "/validate-users-rolebindings"
+          port: 443
+      matchPolicy: Equivalent
+      rules:
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: ["rbac.authorization.k8s.io","authorization.openshift.io"]
+          apiVersions: ["v1"]
+          resources: ["rolebindings"]
+          scope: "Namespaced"
+      sideEffects: None
+      timeoutSeconds: 5
+      reinvocationPolicy: Never
+      failurePolicy: Fail
+      namespaceSelector:
+        matchLabels:
+          toolchain.dev.openshift.com/provider: codeready-toolchain
 parameters:
 - name: NAMESPACE
   value: 'toolchain-member-operator'

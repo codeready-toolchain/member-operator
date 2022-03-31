@@ -11,7 +11,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/controllers/memberstatus"
 	"github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
-	"github.com/codeready-toolchain/member-operator/controllers/useraccountstatus"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -228,14 +227,6 @@ func main() {
 		CheClient: che.DefaultClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccount")
-		os.Exit(1)
-	}
-	if err = (&useraccountstatus.Reconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		GetHostCluster: cluster.GetHostCluster,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "UserAccountStatus")
 		os.Exit(1)
 	}
 	if err = (&membercfg.Reconciler{

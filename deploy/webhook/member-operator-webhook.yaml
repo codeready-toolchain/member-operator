@@ -117,7 +117,7 @@ objects:
         port: 443
     matchPolicy: Equivalent
     rules:
-    - operations: ["CREATE", "UPDATE"]
+    - operations: ["CREATE"]
       apiGroups: [""]
       apiVersions: ["v1"]
       resources: ["pods"]

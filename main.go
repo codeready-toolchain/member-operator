@@ -199,6 +199,7 @@ func main() {
 		Scheme:              mgr.GetScheme(),
 		AllNamespacesClient: allNamespacesClient,
 		Client:              mgr.GetClient(),
+		GetHostCluster:      cluster.GetHostCluster,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Idler")
 		os.Exit(1)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,6 +41,7 @@ type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
+	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers,verbs=get;list;watch;create;update;patch;delete
@@ -129,6 +132,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 			} else {
 				newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			}
+
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
 			podLogger.Info("New pod detected. Start tracking.")
 			newStatusPods = append(newStatusPods, toolchainv1alpha1.Pod{

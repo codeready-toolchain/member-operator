@@ -2,8 +2,8 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/RHEcosystemAppEng/dbaas-operator v0.1.4-0.20220222181358-34f519992531
-	github.com/codeready-toolchain/api v0.0.0-20220304110911-0727a0adecdc
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20220307143744-81636a33ef62
+	github.com/codeready-toolchain/api v0.0.0-20220406062208-83cd78aad988
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20220406062847-51b0d44256d9
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.6
 	// using latest commit from 'github.com/openshift/api@release-4.9'

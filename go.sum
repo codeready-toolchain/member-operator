@@ -632,10 +632,10 @@ github.com/prometheus/procfs v0.2.0/go.mod h1:lV6e/gmhEcM9IjHGsFOCxxuZ+z1YqCvr4O
 github.com/prometheus/procfs v0.6.0 h1:mxy4L2jP6qMonqmq+aTtOx1ifVWUgG/TAmntgbh3xv4=
 github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1xBZuNvfVA=
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
-github.com/rajivnathan/api v0.0.0-20220406221941-caa4afae0e30 h1:Zhk9HP9Q+pb/fWXzRTKncWiRIfeNdScGUfHVyxAmGJ8=
-github.com/rajivnathan/api v0.0.0-20220406221941-caa4afae0e30/go.mod h1:yxINrgni3bMTyGKMjMaLmWwgwZt/P+WT09c/pIMP02w=
-github.com/rajivnathan/toolchain-common v0.0.0-20220406222413-6ea23e7b6a05 h1:smYIbRQM0FAG1vCSq89PI4fWk8AgtjSD0YiuNyRaQ7Y=
-github.com/rajivnathan/toolchain-common v0.0.0-20220406222413-6ea23e7b6a05/go.mod h1:r+wcRuaReKJ2mjtPOcC6DJ5pbwujR9uiYW6wpv8kKPQ=
+github.com/rajivnathan/api v0.0.0-20220407221403-ec7a7eeb4b56 h1:53wnGs1Ii1m5pDj3KvAtm5mFVU86O272PbnHJCC9cpg=
+github.com/rajivnathan/api v0.0.0-20220407221403-ec7a7eeb4b56/go.mod h1:yxINrgni3bMTyGKMjMaLmWwgwZt/P+WT09c/pIMP02w=
+github.com/rajivnathan/toolchain-common v0.0.0-20220407222511-2fedeb773fe6 h1:9rlgyTLP0pBmyuWUhdky3lctjcslEmpf481uXT9WMiQ=
+github.com/rajivnathan/toolchain-common v0.0.0-20220407222511-2fedeb773fe6/go.mod h1:8jxNLmTQOiqs7o90hcpKEFvewuUn3WZAV2z4caThbuk=
 github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf h1:fsZiv9XuFo8G7IyzFWjG02vqzJG7kSqFvD1Wiq3V/o8=
 github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf/go.mod h1:FfTyeSCu+e2VLgeMh/1RFG8TSkVjKRPEyR6EmDt0RIw=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446/go.mod h1:uYEyJGbgTkfkS4+E/PavXkNJcbFIpEtjt2B0KDQ5+9M=

@@ -4,6 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/codeready-toolchain/host-operator/controllers/toolchainconfig"
+
+	"github.com/codeready-toolchain/host-operator/pkg/templates/notificationtemplates"
+
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -27,6 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	notify "github.com/codeready-toolchain/host-operator/controllers/notification"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -129,6 +135,29 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
+				// add sending notification here
+				hostCluster, ok := r.GetHostCluster()
+				if ok {
+					config, err := toolchainconfig.GetToolchainConfig(hostCluster.Client)
+					if err != nil {
+						return errs.Wrapf(err, "unable to get ToolchainConfig")
+					}
+					keysAndVals := map[string]string{
+						toolchainconfig.NotificationContextRegistrationURLKey: config.RegistrationService().RegistrationServiceURL(),
+					}
+
+					_, err = notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+						WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
+						WithControllerReference(idler, r.Scheme).
+						WithTemplate(notificationtemplates.UserProvisioned.Name).
+						WithKeysAndValues(keysAndVals).
+						Create("krana@redhat.com")
+
+					if err != nil {
+						return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+					}
+				}
+
 			} else {
 				newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			}

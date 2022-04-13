@@ -39,6 +39,10 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		// TODO remove NSTemplateSet watch once appstudio workarounds are removed
+		// UserAccount does not contain NSTemplateSet details in its Spec anymore but this controller must still watch NSTemplateSet due to appstudio cases
+		// See https://github.com/codeready-toolchain/member-operator/blob/147dbe58f4923b9d936a21995be8b0c084544c6d/controllers/useraccount/useraccount_controller.go#L167-L172
+		Watches(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, &handler.EnqueueRequestForObject{}).
 		Watches(&source.Kind{Type: &userv1.User{}}, mapToOwnerByLabel).
 		Watches(&source.Kind{Type: &userv1.Identity{}}, mapToOwnerByLabel).
 		Complete(r)
@@ -156,6 +160,7 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	}
 	// we don't expect User nor Identity resources to be present for AppStudio tier
 	// This can be removed as soon as we don't create UserAccounts in AppStudio environment.
+	// Should also remove the NSTemplateSet watch once this is removed.
 	deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 	if err != nil {
 		return deleted, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to delete redundant user or identity")

@@ -3,7 +3,6 @@ package useraccount
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -40,6 +39,9 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.UserAccount{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		// TODO remove NSTemplateSet watch once appstudio workarounds are removed
+		// UserAccount does not contain NSTemplateSet details in its Spec anymore but this controller must still watch NSTemplateSet due to appstudio cases
+		// See https://github.com/codeready-toolchain/member-operator/blob/147dbe58f4923b9d936a21995be8b0c084544c6d/controllers/useraccount/useraccount_controller.go#L167-L172
 		Watches(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, &handler.EnqueueRequestForObject{}).
 		Watches(&source.Kind{Type: &userv1.User{}}, mapToOwnerByLabel).
 		Watches(&source.Kind{Type: &userv1.Identity{}}, mapToOwnerByLabel).
@@ -96,11 +98,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		}
 		return reconcile.Result{}, err
 	}
-	if userAcc.Spec.NSTemplateSet == nil {
-		logger = logger.WithValues("NSTemplateSet", "empty")
-	} else {
-		logger = logger.WithValues("tierName", userAcc.Spec.NSTemplateSet.TierName)
-	}
 
 	// If the UserAccount has not been deleted, create or update user and Identity resources.
 	// If the UserAccount has been deleted, delete secondary resources identity and user.
@@ -116,9 +113,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	if !userAcc.Spec.Disabled {
 		logger.Info("ensuring user and identity associated with UserAccount")
 		if createdOrUpdated, err := r.ensureUserAndIdentity(logger, userAcc, config); err != nil || createdOrUpdated {
-			return reconcile.Result{}, err
-		}
-		if _, createdOrUpdated, err := r.ensureNSTemplateSet(logger, userAcc); err != nil || createdOrUpdated {
 			return reconcile.Result{}, err
 		}
 	} else {
@@ -166,6 +160,7 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	}
 	// we don't expect User nor Identity resources to be present for AppStudio tier
 	// This can be removed as soon as we don't create UserAccounts in AppStudio environment.
+	// Should also remove the NSTemplateSet watch once this is removed.
 	deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 	if err != nil {
 		return deleted, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUserCreationFailed, err, "failed to delete redundant user or identity")
@@ -199,18 +194,6 @@ func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config member
 		}
 		if deleted {
 			if err := r.setStatusTerminating(userAcc, "deleting user/identity"); err != nil {
-				logger.Error(err, "error updating status")
-				return err
-			}
-			return nil
-		}
-
-		deleted, err = r.deleteNSTemplateSet(logger, userAcc)
-		if err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete the NSTemplateSet")
-		}
-		if deleted {
-			if err := r.setStatusTerminating(userAcc, "deleting NSTemplateSet"); err != nil {
 				logger.Error(err, "error updating status")
 				return err
 			}
@@ -413,73 +396,6 @@ func addLabelsAndAnnotations(object client.Object, cl client.Client, userAcc *to
 	return nil
 }
 
-func (r *Reconciler) ensureNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
-	if userAcc.Spec.NSTemplateSet == nil {
-		return nil, false, nil
-	}
-	name := userAcc.Name
-
-	// create if not found
-	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name, Namespace: userAcc.Namespace}, nsTmplSet); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("creating a new NSTemplateSet", "name", name)
-			if err := r.setStatusProvisioning(userAcc); err != nil {
-				return nil, false, err
-			}
-			nsTmplSet = newNSTemplateSet(userAcc)
-			if err := r.Client.Create(context.TODO(), nsTmplSet); err != nil {
-				return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err,
-					"failed to create NSTemplateSet '%s'", name)
-			}
-			logger.Info("NSTemplateSet created successfully")
-			return nsTmplSet, true, nil
-		}
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusNSTemplateSetCreationFailed, err, "failed to get NSTemplateSet '%s'", name)
-	}
-	logger.Info("NSTemplateSet already exists")
-
-	// update if not same
-	if !reflect.DeepEqual(nsTmplSet.Spec, *userAcc.Spec.NSTemplateSet) {
-		return r.updateNSTemplateSet(logger, userAcc, nsTmplSet)
-	}
-	logger.Info("NSTemplateSet is up-to-date", "name", name)
-
-	readyCond, found := condition.FindConditionByType(nsTmplSet.Status.Conditions, toolchainv1alpha1.ConditionReady)
-	// if UserAccount ready condition is already set to false, then don't update if no message is provided
-	// also, don't update when NSTemplateSet ready condition is in an invalid state
-	if !found || readyCond.Status == corev1.ConditionUnknown ||
-		(condition.IsFalse(userAcc.Status.Conditions, toolchainv1alpha1.ConditionReady) && readyCond.Status == corev1.ConditionFalse && readyCond.Message == "") {
-		logger.Info("Either NSTemplateSet is an invalid state or UserAccount ready condition is already set to false and no message is provided by NSTemplateSet", "nstemplateset-ready-condition", readyCond)
-		return nsTmplSet, true, nil
-	}
-
-	if readyCond.Status == corev1.ConditionFalse {
-		logger.Info("NSTemplateSet is not ready", "ready-condition", readyCond)
-		if err := r.setStatusFromNSTemplateSet(userAcc, readyCond.Reason, readyCond.Message); err != nil {
-			return nsTmplSet, false, err
-		}
-		return nsTmplSet, true, nil
-	}
-
-	return nsTmplSet, false, nil
-}
-
-func (r *Reconciler) updateNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (*toolchainv1alpha1.NSTemplateSet, bool, error) {
-	if err := r.setStatusUpdating(userAcc); err != nil {
-		return nil, false, err
-	}
-
-	nsTmplSet.Spec = *userAcc.Spec.NSTemplateSet
-
-	if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
-		return nil, false, r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusUpdateFailed, err,
-			"failed to update NSTemplateSet '%s'", nsTmplSet.Name)
-	}
-	logger.Info("NSTemplateSet updated successfully", "name", nsTmplSet.Name)
-	return nsTmplSet, true, nil
-}
-
 // setFinalizers sets the finalizers for UserAccount
 func (r *Reconciler) addFinalizer(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	// Add the finalizer if it is not present
@@ -557,42 +473,6 @@ func (r *Reconciler) deleteIdentity(logger logr.Logger, userAcc *toolchainv1alph
 	return true, nil
 }
 
-// deleteNSTemplateSet deletes the NSTemplateSet associated with the given UserAccount (if specified)
-// Returns bool and error indicating that whether the resource were deleted.
-func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	if userAcc.Spec.NSTemplateSet == nil {
-		logger.Info("no NSTemplateSet associated with the UserAccount to delete")
-		return false, nil
-	}
-	// Get the NSTemplateSet associated with the UserAccount
-	nstmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	err := r.Client.Get(context.TODO(),
-		types.NamespacedName{ // same namespace/name as the UserAccount
-			Namespace: userAcc.Namespace,
-			Name:      userAcc.Name},
-		nstmplSet)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return false, err
-		}
-		return false, nil
-	}
-	if util.IsBeingDeleted(nstmplSet) {
-		logger.Info("the NSTemplateSet resource is already being deleted")
-		return true, nil
-	}
-	logger.Info("deleting the NSTemplateSet resource")
-	// Delete NSTemplateSet associated with UserAccount
-	if err := r.Client.Delete(context.TODO(), nstmplSet); err != nil {
-		if !errors.IsNotFound(err) {
-			return false, err
-		}
-		return false, nil
-	}
-	logger.Info("deleted the NSTemplateSet resource")
-	return true, nil
-}
-
 // wrapErrorWithStatusUpdate wraps the error and update the user account status. If the update failed then logs the error.
 func (r *Reconciler) wrapErrorWithStatusUpdate(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount, statusUpdater func(userAcc *toolchainv1alpha1.UserAccount, message string) error, err error, format string, args ...interface{}) error {
 	if err == nil {
@@ -633,28 +513,6 @@ func (r *Reconciler) setStatusMappingCreationFailed(userAcc *toolchainv1alpha1.U
 			Type:    toolchainv1alpha1.ConditionReady,
 			Status:  corev1.ConditionFalse,
 			Reason:  toolchainv1alpha1.UserAccountUnableToCreateMappingReason,
-			Message: message,
-		})
-}
-
-func (r *Reconciler) setStatusNSTemplateSetCreationFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
-	return r.updateStatusConditions(
-		userAcc,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UserAccountUnableToCreateNSTemplateSetReason,
-			Message: message,
-		})
-}
-
-func (r *Reconciler) setStatusFromNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount, reason, message string) error {
-	return r.updateStatusConditions(
-		userAcc,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  reason,
 			Message: message,
 		})
 }
@@ -700,27 +558,6 @@ func (r *Reconciler) setStatusDisabled(userAcc *toolchainv1alpha1.UserAccount) e
 		})
 }
 
-func (r *Reconciler) setStatusUpdating(userAcc *toolchainv1alpha1.UserAccount) error {
-	return r.updateStatusConditions(
-		userAcc,
-		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.ConditionReady,
-			Status: corev1.ConditionFalse,
-			Reason: toolchainv1alpha1.UserAccountUpdatingReason,
-		})
-}
-
-func (r *Reconciler) setStatusUpdateFailed(userAcc *toolchainv1alpha1.UserAccount, message string) error {
-	return r.updateStatusConditions(
-		userAcc,
-		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.ConditionReady,
-			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.UserAccountNSTemplateSetUpdateFailedReason,
-			Message: message,
-		})
-}
-
 func (r *Reconciler) setStatusTerminating(userAcc *toolchainv1alpha1.UserAccount, message string) error {
 	return r.updateStatusConditions(
 		userAcc,
@@ -762,17 +599,6 @@ func newIdentity(user *userv1.User) *userv1.Identity {
 		},
 	}
 	return identity
-}
-
-func newNSTemplateSet(userAcc *toolchainv1alpha1.UserAccount) *toolchainv1alpha1.NSTemplateSet {
-	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      userAcc.Name,
-			Namespace: userAcc.Namespace,
-		},
-		Spec: *userAcc.Spec.NSTemplateSet,
-	}
-	return nsTmplSet
 }
 
 // ToIdentityName converts the given `userID` into an identity

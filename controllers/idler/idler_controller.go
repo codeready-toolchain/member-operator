@@ -2,11 +2,8 @@ package idler
 
 import (
 	"context"
+	"fmt"
 	"time"
-
-	"github.com/codeready-toolchain/host-operator/controllers/toolchainconfig"
-
-	"github.com/codeready-toolchain/host-operator/pkg/templates/notificationtemplates"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
@@ -32,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	notify "github.com/codeready-toolchain/host-operator/controllers/notification"
+	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -92,6 +89,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
+	//if err := r.createNotification(logger, idler); err != nil {
+	//	return reconcile.Result{}, r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
+	//}
 	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
 	nextTime := nextPodToBeKilledAfter(logger, idler)
 	if nextTime == nil {
@@ -135,27 +135,8 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
-				// add sending notification here
-				hostCluster, ok := r.GetHostCluster()
-				if ok {
-					config, err := toolchainconfig.GetToolchainConfig(hostCluster.Client)
-					if err != nil {
-						return errs.Wrapf(err, "unable to get ToolchainConfig")
-					}
-					keysAndVals := map[string]string{
-						toolchainconfig.NotificationContextRegistrationURLKey: config.RegistrationService().RegistrationServiceURL(),
-					}
-
-					_, err = notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
-						WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
-						WithControllerReference(idler, r.Scheme).
-						WithTemplate(notificationtemplates.UserProvisioned.Name).
-						WithKeysAndValues(keysAndVals).
-						Create("krana@redhat.com")
-
-					if err != nil {
-						return errs.Wrapf(err, "Unable to create Notification CR from Idler")
-					}
+				if err := r.createNotification(logger, idler); err != nil {
+					return r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
 				}
 
 			} else {
@@ -172,6 +153,37 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	}
 
 	return r.updateStatusPods(idler, newStatusPods)
+}
+
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+	//Get the HostClient
+	hostCluster, ok := r.GetHostCluster()
+	if !ok {
+		err := fmt.Errorf("unable to get the host cluster")
+		logger.Error(err, "host Cluster not found")
+		return err
+	}
+	// add sending notification here
+	//check the condition on Idler if notification already sent
+	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
+	if !found {
+		// Only create a notification if not created before
+		_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+			WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
+			WithControllerReference(idler, r.Scheme).
+			WithTemplate("test").
+			Create("krana@redhat.com")
+
+		if err != nil {
+			return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+		}
+		// update Condition
+		if err = r.setStatusIdlerNotificationCreated(idler); err != nil {
+			return err
+		}
+	}
+	//notification already created
+	return nil
 }
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
@@ -430,6 +442,27 @@ func (r *Reconciler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.IdlerRunningReason,
+		})
+}
+
+func (r *Reconciler) setStatusIdlerNotificationCreated(idler *toolchainv1alpha1.Idler) error {
+	return r.updateStatusConditions(
+		idler,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.IdlerActivatedNotificationCreated,
+			Status: corev1.ConditionTrue,
+			Reason: toolchainv1alpha1.IdlerActivated,
+		})
+}
+
+func (r *Reconciler) setStatusIdlerNotificationCreationFailed(idler *toolchainv1alpha1.Idler, message string) error {
+	return r.updateStatusConditions(
+		idler,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.IdlerActivatedNotificationCreated,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.IdlerActivatedNotificationCreationFailed,
+			Message: message,
 		})
 }
 

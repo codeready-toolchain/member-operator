@@ -86,6 +86,14 @@ func Running() toolchainv1alpha1.Condition {
 	}
 }
 
+func IdlerNotificationCreated() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.IdlerActivatedNotificationCreated,
+		Status: corev1.ConditionTrue,
+		Reason: toolchainv1alpha1.IdlerActivated,
+	}
+}
+
 type IdleablePayloadAssertion struct {
 	client client.Client
 	t      *testing.T

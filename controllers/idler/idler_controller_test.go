@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
@@ -37,7 +39,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("No Idler resource found", func(t *testing.T) {
 		// given
 		requestName := "not-existing-name"
-		reconciler, req, _, _ := prepareReconcile(t, requestName)
+		reconciler, req, _, _ := prepareReconcile(t, requestName, newGetHostClusterReady)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -49,7 +51,7 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("Fail to get Idler resource", func(t *testing.T) {
 		// given
-		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler")
+		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler", newGetHostClusterReady)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			if key.Name == "cant-get-idler" {
 				return errors.New("can't get idler")
@@ -75,7 +77,7 @@ func TestReconcile(t *testing.T) {
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
-		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", idler)
+		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", newGetHostClusterReady, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -99,7 +101,7 @@ func TestEnsureIdling(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, idler)
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
 		preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
 
 		// when
@@ -123,7 +125,7 @@ func TestEnsureIdling(t *testing.T) {
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, idler)
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
 		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
@@ -208,7 +210,7 @@ func TestEnsureIdling(t *testing.T) {
 				// Still tracking all pods. Even deleted ones.
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 					TracksPods(podsTooEarlyToKill.allPods).
-					HasConditions(memberoperatortest.Running())
+					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 				assert.True(t, res.Requeue)
 				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -222,7 +224,7 @@ func TestEnsureIdling(t *testing.T) {
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 						TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)).
-						HasConditions(memberoperatortest.Running())
+						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 					assert.True(t, res.Requeue)
 					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -244,7 +246,7 @@ func TestEnsureIdling(t *testing.T) {
 						// No pods tracked
 						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 							TracksPods([]*corev1.Pod{}).
-							HasConditions(memberoperatortest.Running())
+							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 						// requeue after the idler timeout
 						assert.Equal(t, reconcile.Result{
@@ -268,7 +270,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				},
 				Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: timeout},
 			}
-			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, idler)
+			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -292,7 +294,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, idler)
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
 		allCl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			pl := &corev1.PodList{}
 			if reflect.TypeOf(list) == reflect.TypeOf(pl) && len(opts) == 1 {
@@ -319,7 +321,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		}
 
 		t.Run("can't get controllers because of general error", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
+			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string, first bool) {
 				// given
 				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
@@ -338,16 +340,20 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				if first {
+					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				} else {
+					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg), memberoperatortest.IdlerNotificationCreated())
+				}
 			}
 
-			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
-			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset")
-			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset")
-			assertCanNotGetObject(&batchv1.Job{}, "can't get job")
-			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
-			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
-			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
+			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment", false)
+			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset", false)
+			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset", true)
+			assertCanNotGetObject(&batchv1.Job{}, "can't get job", false)
+			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset", false)
+			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig", false)
+			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller", false)
 		})
 
 		t.Run("can't get controllers because not found", func(t *testing.T) {
@@ -376,7 +382,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 					Requeue:      true,
 					RequeueAfter: 60 * time.Second,
 				}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 			}
 
 			assertCanNotGetObject(&appsv1.Deployment{})
@@ -408,7 +414,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg), memberoperatortest.IdlerNotificationCreated())
 			}
 
 			assertCanNotUpdateObject(&appsv1.Deployment{}, "can't update deployment")
@@ -419,7 +425,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
-			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string) {
+			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string, firstPod bool) {
 				// given
 				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
@@ -438,12 +444,16 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				if firstPod {
+					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				} else {
+					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg), memberoperatortest.IdlerNotificationCreated())
+				}
 			}
 
-			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
-			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
-			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
+			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset", true)
+			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job", false)
+			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod", false)
 		})
 	})
 }
@@ -601,7 +611,7 @@ func createPods(t *testing.T, r *Reconciler, owner v1.Object, startTime metav1.T
 	return podsToTrack
 }
 
-func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
+func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -612,13 +622,14 @@ func prepareReconcile(t *testing.T, name string, initIdlerObjs ...runtime.Object
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              s,
+		GetHostCluster:      getHostClusterFunc(fakeClient),
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient
 }
 
 // prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
 func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
-	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, &idler)
+	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, &idler)
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)
 	//start tracking pods, so the Idler status is filled with the tracked pods
@@ -626,4 +637,8 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha
 	require.NoError(t, err)
 	memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(payloads.allPods)
 	return reconciler, req, cl, allCl
+}
+
+func newGetHostClusterReady(fakeClient client.Client) cluster.GetHostClusterFunc {
+	return memberoperatortest.NewGetHostCluster(fakeClient, true, corev1.ConditionTrue)
 }

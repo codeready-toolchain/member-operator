@@ -833,6 +833,9 @@ func TestReconcilePromotion(t *testing.T) {
 					_, err = r.Reconcile(context.TODO(), req)
 					// then
 					require.NoError(t, err)
+					AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+						HasFinalizer().
+						HasConditions(Updating())
 					AssertThatCluster(t, fakeClient).
 						HasResource(username+"-dev", &toolchainv1alpha1.Idler{}). // still exists (no need to check again the labels)
 						HasResource(username+"-stage", &toolchainv1alpha1.Idler{},

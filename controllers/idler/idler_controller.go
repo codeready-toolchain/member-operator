@@ -167,12 +167,13 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	//check the condition on Idler if notification already sent
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
 	if !found {
+		userEmail := getUserEmailFromUserSignup(hostCluster, idler)
 		// Only create a notification if not created before
 		_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
 			WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
 			WithControllerReference(idler, r.Scheme).
-			WithTemplate("test").
-			Create("krana@redhat.com")
+			WithTemplate("idleractivated").
+			Create(userEmail)
 
 		if err != nil {
 			return errs.Wrapf(err, "Unable to create Notification CR from Idler")
@@ -184,6 +185,11 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	}
 	//notification already created
 	return nil
+}
+
+func getUserEmailFromUserSignup(hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) string {
+
+	return "krana@redhat.com"
 }
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)

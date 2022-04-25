@@ -200,12 +200,16 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(failed))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-		codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-		devRb := newRoleBinding(devNS.Name, "user-edit", username)
-		codeRb := newRoleBinding(codeNS.Name, "user-edit", username)
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, codeNS, devRb, codeRb)
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
+		devRole := newRole(devNS.Name, "exec-pods", username)
+		devRb1 := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+		devRb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
+		stageRole := newRole(stageNS.Name, "exec-pods", username)
+		stageRb1 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
+		stageRb2 := newRoleBinding(stageNS.Name, "crtadmin-view", username)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, devRole, devRb1, devRb2, stageRole, stageRb1, stageRb2)
 
 		// when
 		_, err := r.Reconcile(context.TODO(), req)

@@ -36,9 +36,9 @@ func TestFindNamespace(t *testing.T) {
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-code",
+				Name: "johnsmith-stage",
 				Labels: map[string]string{
-					"toolchain.dev.openshift.com/type": "code",
+					"toolchain.dev.openshift.com/type": "stage",
 				},
 			},
 		},
@@ -53,7 +53,7 @@ func TestFindNamespace(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
-		typeName := "stage"
+		typeName := "other"
 		_, found := findNamespace(namespaces, typeName)
 		assert.False(t, found)
 	})
@@ -63,7 +63,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
+	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "stage"))
 	manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 
 	t.Run("return namespace whose revision is not set", func(t *testing.T) {
@@ -78,14 +78,14 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.True(t, found)
-		assert.Equal(t, "code", tierTemplate.typeName)
-		assert.Equal(t, "johnsmith-code", userNS.GetName())
+		assert.Equal(t, "stage", tierTemplate.typeName)
+		assert.Equal(t, "johnsmith-stage", userNS.GetName())
 	})
 
 	t.Run("return namespace whose revision is different than in tier", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-123"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-stage-123"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -93,8 +93,8 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.True(t, found)
-		assert.Equal(t, "code", tierTemplate.typeName)
-		assert.Equal(t, "johnsmith-code", userNS.GetName())
+		assert.Equal(t, "stage", tierTemplate.typeName)
+		assert.Equal(t, "johnsmith-stage", userNS.GetName())
 	})
 
 	t.Run("return namespace whose tier label is different than the tier name", func(t *testing.T) {
@@ -115,7 +115,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	t.Run("return namespace whose tier is different", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "advanced-code-abcde21"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "outdated"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -123,14 +123,16 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.True(t, found)
-		assert.Equal(t, "code", tierTemplate.typeName)
-		assert.Equal(t, "johnsmith-code", userNS.GetName())
+		require.NotNil(t, tierTemplate)
+		assert.Equal(t, "stage", tierTemplate.typeName)
+		require.NotNil(t, userNS)
+		assert.Equal(t, "johnsmith-stage", userNS.GetName())
 	})
 
 	t.Run("return namespace that is not part of user namespaces", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
+		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-stage-abcde21"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
@@ -138,20 +140,19 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		require.True(t, found)
-		assert.Equal(t, "stage", tierTemplate.typeName)
+		assert.Equal(t, "other", tierTemplate.typeName)
 		assert.Nil(t, userNS)
 	})
 
 	t.Run("namespace not found", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-code-abcde21"
 		userNamespaces = append(userNamespaces, corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-stage", Labels: map[string]string{
-					"toolchain.dev.openshift.com/type":        "stage",
-					"toolchain.dev.openshift.com/templateref": "basic-stage-abcde13",
+				Name: "johnsmith-other", Labels: map[string]string{
 					"toolchain.dev.openshift.com/tier":        "basic",
+					"toolchain.dev.openshift.com/type":        "other",
+					"toolchain.dev.openshift.com/templateref": "basic-other-abcde13",
 					"toolchain.dev.openshift.com/owner":       "johnsmith",
 				},
 			},
@@ -206,9 +207,9 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev", Labels: map[string]string{
+					"toolchain.dev.openshift.com/tier":        "basic",
 					"toolchain.dev.openshift.com/type":        "dev",
 					"toolchain.dev.openshift.com/templateref": "basic-dev-abcde11",
-					"toolchain.dev.openshift.com/tier":        "basic",
 					"toolchain.dev.openshift.com/owner":       "johnsmith",
 				},
 			},
@@ -216,10 +217,10 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-code", Labels: map[string]string{
-					"toolchain.dev.openshift.com/type":        "code",
+				Name: "johnsmith-stage", Labels: map[string]string{
 					"toolchain.dev.openshift.com/tier":        "basic",
-					"toolchain.dev.openshift.com/templateref": "basic-code-abcde21",
+					"toolchain.dev.openshift.com/type":        "stage",
+					"toolchain.dev.openshift.com/templateref": "basic-stage-abcde21",
 					"toolchain.dev.openshift.com/owner":       "johnsmith",
 				},
 			},
@@ -228,19 +229,19 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 	}
 	tierTemplates := []*tierTemplate{
 		{
-			templateRef: "basic-dev-abcde11",
+			tierName:    "basic",
 			typeName:    "dev",
-			tierName:    "basic",
+			templateRef: "basic-dev-abcde11",
 		},
 		{
-			templateRef: "basic-code-abcde21",
-			typeName:    "code",
 			tierName:    "basic",
-		},
-		{
-			templateRef: "basic-stage-abcde13",
 			typeName:    "stage",
+			templateRef: "basic-stage-abcde21",
+		},
+		{
 			tierName:    "basic",
+			typeName:    "other",
+			templateRef: "basic-other-abcde13",
 		},
 	}
 	return userNamespaces, tierTemplates
@@ -258,8 +259,8 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "johnsmith-code", Labels: map[string]string{
-					"toolchain.dev.openshift.com/type": "code",
+				Name: "johnsmith-stage", Labels: map[string]string{
+					"toolchain.dev.openshift.com/type": "stage",
 				},
 			},
 		},
@@ -280,7 +281,7 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 
 		// then
 		require.True(t, found)
-		assert.Equal(t, "johnsmith-code", namespace.Name)
+		assert.Equal(t, "johnsmith-stage", namespace.Name)
 	})
 
 	t.Run("should not return any namespace", func(t *testing.T) {
@@ -292,8 +293,8 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 				tierName:    "basic",
 			},
 			{
-				templateRef: "basic-code-abcde21",
-				typeName:    "code",
+				templateRef: "basic-stage-abcde21",
+				typeName:    "stage",
 				tierName:    "basic",
 			},
 		}
@@ -389,7 +390,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 
 	t.Run("should create only one namespace", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
@@ -400,7 +401,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		assert.True(t, createdOrUpdated)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasSpecNamespaces("dev", "code").
+			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, username+"-dev", manager.Client).
 			HasNoOwnerReference().
@@ -409,15 +410,15 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasNoLabel("toolchain.dev.openshift.com/templateref").
 			HasNoLabel("toolchain.dev.openshift.com/tier")
-		AssertThatNamespace(t, username+"-code", manager.Client).
+		AssertThatNamespace(t, username+"-stage", manager.Client).
 			DoesNotExist()
 	})
 
 	t.Run("should create the second namespace when the first one already exists", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(Provisioning()))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit", username)
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, rb)
 
 		// when
@@ -428,12 +429,12 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		assert.True(t, createdOrUpdated)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasSpecNamespaces("dev", "code").
+			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioning())
-		AssertThatNamespace(t, username+"-code", fakeClient).
+		AssertThatNamespace(t, username+"-stage", fakeClient).
 			HasNoOwnerReference().
 			HasLabel("toolchain.dev.openshift.com/owner", username).
-			HasLabel("toolchain.dev.openshift.com/type", "code").
+			HasLabel("toolchain.dev.openshift.com/type", "stage").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasNoLabel("toolchain.dev.openshift.com/templateref").
 			HasNoLabel("toolchain.dev.openshift.com/tier")
@@ -442,7 +443,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 
 	t.Run("inner resources created for existing namespace", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(Provisioning()))
 		devNS := newNamespace("", username, "dev") // NS exist but it is not complete yet
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
 
@@ -454,7 +455,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		assert.True(t, createdOrUpdated)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasSpecNamespaces("dev", "code").
+			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, username+"-dev", fakeClient).
 			HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -462,17 +463,17 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
 			HasLabel("toolchain.dev.openshift.com/tier", "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasResource("user-edit", &rbacv1.RoleBinding{})
-		AssertThatNamespace(t, username+"-code", manager.Client).
+			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
+		AssertThatNamespace(t, username+"-stage", manager.Client).
 			DoesNotExist()
 	})
 
-	t.Run("ensure inner resources for code namespace if the dev is already provisioned", func(t *testing.T) {
+	t.Run("ensure inner resources for stage namespace if the dev is already provisioned", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(Provisioning()))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(Provisioning()))
 		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-		codeNS := newNamespace("", username, "code") // NS exist but it is not complete yet
-		rb := newRoleBinding(devNS.Name, "user-edit", username)
+		codeNS := newNamespace("", username, "stage") // NS exist but it is not complete yet
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS, rb)
 
 		// when
@@ -483,16 +484,16 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		assert.True(t, createdOrUpdated)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasSpecNamespaces("dev", "code").
+			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioning())
-		for _, nsType := range []string{"code", "dev"} {
+		for _, nsType := range []string{"stage", "dev"} {
 			AssertThatNamespace(t, username+"-"+nsType, fakeClient).
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", nsType).
 				HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11").
 				HasLabel("toolchain.dev.openshift.com/tier", "basic").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasResource("user-edit", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 		}
 	})
 }
@@ -509,7 +510,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 
 	t.Run("fail to create namespace", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 			return errors.New("unable to create namespace")
@@ -525,12 +526,12 @@ func TestEnsureNamespacesFail(t *testing.T) {
 			HasFinalizer().
 			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: Namespace, version: v1: unable to create resource of kind: Namespace, version: v1: unable to create namespace"))
 		AssertThatNamespace(t, username+"-dev", fakeClient).DoesNotExist()
-		AssertThatNamespace(t, username+"-code", fakeClient).DoesNotExist()
+		AssertThatNamespace(t, username+"-stage", fakeClient).DoesNotExist()
 	})
 
 	t.Run("fail to fetch namespaces", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 		fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			return errors.New("some error")
@@ -546,12 +547,12 @@ func TestEnsureNamespacesFail(t *testing.T) {
 			HasFinalizer().
 			HasConditions(UnableToProvision("some error"))
 		AssertThatNamespace(t, username+"-dev", fakeClient).DoesNotExist()
-		AssertThatNamespace(t, username+"-code", fakeClient).DoesNotExist()
+		AssertThatNamespace(t, username+"-stage", fakeClient).DoesNotExist()
 	})
 
 	t.Run("fail to create inner resources", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		devNS := newNamespace("", username, "dev") // NS exists but is missing its inner resources (since its revision is not set yet)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
 		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
@@ -569,7 +570,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 			HasConditions(UnableToProvisionNamespace(
 				"unable to create resource of kind: RoleBinding, version: v1: unable to create resource of kind: RoleBinding, version: v1: unable to create some object"))
 		AssertThatNamespace(t, username+"-dev", fakeClient).
-			HasNoResource("user-edit", &rbacv1.RoleBinding{})
+			HasNoResource("crtadmin-pods", &rbacv1.RoleBinding{})
 	})
 
 	t.Run("fail to update status when ensuring inner resources", func(t *testing.T) {
@@ -629,7 +630,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 
 	t.Run("fail to ensure when nextNamespaceToProvisionOrUpdate returns error", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		devNS := newNamespace("basic", username, "dev")
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
 		fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
@@ -650,10 +651,10 @@ func TestEnsureNamespacesFail(t *testing.T) {
 func TestDeleteNamespace(t *testing.T) {
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
-	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "code")
-	nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withDeletionTs())
+	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "stage")
+	nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withDeletionTs())
 	devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-	codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
+	codeNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 
 	t.Run("delete user namespace", func(t *testing.T) {
 		// given
@@ -695,7 +696,7 @@ func TestDeleteNamespace(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, allDeleted)
 			// get the first namespace and check its deleted
-			firstNSName := fmt.Sprintf("%s-code", username)
+			firstNSName := fmt.Sprintf("%s-dev", username)
 			AssertThatNamespace(t, firstNSName, cl).DoesNotExist()
 
 			t.Run("delete the second namespace", func(t *testing.T) {
@@ -706,7 +707,7 @@ func TestDeleteNamespace(t *testing.T) {
 				require.NoError(t, err)
 				assert.False(t, allDeleted)
 				// get the second namespace and check its deleted
-				secondNSName := fmt.Sprintf("%s-dev", username)
+				secondNSName := fmt.Sprintf("%s-stage", username)
 				AssertThatNamespace(t, secondNSName, cl).DoesNotExist()
 			})
 
@@ -752,7 +753,7 @@ func TestDeleteNamespace(t *testing.T) {
 
 	t.Run("failed to fetch namespaces", func(t *testing.T) {
 		// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withNamespaces("abcde11", "dev", "stage"))
 		manager, cl := prepareNamespacesManager(t, nsTmplSet)
 		cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			if _, ok := list.(*corev1.NamespaceList); ok {
@@ -791,8 +792,8 @@ func TestPromoteNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			ro := newRole(devNS.Name, "rbac-edit", username)
-			rb := newRoleBinding(devNS.Name, "user-edit", username)
+			ro := newRole(devNS.Name, "exec-pods", username)
+			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
 
 			// when
@@ -811,8 +812,8 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasResource("user-edit", &rbacv1.RoleBinding{}).
-				HasResource("user-rbac-edit", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
 		})
 
 		t.Run("upgrade dev to advanced tier by changing only the tier label", func(t *testing.T) {
@@ -821,8 +822,8 @@ func TestPromoteNamespaces(t *testing.T) {
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			devNS.Labels["toolchain.dev.openshift.com/tier"] = "base"
-			ro := newRole(devNS.Name, "rbac-edit", username)
-			rb := newRoleBinding(devNS.Name, "user-edit", username)
+			ro := newRole(devNS.Name, "exec-pods", username)
+			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
 
 			// when
@@ -841,8 +842,8 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasResource("user-edit", &rbacv1.RoleBinding{}).
-				HasResource("user-rbac-edit", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
 		})
 
 		t.Run("downgrade dev to basic tier", func(t *testing.T) {
@@ -850,10 +851,10 @@ func TestPromoteNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			rb := newRoleBinding(devNS.Name, "user-edit", username)
-			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit", username)
-			ro := newRole(devNS.Name, "rbac-edit", username)
-			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, rbacRb, ro)
+			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+			rb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
+			ro := newRole(devNS.Name, "exec-pods", username)
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, rb2, ro)
 
 			// when
 			updated, err := manager.ensure(logger, nsTmplSet)
@@ -871,9 +872,9 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // downgraded
 				HasLabel("toolchain.dev.openshift.com/tier", "basic").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasResource("user-edit", &rbacv1.RoleBinding{}).
-				HasNoResource("rbac-edit", &rbacv1.Role{}). // role does not exist
-				HasNoResource("user-rbac-edit", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+				HasNoResource("exec-pods", &rbacv1.Role{}). // role does not exist
+				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
 
 		})
 
@@ -881,10 +882,10 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given 'advanced' NSTemplate only has a 'dev' namespace
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
 			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'code' NS
+			codeNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 
-			// when - should delete the code namespace
+			// when - should delete the stage namespace
 			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
@@ -921,8 +922,8 @@ func TestPromoteNamespaces(t *testing.T) {
 					HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
 					HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasResource("user-edit", &rbacv1.RoleBinding{}).
-					HasResource("rbac-edit", &rbacv1.Role{})
+					HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+					HasResource("exec-pods", &rbacv1.Role{})
 			})
 		})
 	})
@@ -958,13 +959,13 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "code", withTemplateRefUsingRevision("abcde11"))
-			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'code' NS
+			codeNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("mock error: '%T'", obj)
 			}
 
-			// when - should delete the code namespace
+			// when - should delete the stage namespace
 			_, err := manager.ensure(logger, nsTmplSet)
 
 			// then
@@ -972,12 +973,12 @@ func TestPromoteNamespaces(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
 				HasConditions(UpdateFailed("mock error: '*v1.Namespace'")) // failed to delete NS
-			AssertThatNamespace(t, username+"-code", cl).
+			AssertThatNamespace(t, username+"-stage", cl).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
-				HasLabel("toolchain.dev.openshift.com/type", "code").
+				HasLabel("toolchain.dev.openshift.com/type", "stage").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-code-abcde11"). // unchanged, namespace was not deleted
+				HasLabel("toolchain.dev.openshift.com/templateref", "basic-stage-abcde11"). // unchanged, namespace was not deleted
 				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 			AssertThatNamespace(t, username+"-dev", cl).
 				HasNoOwnerReference().
@@ -1006,9 +1007,9 @@ func TestUpdateNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			ro := newRole(devNS.Name, "rbac-edit", username)
-			rb := newRoleBinding(devNS.Name, "user-edit", username)
-			rbacRb := newRoleBinding(devNS.Name, "user-rbac-edit", username)
+			ro := newRole(devNS.Name, "exec-pods", username)
+			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+			rbacRb := newRoleBinding(devNS.Name, "crtadmin-view", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rbacRb)
 
 			// when
@@ -1027,9 +1028,9 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasResource("user-edit", &rbacv1.RoleBinding{}).
-				HasResource("rbac-edit", &rbacv1.Role{}).
-				HasNoResource("user-rbac-edit", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+				HasResource("exec-pods", &rbacv1.Role{}).
+				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
 		})
 
 		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier", func(t *testing.T) {
@@ -1037,8 +1038,8 @@ func TestUpdateNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde12"))
-			rb := newRoleBinding(devNS.Name, "user-edit", username)
-			ro := newRole(devNS.Name, "rbac-edit", username)
+			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+			ro := newRole(devNS.Name, "exec-pods", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, ro)
 
 			// when
@@ -1057,19 +1058,19 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasResource("user-edit", &rbacv1.RoleBinding{}).
-				HasResource("rbac-edit", &rbacv1.Role{}).
-				HasResource("user-rbac-edit", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+				HasResource("exec-pods", &rbacv1.Role{}).
+				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
 		})
 
 		t.Run("delete redundant namespace while updating revision", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
 			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
-			codeNS := newNamespace("advanced", username, "code", withTemplateRefUsingRevision("abcde11"))
-			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'code' NS
+			codeNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 
-			// when - should delete the code namespace
+			// when - should delete the stage namespace
 			updated, err := manager.ensure(logger, nsTmplSet)
 
 			// then
@@ -1147,7 +1148,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "code"))
+	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "stage"))
 	manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 	t.Run("namespace doesn't have the type and templateref label", func(t *testing.T) {
@@ -1182,8 +1183,8 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		}
-		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
-		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
+		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
@@ -1197,8 +1198,8 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	t.Run("namespace doesn't have the required rolebinding", func(t *testing.T) {
 		//given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
-		role := newRole(devNS.Name, "rbac-edit", "johnsmith")
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
+		role := newRole(devNS.Name, "exec-pods", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
@@ -1212,12 +1213,12 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	t.Run("role doesn't have the owner label", func(t *testing.T) {
 		//given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		rb := newRoleBinding(devNS.Name, "user-edit", "johnsmith")
-		rb2 := newRoleBinding(devNS.Name, "user-rbac-edit", "johnsmith")
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
+		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", "johnsmith")
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: devNS.Name,
-				Name:      "rbac-edit",
+				Name:      "exec-pods",
 				Labels: map[string]string{
 					"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 				},
@@ -1239,7 +1240,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := &rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: devNS.Name,
-				Name:      "user-edit",
+				Name:      "crtadmin-pods",
 				Labels: map[string]string{
 					"toolchain.dev.openshift.com/provider": "codeready-toolchain",
 				},
@@ -1271,9 +1272,9 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	})
 
 	t.Run("containsRole returns error", func(t *testing.T) {
-		ro := newRole("johnsmith-dev", "user-edit", "johnsmith")
-		ro2 := newRole("johnsmith-dev", "user-rbac-edit", "johnsmith")
-		rb := newRoleBinding("johnsmith-dev", "user-edit", "johnsmith")
+		ro := newRole("johnsmith-dev", "crtadmin-pods", "johnsmith")
+		ro2 := newRole("johnsmith-dev", "crtadmin-view", "johnsmith")
+		rb := newRoleBinding("johnsmith-dev", "crtadmin-pods", "johnsmith")
 		roleList := []rbacv1.Role{}
 		roleList = append(roleList, *ro, *ro2)
 		found, err := manager.containsRole(roleList, rb, "johnsmith")
@@ -1282,9 +1283,9 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	})
 
 	t.Run("containsRole returns error", func(t *testing.T) {
-		rb := newRoleBinding("johnsmith-dev", "user-edit", "johnsmith")
-		rb2 := newRoleBinding("johnsmith-dev", "user-rbac-edit", "johnsmith")
-		ro := newRole("johnsmith-dev", "user-edit", "johnsmith")
+		rb := newRoleBinding("johnsmith-dev", "crtadmin-pods", "johnsmith")
+		rb2 := newRoleBinding("johnsmith-dev", "crtadmin-view", "johnsmith")
+		ro := newRole("johnsmith-dev", "crtadmin-pods", "johnsmith")
 		roleBindingList := []rbacv1.RoleBinding{}
 		roleBindingList = append(roleBindingList, *rb, *rb2)
 		found, err := manager.containsRoleBindings(roleBindingList, ro, "johnsmith")

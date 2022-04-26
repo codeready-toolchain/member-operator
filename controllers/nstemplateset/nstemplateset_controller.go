@@ -134,6 +134,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
+		logger.Info("created or updated cluster resources")
 		return reconcile.Result{}, nil // wait for cluster resources to be created
 	}
 
@@ -141,6 +142,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update user namespaces")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
+		logger.Info("created or updated namespace resources")
 		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
 	}
 
@@ -148,6 +150,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update roles in space")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
+		logger.Info("created or updated space-role resources")
 		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
 	}
 
@@ -215,9 +218,8 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 
 // deleteObsoleteObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
-// return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
 func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) error {
-	logger.Info("looking for obsolete objects", "count", len(currentObjs))
+	logger.Info("looking for obsolete objects", "current_count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())

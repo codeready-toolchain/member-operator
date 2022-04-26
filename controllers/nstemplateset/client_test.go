@@ -58,6 +58,21 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
+	t.Run("when creating none because the both already exists", func(t *testing.T) {
+		// given
+		apiClient, fakeClient := prepareAPIClient(t)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
+		require.NoError(t, err)
+
+		// when
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs), additionalLabel)
+
+		// then
+		require.NoError(t, err)
+		assert.False(t, changed)
+		assertObjects(t, fakeClient, false)
+	})
+
 	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)

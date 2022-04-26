@@ -21,6 +21,7 @@ type APIClient struct {
 
 // ApplyToolchainObjects applies the given ToolchainObjects with the given labels.
 // If any object is marked as optional, then it checks if the API group is available - if not, then it skips the object.
+// Returns `true` if at least one object was created or updated
 func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []runtimeclient.Object, newLabels map[string]string) (bool, error) {
 	applyClient := applycl.NewApplyClient(c.Client, c.Scheme)
 	anyApplied := false
@@ -33,11 +34,12 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 			}
 		}
 
-		_, err := applyClient.Apply([]runtimeclient.Object{object}, newLabels)
+		applied, err := applyClient.Apply([]runtimeclient.Object{object}, newLabels)
 		if err != nil {
 			return anyApplied, err
 		}
-		anyApplied = true
+		logger.Info("applied resource", "group_kind", object.GetObjectKind().GroupVersionKind().GroupKind().String(), "namespace", object.GetNamespace(), "name", object.GetName(), "applied", applied)
+		anyApplied = anyApplied || applied
 	}
 
 	return anyApplied, nil

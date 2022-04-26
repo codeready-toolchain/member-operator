@@ -196,11 +196,11 @@ func (r *namespacesManager) ensureDeleted(logger logr.Logger, nsTmplSet *toolcha
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
 	var tmpls []*tierTemplate
 	for _, ns := range nsTmplSet.Spec.Namespaces {
-		nsTmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef)
+		tmpl, err := getTierTemplate(r.GetHostCluster, ns.TemplateRef)
 		if err != nil {
 			return nil, err
 		}
-		tmpls = append(tmpls, nsTmpl)
+		tmpls = append(tmpls, tmpl)
 	}
 	return tmpls, nil
 }

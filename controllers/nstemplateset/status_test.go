@@ -201,8 +201,8 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(failed))
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		devRole := newRole(devNS.Name, "exec-pods", username)
 		devRb1 := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		devRb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)

@@ -90,8 +90,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		rb2 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, rb, rb2)
@@ -128,8 +128,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		idlerDev := newIdler(username, username+"-dev", "advanced")
 		idlerStage := newIdler(username, username+"-stage", "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"), withClusterResources("abcde11"))
 		devRole := newRole(devNS.Name, "exec-pods", username)
 		devRb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
@@ -185,8 +185,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS)
 
 		// when
@@ -227,8 +227,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("should recreate role when missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage")) // no cluster resources here
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
 		rb3 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
@@ -299,8 +299,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 				"basic-admin-abcde11": {username},
 			}))
 		// create namespaces (and assume they are complete since they have the expected revision number)
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet,
 			devNS,
 			newRole(devNS.Name, "exec-pods", username),
@@ -339,8 +339,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("should add owner label to role when missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"))
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
@@ -391,8 +391,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("should add owner label to rolebinding when missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
 		delete(rbDev.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
@@ -431,8 +431,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("should correct the value of owner in label of rolebinding when incorrect", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "crtadmin-pods", "wrong-owner")
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", "wrong-owner")
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, rbDev, rbCode)
@@ -469,8 +469,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 	t.Run("should correct the value of owner in label of role when incorrect", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"))
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
@@ -802,8 +802,8 @@ func TestReconcilePromotion(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-			stageNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "exec-pods", username)
 			stageRo := newRole(stageNS.Name, "exec-pods", username)
 			devRb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
@@ -988,12 +988,12 @@ func TestReconcileUpdate(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
 
-			devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "exec-pods", username)
 			devRb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			devRbacRb := newRoleBinding(devNS.Name, "crtadmin-view", username)
 
-			stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+			stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 			stageRo := newRole(stageNS.Name, "exec-pods", username)
 			stageRb := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
 			stageRbacRb := newRoleBinding(stageNS.Name, "crtadmin-view", username)
@@ -1222,8 +1222,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "stage")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(username, "advanced")
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 		r, _ := prepareController(t, nsTmplSet, crq, devNS, stageNS)
 		req := newReconcileRequest(namespaceName, username)
 
@@ -1326,8 +1326,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
 		nsTmplSet.SetDeletionTimestamp(&metav1.Time{Time: time.Now().Add(-61 * time.Second)})
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 
 		r, fakeClient := prepareController(t, nsTmplSet, devNS, stageNS)
 		req := newReconcileRequest(namespaceName, username)
@@ -1353,8 +1353,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
-		devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-		stageNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 
 		r, fakeClient := prepareController(t, nsTmplSet, devNS, stageNS)
 		req := newReconcileRequest(namespaceName, username)
@@ -1738,7 +1738,7 @@ func newIdler(username, name, tierName string) *toolchainv1alpha1.Idler { // nol
 
 type objectMetaOption func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta
 
-func withTemplateRefRevision(revision string) objectMetaOption {
+func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
 		meta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, revision)
 		return meta

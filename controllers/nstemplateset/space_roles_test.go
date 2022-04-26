@@ -34,7 +34,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					"appstudio-viewer-abcde11": {"user3", "user4"},
 				}))
 			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity-appstudio
-				withTemplateRefRevision("abcde10"), // starting with an older revision
+				withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 			)
 			mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 
@@ -124,7 +124,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 						"basic-admin-abcde11": {"user1", "user2"},
 					}))
 				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "dev", // ns.name=oddity-dev
-					withTemplateRefRevision("abcde10"), // starting with an older revision
+					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
@@ -155,7 +155,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 						"basic-admin-abcde11": {"user1", "user2"},
 					}))
 				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "dev",
-					withTemplateRefRevision("abcde10"), // starting with an older revision
+					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
@@ -186,7 +186,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 						"basic-admin-abcde11": {"user1", "user2"},
 					}))
 				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "dev", // ns.name=oddity-dev
-					withTemplateRefRevision("abcde11"),
+					withTemplateRefUsingRevision("abcde11"),
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles

@@ -417,7 +417,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 	t.Run("should create the second namespace when the first one already exists", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(Provisioning()))
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, rb)
 
@@ -471,7 +471,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 	t.Run("ensure inner resources for stage namespace if the dev is already provisioned", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(Provisioning()))
-		devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		codeNS := newNamespace("", username, "stage") // NS exist but it is not complete yet
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS, rb)
@@ -653,8 +653,8 @@ func TestDeleteNamespace(t *testing.T) {
 	namespaceName := "toolchain-member"
 	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "stage")
 	nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withDeletionTs())
-	devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-	codeNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+	devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+	codeNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 
 	t.Run("delete user namespace", func(t *testing.T) {
 		// given
@@ -791,7 +791,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "exec-pods", username)
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
@@ -820,7 +820,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			devNS.Labels["toolchain.dev.openshift.com/tier"] = "base"
 			ro := newRole(devNS.Name, "exec-pods", username)
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
@@ -850,7 +850,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			rb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
 			ro := newRole(devNS.Name, "exec-pods", username)
@@ -881,8 +881,8 @@ func TestPromoteNamespaces(t *testing.T) {
 		t.Run("delete redundant namespace while upgrading tier", func(t *testing.T) {
 			// given 'advanced' NSTemplate only has a 'dev' namespace
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 
 			// when - should delete the stage namespace
@@ -934,7 +934,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
 			// create namespace but with an unknown tier
-			devNS := newNamespace("fail", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("fail", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
@@ -958,8 +958,8 @@ func TestPromoteNamespaces(t *testing.T) {
 		t.Run("fail to delete redundant namespace while upgrading tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
-			devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
-			codeNS := newNamespace("basic", username, "stage", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("mock error: '%T'", obj)
@@ -1006,7 +1006,7 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
-			devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "exec-pods", username)
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			rbacRb := newRoleBinding(devNS.Name, "crtadmin-view", username)
@@ -1037,7 +1037,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"))
 			// create namespace (and assume it is complete since it has the expected revision number)
-			devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde12"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde12"))
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
 			ro := newRole(devNS.Name, "exec-pods", username)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, ro)
@@ -1066,8 +1066,8 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("delete redundant namespace while updating revision", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"))
-			devNS := newNamespace("advanced", username, "dev", withTemplateRefRevision("abcde11"))
-			codeNS := newNamespace("advanced", username, "stage", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			codeNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 
 			// when - should delete the stage namespace
@@ -1096,7 +1096,7 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("update to abcde13 fails because it find the new template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde13", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde11"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
@@ -1120,7 +1120,7 @@ func TestUpdateNamespaces(t *testing.T) {
 		t.Run("update from abcde13 fails because it find current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTemplateRefRevision("abcde13"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde13"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
@@ -1197,7 +1197,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 	t.Run("namespace doesn't have the required rolebinding", func(t *testing.T) {
 		//given
-		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		role := newRole(devNS.Name, "exec-pods", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
@@ -1212,7 +1212,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 	t.Run("role doesn't have the owner label", func(t *testing.T) {
 		//given
-		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", "johnsmith")
 		role := &rbacv1.Role{
@@ -1236,7 +1236,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 	t.Run("rolebinding doesn't have the owner label", func(t *testing.T) {
 		//given
-		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := &rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: devNS.Name,
@@ -1258,7 +1258,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 
 	t.Run("namespace doesn't have owner Label", func(t *testing.T) {
 		//given
-		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefRevision("abcde11"))
+		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		delete(devNS.Labels, toolchainv1alpha1.OwnerLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")

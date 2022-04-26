@@ -3,6 +3,7 @@ package nstemplateset
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -38,13 +39,13 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 				return false, errors.Wrap(err, "unable to decode current space roles in annotation")
 			}
 		}
-		// compare last-applied vs spec to see if there's anything obsolete to do
-		if reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
-			logger.Info("no space role to update", "namespace", ns.Name)
-			continue
-		}
-		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
-			return false, err
+		// compare last-applied vs spec to see if there's anything obsolete
+		// note: we only set the NSTemplateSet status to `provisioning` if there are "configuration" changes,
+		// but for other cases (such as restoring resources deleted by a user), we don't set the NSTemplateSet status to `provisioning`.
+		if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
+			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
+				return false, err
+			}
 		}
 		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(&ns, lastAppliedSpaceRoles) // nolint:gosec
 		if err != nil {
@@ -61,33 +62,36 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 		}
-		logger.Info("creating space role objects")
+		logger.Info("creating space role objects", "count", len(spaceRoleObjs))
 		// create (or update existing) objects based the tier template
 		if _, err = r.ApplyToolchainObjects(logger, spaceRoleObjs, labels); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
 
-		if err = deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs); err != nil {
+		if err := deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
 		}
 
-		// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
-		// diffs when the space roles are changed (users added or removed, etc.)
-		sr, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
-		if err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
-				"failed update namespace annotation")
+		if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
+			// store the space roles in an annotation at the namespace level, so we know what was applied and how to deal with
+			// diffs when the space roles are changed (users added or removed, etc.)
+			sr, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
+			if err != nil {
+				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+					fmt.Sprintf("failed to marshal space roles to update '%s' annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
+			}
+			if ns.Annotations == nil {
+				ns.Annotations = map[string]string{}
+			}
+			ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
+			logger.Info("updated annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(sr))
+
+			if err := r.Client.Update(context.TODO(), &ns); err != nil { // nolint:gosec
+				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+					fmt.Sprintf("failed to update namespace with '%s' annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
+			}
+			return true, nil
 		}
-		if ns.Annotations == nil {
-			ns.Annotations = map[string]string{}
-		}
-		ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
-		if err := r.Client.Update(context.TODO(), &ns); err != nil { // nolint:gosec
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
-				"failed update namespace annotation")
-		}
-		logger.Info("updated namespace annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(sr))
-		return true, nil
 	}
 	return false, nil
 }

@@ -167,19 +167,20 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	//check the condition on Idler if notification already sent
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
 	if !found {
-		userEmail := getUserEmailFromUserSignup(hostCluster, idler)
+		userEmails := r.getUserEmailFromUserSignup(hostCluster, idler)
 		// Only create a notification if not created before
-		_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
-			WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
-			WithControllerReference(idler, r.Scheme).
-			WithTemplate("idleractivated").
-			Create(userEmail)
-
-		if err != nil {
-			return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+		for _, userEmail := range userEmails {
+			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+				WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
+				WithControllerReference(idler, r.Scheme).
+				WithTemplate("idleractivated").
+				Create(userEmail)
+			if err != nil {
+				return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+			}
 		}
 		// update Condition
-		if err = r.setStatusIdlerNotificationCreated(idler); err != nil {
+		if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
 			return err
 		}
 	}
@@ -187,9 +188,29 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	return nil
 }
 
-func getUserEmailFromUserSignup(hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) string {
-
-	return "krana@redhat.com"
+func (r *Reconciler) getUserEmailFromUserSignup(hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) []string {
+	var emails []string
+	//get NSTemplateSet from idler
+	owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
+	if found {
+		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
+		r.Client.Get(context.TODO(), types.NamespacedName{Name: owner}, nsTemplateSet)
+		//get MUR from NSTemplateSetSpec
+		spaceRoles := nsTemplateSet.Spec.SpaceRoles
+		var murs []string
+		for _, spaceRole := range spaceRoles {
+			for _, username := range spaceRole.Usernames {
+				murs = append(murs, username)
+			}
+		}
+		// get MUR from host and use user email from annotations
+		for _, mur := range murs {
+			getMUR := &toolchainv1alpha1.MasterUserRecord{}
+			hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
+			emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
+		}
+	}
+	return emails
 }
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)

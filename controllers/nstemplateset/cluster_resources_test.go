@@ -280,9 +280,8 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		crq := newClusterResourceQuota(username, "advanced")
 		crb := newTektonClusterRoleBinding(username, "advanced")
 		idlerDev := newIdler(username, username+"-dev", "advanced")
-		idlerCode := newIdler(username, username+"-code", "advanced")
 		idlerStage := newIdler(username, username+"-stage", "advanced")
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerCode, idlerStage)
+		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
 
 		// when
 		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
@@ -297,7 +296,6 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 			HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 			HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
-			HasResource(username+"-code", &toolchainv1alpha1.Idler{}).
 			HasResource(username+"-stage", &toolchainv1alpha1.Idler{})
 	})
 }
@@ -728,16 +726,14 @@ func TestPromoteClusterResources(t *testing.T) {
 			anotherCrb := newTektonClusterRoleBinding("another", "basic")
 
 			idlerDev := newIdler(username, username+"-dev", "advanced")
-			idlerCode := newIdler(username, username+"-code", "advanced")
 			idlerStage := newIdler(username, username+"-stage", "advanced")
 			anotherIdlerDev := newIdler("another", "another-dev", "advanced")
-			anotherIdlerCode := newIdler("another", "another-code", "advanced")
 			anotherIdlerStage := newIdler("another", "another-stage", "advanced")
 
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given
 				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources("abcde11"))
-				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerCode, idlerStage, anotherIdlerDev, anotherIdlerCode, anotherIdlerStage)
+				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerStage, anotherIdlerDev, anotherIdlerStage)
 
 				// when
 				updated, err := manager.ensure(logger, nsTmplSet)
@@ -754,10 +750,8 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 					HasResource("another-tekton-view", &rbacv1.ClusterRoleBinding{}).
 					HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
-					HasResource(username+"-code", &toolchainv1alpha1.Idler{}).
 					HasResource(username+"-stage", &toolchainv1alpha1.Idler{}).
 					HasResource("another-dev", &toolchainv1alpha1.Idler{}).
-					HasResource("another-code", &toolchainv1alpha1.Idler{}).
 					HasResource("another-stage", &toolchainv1alpha1.Idler{})
 			})
 

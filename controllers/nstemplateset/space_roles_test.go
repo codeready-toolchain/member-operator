@@ -72,19 +72,11 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
-
-			t.Run("update annotation", func(t *testing.T) {
-				// when
-				_, err := mgr.ensure(logger, nsTmplSet)
-
-				// then
-				// verify that the `last-applied-space-roles` annotation was set on namespace
-				require.NoError(t, err)
-				lastApplied, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
-				require.NoError(t, err)
-				AssertThatNamespace(t, "oddity-appstudio", memberClient.Client).
-					HasAnnotation(toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(lastApplied))
-			})
+			// also verify that the `last-applied-space-roles` annotation was set on namespace
+			lastApplied, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
+			require.NoError(t, err)
+			AssertThatNamespace(t, "oddity-appstudio", memberClient.Client).
+				HasAnnotation(toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(lastApplied))
 
 			t.Run("remove admin role and rolebindings", func(t *testing.T) {
 				// given

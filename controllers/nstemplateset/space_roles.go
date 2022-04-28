@@ -62,7 +62,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 		}
-		logger.Info("creating space role objects", "count", len(spaceRoleObjs))
+		logger.Info("applying space role objects", "count", len(spaceRoleObjs))
 		// create (or update existing) objects based the tier template
 		if _, err = r.ApplyToolchainObjects(logger, spaceRoleObjs, labels); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)

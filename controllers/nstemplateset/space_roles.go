@@ -40,7 +40,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			}
 		}
 		// compare last-applied vs spec to see if there's anything obsolete
-		// note: we only set the NSTemplateSet status to `provisioning` if there are "configuration" changes,
+		// note: we only set the NSTemplateSet status to `provisioning` if there are resource changes,
 		// but for other cases (such as restoring resources deleted by a user), we don't set the NSTemplateSet status to `provisioning`.
 		if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
 			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {

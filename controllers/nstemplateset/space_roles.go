@@ -84,12 +84,11 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 				ns.Annotations = map[string]string{}
 			}
 			ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
-			logger.Info("updated annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(sr))
-
 			if err := r.Client.Update(context.TODO(), &ns); err != nil { // nolint:gosec
 				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
 					fmt.Sprintf("failed to update namespace with '%s' annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
 			}
+			logger.Info("updated annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(sr))
 			return true, nil
 		}
 	}

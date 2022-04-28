@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -288,6 +289,51 @@ func TestReconcileProvisionOK(t *testing.T) {
 					HasResource("exec-pods", &rbacv1.Role{}) // created
 			})
 		})
+	})
+
+	t.Run("should recreate all spacerole-related rolebindings at once when missing", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic",
+			withNamespaces("abcde11", "dev", "stage"),
+			withSpaceRoles(map[string][]string{
+				"basic-admin-abcde11": {username},
+			}))
+		// create namespaces (and assume they are complete since they have the expected revision number)
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet,
+			devNS,
+			newRole(devNS.Name, "exec-pods", username),
+			newRoleBinding(devNS.Name, "crtadmin-pods", username),
+			newRoleBinding(devNS.Name, "crtadmin-view", username),
+			newRole(devNS.Name, "space-admin", username), // `space-admin` role exists, but `${USERNAME}-space-admin` rolebinding is missing
+			stageNS,
+			newRole(stageNS.Name, "exec-pods", username),
+			newRoleBinding(stageNS.Name, "crtadmin-pods", username),
+			newRoleBinding(stageNS.Name, "crtadmin-view", username),
+			newRole(stageNS.Name, "space-admin", username))
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasSpecNamespaces("dev", "stage").
+			HasConditions(Provisioned()) // status was NOT changed for this particular use-case
+		AssertThatNamespace(t, username+"-dev", fakeClient).
+			HasResource("exec-pods", &rbacv1.Role{}).
+			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+			HasResource("space-admin", &rbacv1.Role{}).
+			HasResource(username+"-space-admin", &rbacv1.RoleBinding{}) // created
+		AssertThatNamespace(t, username+"-stage", fakeClient).
+			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+			HasResource("exec-pods", &rbacv1.Role{}).
+			HasResource("space-admin", &rbacv1.Role{}).
+			HasResource(username+"-space-admin", &rbacv1.RoleBinding{}) // also created
 	})
 
 	t.Run("should add owner label to role when missing", func(t *testing.T) {
@@ -1695,6 +1741,17 @@ type objectMetaOption func(meta metav1.ObjectMeta, tier, typeName string) metav1
 func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
 		meta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, revision)
+		return meta
+	}
+}
+
+func withLastAppliedSpaceRoles(nsTmplSet *toolchainv1alpha1.NSTemplateSet) objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		sr, _ := json.Marshal(nsTmplSet.Spec.SpaceRoles) // assume marshalling always works
+		if meta.Annotations == nil {
+			meta.Annotations = map[string]string{}
+		}
+		meta.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
 		return meta
 	}
 }

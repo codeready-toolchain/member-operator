@@ -33,7 +33,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					"appstudio-admin-abcde11":  {"user1", "user2"},
 					"appstudio-viewer-abcde11": {"user3", "user4"},
 				}))
-			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity=appstudio
+			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "appstudio", // ns.name=oddity-appstudio
 				withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 			)
 			mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
@@ -72,7 +72,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
-			// verify that the `last-applied-space-roles` annotation was set on namespace
+			// also verify that the `last-applied-space-roles` annotation was set on namespace
 			lastApplied, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
 			require.NoError(t, err)
 			AssertThatNamespace(t, "oddity-appstudio", memberClient.Client).
@@ -95,7 +95,8 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				// at this point, the NSTemplateSet is still in `updating` state
 				AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 					HasConditions(Updating())
-					// verify that `admin` role and rolebinding for `user1` and `user2` were deleted, but nothing changed for the viewer role and rolebindings
+
+				// verify that `admin` role and rolebinding for `user1` and `user2` were deleted, but nothing changed for the viewer role and rolebindings
 				AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).DoesNotExist()              // deleted
 				AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).DoesNotExist() // deleted
 				AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).DoesNotExist() // deleted
@@ -114,7 +115,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withSpaceRoles(map[string][]string{
 						"basic-admin-abcde11": {"user1", "user2"},
 					}))
-				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "basic", // ns.name=oddity=basic
+				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "dev", // ns.name=oddity-dev
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
@@ -133,10 +134,10 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 					HasConditions(Updating())
 					// verify that role bindings for `user1` and `user2`` still exist and thet one was added for `user3`
-				AssertThatRole(t, "oddity-basic", "space-admin", memberClient).Exists()              // unchanged
-				AssertThatRoleBinding(t, "oddity-basic", "user1-space-admin", memberClient).Exists() // unchanged
-				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists() // unchanged
-				AssertThatRoleBinding(t, "oddity-basic", "user3-space-admin", memberClient).Exists() // created
+				AssertThatRole(t, "oddity-dev", "space-admin", memberClient).Exists()              // unchanged
+				AssertThatRoleBinding(t, "oddity-dev", "user1-space-admin", memberClient).Exists() // unchanged
+				AssertThatRoleBinding(t, "oddity-dev", "user2-space-admin", memberClient).Exists() // unchanged
+				AssertThatRoleBinding(t, "oddity-dev", "user3-space-admin", memberClient).Exists() // created
 			})
 
 			t.Run("remove admin user", func(t *testing.T) {
@@ -145,28 +146,29 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withSpaceRoles(map[string][]string{
 						"basic-admin-abcde11": {"user1", "user2"},
 					}))
-				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "basic", // ns.name=oddity=basic
+				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "dev",
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
+
 				// remove `user1` from admin space roles
 				nsTmplSet.Spec.SpaceRoles[0].Usernames = []string{"user2"}
 
 				// when
-				createdOrUpdated, err := mgr.ensure(logger, nsTmplSet)
+				changed, err := mgr.ensure(logger, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
-				assert.True(t, createdOrUpdated) // outdated objs deleted
+				assert.True(t, changed) // outdated objs deleted
 				// at this point, the NSTemplateSet is still in `updating` state
 				AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 					HasConditions(Updating())
 				// verify that rolebinding for `user1` was removed but the one for `user2` was not changed
-				AssertThatRole(t, "oddity-basic", "space-admin", memberClient).Exists()                    // unchanged
-				AssertThatRoleBinding(t, "oddity-basic", "user1-space-admin", memberClient).DoesNotExist() // deleted
-				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists()       // unchanged
+				AssertThatRole(t, "oddity-dev", "space-admin", memberClient).Exists()                    // unchanged
+				AssertThatRoleBinding(t, "oddity-dev", "user1-space-admin", memberClient).DoesNotExist() // deleted
+				AssertThatRoleBinding(t, "oddity-dev", "user2-space-admin", memberClient).Exists()       // unchanged
 			})
 
 			t.Run("no change", func(t *testing.T) {
@@ -175,8 +177,8 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withSpaceRoles(map[string][]string{
 						"basic-admin-abcde11": {"user1", "user2"},
 					}))
-				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "basic", // ns.name=oddity-basic
-					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
+				ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "dev", // ns.name=oddity-dev
+					withTemplateRefUsingRevision("abcde11"),
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
@@ -191,9 +193,9 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					HasConditions(Updating())
 					// then verify that roles and rolebindings still exist, but nothing changed
 				assert.False(t, createdOrUpdated)
-				AssertThatRole(t, "oddity-basic", "space-admin", memberClient).Exists()              // created
-				AssertThatRoleBinding(t, "oddity-basic", "user1-space-admin", memberClient).Exists() // created
-				AssertThatRoleBinding(t, "oddity-basic", "user2-space-admin", memberClient).Exists() // created
+				AssertThatRole(t, "oddity-dev", "space-admin", memberClient).Exists()              // created
+				AssertThatRoleBinding(t, "oddity-dev", "user1-space-admin", memberClient).Exists() // created
+				AssertThatRoleBinding(t, "oddity-dev", "user2-space-admin", memberClient).Exists() // created
 			})
 		})
 

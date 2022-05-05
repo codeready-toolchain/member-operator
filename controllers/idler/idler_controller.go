@@ -32,6 +32,10 @@ import (
 	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 )
 
+const (
+	MemberOperatorNS = "MEMBER_OPERATOR_NAMESPACE"
+)
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -167,7 +171,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	//check the condition on Idler if notification already sent
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
 	if !found {
-		userEmails := r.getUserEmailFromUserSignup(hostCluster, idler)
+		userEmails := r.getUserEmailFromUserSignup(logger, hostCluster, idler)
 		// Only create a notification if not created before
 		for _, userEmail := range userEmails {
 			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
@@ -188,25 +192,31 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	return nil
 }
 
-func (r *Reconciler) getUserEmailFromUserSignup(hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) []string {
+func (r *Reconciler) getUserEmailFromUserSignup(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) []string {
 	var emails []string
 	//get NSTemplateSet from idler
 	owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
 	if found {
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
-		r.Client.Get(context.TODO(), types.NamespacedName{Name: owner}, nsTemplateSet)
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: MemberOperatorNS}, nsTemplateSet)
+		if err != nil {
+			logger.Info(fmt.Sprintf(" Could not get the NSTemplateSet with name: %s", owner), err)
+			return emails
+		}
 		//get MUR from NSTemplateSetSpec
 		spaceRoles := nsTemplateSet.Spec.SpaceRoles
 		var murs []string
 		for _, spaceRole := range spaceRoles {
-			for _, username := range spaceRole.Usernames {
-				murs = append(murs, username)
-			}
+			murs = append(murs, spaceRole.Usernames...)
 		}
 		// get MUR from host and use user email from annotations
 		for _, mur := range murs {
 			getMUR := &toolchainv1alpha1.MasterUserRecord{}
-			hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
+			err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
+			if err != nil {
+				logger.Info(fmt.Sprintf("Could not get the MUR with name : %s", mur), err)
+				continue
+			}
 			emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
 		}
 	}

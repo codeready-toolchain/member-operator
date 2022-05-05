@@ -11,6 +11,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	nstemplatesetTest "github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -458,6 +459,58 @@ func TestEnsureIdlingFailed(t *testing.T) {
 	})
 }
 
+func TestCreateNotification(t *testing.T) {
+}
+
+func TestGetUserEmailFromUserSignup(t *testing.T) {
+	// given
+	idler := &toolchainv1alpha1.Idler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "alex-stage",
+			Labels: map[string]string{
+				toolchainv1alpha1.OwnerLabelKey: "alex",
+			},
+		},
+		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+	}
+
+	t.Run("Get user email when only space has only one user - DevSandbox", func(t *testing.T) {
+		//given
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR(test.HostOperatorNs, "alex")
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		hostCluster, _ := reconciler.GetHostCluster()
+		//when
+		emails := reconciler.getUserEmailFromUserSignup(logf.FromContext(context.TODO()), hostCluster, idler)
+		//then
+		require.NotEmpty(t, emails)
+		require.Len(t, emails, 1)
+		require.Equal(t, "alex@test.com", emails[0])
+	})
+
+	t.Run("Get user email when space has more than one user - AppStudio", func(t *testing.T) {
+		//given
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex", "brian", "charlie"}
+		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR(test.HostOperatorNs, "alex")
+		mur2 := newMUR(test.HostOperatorNs, "brian")
+		mur3 := newMUR(test.HostOperatorNs, "charlie")
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur, mur2, mur3)
+		hostCluster, _ := reconciler.GetHostCluster()
+		//when
+		emails := reconciler.getUserEmailFromUserSignup(logf.FromContext(context.TODO()), hostCluster, idler)
+		//then
+		require.NotEmpty(t, emails)
+		require.Len(t, emails, 3)
+		require.Contains(t, emails, "alex@test.com")
+		require.Contains(t, emails, "brian@test.com")
+		require.Contains(t, emails, "charlie@test.com")
+	})
+}
+
 type payloads struct {
 	// standalonePods are pods which are supposed to be tracked and also deleted directly by the Idler controller
 	// if run for too long
@@ -641,4 +694,48 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha
 
 func newGetHostClusterReady(fakeClient client.Client) cluster.GetHostClusterFunc {
 	return memberoperatortest.NewGetHostCluster(fakeClient, true, corev1.ConditionTrue)
+}
+
+func newNSTmplSet(namespaceName, name, tier string, revision string, namespaces []string, usernames []string) *toolchainv1alpha1.NSTemplateSet { // nolint:unparam
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  namespaceName,
+			Name:       name,
+			Finalizers: []string{toolchainv1alpha1.FinalizerName},
+		},
+		Spec: toolchainv1alpha1.NSTemplateSetSpec{
+			TierName:   tier,
+			Namespaces: []toolchainv1alpha1.NSTemplateSetNamespace{},
+		},
+	}
+	nss := make([]toolchainv1alpha1.NSTemplateSetNamespace, len(namespaces))
+	for index, nsType := range namespaces {
+		nss[index] = toolchainv1alpha1.NSTemplateSetNamespace{
+			TemplateRef: fmt.Sprintf("%s-%s-%s", nsTmplSet.Spec.TierName, nsType, revision),
+		}
+	}
+	nsTmplSet.Spec.Namespaces = nss
+	nsTmplUsernames := make([]string, 0)
+	for _, username := range usernames {
+		nsTmplUsernames = append(nsTmplUsernames, username)
+	}
+	nsTmplSet.Spec.SpaceRoles = []toolchainv1alpha1.NSTemplateSetSpaceRole{
+		{
+			Usernames: nsTmplUsernames,
+		},
+	}
+	return nsTmplSet
+}
+
+func newMUR(namespaceName, name string) *toolchainv1alpha1.MasterUserRecord {
+	return &toolchainv1alpha1.MasterUserRecord{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  namespaceName,
+			Name:       name,
+			Finalizers: []string{toolchainv1alpha1.FinalizerName},
+			Annotations: map[string]string{
+				toolchainv1alpha1.MasterUserRecordEmailAnnotationKey: fmt.Sprintf("%s@test.com", name),
+			},
+		},
+	}
 }

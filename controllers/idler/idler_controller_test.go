@@ -8,12 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	nstemplatesetTest "github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -211,7 +210,7 @@ func TestEnsureIdling(t *testing.T) {
 				// Still tracking all pods. Even deleted ones.
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 					TracksPods(podsTooEarlyToKill.allPods).
-					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+					HasConditions(memberoperatortest.Running())
 
 				assert.True(t, res.Requeue)
 				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -225,7 +224,7 @@ func TestEnsureIdling(t *testing.T) {
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 						TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)).
-						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+						HasConditions(memberoperatortest.Running())
 
 					assert.True(t, res.Requeue)
 					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -247,7 +246,7 @@ func TestEnsureIdling(t *testing.T) {
 						// No pods tracked
 						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 							TracksPods([]*corev1.Pod{}).
-							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+							HasConditions(memberoperatortest.Running())
 
 						// requeue after the idler timeout
 						assert.Equal(t, reconcile.Result{
@@ -322,7 +321,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		}
 
 		t.Run("can't get controllers because of general error", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string, first bool) {
+			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
 				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
@@ -341,20 +340,16 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				if first {
-					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
-				} else {
-					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg), memberoperatortest.IdlerNotificationCreated())
-				}
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
 			}
 
-			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment", false)
-			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset", false)
-			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset", true)
-			assertCanNotGetObject(&batchv1.Job{}, "can't get job", false)
-			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset", false)
-			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig", false)
-			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller", false)
+			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
+			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset")
+			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset")
+			assertCanNotGetObject(&batchv1.Job{}, "can't get job")
+			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
+			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
+			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
 		})
 
 		t.Run("can't get controllers because not found", func(t *testing.T) {
@@ -383,7 +378,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 					Requeue:      true,
 					RequeueAfter: 60 * time.Second,
 				}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 			}
 
 			assertCanNotGetObject(&appsv1.Deployment{})
@@ -415,7 +410,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg), memberoperatortest.IdlerNotificationCreated())
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
 			}
 
 			assertCanNotUpdateObject(&appsv1.Deployment{}, "can't update deployment")
@@ -426,7 +421,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
-			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string, firstPod bool) {
+			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
 				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
@@ -445,16 +440,12 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				if firstPod {
-					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
-				} else {
-					memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg), memberoperatortest.IdlerNotificationCreated())
-				}
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
 			}
 
-			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset", true)
-			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job", false)
-			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod", false)
+			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
+			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
+			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
 		})
 	})
 }
@@ -462,7 +453,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 func TestCreateNotification(t *testing.T) {
 }
 
-func TestGetUserEmailFromUserSignup(t *testing.T) {
+func TestGetUserEmailFromMUR(t *testing.T) {
 	// given
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -479,11 +470,11 @@ func TestGetUserEmailFromUserSignup(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR(test.HostOperatorNs, "alex")
+		mur := newMUR("alex")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails := reconciler.getUserEmailFromUserSignup(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, _ := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
 		require.NotEmpty(t, emails)
 		require.Len(t, emails, 1)
@@ -495,19 +486,44 @@ func TestGetUserEmailFromUserSignup(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex", "brian", "charlie"}
 		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR(test.HostOperatorNs, "alex")
-		mur2 := newMUR(test.HostOperatorNs, "brian")
-		mur3 := newMUR(test.HostOperatorNs, "charlie")
+		mur := newMUR("alex")
+		mur2 := newMUR("brian")
+		mur3 := newMUR("charlie")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur, mur2, mur3)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails := reconciler.getUserEmailFromUserSignup(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, _ := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
 		require.NotEmpty(t, emails)
 		require.Len(t, emails, 3)
 		require.Contains(t, emails, "alex@test.com")
 		require.Contains(t, emails, "brian@test.com")
 		require.Contains(t, emails, "charlie@test.com")
+	})
+
+	t.Run("unable to get NSTemplateSet", func(t *testing.T) {
+		//given
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
+		hostCluster, _ := reconciler.GetHostCluster()
+		//when
+		emails, err := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
+		//then
+		require.Error(t, err)
+		require.Len(t, emails, 0)
+	})
+
+	t.Run("unable to get MUR, no error but no email found", func(t *testing.T) {
+		//given
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
+		hostCluster, _ := reconciler.GetHostCluster()
+		//when
+		emails, err := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
+		//then
+		require.Error(t, err)
+		require.Len(t, emails, 0)
 	})
 }
 
@@ -716,9 +732,7 @@ func newNSTmplSet(namespaceName, name, tier string, revision string, namespaces 
 	}
 	nsTmplSet.Spec.Namespaces = nss
 	nsTmplUsernames := make([]string, 0)
-	for _, username := range usernames {
-		nsTmplUsernames = append(nsTmplUsernames, username)
-	}
+	nsTmplUsernames = append(nsTmplUsernames, usernames...)
 	nsTmplSet.Spec.SpaceRoles = []toolchainv1alpha1.NSTemplateSetSpaceRole{
 		{
 			Usernames: nsTmplUsernames,
@@ -727,10 +741,10 @@ func newNSTmplSet(namespaceName, name, tier string, revision string, namespaces 
 	return nsTmplSet
 }
 
-func newMUR(namespaceName, name string) *toolchainv1alpha1.MasterUserRecord {
+func newMUR(name string) *toolchainv1alpha1.MasterUserRecord {
 	return &toolchainv1alpha1.MasterUserRecord{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:  namespaceName,
+			Namespace:  test.HostOperatorNs,
 			Name:       name,
 			Finalizers: []string{toolchainv1alpha1.FinalizerName},
 			Annotations: map[string]string{

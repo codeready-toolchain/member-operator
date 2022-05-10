@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 	"github.com/go-logr/logr"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	errs "github.com/pkg/errors"
@@ -28,8 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 )
 
 const (
@@ -48,7 +46,7 @@ type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
-	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
+	GetHostCluster      cluster.GetHostClusterFunc
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers,verbs=get;list;watch;create;update;patch;delete
@@ -93,9 +91,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(logger, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	//if err := r.createNotification(logger, idler); err != nil {
-	//	return reconcile.Result{}, r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
-	//}
 	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
 	nextTime := nextPodToBeKilledAfter(logger, idler)
 	if nextTime == nil {
@@ -163,16 +158,12 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {
-		err := fmt.Errorf("unable to get the host cluster")
-		logger.Error(err, "host Cluster not found")
-		return err
+		return fmt.Errorf("unable to get the host cluster")
 	}
 	// add sending notification here
-	//check the condition on Idler if notification already sent
-	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
-	if !found {
-		userEmails := r.getUserEmailFromUserSignup(logger, hostCluster, idler)
-		// Only create a notification if not created before
+	//check the condition on Idler if notification already sent and only create a notification if not created before
+	if condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated) {
+		userEmails, _ := r.getUserEmailFromMUR(logger, hostCluster, idler)
 		for _, userEmail := range userEmails {
 			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
 				WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
@@ -192,21 +183,19 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	return nil
 }
 
-func (r *Reconciler) getUserEmailFromUserSignup(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) []string {
+func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
 	var emails []string
 	//get NSTemplateSet from idler
-	owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
-	if found {
+	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
 		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: MemberOperatorNS}, nsTemplateSet)
 		if err != nil {
-			logger.Info(fmt.Sprintf(" Could not get the NSTemplateSet with name: %s", owner), err)
-			return emails
+			logger.Info("Could not get the NSTemplateSet with name", "owner", owner)
+			return emails, err
 		}
-		//get MUR from NSTemplateSetSpec
-		spaceRoles := nsTemplateSet.Spec.SpaceRoles
+		// iterate on space roles from NSTemplateSet
 		var murs []string
-		for _, spaceRole := range spaceRoles {
+		for _, spaceRole := range nsTemplateSet.Spec.SpaceRoles {
 			murs = append(murs, spaceRole.Usernames...)
 		}
 		// get MUR from host and use user email from annotations
@@ -214,13 +203,14 @@ func (r *Reconciler) getUserEmailFromUserSignup(logger logr.Logger, hostCluster 
 			getMUR := &toolchainv1alpha1.MasterUserRecord{}
 			err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
 			if err != nil {
-				logger.Info(fmt.Sprintf("Could not get the MUR with name : %s", mur), err)
-				continue
+				return emails, fmt.Errorf("Could not get the MUR with name: %s", mur)
 			}
 			emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
 		}
+	} else {
+		logger.Info(fmt.Sprintf("Idler %s does not have any owner label", idler.Name), "Owner Missing", idler)
 	}
-	return emails
+	return emails, nil
 }
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)

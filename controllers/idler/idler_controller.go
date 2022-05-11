@@ -135,7 +135,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
-				if err, _ := r.createNotification(logger, idler); err != nil {
+				if _, err := r.createNotification(logger, idler); err != nil {
 					return r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
 				}
 
@@ -155,11 +155,11 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	return r.updateStatusPods(idler, newStatusPods)
 }
 
-func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) (error, bool) {
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) (bool, error) {
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {
-		return fmt.Errorf("unable to get the host cluster"), false
+		return false, fmt.Errorf("unable to get the host cluster")
 	}
 	// add sending notification here
 	//check the condition on Idler if notification already sent
@@ -168,7 +168,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated) {
 		userEmails, err := r.getUserEmailFromMUR(logger, hostCluster, idler)
 		if err != nil {
-			return err, false
+			return false, err
 		}
 		if len(userEmails) > 0 {
 			for _, userEmail := range userEmails {
@@ -178,20 +178,20 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 					WithTemplate("idlertriggered").
 					Create(userEmail)
 				if err != nil {
-					return errs.Wrapf(err, "Unable to create Notification CR from Idler"), false
+					return false, errs.Wrapf(err, "Unable to create Notification CR from Idler")
 				}
 			}
 			// set notification created condition
 			if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
-				return err, false
+				return false, err
 			}
-			return nil, true
+			return true, nil
 		}
 		// no email found, thus no email sent
-		return nil, false
+		return false, nil
 	}
 	//notification already created
-	return nil, false
+	return false, nil
 }
 
 func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {

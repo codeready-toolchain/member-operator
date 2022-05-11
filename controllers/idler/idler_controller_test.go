@@ -471,14 +471,14 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 
 		//when
-		err, created := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.NoError(t, err)
 		require.True(t, created)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated))
 		t.Run("Notification not created if already sent", func(t *testing.T) {
 			//when
-			err, created = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+			created, err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 			//then
 			require.NoError(t, err)
 			require.False(t, created)
@@ -501,7 +501,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 
 		//when
-		err, created := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.NoError(t, err)
 		require.True(t, created)
@@ -515,7 +515,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
 
 		//when
-		err, created := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.Error(t, err)
 		require.False(t, created)

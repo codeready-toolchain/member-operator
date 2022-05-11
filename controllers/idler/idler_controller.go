@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -13,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 	"github.com/go-logr/logr"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	errs "github.com/pkg/errors"
@@ -134,7 +135,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
-				if err := r.createNotification(logger, idler); err != nil {
+				if err, _ := r.createNotification(logger, idler); err != nil {
 					return r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
 				}
 
@@ -154,33 +155,43 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	return r.updateStatusPods(idler, newStatusPods)
 }
 
-func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) (error, bool) {
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {
-		return fmt.Errorf("unable to get the host cluster")
+		return fmt.Errorf("unable to get the host cluster"), false
 	}
 	// add sending notification here
-	//check the condition on Idler if notification already sent and only create a notification if not created before
-	if condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated) {
-		userEmails, _ := r.getUserEmailFromMUR(logger, hostCluster, idler)
-		for _, userEmail := range userEmails {
-			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
-				WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
-				WithControllerReference(idler, r.Scheme).
-				WithTemplate("idleractivated").
-				Create(userEmail)
-			if err != nil {
-				return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+	//check the condition on Idler if notification already sent
+	// only create a notification if not created before
+	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
+	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated) {
+		userEmails, err := r.getUserEmailFromMUR(logger, hostCluster, idler)
+		if err != nil {
+			return err, false
+		}
+		if len(userEmails) > 0 {
+			for _, userEmail := range userEmails {
+				_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+					WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
+					WithControllerReference(idler, r.Scheme).
+					WithTemplate("idlertriggered").
+					Create(userEmail)
+				if err != nil {
+					return errs.Wrapf(err, "Unable to create Notification CR from Idler"), false
+				}
 			}
+			// set notification created condition
+			if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
+				return err, false
+			}
+			return nil, true
 		}
-		// update Condition
-		if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
-			return err
-		}
+		// no email found, thus no email sent
+		return nil, false
 	}
 	//notification already created
-	return nil
+	return nil, false
 }
 
 func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
@@ -203,7 +214,7 @@ func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluste
 			getMUR := &toolchainv1alpha1.MasterUserRecord{}
 			err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
 			if err != nil {
-				return emails, fmt.Errorf("Could not get the MUR with name: %s", mur)
+				return emails, fmt.Errorf("Could not get the MUR with name: %s ", mur)
 			}
 			emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
 		}

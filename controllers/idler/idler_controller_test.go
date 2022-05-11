@@ -509,6 +509,7 @@ func TestCreateNotification(t *testing.T) {
 	})
 
 	t.Run("Error in creating notification because MUR not found", func(t *testing.T) {
+		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)

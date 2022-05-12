@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -260,6 +262,116 @@ func TestEnsureIdling(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("Create notification the first time resources Idled", func(t *testing.T) {
+		// given
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "alex-stage",
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey: "alex",
+				},
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+		}
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR("alex")
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+
+		// first reconcile to track pods
+		res, err := reconciler.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.True(t, res.Requeue)
+		assert.Equal(t, int(res.RequeueAfter), 0)
+		// Idler tracks all pods now but pods have not been deleted yet
+		memberoperatortest.AssertThatInIdleableCluster(t, allCl).
+			PodsExist(podsRunningForTooLong.standalonePods).
+			DaemonSetExists(podsRunningForTooLong.daemonSet).
+			JobExists(podsRunningForTooLong.job).
+			DeploymentScaledUp(podsRunningForTooLong.deployment).
+			ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
+			DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
+			ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
+			StatefulSetScaledUp(podsRunningForTooLong.statefulSet)
+
+		// second reconcile should delete pods and create notification
+		res, err = reconciler.Reconcile(context.TODO(), req)
+		//then
+		assert.NoError(t, err)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+		//check the notification is actually created
+		hostCl, _ := reconciler.GetHostCluster()
+		notification := &toolchainv1alpha1.Notification{}
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: test.HostOperatorNs,
+			Name:      "alex-stage-idled",
+		}, notification)
+		require.NoError(t, err)
+
+	})
+
+	t.Run("Pods idled but notification not created", func(t *testing.T) {
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "alex-dev",
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey: "alex",
+				},
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+		}
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet) // mur not added
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+
+		// first reconcile to track pods
+		res, err := reconciler.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
+		assert.True(t, res.Requeue)
+		assert.Equal(t, int(res.RequeueAfter), 0)
+		// Idler tracks all pods now but pods have not been deleted yet
+		memberoperatortest.AssertThatInIdleableCluster(t, allCl).
+			PodsExist(podsRunningForTooLong.standalonePods).
+			DaemonSetExists(podsRunningForTooLong.daemonSet).
+			JobExists(podsRunningForTooLong.job).
+			DeploymentScaledUp(podsRunningForTooLong.deployment).
+			ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
+			DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
+			ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
+			StatefulSetScaledUp(podsRunningForTooLong.statefulSet)
+
+		// second reconcile should delete pods and create notification
+		res, err = reconciler.Reconcile(context.TODO(), req)
+		//then
+		assert.NoError(t, err)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("Could not get the MUR with name: alex "))
+		hostCl, _ := reconciler.GetHostCluster()
+		notification := &toolchainv1alpha1.Notification{}
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: test.HostOperatorNs,
+			Name:      "alex-dev-idled",
+		}, notification)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "\"alex-dev-idled\" not found")
+
+		t.Run("third reconcile doesn't create notification as no pods to idle", func(t *testing.T) {
+			// second reconcile should delete pods and create notification
+			res, err = reconciler.Reconcile(context.TODO(), req)
+			//then
+			assert.NoError(t, err)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("Could not get the MUR with name: alex "))
+		})
+	})
 }
 
 func TestEnsureIdlingFailed(t *testing.T) {
@@ -485,7 +597,7 @@ func TestCreateNotification(t *testing.T) {
 		})
 	})
 
-	t.Run("Creates notification when condition exists but is false", func(t *testing.T) {
+	t.Run("Creates notification when notification creation had failed previously", func(t *testing.T) {
 		idler.Status.Conditions = []toolchainv1alpha1.Condition{
 			{
 				Type:    toolchainv1alpha1.IdlerActivatedNotificationCreated,

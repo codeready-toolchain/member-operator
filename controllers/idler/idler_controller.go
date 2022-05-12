@@ -173,6 +173,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 		if len(userEmails) > 0 {
 			for _, userEmail := range userEmails {
 				_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+					WithName(fmt.Sprintf("%s-%s", idler.Name, toolchainv1alpha1.NotificationTypeIdled)).
 					WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
 					WithControllerReference(idler, r.Scheme).
 					WithTemplate("idlertriggered").

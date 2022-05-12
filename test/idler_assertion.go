@@ -94,6 +94,15 @@ func IdlerNotificationCreated() toolchainv1alpha1.Condition {
 	}
 }
 
+func IdlerNotificationCreationFailed(message string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.IdlerActivatedNotificationCreated,
+		Status:  corev1.ConditionFalse,
+		Reason:  toolchainv1alpha1.IdlerActivatedNotificationCreationFailed,
+		Message: message,
+	}
+}
+
 type IdleablePayloadAssertion struct {
 	client client.Client
 	t      *testing.T

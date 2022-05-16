@@ -13,7 +13,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	nstemplatesetTest "github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -276,7 +275,7 @@ func TestEnsureIdling(t *testing.T) {
 		}
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
@@ -327,7 +326,7 @@ func TestEnsureIdling(t *testing.T) {
 		}
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet) // mur not added
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
@@ -578,7 +577,7 @@ func TestCreateNotification(t *testing.T) {
 		// given
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 
@@ -608,7 +607,7 @@ func TestCreateNotification(t *testing.T) {
 		}
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 
@@ -624,7 +623,7 @@ func TestCreateNotification(t *testing.T) {
 		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
 
 		//when
@@ -651,7 +650,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		//given
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
@@ -668,7 +667,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		//given
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex", "brian", "charlie"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		mur2 := newMUR("brian")
 		mur3 := newMUR("charlie")
@@ -700,7 +699,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		//given
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(nstemplatesetTest.MemberOperatorNS, "alex", "advanced", "abcde11", namespaces, usernames)
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
@@ -876,6 +875,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
+		Namespace:           test.MemberOperatorNs,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient
 }

@@ -31,10 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const (
-	MemberOperatorNS = "MEMBER_OPERATOR_NAMESPACE"
-)
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -48,6 +44,7 @@ type Reconciler struct {
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
 	GetHostCluster      cluster.GetHostClusterFunc
+	Namespace           string
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers,verbs=get;list;watch;create;update;patch;delete
@@ -200,7 +197,7 @@ func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluste
 	//get NSTemplateSet from idler
 	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: MemberOperatorNS}, nsTemplateSet)
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
 		if err != nil {
 			logger.Info("Could not get the NSTemplateSet with name", "owner", owner)
 			return emails, err

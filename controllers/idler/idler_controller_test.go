@@ -587,7 +587,7 @@ func TestCreateNotification(t *testing.T) {
 		//then
 		require.NoError(t, err)
 		require.True(t, created)
-		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated))
+		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 		t.Run("Notification not created if already sent", func(t *testing.T) {
 			//when
 			created, err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
@@ -600,9 +600,9 @@ func TestCreateNotification(t *testing.T) {
 	t.Run("Creates notification when notification creation had failed previously", func(t *testing.T) {
 		idler.Status.Conditions = []toolchainv1alpha1.Condition{
 			{
-				Type:    toolchainv1alpha1.IdlerActivatedNotificationCreated,
+				Type:    toolchainv1alpha1.IdlerTriggeredNotificationCreated,
 				Status:  corev1.ConditionFalse,
-				Reason:  toolchainv1alpha1.IdlerActivatedNotificationCreationFailed,
+				Reason:  toolchainv1alpha1.IdlerTriggeredNotificationCreationFailedReason,
 				Message: "notification wasn't created before",
 			},
 		}
@@ -617,7 +617,7 @@ func TestCreateNotification(t *testing.T) {
 		//then
 		require.NoError(t, err)
 		require.True(t, created)
-		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated))
+		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
 
 	t.Run("Error in creating notification because MUR not found", func(t *testing.T) {

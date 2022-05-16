@@ -3,7 +3,7 @@ module github.com/codeready-toolchain/member-operator
 require (
 	github.com/RHEcosystemAppEng/dbaas-operator v0.1.4-0.20220222181358-34f519992531
 	github.com/codeready-toolchain/api v0.0.0-20220413210644-dc40aec24fcf
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20220407172553-826188a0ce5d
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20220504113537-d899cb88636e
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.6
 	// using latest commit from 'github.com/openshift/api@release-4.9'
@@ -24,9 +24,6 @@ require (
 	sigs.k8s.io/controller-runtime v0.10.3
 )
 
-replace (
-	github.com/codeready-toolchain/api => github.com/ranakan19/api v0.0.0-20220420025818-2767439f0810
-	github.com/codeready-toolchain/toolchain-common => github.com/ranakan19/toolchain-common v0.0.0-20220419151532-0cc8fdef5730
-)
+replace github.com/codeready-toolchain/api => github.com/ranakan19/api v0.0.0-20220516122538-d90642f61eaa
 
 go 1.16

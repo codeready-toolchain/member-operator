@@ -164,8 +164,8 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	// add sending notification here
 	//check the condition on Idler if notification already sent
 	// only create a notification if not created before
-	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated)
-	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerActivatedNotificationCreated) {
+	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
+	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
 		userEmails, err := r.getUserEmailFromMUR(logger, hostCluster, idler)
 		if err != nil {
 			return false, err
@@ -488,9 +488,9 @@ func (r *Reconciler) setStatusIdlerNotificationCreated(idler *toolchainv1alpha1.
 	return r.updateStatusConditions(
 		idler,
 		toolchainv1alpha1.Condition{
-			Type:   toolchainv1alpha1.IdlerActivatedNotificationCreated,
+			Type:   toolchainv1alpha1.IdlerTriggeredNotificationCreated,
 			Status: corev1.ConditionTrue,
-			Reason: toolchainv1alpha1.IdlerActivated,
+			Reason: toolchainv1alpha1.IdlerTriggeredReason,
 		})
 }
 
@@ -498,9 +498,9 @@ func (r *Reconciler) setStatusIdlerNotificationCreationFailed(idler *toolchainv1
 	return r.updateStatusConditions(
 		idler,
 		toolchainv1alpha1.Condition{
-			Type:    toolchainv1alpha1.IdlerActivatedNotificationCreated,
+			Type:    toolchainv1alpha1.IdlerTriggeredNotificationCreated,
 			Status:  corev1.ConditionFalse,
-			Reason:  toolchainv1alpha1.IdlerActivatedNotificationCreationFailed,
+			Reason:  toolchainv1alpha1.IdlerTriggeredNotificationCreationFailedReason,
 			Message: message,
 		})
 }

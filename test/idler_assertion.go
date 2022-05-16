@@ -88,17 +88,17 @@ func Running() toolchainv1alpha1.Condition {
 
 func IdlerNotificationCreated() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
-		Type:   toolchainv1alpha1.IdlerActivatedNotificationCreated,
+		Type:   toolchainv1alpha1.IdlerTriggeredNotificationCreated,
 		Status: corev1.ConditionTrue,
-		Reason: toolchainv1alpha1.IdlerActivated,
+		Reason: toolchainv1alpha1.IdlerTriggeredReason,
 	}
 }
 
 func IdlerNotificationCreationFailed(message string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
-		Type:    toolchainv1alpha1.IdlerActivatedNotificationCreated,
+		Type:    toolchainv1alpha1.IdlerTriggeredNotificationCreated,
 		Status:  corev1.ConditionFalse,
-		Reason:  toolchainv1alpha1.IdlerActivatedNotificationCreationFailed,
+		Reason:  toolchainv1alpha1.IdlerTriggeredNotificationCreationFailedReason,
 		Message: message,
 	}
 }

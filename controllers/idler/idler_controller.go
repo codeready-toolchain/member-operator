@@ -158,12 +158,11 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	if !ok {
 		return false, fmt.Errorf("unable to get the host cluster")
 	}
-	// add sending notification here
 	//check the condition on Idler if notification already sent
 	// only create a notification if not created before
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
 	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
-		userEmails, err := r.getUserEmailFromMUR(logger, hostCluster, idler)
+		userEmails, err := r.getUserEmailsFromMURs(logger, hostCluster, idler)
 		if err != nil {
 			return false, err
 		}
@@ -192,7 +191,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	return false, nil
 }
 
-func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
+func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
 	var emails []string
 	//get NSTemplateSet from idler
 	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
@@ -200,7 +199,7 @@ func (r *Reconciler) getUserEmailFromMUR(logger logr.Logger, hostCluster *cluste
 		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
 		if err != nil {
 			logger.Info("Namespace is :", "namespace", r.Namespace)
-			logger.Info("Could not get the NSTemplateSet with name", "owner", owner)
+			logger.Error(err, "Could not get the NSTemplateSet with name", "owner", owner)
 			return emails, err
 		}
 		// iterate on space roles from NSTemplateSet

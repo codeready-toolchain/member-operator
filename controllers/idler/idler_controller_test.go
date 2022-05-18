@@ -10,12 +10,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
+	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -277,25 +276,15 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
 
 		// first reconcile to track pods
 		res, err := reconciler.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 		assert.True(t, res.Requeue)
 		assert.Equal(t, int(res.RequeueAfter), 0)
-		// Idler tracks all pods now but pods have not been deleted yet
-		memberoperatortest.AssertThatInIdleableCluster(t, allCl).
-			PodsExist(podsRunningForTooLong.standalonePods).
-			DaemonSetExists(podsRunningForTooLong.daemonSet).
-			JobExists(podsRunningForTooLong.job).
-			DeploymentScaledUp(podsRunningForTooLong.deployment).
-			ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
-			DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
-			ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
-			StatefulSetScaledUp(podsRunningForTooLong.statefulSet)
 
 		// second reconcile should delete pods and create notification
 		res, err = reconciler.Reconcile(context.TODO(), req)
@@ -327,26 +316,15 @@ func TestEnsureIdling(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet) // mur not added
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet) // mur not added
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
 
 		// first reconcile to track pods
 		res, err := reconciler.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 		assert.True(t, res.Requeue)
 		assert.Equal(t, int(res.RequeueAfter), 0)
-		// Idler tracks all pods now but pods have not been deleted yet
-		memberoperatortest.AssertThatInIdleableCluster(t, allCl).
-			PodsExist(podsRunningForTooLong.standalonePods).
-			DaemonSetExists(podsRunningForTooLong.daemonSet).
-			JobExists(podsRunningForTooLong.job).
-			DeploymentScaledUp(podsRunningForTooLong.deployment).
-			ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
-			DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
-			ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
-			StatefulSetScaledUp(podsRunningForTooLong.statefulSet)
-
 		// second reconcile should delete pods and create notification
 		res, err = reconciler.Reconcile(context.TODO(), req)
 		//then
@@ -655,7 +633,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
 		require.NoError(t, err)
 		require.NotEmpty(t, emails)
@@ -674,7 +652,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur, mur2, mur3)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
 		require.NoError(t, err)
 		require.NotEmpty(t, emails)
@@ -689,7 +667,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
 		require.Error(t, err)
 		require.Len(t, emails, 0)
@@ -703,7 +681,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailFromMUR(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
 		require.Error(t, err)
 		require.Len(t, emails, 0)

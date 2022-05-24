@@ -221,7 +221,7 @@ func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, curr
 Current:
 	for _, currentObj := range currentObjs {
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
-		objectLogger.Info("checking obsolete object")
+		objectLogger.Info("checking obsolete object", "object_namespace", currentObj.GetNamespace(), "object_name", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		for _, newObj := range newObjects {
 			if commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
@@ -232,7 +232,7 @@ Current:
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted
 		}
-		logger.Info("deleted obsolete object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
+		logger.Info("deleted obsolete object", "object_namespace", currentObj.GetNamespace(), "object_name", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 	}
 	return nil
 }

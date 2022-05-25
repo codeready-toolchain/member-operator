@@ -25,6 +25,10 @@ import (
 )
 
 func TestFindNamespace(t *testing.T) {
+
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
+
 	namespaces := []corev1.Namespace{
 		{
 			ObjectMeta: metav1.ObjectMeta{
@@ -63,6 +67,9 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "stage"))
 	manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 
@@ -73,7 +80,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		delete(userNamespaces[1].Labels, "toolchain.dev.openshift.com/templateref")
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -88,7 +95,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-stage-123"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -103,7 +110,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[0].Labels["toolchain.dev.openshift.com/tier"] = "advanced"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -118,7 +125,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "outdated"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -135,7 +142,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-stage-abcde21"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -160,7 +167,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		})
 
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -177,7 +184,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		assert.Error(t, err, "mock List error")
@@ -194,7 +201,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
 
 		// then
 		require.Error(t, err, "mock List error")
@@ -383,8 +390,9 @@ func TestEnsureNamespacesOK(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -499,9 +507,9 @@ func TestEnsureNamespacesOK(t *testing.T) {
 }
 
 func TestEnsureNamespacesFail(t *testing.T) {
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
-
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -649,6 +657,9 @@ func TestEnsureNamespacesFail(t *testing.T) {
 }
 
 func TestDeleteNamespace(t *testing.T) {
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "stage")
@@ -777,8 +788,9 @@ func TestDeleteNamespace(t *testing.T) {
 
 func TestPromoteNamespaces(t *testing.T) {
 
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -993,8 +1005,9 @@ func TestPromoteNamespaces(t *testing.T) {
 
 func TestUpdateNamespaces(t *testing.T) {
 
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -1145,6 +1158,8 @@ func TestUpdateNamespaces(t *testing.T) {
 
 func TestIsUpToDateAndProvisioned(t *testing.T) {
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -1163,7 +1178,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		// when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, &devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1189,7 +1204,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(&devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, &devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1204,7 +1219,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1228,7 +1243,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1250,7 +1265,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1264,7 +1279,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
 		//then
 		require.Error(t, err, "namespace doesn't have owner label")
 		require.False(t, isProvisioned)

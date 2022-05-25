@@ -136,7 +136,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	// go though all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {
 		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
-		gvkLogger.Info("ensuring cluster resource kind")
+		gvkLogger.Info("ensuring cluster resources")
 		newObjs := make([]runtimeclient.Object, 0)
 
 		// get all objects of the resource kind from the template (if the template is specified)
@@ -188,7 +188,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 
 // apply creates or updates the given object with the set of toolchain labels. If the apply operation was successful, then it returns 'true, nil',
 // but if there was an error then it returns 'false, error'.
-func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, toApply runtimeclient.Object) (bool, error) {
+func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, object runtimeclient.Object) (bool, error) {
 	var labels = map[string]string{
 		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:        toolchainv1alpha1.ClusterResourcesTemplateType,
@@ -201,10 +201,10 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	logger.Info("applying cluster resource", "gvk", toApply.GetObjectKind().GroupVersionKind())
-	createdOrModified, err := r.ApplyToolchainObjects(logger, []runtimeclient.Object{toApply}, labels)
+	logger.Info("applying cluster resource", "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
+	createdOrModified, err := r.ApplyToolchainObjects(logger, []runtimeclient.Object{object}, labels)
 	if err != nil {
-		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", toApply.GetObjectKind().GroupVersionKind())
+		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", object.GetObjectKind().GroupVersionKind())
 	}
 	return createdOrModified, nil
 }
@@ -219,6 +219,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 // If no resource to be updated or deleted was found then it returns 'false, nil'. In case of any errors 'false, error'
 func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
+	logger.Info("updating or deleting cluster resources")
 CurrentObjects:
 	for _, currentObject := range currentObjs {
 
@@ -232,6 +233,7 @@ CurrentObjects:
 			if newObject.GetName() == currentObject.GetName() {
 				// is found then let's check if we need to update it
 				if !isUpToDate(currentObject, newObject, tierTemplate) {
+					logger.Info("updating cluster resource")
 					// let's update it
 					if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 						return false, err
@@ -242,6 +244,7 @@ CurrentObjects:
 			}
 		}
 		// is not found then let's delete it
+		logger.Info("deleting cluster resource")
 		return r.deleteClusterResource(nsTmplSet, currentObject)
 	}
 	return false, nil

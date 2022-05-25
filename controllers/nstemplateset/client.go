@@ -32,7 +32,7 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 				continue
 			}
 		}
-
+		logger.Info("applying object", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 		_, err := applyClient.Apply([]runtimeclient.Object{object}, newLabels)
 		if err != nil {
 			return anyApplied, err

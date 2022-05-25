@@ -22,7 +22,9 @@ import (
 
 func TestEnsureSpaceRoles(t *testing.T) {
 
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 
 	t.Run("success", func(t *testing.T) {
 

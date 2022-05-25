@@ -23,13 +23,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
-
-var logger = ctrl.Log.WithName("controllers").WithName("NSTemplateSet")
 
 func TestClusterResourceKinds(t *testing.T) {
 	// given
@@ -179,7 +176,8 @@ func TestClusterResourceKinds(t *testing.T) {
 
 func TestEnsureClusterResourcesOK(t *testing.T) {
 	// given
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -301,9 +299,10 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 }
 
 func TestEnsureClusterResourcesFail(t *testing.T) {
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -368,6 +367,9 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 
 func TestDeleteClusterResources(t *testing.T) {
 
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	crq := newClusterResourceQuota(username, "advanced")
@@ -494,8 +496,9 @@ func TestPromoteClusterResources(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	crb := newTektonClusterRoleBinding(username, "advanced")
@@ -902,8 +905,9 @@ func TestUpdateClusterResources(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
 	username := "johnsmith"
 	namespaceName := "toolchain-member"
 	crb := newTektonClusterRoleBinding(username, "advanced")

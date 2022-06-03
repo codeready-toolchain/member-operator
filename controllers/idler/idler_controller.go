@@ -115,7 +115,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
+		podLogger := logger.WithValues("fne", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
@@ -153,6 +153,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 }
 
 func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) (bool, error) {
+	logger.Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {
@@ -161,7 +162,15 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	//check the condition on Idler if notification already sent
 	// only create a notification if not created before
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
+	logger.Info(fmt.Sprintf("condition exists : %s", found))
 	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
+		notificationName := fmt.Sprintf("%s-%s", idler.Name, toolchainv1alpha1.NotificationTypeIdled)
+		notification := &toolchainv1alpha1.Notification{}
+		if err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: notificationName, Namespace: hostCluster.OperatorNamespace}, notification); err != nil {
+			if errors.IsNotFound(err) {
+				fmt.Println("here we go, no notification created")
+			}
+		}
 		userEmails, err := r.getUserEmailsFromMURs(logger, hostCluster, idler)
 		if err != nil {
 			return false, err
@@ -192,13 +201,14 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 }
 
 func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
+	logger.Info("getUserEmailsFromMURs")
 	var emails []string
 	//get NSTemplateSet from idler
 	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
 		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
 		if err != nil {
-			logger.Info("Namespace is :", "namespace", r.Namespace)
+			fmt.Println(fmt.Sprintf("Namespace is : %s", r.Namespace))
 			logger.Error(err, "Could not get the NSTemplateSet with name", "owner", owner)
 			return emails, err
 		}
@@ -482,6 +492,7 @@ func (r *Reconciler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 }
 
 func (r *Reconciler) setStatusIdlerNotificationCreated(idler *toolchainv1alpha1.Idler) error {
+	fmt.Println(fmt.Sprintf("time is %t, setting notification status"))
 	return r.updateStatusConditions(
 		idler,
 		toolchainv1alpha1.Condition{

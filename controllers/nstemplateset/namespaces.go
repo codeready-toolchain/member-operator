@@ -25,7 +25,7 @@ type namespacesManager struct {
 // ensure ensures that all expected namespaces exists and they contain all the expected resources
 // return `true, nil` when something changed, `false, nil` or `false, err` otherwise
 func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (createdOrUpdated bool, err error) {
-	logger.Info("ensuring namespaces")
+	logger.Info("ensuring namespaces", "tier", nsTmplSet.Spec.TierName)
 	username := nsTmplSet.GetName()
 	userNamespaces, err := fetchNamespacesByOwner(r.Client, username)
 	if err != nil {
@@ -50,7 +50,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 	}
 
 	// find next namespace for provisioning namespace resource
-	tierTemplate, userNamespace, found, err := r.nextNamespaceToProvisionOrUpdate(tierTemplatesByType, userNamespaces)
+	tierTemplate, userNamespace, found, err := r.nextNamespaceToProvisionOrUpdate(logger, tierTemplatesByType, userNamespaces)
 	if err != nil {
 		return false, err
 	}
@@ -120,6 +120,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	}
 
 	if currentRef, exists := namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey]; exists && currentRef != "" && currentRef != tierTemplate.templateRef {
+		logger.Info("checking obsolete namespace resources", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 		if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 			return err
 		}
@@ -233,12 +234,12 @@ func fetchNamespacesByOwner(cl runtimeclient.Client, username string) ([]corev1.
 // nextNamespaceToProvisionOrUpdate returns first namespace (from given namespaces) whose status is active and
 // either revision is not set or revision or tier doesn't equal to the current one.
 // It also returns namespace present in tcNamespaces but not found in given namespaces
-func (r *namespacesManager) nextNamespaceToProvisionOrUpdate(tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool, error) {
+func (r *namespacesManager) nextNamespaceToProvisionOrUpdate(logger logr.Logger, tierTemplatesByType []*tierTemplate, namespaces []corev1.Namespace) (*tierTemplate, *corev1.Namespace, bool, error) {
 	for _, nsTemplate := range tierTemplatesByType {
 		namespace, found := findNamespace(namespaces, nsTemplate.typeName)
 		if found {
 			if namespace.Status.Phase == corev1.NamespaceActive {
-				isProvisioned, err := r.isUpToDateAndProvisioned(&namespace, nsTemplate)
+				isProvisioned, err := r.isUpToDateAndProvisioned(logger, &namespace, nsTemplate)
 				if err != nil {
 					return nsTemplate, nil, true, err
 				}
@@ -287,7 +288,8 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 
 // isUpToDateAndProvisioned checks if the obj has the correct Template Reference Label.
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
-func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
+func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
+	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
@@ -298,16 +300,6 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 		}
 		processedRoles := []runtimeclient.Object{}
 		processedRoleBindings := []runtimeclient.Object{}
-		roleList := rbac.RoleList{}
-		rolebindingList := rbac.RoleBindingList{}
-		if err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(ns.GetName())); err != nil {
-			return false, err
-		}
-
-		if err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(ns.GetName())); err != nil {
-			return false, err
-		}
-
 		for _, obj := range newObjs {
 			switch obj.GetObjectKind().GroupVersionKind().Kind {
 			case "Role":
@@ -316,12 +308,22 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 				processedRoleBindings = append(processedRoleBindings, obj)
 			}
 		}
+
 		// get the owner name from namespace
 		owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
 		if !exists {
 			return false, fmt.Errorf("namespace doesn't have owner label")
 		}
-		//Check the names of the roles and roleBindings as well
+		roleList := rbac.RoleList{}
+		rolebindingList := rbac.RoleBindingList{}
+		if err = r.AllNamespacesClient.List(context.TODO(), &roleList, runtimeclient.InNamespace(ns.GetName())); err != nil {
+			return false, err
+		}
+		if err = r.AllNamespacesClient.List(context.TODO(), &rolebindingList, runtimeclient.InNamespace(ns.GetName())); err != nil {
+			return false, err
+		}
+
+		// check the names of the roles and roleBindings as well
 		for _, role := range processedRoles {
 			if found, err := r.containsRole(roleList.Items, role, owner); !found || err != nil {
 				return false, err
@@ -333,9 +335,10 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ns *corev1.Namespace, tierT
 				return false, err
 			}
 		}
+		logger.Info("namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
 		return true, nil
 	}
-
+	logger.Info("namespace is not up-to-date or not provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
 	return false, nil
 }
 

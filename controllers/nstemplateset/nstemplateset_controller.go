@@ -90,6 +90,7 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=nstemplatesets/finalizers,verbs=update
 
 //+kubebuilder:rbac:groups="",resources=namespaces;limitranges,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=namespaces;resourcequotas,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io;authorization.openshift.io,resources=rolebindings;roles;clusterroles;clusterrolebindings,verbs=*
 //+kubebuilder:rbac:groups=quota.openshift.io,resources=clusterresourcequotas,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -221,7 +222,7 @@ func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, curr
 Current:
 	for _, currentObj := range currentObjs {
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
-		objectLogger.Info("checking obsolete object")
+		objectLogger.Info("checking obsolete object", "object_namespace", currentObj.GetNamespace(), "object_name", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		for _, newObj := range newObjects {
 			if commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
@@ -232,7 +233,7 @@ Current:
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted
 		}
-		logger.Info("deleted obsolete object", "objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
+		logger.Info("deleted obsolete object", "object_namespace", currentObj.GetNamespace(), "object_name", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 	}
 	return nil
 }

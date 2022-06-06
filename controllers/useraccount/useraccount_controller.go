@@ -150,13 +150,24 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	var createdOrUpdated bool
 	var user *userv1.User
 	var err error
+
+	// get the associated NSTemplateSet so we can handle the appstudio-specific case
+	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
+	if err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: userAcc.Namespace, Name: userAcc.Name}, nsTmplSet); err != nil {
+		logger.Error(err, "failed to look up NSTemplateSet")
+		return false, err
+	}
+	logger.Info("NSTemplateSet Spec TierName", "tier name", nsTmplSet.Spec.TierName)
+
 	// for non-AppStudio use-case - create User & Identity resources if user is not using appstudio tier
-	if userAcc.Labels == nil || userAcc.Labels[toolchainv1alpha1.TierLabelKey] != "appstudio" {
+	if nsTmplSet.Spec.TierName != "appstudio" {
 		if user, createdOrUpdated, err = r.ensureUser(logger, config, userAcc); err != nil || createdOrUpdated {
 			return createdOrUpdated, err
 		}
 		_, createdOrUpdated, err = r.ensureIdentity(logger, config, userAcc, user)
 		return createdOrUpdated, err
+	} else {
+		logger.Info("Ensuring no User and Identity resources for AppStudio user")
 	}
 	// we don't expect User nor Identity resources to be present for AppStudio tier
 	// This can be removed as soon as we don't create UserAccounts in AppStudio environment.

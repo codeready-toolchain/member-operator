@@ -381,14 +381,15 @@ func TestReconcile(t *testing.T) {
 		})
 	})
 
-	t.Run("for AppStudio tier", func(t *testing.T) {
+	t.Run("SkipUserCreation is set to true - for AppStudio", func(t *testing.T) {
 		// given
 		appStudioAccount := userAcc.DeepCopy()
-		appStudioAccount.Labels[toolchainv1alpha1.TierLabelKey] = "appstudio"
+		// the member operator is configured to skip user creation
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.SkipUserCreation(true))
 
 		t.Run("tiername is appstudio - no user nor identity", func(t *testing.T) {
 			// given
-			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount)
+			r, req, cl, _ := prepareReconcile(t, username, cfg, appStudioAccount)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -405,7 +406,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("user & identity are there - it should remove identity as it has the owner label set", func(t *testing.T) {
 			// given
-			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount, preexistingUser, preexistingIdentity)
+			r, req, cl, _ := prepareReconcile(t, username, cfg, appStudioAccount, preexistingUser, preexistingIdentity)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -424,7 +425,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			withoutLabel := preexistingIdentity.DeepCopy()
 			withoutLabel.Labels = nil
-			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount, withoutLabel, preexistingUser)
+			r, req, cl, _ := prepareReconcile(t, username, cfg, appStudioAccount, withoutLabel, preexistingUser)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -447,7 +448,7 @@ func TestReconcile(t *testing.T) {
 			identityWithoutLabel.Labels = nil
 			userWithoutLabel := preexistingUser.DeepCopy()
 			userWithoutLabel.Labels = nil
-			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount, identityWithoutLabel, userWithoutLabel)
+			r, req, cl, _ := prepareReconcile(t, username, appStudioAccount, cfg, identityWithoutLabel, userWithoutLabel)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)

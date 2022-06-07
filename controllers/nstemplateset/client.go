@@ -1,10 +1,14 @@
 package nstemplateset
 
 import (
+	"context"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,6 +33,16 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		if _, exists := object.GetAnnotations()[toolchainv1alpha1.TierTemplateObjectOptionalResourceAnnotation]; exists {
 			if !apiGroupIsPresent(c.AvailableAPIGroups, object.GetObjectKind().GroupVersionKind()) {
 				logger.Info("the object is marked as optional and the API group is not present - skipping...", "gvk", object.GetObjectKind().GroupVersionKind().String(), "name", object.GetName())
+				continue
+			}
+		}
+		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
+			sa := &v1.ServiceAccount{}
+			err := c.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
+			if !errors.IsNotFound(err) {
+				return anyApplied, err
+			}
+			if err == nil {
 				continue
 			}
 		}

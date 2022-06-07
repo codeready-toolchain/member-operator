@@ -33,13 +33,23 @@ func TestApplyToolchainObjects(t *testing.T) {
 	additionalLabel := map[string]string{
 		"foo": "bar",
 	}
+	sa := &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ServiceAccount",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "appstudio-user-sa",
+			Namespace: "john-dev",
+		},
+	}
 
 	t.Run("when creating two objects", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs, sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -50,11 +60,11 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when creating only one object because the other one already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs, sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -65,7 +75,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -82,7 +92,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		apiClient, fakeClient := prepareAPIClient(t)
 		// the version is different
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha2"))
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -98,7 +108,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha1"))
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -108,6 +118,39 @@ func TestApplyToolchainObjects(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, changed)
 		assertObjects(t, fakeClient, true)
+	})
+
+	t.Run("don't update SA when it already exists", func(t *testing.T) {
+		// given
+		apiClient, fakeClient := prepareAPIClient(t)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role, sa), additionalLabel)
+		require.NoError(t, err)
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
+			return fmt.Errorf("should not update")
+		}
+
+		// when
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(sa), additionalLabel)
+
+		// then
+		require.NoError(t, err)
+		assert.False(t, changed)
+		assertObjects(t, fakeClient, false)
+	})
+
+	t.Run("create SA when it doesn't exist yet", func(t *testing.T) {
+		// given
+		apiClient, fakeClient := prepareAPIClient(t)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role), additionalLabel)
+		require.NoError(t, err)
+
+		// when
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(sa), additionalLabel)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, changed)
+		assertObjects(t, fakeClient, false)
 	})
 }
 
@@ -130,6 +173,10 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool
 		HasLabel(toolchainv1alpha1.OwnerLabelKey, "john").
 		HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 		HasLabel("foo", "bar")
+	sa := &corev1.ServiceAccount{}
+	AssertObject(t, client, "john-dev", "appstudio-user-sa", sa, func() {
+		assert.Equal(t, map[string]string{"foo": "bar"}, sa.Labels)
+	})
 	dBaaSTenant := &dbaasv1alpha1.DBaaSTenant{}
 	if expectDBaaSTenant {
 		AssertObject(t, client, "", "john-dev-tenant", dBaaSTenant, func() {

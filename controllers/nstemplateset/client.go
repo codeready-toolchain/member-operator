@@ -7,7 +7,6 @@ import (
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,8 +36,8 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 			}
 		}
 		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
-			sa := &v1.ServiceAccount{}
-			err := c.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
+			sa := object.DeepCopyObject().(runtimeclient.Object)
+			err := applyClient.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}

@@ -597,6 +597,36 @@ func TestCreateNotification(t *testing.T) {
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
 
+	t.Run("Condition is set when setting failed previously, and notification is only sent once", func(t *testing.T) {
+		//This is to check the scenario when setting condition fails after creating a notification. Second reconcile expects to attempt the condition again, but not create the notification
+		// given
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR("alex")
+		reconciler, _, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+			return errors.New("can't update condition")
+		}
+		//when
+		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+
+		//then
+		require.True(t, created)
+		require.Error(t, err, "can't update condition")
+		err = cl.Get(context.TODO(), types.NamespacedName{Name: idler.Name}, idler)
+		require.NoError(t, err)
+		_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
+		require.False(t, found)
+
+		// second reconcile will not create the notification again but set the status
+		cl.MockStatusUpdate = nil
+		created, err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		require.False(t, created)
+		require.NoError(t, err)
+		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
+	})
+
 	t.Run("Error in creating notification because MUR not found", func(t *testing.T) {
 		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}

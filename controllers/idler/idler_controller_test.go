@@ -8,14 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/types"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	memberoperatortest "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"

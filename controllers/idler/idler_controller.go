@@ -213,7 +213,6 @@ func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *clus
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
 		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
 		if err != nil {
-			fmt.Println(fmt.Sprintf("Namespace is : %s", r.Namespace))
 			logger.Error(err, "Could not get the NSTemplateSet with name", "owner", owner)
 			return emails, err
 		}

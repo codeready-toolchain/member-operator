@@ -133,7 +133,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					podLogger.Info("Pod deleted")
 				}
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-				if _, err := r.createNotification(logger, idler); err != nil {
+				if err := r.createNotification(logger, idler); err != nil {
 					return r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
 				}
 
@@ -153,14 +153,13 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	return r.updateStatusPods(idler, newStatusPods)
 }
 
-func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) (bool, error) {
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
 	logger.Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {
-		return false, fmt.Errorf("unable to get the host cluster")
+		return fmt.Errorf("unable to get the host cluster")
 	}
-	created := false
 	//check the condition on Idler if notification already sent, only create a notification if not created before
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
 	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
@@ -171,12 +170,12 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 			if errors.IsNotFound(err) {
 				userEmails, err := r.getUserEmailsFromMURs(logger, hostCluster, idler)
 				if err != nil {
-					return created, err
-				}
-				keysAndVals := map[string]string{
-					"Namespace": idler.Name,
+					return err
 				}
 				if len(userEmails) > 0 {
+					keysAndVals := map[string]string{
+						"Namespace": idler.Name,
+					}
 					for _, userEmail := range userEmails {
 						_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
 							WithName(notificationName).
@@ -185,24 +184,26 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 							WithKeysAndValues(keysAndVals).
 							Create(userEmail)
 						if err != nil {
-							return created, errs.Wrapf(err, "Unable to create Notification CR from Idler")
+							return errs.Wrapf(err, "Unable to create Notification CR from Idler")
 						}
 					}
-					created = true
 				} else {
 					// no email found, thus no email sent
-					return created, nil
+					logger.Error(fmt.Errorf("no email found for the user in MURs"), "no email found to ")
+					return nil
 				}
+			} else {
+				return err
 			}
 		}
 		// set notification created condition
 		if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
-			return created, err
+			return err
 		}
-		return created, nil
+		return nil
 	}
 	//notification already created
-	return created, nil
+	return nil
 }
 
 func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {

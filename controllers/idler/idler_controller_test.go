@@ -123,10 +123,17 @@ func TestEnsureIdling(t *testing.T) {
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey: "alex",
+				},
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR("alex")
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
@@ -211,7 +218,7 @@ func TestEnsureIdling(t *testing.T) {
 				// Still tracking all pods. Even deleted ones.
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 					TracksPods(podsTooEarlyToKill.allPods).
-					HasConditions(memberoperatortest.Running())
+					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 				assert.True(t, res.Requeue)
 				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -225,7 +232,7 @@ func TestEnsureIdling(t *testing.T) {
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 						TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)).
-						HasConditions(memberoperatortest.Running())
+						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 					assert.True(t, res.Requeue)
 					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
@@ -247,7 +254,7 @@ func TestEnsureIdling(t *testing.T) {
 						// No pods tracked
 						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 							TracksPods([]*corev1.Pod{}).
-							HasConditions(memberoperatortest.Running())
+							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 						// requeue after the idler timeout
 						assert.Equal(t, reconcile.Result{
@@ -559,17 +566,25 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 
 		//when
-		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.NoError(t, err)
-		require.True(t, created)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
+		//check notification was created
+		hostCl, _ := reconciler.GetHostCluster()
+		notification := toolchainv1alpha1.Notification{}
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{Name: "alex-stage-idled", Namespace: hostCl.OperatorNamespace}, &notification)
+		require.NoError(t, err)
+		createdTime := notification.CreationTimestamp
+
 		t.Run("Notification not created if already sent", func(t *testing.T) {
 			//when
-			created, err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+			err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 			//then
 			require.NoError(t, err)
-			require.False(t, created)
+			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{Name: "alex-stage-idled", Namespace: hostCl.OperatorNamespace}, &notification)
+			require.NoError(t, err)
+			require.Equal(t, createdTime, notification.CreationTimestamp)
 		})
 	})
 
@@ -589,10 +604,9 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
 
 		//when
-		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.NoError(t, err)
-		require.True(t, created)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
 
@@ -609,10 +623,9 @@ func TestCreateNotification(t *testing.T) {
 			return errors.New("can't update condition")
 		}
 		//when
-		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 
 		//then
-		require.True(t, created)
 		require.Error(t, err, "can't update condition")
 		err = cl.Get(context.TODO(), types.NamespacedName{Name: idler.Name}, idler)
 		require.NoError(t, err)
@@ -621,8 +634,7 @@ func TestCreateNotification(t *testing.T) {
 
 		// second reconcile will not create the notification again but set the status
 		cl.MockStatusUpdate = nil
-		created, err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
-		require.False(t, created)
+		err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
@@ -635,10 +647,9 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
 
 		//when
-		created, err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.Error(t, err)
-		require.False(t, created)
 	})
 }
 

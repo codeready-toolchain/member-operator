@@ -599,6 +599,7 @@ func TestCreateNotification(t *testing.T) {
 	t.Run("Condition is set when setting failed previously, and notification is only sent once", func(t *testing.T) {
 		//This is to check the scenario when setting condition fails after creating a notification. Second reconcile expects to attempt the condition again, but not create the notification
 		// given
+		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)

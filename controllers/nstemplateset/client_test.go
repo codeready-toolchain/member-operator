@@ -138,6 +138,27 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
+	t.Run("update Role and don't update SA when it already exists", func(t *testing.T) {
+		// given
+		apiClient, fakeClient := prepareAPIClient(t)
+		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role, sa), additionalLabel)
+		require.NoError(t, err)
+		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
+			if obj.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
+				return fmt.Errorf("should not update")
+			}
+			return fakeClient.Client.Update(ctx, obj, opts...)
+		}
+
+		// when
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, sa), additionalLabel)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, changed)
+		assertObjects(t, fakeClient, false)
+	})
+
 	t.Run("create SA when it doesn't exist yet", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)

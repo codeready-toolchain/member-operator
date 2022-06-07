@@ -39,10 +39,11 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
 			sa := &v1.ServiceAccount{}
 			err := c.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
-			if !errors.IsNotFound(err) {
+			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
 			if err == nil {
+				logger.Info("the object is SA and already exists - won't be applied")
 				continue
 			}
 		}

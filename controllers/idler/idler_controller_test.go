@@ -40,7 +40,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("No Idler resource found", func(t *testing.T) {
 		// given
 		requestName := "not-existing-name"
-		reconciler, req, _, _ := prepareReconcile(t, requestName, newGetHostClusterReady)
+		reconciler, req, _, _ := prepareReconcile(t, requestName, getHostCluster)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -52,7 +52,7 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("Fail to get Idler resource", func(t *testing.T) {
 		// given
-		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler", newGetHostClusterReady)
+		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler", getHostCluster)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 			if key.Name == "cant-get-idler" {
 				return errors.New("can't get idler")
@@ -78,7 +78,7 @@ func TestReconcile(t *testing.T) {
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
-		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", newGetHostClusterReady, idler)
+		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -102,7 +102,7 @@ func TestEnsureIdling(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
 
 		// when
@@ -133,7 +133,7 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
@@ -282,7 +282,7 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
 
@@ -321,7 +321,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				},
 				Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: timeout},
 			}
-			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
+			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -345,7 +345,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
+		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		allCl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			pl := &corev1.PodList{}
 			if reflect.TypeOf(list) == reflect.TypeOf(pl) && len(opts) == 1 {
@@ -517,7 +517,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
@@ -555,7 +555,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
@@ -572,7 +572,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, _, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 			return errors.New("can't update condition")
 		}
@@ -598,7 +598,7 @@ func TestCreateNotification(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
@@ -614,7 +614,7 @@ func TestCreateNotification(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		require.EqualError(t, err, "no email found for the user in MURs")
@@ -639,7 +639,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
@@ -658,7 +658,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		mur := newMUR("alex")
 		mur2 := newMUR("brian")
 		mur3 := newMUR("charlie")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur, mur2, mur3)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
@@ -673,7 +673,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 
 	t.Run("unable to get NSTemplateSet", func(t *testing.T) {
 		//given
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
@@ -687,7 +687,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
@@ -869,7 +869,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 
 // prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
 func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
-	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, newGetHostClusterReady, &idler)
+	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, getHostCluster, &idler)
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)
 	//start tracking pods, so the Idler status is filled with the tracked pods
@@ -879,7 +879,7 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha
 	return reconciler, req, cl, allCl
 }
 
-func newGetHostClusterReady(fakeClient client.Client) cluster.GetHostClusterFunc {
+func getHostCluster(fakeClient client.Client) cluster.GetHostClusterFunc {
 	return memberoperatortest.NewGetHostCluster(fakeClient, true, corev1.ConditionTrue)
 }
 

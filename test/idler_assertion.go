@@ -69,6 +69,13 @@ func (a *IdlerAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) 
 	return a
 }
 
+func (a *IdlerAssertion) ContainsCondition(expected toolchainv1alpha1.Condition) *IdlerAssertion {
+	err := a.loadIdlerAssertion()
+	require.NoError(a.t, err)
+	test.AssertContainsCondition(a.t, a.idler.Status.Conditions, expected)
+	return a
+}
+
 func FailedToIdle(message string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,

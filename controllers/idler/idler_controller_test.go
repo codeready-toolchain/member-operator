@@ -306,7 +306,7 @@ func TestEnsureIdling(t *testing.T) {
 			Name:      "alex-stage-idled",
 		}, notification)
 		require.NoError(t, err)
-
+		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
 	})
 
 	t.Run("Pods idled but notification not created", func(t *testing.T) {
@@ -336,7 +336,7 @@ func TestEnsureIdling(t *testing.T) {
 		//then
 		assert.NoError(t, err)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("Could not get the MUR with name: alex "))
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found"))
 		hostCl, _ := reconciler.GetHostCluster()
 		notification := &toolchainv1alpha1.Notification{}
 		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
@@ -352,7 +352,7 @@ func TestEnsureIdling(t *testing.T) {
 			//then
 			assert.NoError(t, err)
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("Could not get the MUR with name: alex "))
+				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found"))
 		})
 	})
 }
@@ -437,7 +437,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.FailedToIdle(errMsg))
 			}
 
 			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
@@ -475,7 +475,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 					Requeue:      true,
 					RequeueAfter: 60 * time.Second,
 				}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
 			}
 
 			assertCanNotGetObject(&appsv1.Deployment{})
@@ -507,7 +507,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.FailedToIdle(errMsg))
 			}
 
 			assertCanNotUpdateObject(&appsv1.Deployment{}, "can't update deployment")
@@ -537,7 +537,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				// then
 				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.FailedToIdle(errMsg))
 			}
 
 			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
@@ -626,7 +626,7 @@ func TestCreateNotification(t *testing.T) {
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 
 		//then
-		require.Error(t, err, "can't update condition")
+		require.EqualError(t, err, "can't update condition")
 		err = cl.Get(context.TODO(), types.NamespacedName{Name: idler.Name}, idler)
 		require.NoError(t, err)
 		_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
@@ -649,7 +649,7 @@ func TestCreateNotification(t *testing.T) {
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
-		require.Error(t, err)
+		require.EqualError(t, err, "could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found")
 	})
 }
 
@@ -710,7 +710,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
 		//then
-		require.Error(t, err)
+		require.EqualError(t, err, "nstemplatesets.toolchain.dev.openshift.com \"alex\" not found")
 		require.Len(t, emails, 0)
 	})
 

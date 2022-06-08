@@ -115,7 +115,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		podLogger := logger.WithValues("fne", pod.Name, "pod_phase", pod.Status.Phase)
+		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
@@ -134,7 +134,8 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 				}
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
 				if err := r.createNotification(logger, idler); err != nil {
-					return r.setStatusIdlerNotificationCreationFailed(idler, err.Error())
+					logger.Error(err, "failed to create Notification, status updated")
+					r.setStatusIdlerNotificationCreationFailed(idler, err.Error()) // not returning error to continue tracking remaining pods
 				}
 
 			} else {
@@ -162,59 +163,58 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 	}
 	//check the condition on Idler if notification already sent, only create a notification if not created before
 	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
-	if !found || condition.IsFalse(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
-		notificationName := fmt.Sprintf("%s-%s", idler.Name, toolchainv1alpha1.NotificationTypeIdled)
-		notification := &toolchainv1alpha1.Notification{}
-		// Check if notification already exists in host
-		if err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: notificationName, Namespace: hostCluster.OperatorNamespace}, notification); err != nil {
-			if errors.IsNotFound(err) {
-				userEmails, err := r.getUserEmailsFromMURs(logger, hostCluster, idler)
-				if err != nil {
-					return err
-				}
-				if len(userEmails) > 0 {
-					keysAndVals := map[string]string{
-						"Namespace": idler.Name,
-					}
-					for _, userEmail := range userEmails {
-						_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
-							WithName(notificationName).
-							WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
-							WithTemplate("idlertriggered").
-							WithKeysAndValues(keysAndVals).
-							Create(userEmail)
-						if err != nil {
-							return errs.Wrapf(err, "Unable to create Notification CR from Idler")
-						}
-					}
-				} else {
-					// no email found, thus no email sent
-					logger.Error(fmt.Errorf("no email found for the user in MURs"), "no email found to ")
-					return nil
-				}
-			} else {
-				return err
-			}
-		}
-		// set notification created condition
-		if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
-			return err
-		}
+	if found && condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
+		// notification already created
 		return nil
 	}
-	//notification already created
+
+	notificationName := fmt.Sprintf("%s-%s", idler.Name, toolchainv1alpha1.NotificationTypeIdled)
+	notification := &toolchainv1alpha1.Notification{}
+	// Check if notification already exists in host
+	if err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: notificationName, Namespace: hostCluster.OperatorNamespace}, notification); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		userEmails, err := r.getUserEmailsFromMURs(logger, hostCluster, idler)
+		if err != nil {
+			return err
+		}
+		if len(userEmails) == 0 {
+			// no email found, thus no email sent
+			return fmt.Errorf("no email found for the user in MURs")
+		}
+
+		keysAndVals := map[string]string{
+			"Namespace": idler.Name,
+		}
+		for _, userEmail := range userEmails {
+			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+				WithName(notificationName).
+				WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
+				WithTemplate("idlertriggered").
+				WithKeysAndValues(keysAndVals).
+				Create(userEmail)
+			if err != nil {
+				return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+			}
+		}
+	}
+	// set notification created condition
+	if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
-	logger.Info("getUserEmailsFromMURs")
 	var emails []string
 	//get NSTemplateSet from idler
 	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
 		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
 		if err != nil {
-			logger.Error(err, "Could not get the NSTemplateSet with name", "owner", owner)
+			logger.Error(err, "could not get the NSTemplateSet with name", "owner", owner)
 			return emails, err
 		}
 		// iterate on space roles from NSTemplateSet
@@ -227,12 +227,12 @@ func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *clus
 			getMUR := &toolchainv1alpha1.MasterUserRecord{}
 			err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
 			if err != nil {
-				return emails, fmt.Errorf("Could not get the MUR with name: %s ", mur)
+				return emails, errs.Wrapf(err, "could not get the MUR")
 			}
 			emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
 		}
 	} else {
-		logger.Info(fmt.Sprintf("Idler %s does not have any owner label", idler.Name), "Owner Missing", idler)
+		logger.Info("Idler does not have any owner label", "idler_name", idler.Name)
 	}
 	return emails, nil
 }

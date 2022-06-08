@@ -306,54 +306,8 @@ func TestEnsureIdling(t *testing.T) {
 			Name:      "alex-stage-idled",
 		}, notification)
 		require.NoError(t, err)
+		require.Equal(t, "alex@test.com", notification.Spec.Recipient)
 		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
-	})
-
-	t.Run("Pods idled but notification not created", func(t *testing.T) {
-		idler := &toolchainv1alpha1.Idler{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "alex-dev",
-				Labels: map[string]string{
-					toolchainv1alpha1.OwnerLabelKey: "alex",
-				},
-			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
-		}
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet) // mur not added
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
-
-		// first reconcile to track pods
-		res, err := reconciler.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.True(t, res.Requeue)
-		assert.Equal(t, int(res.RequeueAfter), 0)
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		assert.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found"))
-		hostCl, _ := reconciler.GetHostCluster()
-		notification := &toolchainv1alpha1.Notification{}
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "alex-dev-idled",
-		}, notification)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "\"alex-dev-idled\" not found")
-
-		t.Run("third reconcile doesn't create notification as no pods to idle", func(t *testing.T) {
-			// second reconcile should delete pods and create notification
-			res, err = reconciler.Reconcile(context.TODO(), req)
-			//then
-			assert.NoError(t, err)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreationFailed("could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found"))
-		})
 	})
 }
 
@@ -650,6 +604,20 @@ func TestCreateNotification(t *testing.T) {
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		//then
 		require.EqualError(t, err, "could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found")
+	})
+
+	t.Run("Error in creating notification because no user email found in MUR", func(t *testing.T) {
+		// given
+		idler.Status.Conditions = nil
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR("alex")
+		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, newGetHostClusterReady, idler, nsTmplSet, mur)
+		//when
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		require.EqualError(t, err, "no email found for the user in MURs")
 	})
 }
 

@@ -231,7 +231,9 @@ func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *clus
 			if err != nil {
 				return emails, errs.Wrapf(err, "could not get the MUR")
 			}
-			emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
+			if email := getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey]; email != "" {
+				emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
+			}
 		}
 	} else {
 		logger.Info("Idler does not have any owner label", "idler_name", idler.Name)

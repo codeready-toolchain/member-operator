@@ -306,8 +306,23 @@ func TestEnsureIdling(t *testing.T) {
 			Name:      "alex-stage-idled",
 		}, notification)
 		require.NoError(t, err)
+		notificationCreationTime := notification.CreationTimestamp
 		require.Equal(t, "alex@test.com", notification.Spec.Recipient)
 		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
+
+		// third reconcile should not create a notification
+		res, err = reconciler.Reconcile(context.TODO(), req)
+		//then
+		assert.NoError(t, err)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: test.HostOperatorNs,
+			Name:      "alex-stage-idled",
+		}, notification)
+		require.NoError(t, err)
+		require.Equal(t, notificationCreationTime, notification.CreationTimestamp)
 	})
 }
 

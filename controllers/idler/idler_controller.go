@@ -133,7 +133,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 				}
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
 				if err := r.createNotification(logger, idler); err != nil {
-					logger.Error(err, "failed to create Notification, status updated")
+					logger.Error(err, "failed to create Notification")
 					if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
 						return err
 					} // not returning error to continue tracking remaining pods
@@ -197,7 +197,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 				WithKeysAndValues(keysAndVals).
 				Create(userEmail)
 			if err != nil {
-				return errs.Wrapf(err, "Unable to create Notification CR from Idler")
+				return errs.Wrapf(err, "unable to create Notification CR from Idler")
 			}
 		}
 	}

@@ -514,6 +514,39 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
 		})
 	})
+
+	t.Run("Fail if cannot update notification creation failed status", func(t *testing.T) {
+		// given
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "john-dev",
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey: "john",
+				},
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
+		}
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"john"}
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "john", "advanced", "abcde11", namespaces, usernames)
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+
+		// when
+		// first reconcile to start tracking pods
+		_, err := reconciler.Reconcile(context.TODO(), req)
+
+		// second reconcile to delete pods and create notification
+		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+			return fmt.Errorf("cannot set status to fail")
+		}
+		_, err = reconciler.Reconcile(context.TODO(), req)
+
+		// then
+		// since no mur, error should have been wrapped as status update, but status update fails
+		require.EqualError(t, err, "failed to ensure idling 'john-dev': cannot set status to fail")
+	})
 }
 
 func TestCreateNotification(t *testing.T) {
@@ -633,6 +666,19 @@ func TestCreateNotification(t *testing.T) {
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
 		require.EqualError(t, err, "no email found for the user in MURs")
+	})
+
+	t.Run("Error in creating notification due to invalid email address", func(t *testing.T) {
+		idler.Status.Conditions = nil
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR("alex")
+		mur.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey] = "invalid-email-address"
+		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		//when
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address")
 	})
 }
 

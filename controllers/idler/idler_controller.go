@@ -135,7 +135,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 				if err := r.createNotification(logger, idler); err != nil {
 					logger.Error(err, "failed to create Notification")
 					if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
-						return err
+						logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
 					} // not returning error to continue tracking remaining pods
 				}
 

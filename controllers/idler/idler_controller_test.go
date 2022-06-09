@@ -536,6 +536,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		// when
 		// first reconcile to start tracking pods
 		_, err := reconciler.Reconcile(context.TODO(), req)
+		require.NoError(t, err)
 
 		// second reconcile to delete pods and create notification
 		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {

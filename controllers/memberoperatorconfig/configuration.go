@@ -95,6 +95,10 @@ func (c *Configuration) MemberStatus() MemberStatusConfig {
 	return MemberStatusConfig{c.cfg.MemberStatus}
 }
 
+func (c *Configuration) SkipUserCreation() bool {
+	return commonconfig.GetBool(c.cfg.SkipUserCreation, false)
+}
+
 func (c *Configuration) ToolchainCluster() ToolchainClusterConfig {
 	return ToolchainClusterConfig{c.cfg.ToolchainCluster}
 }

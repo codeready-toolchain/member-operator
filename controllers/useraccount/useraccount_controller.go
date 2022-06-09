@@ -150,8 +150,8 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	var createdOrUpdated bool
 	var user *userv1.User
 	var err error
-	// for non-AppStudio use-case - create User & Identity resources if user is not using appstudio tier
-	if userAcc.Labels == nil || userAcc.Labels[toolchainv1alpha1.TierLabelKey] != "appstudio" {
+	// create User & Identity resources unless configured otherwise, SkipUserCreation will be set mainly for early appstudio development clusters
+	if !config.SkipUserCreation() {
 		if user, createdOrUpdated, err = r.ensureUser(logger, config, userAcc); err != nil || createdOrUpdated {
 			return createdOrUpdated, err
 		}

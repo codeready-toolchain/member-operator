@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"

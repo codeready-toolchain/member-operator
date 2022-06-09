@@ -245,6 +245,21 @@ func TestMemberStatus(t *testing.T) {
 	})
 }
 
+func TestSkipUserCreation(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.False(t, memberOperatorCfg.SkipUserCreation())
+	})
+	t.Run("non-default", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.SkipUserCreation(true))
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.True(t, memberOperatorCfg.SkipUserCreation())
+	})
+}
+
 func TestToolchainCluster(t *testing.T) {
 	t.Run("health check period", func(t *testing.T) {
 		t.Run("default", func(t *testing.T) {

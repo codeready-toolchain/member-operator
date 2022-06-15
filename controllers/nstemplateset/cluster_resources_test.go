@@ -361,7 +361,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionClusterResources(
-				"failed to apply cluster resource of type 'quota.openshift.io/v1, Kind=ClusterResourceQuota'"))
+				"failed to apply cluster resource of type 'quota.openshift.io/v1, Kind=ClusterResourceQuota': unable to create resource of kind: ClusterResourceQuota, version: v1: unable to create resource of kind: ClusterResourceQuota, version: v1: some error"))
 	})
 }
 

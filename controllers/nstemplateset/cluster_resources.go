@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -204,7 +203,7 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	logger.Info("applying cluster resource", "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 	createdOrModified, err := r.ApplyToolchainObjects(logger, []runtimeclient.Object{object}, labels)
 	if err != nil {
-		return false, fmt.Errorf("failed to apply cluster resource of type '%v'", object.GetObjectKind().GroupVersionKind())
+		return false, errs.Wrapf(err, "failed to apply cluster resource of type '%v'", object.GetObjectKind().GroupVersionKind())
 	}
 	return createdOrModified, nil
 }
@@ -225,7 +224,7 @@ CurrentObjects:
 
 		// if the template is not specified, then delete all cluster resources one by one
 		if nsTmplSet.Spec.ClusterResources == nil || tierTemplate == nil {
-			return r.deleteClusterResource(nsTmplSet, currentObject)
+			return r.deleteClusterResource(logger, nsTmplSet, currentObject)
 		}
 
 		// check if the object should still exist and should be updated
@@ -244,14 +243,14 @@ CurrentObjects:
 			}
 		}
 		// is not found then let's delete it
-		logger.Info("deleting cluster resource")
-		return r.deleteClusterResource(nsTmplSet, currentObject)
+		return r.deleteClusterResource(logger, nsTmplSet, currentObject)
 	}
 	return false, nil
 }
 
 // deleteClusterResource sets status to updating, deletes the given resource and returns 'true, nil'. In case of any errors 'false, error'.
-func (r *clusterResourcesManager) deleteClusterResource(nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete runtimeclient.Object) (bool, error) {
+func (r *clusterResourcesManager) deleteClusterResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete runtimeclient.Object) (bool, error) {
+	logger.Info("deleting cluster resource")
 	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 		return false, err
 	}

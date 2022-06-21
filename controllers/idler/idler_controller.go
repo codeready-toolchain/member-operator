@@ -163,8 +163,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 		return fmt.Errorf("unable to get the host cluster")
 	}
 	//check the condition on Idler if notification already sent, only create a notification if not created before
-	_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
-	if found && condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
+	if condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
 		// notification already created
 		return nil
 	}

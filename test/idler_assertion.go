@@ -69,6 +69,13 @@ func (a *IdlerAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) 
 	return a
 }
 
+func (a *IdlerAssertion) ContainsCondition(expected toolchainv1alpha1.Condition) *IdlerAssertion {
+	err := a.loadIdlerAssertion()
+	require.NoError(a.t, err)
+	test.AssertContainsCondition(a.t, a.idler.Status.Conditions, expected)
+	return a
+}
+
 func FailedToIdle(message string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
@@ -83,6 +90,23 @@ func Running() toolchainv1alpha1.Condition {
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
 		Reason: toolchainv1alpha1.IdlerRunningReason,
+	}
+}
+
+func IdlerNotificationCreated() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.IdlerTriggeredNotificationCreated,
+		Status: corev1.ConditionTrue,
+		Reason: toolchainv1alpha1.IdlerTriggeredReason,
+	}
+}
+
+func IdlerNotificationCreationFailed(message string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.IdlerTriggeredNotificationCreated,
+		Status:  corev1.ConditionFalse,
+		Reason:  toolchainv1alpha1.IdlerTriggeredNotificationCreationFailedReason,
+		Message: message,
 	}
 }
 

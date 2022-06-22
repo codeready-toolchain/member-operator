@@ -2,10 +2,13 @@ package idler
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -39,6 +42,8 @@ type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
+	GetHostCluster      cluster.GetHostClusterFunc
+	Namespace           string
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=idlers,verbs=get;list;watch;create;update;patch;delete
@@ -126,9 +131,18 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
+				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
+				if err := r.createNotification(logger, idler); err != nil {
+					logger.Error(err, "failed to create Notification")
+					if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
+						logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
+					} // not returning error to continue tracking remaining pods
+				}
+
 			} else {
 				newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			}
+
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
 			podLogger.Info("New pod detected. Start tracking.")
 			newStatusPods = append(newStatusPods, toolchainv1alpha1.Pod{
@@ -139,6 +153,90 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	}
 
 	return r.updateStatusPods(idler, newStatusPods)
+}
+
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+	logger.Info("Create Notification")
+	//Get the HostClient
+	hostCluster, ok := r.GetHostCluster()
+	if !ok {
+		return fmt.Errorf("unable to get the host cluster")
+	}
+	//check the condition on Idler if notification already sent, only create a notification if not created before
+	if condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated) {
+		// notification already created
+		return nil
+	}
+
+	notificationName := fmt.Sprintf("%s-%s", idler.Name, toolchainv1alpha1.NotificationTypeIdled)
+	notification := &toolchainv1alpha1.Notification{}
+	// Check if notification already exists in host
+	if err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: notificationName, Namespace: hostCluster.OperatorNamespace}, notification); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		userEmails, err := r.getUserEmailsFromMURs(logger, hostCluster, idler)
+		if err != nil {
+			return err
+		}
+		if len(userEmails) == 0 {
+			// no email found, thus no email sent
+			return fmt.Errorf("no email found for the user in MURs")
+		}
+
+		keysAndVals := map[string]string{
+			"Namespace": idler.Name,
+		}
+		for _, userEmail := range userEmails {
+			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
+				WithName(notificationName).
+				WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
+				WithTemplate("idlertriggered").
+				WithKeysAndValues(keysAndVals).
+				Create(userEmail)
+			if err != nil {
+				return errs.Wrapf(err, "unable to create Notification CR from Idler")
+			}
+		}
+	}
+	// set notification created condition
+	if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
+	var emails []string
+	//get NSTemplateSet from idler
+	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
+		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
+		if err != nil {
+			logger.Error(err, "could not get the NSTemplateSet with name", "owner", owner)
+			return emails, err
+		}
+		// iterate on space roles from NSTemplateSet
+		var murs []string
+		for _, spaceRole := range nsTemplateSet.Spec.SpaceRoles {
+			murs = append(murs, spaceRole.Usernames...)
+		}
+		// get MUR from host and use user email from annotations
+		for _, mur := range murs {
+			getMUR := &toolchainv1alpha1.MasterUserRecord{}
+			err := hostCluster.Client.Get(context.TODO(), types.NamespacedName{Name: mur, Namespace: hostCluster.OperatorNamespace}, getMUR)
+			if err != nil {
+				return emails, errs.Wrapf(err, "could not get the MUR")
+			}
+			if email := getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey]; email != "" {
+				emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
+			}
+		}
+	} else {
+		logger.Info("Idler does not have any owner label", "idler_name", idler.Name)
+	}
+	return emails, nil
 }
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
@@ -397,6 +495,27 @@ func (r *Reconciler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.IdlerRunningReason,
+		})
+}
+
+func (r *Reconciler) setStatusIdlerNotificationCreated(idler *toolchainv1alpha1.Idler) error {
+	return r.updateStatusConditions(
+		idler,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.IdlerTriggeredNotificationCreated,
+			Status: corev1.ConditionTrue,
+			Reason: toolchainv1alpha1.IdlerTriggeredReason,
+		})
+}
+
+func (r *Reconciler) setStatusIdlerNotificationCreationFailed(idler *toolchainv1alpha1.Idler, message string) error {
+	return r.updateStatusConditions(
+		idler,
+		toolchainv1alpha1.Condition{
+			Type:    toolchainv1alpha1.IdlerTriggeredNotificationCreated,
+			Status:  corev1.ConditionFalse,
+			Reason:  toolchainv1alpha1.IdlerTriggeredNotificationCreationFailedReason,
+			Message: message,
 		})
 }
 

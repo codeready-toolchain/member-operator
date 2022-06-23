@@ -279,7 +279,9 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		crb := newTektonClusterRoleBinding(username, "advanced")
 		idlerDev := newIdler(username, username+"-dev", "advanced")
 		idlerStage := newIdler(username, username+"-stage", "advanced")
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
+		dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced")
+		dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
+		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, dBaaSTenantDev, dBaaSTenantStage, idlerDev, idlerStage)
 
 		// when
 		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
@@ -582,7 +584,8 @@ func TestPromoteClusterResources(t *testing.T) {
 			crb := newTektonClusterRoleBinding(username, "withemptycrq")
 			emptyCrq := newClusterResourceQuota(username, "withemptycrq")
 			emptyCrq.Name = "for-empty"
-			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, codeNs)
+			dBaaSTenant := newDBaaSTenant(username, "dev", "advanced")
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, dBaaSTenant, codeNs)
 
 			// when
 			updated, err := manager.ensure(logger, nsTmplSet)
@@ -730,13 +733,30 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			idlerDev := newIdler(username, username+"-dev", "advanced")
 			idlerStage := newIdler(username, username+"-stage", "advanced")
+
 			anotherIdlerDev := newIdler("another", "another-dev", "advanced")
 			anotherIdlerStage := newIdler("another", "another-stage", "advanced")
+
+			dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced")
+			dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
 
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given
 				nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withConditions(Provisioned()), withClusterResources("abcde11"))
-				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerStage, anotherIdlerDev, anotherIdlerStage)
+				manager, cl := prepareClusterResourcesManager(t,
+					anotherNsTmplSet,
+					anotherCRQ,
+					nsTmplSet,
+					advancedCRQ,
+					anotherCrb,
+					crb,
+					idlerDev,
+					idlerStage,
+					anotherIdlerDev,
+					anotherIdlerStage,
+					dBaaSTenantDev,
+					dBaaSTenantStage,
+				)
 
 				// when
 				updated, err := manager.ensure(logger, nsTmplSet)
@@ -900,6 +920,240 @@ func TestPromoteClusterResources(t *testing.T) {
 	})
 }
 
+func TestDBaaSTenantUpdate(t *testing.T) {
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
+	username := "johnsmith"
+	namespaceName := "toolchain-member"
+
+	t.Run("success", func(t *testing.T) {
+
+		t.Run("upgrade from advanced to withdbaasupdate tier by changing only the DBaaSTenant", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "withdbaasupdate", withNamespaces("abcde11", "dev", "stage"), withClusterResources("abcde11"))
+			codeNs := newNamespace("withdbaasupdate", username, "code")
+			stageNs := newNamespace("withdbaasupdate", username, "stage")
+			crq := newClusterResourceQuota(username, "withdbaasupdate")
+			crb := newTektonClusterRoleBinding(username, "withdbaasupdate")
+			idlerDev := newIdler(username, username+"-dev", "withdbaasupdate")
+			idlerStage := newIdler(username, username+"-stage", "withdbaasupdate")
+			dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced") // all resources other than dbaastenants have been updated to withdbaasupdate tier already
+			dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs, stageNs, idlerDev, idlerStage, dBaaSTenantDev, dBaaSTenantStage)
+
+			// when
+			updated, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+					WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+													WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+				HasNoResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}). // 1st DBaaSTenant deleted
+				HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{})  // 2nd DBaaSTenant still exists
+
+			t.Run("second DBaaSTenant resource deleted", func(t *testing.T) {
+				// when
+				updated, err := manager.ensure(logger, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, updated)
+				AssertThatNSTemplateSet(t, namespaceName, username, cl).
+					HasFinalizer().
+					HasConditions(Updating())
+				AssertThatCluster(t, cl).
+					HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+						WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+						WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+						Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+					HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+						WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+					HasNoResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).
+					HasNoResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // 2nd DBaaSTenant deleted
+
+				t.Run("first DBaaSTenant resource recreated", func(t *testing.T) {
+					// when
+					updated, err := manager.ensure(logger, nsTmplSet)
+
+					// then
+					require.NoError(t, err)
+					assert.True(t, updated)
+					AssertThatNSTemplateSet(t, namespaceName, username, cl).
+						HasFinalizer().
+						HasConditions(Updating())
+					AssertThatCluster(t, cl).
+						HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+							WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+							WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+							Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+						HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+																WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+						HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).    // 1st DBaaSTenant recreated
+						HasNoResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // 2nd DBaaSTenant still does not exist
+
+					t.Run("second DBaaSTenant resource recreated", func(t *testing.T) {
+						// when
+						updated, err := manager.ensure(logger, nsTmplSet)
+
+						// then
+						require.NoError(t, err)
+						assert.True(t, updated)
+						AssertThatNSTemplateSet(t, namespaceName, username, cl).
+							HasFinalizer().
+							HasConditions(Updating())
+						AssertThatCluster(t, cl).
+							HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+								WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+								WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+								Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+							HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+																WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+							HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).  // 1st DBaaSTenant still exists
+							HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // 2nd DBaaSTenant recreated
+					})
+				})
+			})
+		})
+	})
+
+	t.Run("failures", func(t *testing.T) {
+
+		t.Run("DBaaSTenant get error", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "withdbaasupdate", withNamespaces("abcde11", "dev", "stage"), withClusterResources("abcde11"))
+			codeNs := newNamespace("withdbaasupdate", username, "code")
+			stageNs := newNamespace("withdbaasupdate", username, "stage")
+			crq := newClusterResourceQuota(username, "withdbaasupdate")
+			crb := newTektonClusterRoleBinding(username, "withdbaasupdate")
+			idlerDev := newIdler(username, username+"-dev", "withdbaasupdate")
+			idlerStage := newIdler(username, username+"-stage", "withdbaasupdate")
+			dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced") // all resources other than dbaastenants have been updated to withdbaasupdate tier already
+			dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs, stageNs, idlerDev, idlerStage, dBaaSTenantDev, dBaaSTenantStage)
+			cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+				if _, ok := obj.(*dbaasv1alpha1.DBaaSTenant); ok {
+					return fmt.Errorf("get error")
+				}
+				return cl.Client.Get(ctx, key, obj)
+			}
+
+			// when
+			updated, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.EqualError(t, err, "failed to update/delete existing cluster resources of GVK 'dbaas.redhat.com/v1alpha1, Kind=DBaaSTenant': get error")
+			assert.False(t, updated)
+
+			cl.MockGet = nil
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(UpdateFailed("get error"))
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+					WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+													WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+				HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).  // 1st DBaaSTenant still exists
+				HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // 2nd DBaaSTenant still exists
+		})
+
+		t.Run("DBaaSTenant delete error", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "withdbaasupdate", withNamespaces("abcde11", "dev", "stage"), withClusterResources("abcde11"))
+			codeNs := newNamespace("withdbaasupdate", username, "code")
+			stageNs := newNamespace("withdbaasupdate", username, "stage")
+			crq := newClusterResourceQuota(username, "withdbaasupdate")
+			crb := newTektonClusterRoleBinding(username, "withdbaasupdate")
+			idlerDev := newIdler(username, username+"-dev", "withdbaasupdate")
+			idlerStage := newIdler(username, username+"-stage", "withdbaasupdate")
+			dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced") // all resources other than dbaastenants have been updated to withdbaasupdate tier already
+			dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs, stageNs, idlerDev, idlerStage, dBaaSTenantDev, dBaaSTenantStage)
+			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				if _, ok := obj.(*dbaasv1alpha1.DBaaSTenant); ok {
+					return fmt.Errorf("delete error")
+				}
+				return cl.Client.Delete(ctx, obj, opts...)
+			}
+
+			// when
+			updated, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.EqualError(t, err, "failed to update/delete existing cluster resources of GVK 'dbaas.redhat.com/v1alpha1, Kind=DBaaSTenant': delete error")
+			assert.False(t, updated)
+
+			cl.MockGet = nil
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(UpdateFailed("delete error"))
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+					WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+													WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+				HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).  // 1st DBaaSTenant still exists
+				HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // 2nd DBaaSTenant still exists
+		})
+
+		t.Run("DBaaSTenant is being deleted error", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "withdbaasupdate", withNamespaces("abcde11", "dev", "stage"), withClusterResources("abcde11"))
+			codeNs := newNamespace("withdbaasupdate", username, "code")
+			stageNs := newNamespace("withdbaasupdate", username, "stage")
+			crq := newClusterResourceQuota(username, "withdbaasupdate")
+			crb := newTektonClusterRoleBinding(username, "withdbaasupdate")
+			idlerDev := newIdler(username, username+"-dev", "withdbaasupdate")
+			idlerStage := newIdler(username, username+"-stage", "withdbaasupdate")
+			dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced") // all resources other than dbaastenants have been updated to withdbaasupdate tier already
+			dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
+
+			dBaaSTenantDev.DeletionTimestamp = &metav1.Time{Time: time.Now()} // dBaaSTenantDev is currently being deleted
+
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs, stageNs, idlerDev, idlerStage, dBaaSTenantDev, dBaaSTenantStage)
+
+			// when
+			updated, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.EqualError(t, err, "failed to update/delete existing cluster resources of GVK 'dbaas.redhat.com/v1alpha1, Kind=DBaaSTenant': DBaaSTenant is currently being deleted")
+			assert.False(t, updated)
+
+			cl.MockGet = nil
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(UpdateFailed("DBaaSTenant is currently being deleted"))
+			AssertThatCluster(t, cl).
+				HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "withdbaasupdate-clusterresources-abcde11"),
+					WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate"),
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+				HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{},
+													WithLabel("toolchain.dev.openshift.com/tier", "withdbaasupdate")).
+				HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).  // 1st DBaaSTenant still exists
+				HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // 2nd DBaaSTenant still exists
+		})
+	})
+}
+
 func TestUpdateClusterResources(t *testing.T) {
 
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
@@ -918,7 +1172,7 @@ func TestUpdateClusterResources(t *testing.T) {
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
-			codeNs := newNamespace("advanced", username, "dev")
+			codeNs := newNamespace("advanced", username, "dev") // references templateref abcde11
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when

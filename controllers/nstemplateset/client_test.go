@@ -29,7 +29,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	logf.SetLogger(logger)
 	role := newRole("john-dev", "edit-john", "john")
 	devNs := newNamespace("advanced", "john", "dev")
-	dBaaSTenant := newDBaaSTenant("john-dev-tenant", "john")
+	dBaaSTenant := newDBaaSTenant("john", "dev", "advanced")
 	additionalLabel := map[string]string{
 		"foo": "bar",
 	}
@@ -46,7 +46,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("when creating two objects", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 
 		// when
 		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs, sa), additionalLabel)
@@ -59,7 +59,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("when creating only one object because the other one already exists", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
@@ -74,7 +74,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
@@ -89,7 +89,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("when only DBaaSTenant is supposed to be applied, the group for DBaaS is present, but not the version", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 		// the version is different
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha2"))
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
@@ -106,8 +106,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("when only DBaaSTenant is supposed to be applied and the group for DBaaS is present", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
-		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha1"))
+		apiClient, fakeClient := prepareAPIClient(t, true)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
@@ -122,7 +121,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("don't update SA when it already exists", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
@@ -140,7 +139,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("update Role and don't update SA when it already exists", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
@@ -161,7 +160,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 
 	t.Run("create SA when it doesn't exist yet", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
+		apiClient, fakeClient := prepareAPIClient(t, false)
 		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role), additionalLabel)
 		require.NoError(t, err)
 
@@ -200,7 +199,7 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool
 	})
 	dBaaSTenant := &dbaasv1alpha1.DBaaSTenant{}
 	if expectDBaaSTenant {
-		AssertObject(t, client, "", "john-dev-tenant", dBaaSTenant, func() {
+		AssertObject(t, client, "", "tenant-john-dev", dBaaSTenant, func() {
 			assert.Contains(t, dBaaSTenant.Labels, toolchainv1alpha1.ProviderLabelKey)
 			assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, dBaaSTenant.Labels[toolchainv1alpha1.ProviderLabelKey])
 			assert.Contains(t, dBaaSTenant.Labels, toolchainv1alpha1.OwnerLabelKey)
@@ -210,30 +209,11 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool
 		})
 	} else {
 		// should not exist
-		AssertObjectNotFound(t, client, "john-dev", "john-dev-tenant", dBaaSTenant)
+		AssertObjectNotFound(t, client, "john-dev", "tenant-john-dev", dBaaSTenant)
 	}
 }
 
-func newDBaaSTenant(name, owner string) *dbaasv1alpha1.DBaaSTenant {
-	return &dbaasv1alpha1.DBaaSTenant{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: dbaasv1alpha1.SchemeBuilder.GroupVersion.String(),
-			Kind:       "DBaaSTenant",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    owner,
-			},
-			Annotations: map[string]string{
-				toolchainv1alpha1.TierTemplateObjectOptionalResourceAnnotation: "true",
-			},
-		},
-	}
-}
-
-func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *test.FakeClient) {
+func prepareAPIClient(t *testing.T, optionalAPIsInstalled bool, initObjs ...runtime.Object) (*APIClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -269,16 +249,20 @@ func prepareAPIClient(t *testing.T, initObjs ...runtime.Object) (*APIClient, *te
 		obj.SetGeneration(o.GetGeneration())
 		return nil
 	}
+	apiGroups := newAPIGroups(
+		newAPIGroup("quota.openshift.io", "v1"),
+		newAPIGroup("rbac.authorization.k8s.io", "v1"),
+		newAPIGroup("toolchain.dev.openshift.com", "v1alpha1"),
+		newAPIGroup("", "v1"))
+	if optionalAPIsInstalled {
+		apiGroups = append(apiGroups, newAPIGroup("dbaas.redhat.com", "v1alpha1"))
+	}
 	return &APIClient{
 		AllNamespacesClient: fakeClient,
 		Client:              fakeClient,
 		Scheme:              s,
 		GetHostCluster:      NewGetHostCluster(fakeClient, true, corev1.ConditionTrue),
-		AvailableAPIGroups: newAPIGroups(
-			newAPIGroup("quota.openshift.io", "v1"),
-			newAPIGroup("rbac.authorization.k8s.io", "v1"),
-			newAPIGroup("toolchain.dev.openshift.com", "v1alpha1"),
-			newAPIGroup("", "v1")),
+		AvailableAPIGroups:  apiGroups,
 	}, fakeClient
 }
 

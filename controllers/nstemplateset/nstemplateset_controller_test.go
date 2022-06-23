@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -127,6 +128,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		crb := newTektonClusterRoleBinding(username, "advanced")
 		idlerDev := newIdler(username, username+"-dev", "advanced")
 		idlerStage := newIdler(username, username+"-stage", "advanced")
+		dBaaSTenantDev := newDBaaSTenant(username, "dev", "advanced")
+		dBaaSTenantStage := newDBaaSTenant(username, "stage", "advanced")
 		// create namespaces (and assume they are complete since they have the expected revision number)
 		devNS := newNamespace("advanced", username, "dev", withTemplateRefUsingRevision("abcde11"))
 		stageNS := newNamespace("advanced", username, "stage", withTemplateRefUsingRevision("abcde11"))
@@ -137,8 +140,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 		stageRole := newRole(stageNS.Name, "exec-pods", username)
 		stageRb := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
 		stageRb2 := newRoleBinding(stageNS.Name, "crtadmin-view", username)
+
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet,
-			crq, crb, idlerDev, idlerStage,
+			crq, crb, idlerDev, idlerStage, dBaaSTenantDev, dBaaSTenantStage,
 			devNS, stageNS,
 			devRole, devRb, devRb2,
 			stageRole, stageRb, stageRb2)
@@ -610,7 +614,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 					HasResource(username+"-stage", &toolchainv1alpha1.Idler{}) // created
 				AssertThatNamespace(t, username+"-dev", fakeClient).DoesNotExist()
 
-				t.Run("provision john's dev namespace", func(t *testing.T) {
+				t.Run("provision john's dev and stage DBaaSTenant", func(t *testing.T) {
 					// when
 					res, err := r.Reconcile(context.TODO(), req)
 
@@ -621,22 +625,33 @@ func TestProvisionTwoUsers(t *testing.T) {
 						HasFinalizer().
 						HasSpecNamespaces("dev").
 						HasConditions(Provisioning())
+					AssertThatNamespace(t, username+"-dev", fakeClient).
+						DoesNotExist()
 					AssertThatCluster(t, fakeClient).
 						HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
 						HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 						HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
-						HasResource(username+"-stage", &toolchainv1alpha1.Idler{})
-					AssertThatNamespace(t, username+"-dev", fakeClient).
-						HasLabel("toolchain.dev.openshift.com/owner", username).
-						HasLabel("toolchain.dev.openshift.com/type", "dev").
-						HasNoLabel("toolchain.dev.openshift.com/templateref"). // no label until all the namespace inner resources have been created
-						HasNoLabel("toolchain.dev.openshift.com/tier").
-						HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
+						HasResource(username+"-stage", &toolchainv1alpha1.Idler{}).
+						HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}) // created
 
-					t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
-						// given - when host cluster is not ready, then it should use the cache
-						r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+					// when
+					res, err = r.Reconcile(context.TODO(), req)
 
+					// then
+					require.NoError(t, err)
+					assert.Equal(t, reconcile.Result{}, res)
+					AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+						HasConditions(Provisioning())
+					AssertThatCluster(t, fakeClient).
+						HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+						HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+						HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
+						HasResource(username+"-stage", &toolchainv1alpha1.Idler{}).
+						HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).
+						HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // created
+					AssertThatNamespace(t, username+"-dev", fakeClient).DoesNotExist()
+
+					t.Run("provision john's dev namespace", func(t *testing.T) {
 						// when
 						res, err := r.Reconcile(context.TODO(), req)
 
@@ -647,42 +662,51 @@ func TestProvisionTwoUsers(t *testing.T) {
 							HasFinalizer().
 							HasSpecNamespaces("dev").
 							HasConditions(Provisioning())
+						AssertThatCluster(t, fakeClient).
+							HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+							HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+							HasResource(username+"-dev", &toolchainv1alpha1.Idler{}).
+							HasResource(username+"-stage", &toolchainv1alpha1.Idler{})
 						AssertThatNamespace(t, username+"-dev", fakeClient).
 							HasLabel("toolchain.dev.openshift.com/owner", username).
 							HasLabel("toolchain.dev.openshift.com/type", "dev").
-							HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-							HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-							HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-							HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
-						AssertThatCluster(t, fakeClient).
-							HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-							HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+							HasNoLabel("toolchain.dev.openshift.com/templateref"). // no label until all the namespace inner resources have been created
+							HasNoLabel("toolchain.dev.openshift.com/tier").
+							HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 
-						t.Run("provision ClusterResourceQuota for the joe user (using cached TierTemplate)", func(t *testing.T) {
-							// given
-							joeUsername := "joe"
-							joeNsTmplSet := newNSTmplSet(namespaceName, joeUsername, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
-							err := fakeClient.Create(context.TODO(), joeNsTmplSet)
-							require.NoError(t, err)
-							joeReq := newReconcileRequest(namespaceName, joeUsername)
+						t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
+							// given - when host cluster is not ready, then it should use the cache
+							r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
 
 							// when
-							res, err := r.Reconcile(context.TODO(), joeReq)
+							res, err := r.Reconcile(context.TODO(), req)
 
 							// then
 							require.NoError(t, err)
 							assert.Equal(t, reconcile.Result{}, res)
-							AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
+							AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 								HasFinalizer().
 								HasSpecNamespaces("dev").
 								HasConditions(Provisioning())
-							AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-								DoesNotExist()
+							AssertThatNamespace(t, username+"-dev", fakeClient).
+								HasLabel("toolchain.dev.openshift.com/owner", username).
+								HasLabel("toolchain.dev.openshift.com/type", "dev").
+								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
+								HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+								HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+								HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 							AssertThatCluster(t, fakeClient).
-								HasResource("for-"+joeUsername, &quotav1.ClusterResourceQuota{}).
-								HasNoResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+								HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+								HasResource(username+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
-							t.Run("provision joe's clusterRoleBinding (using cached TierTemplate)", func(t *testing.T) {
+							t.Run("provision ClusterResourceQuota for the joe user (using cached TierTemplate)", func(t *testing.T) {
+								// given
+								joeUsername := "joe"
+								joeNsTmplSet := newNSTmplSet(namespaceName, joeUsername, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+								err := fakeClient.Create(context.TODO(), joeNsTmplSet)
+								require.NoError(t, err)
+								joeReq := newReconcileRequest(namespaceName, joeUsername)
+
 								// when
 								res, err := r.Reconcile(context.TODO(), joeReq)
 
@@ -697,9 +721,9 @@ func TestProvisionTwoUsers(t *testing.T) {
 									DoesNotExist()
 								AssertThatCluster(t, fakeClient).
 									HasResource("for-"+joeUsername, &quotav1.ClusterResourceQuota{}).
-									HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+									HasNoResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
-								t.Run("provision joe's dev and stage Idlers", func(t *testing.T) {
+								t.Run("provision joe's clusterRoleBinding (using cached TierTemplate)", func(t *testing.T) {
 									// when
 									res, err := r.Reconcile(context.TODO(), joeReq)
 
@@ -713,23 +737,10 @@ func TestProvisionTwoUsers(t *testing.T) {
 									AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
 										DoesNotExist()
 									AssertThatCluster(t, fakeClient).
-										HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
-										HasResource(joeUsername+"-dev", &toolchainv1alpha1.Idler{}) // created
+										HasResource("for-"+joeUsername, &quotav1.ClusterResourceQuota{}).
+										HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
-									// when
-									res, err = r.Reconcile(context.TODO(), joeReq)
-
-									// then
-									require.NoError(t, err)
-									assert.Equal(t, reconcile.Result{}, res)
-									AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
-										HasConditions(Provisioning())
-									AssertThatCluster(t, fakeClient).
-										HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
-										HasResource(joeUsername+"-dev", &toolchainv1alpha1.Idler{}).
-										HasResource(joeUsername+"-stage", &toolchainv1alpha1.Idler{}) // created
-
-									t.Run("provision joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
+									t.Run("provision joe's dev and stage Idlers", func(t *testing.T) {
 										// when
 										res, err := r.Reconcile(context.TODO(), joeReq)
 
@@ -741,19 +752,25 @@ func TestProvisionTwoUsers(t *testing.T) {
 											HasSpecNamespaces("dev").
 											HasConditions(Provisioning())
 										AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-											HasLabel("toolchain.dev.openshift.com/owner", joeUsername).
-											HasLabel("toolchain.dev.openshift.com/type", "dev").
-											HasNoLabel("toolchain.dev.openshift.com/templateref").
-											HasNoLabel("toolchain.dev.openshift.com/tier").
-											HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
+											DoesNotExist()
 										AssertThatCluster(t, fakeClient).
-											HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
-											HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+											HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+											HasResource(joeUsername+"-dev", &toolchainv1alpha1.Idler{}) // created
 
-										t.Run("provision inner resources of joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
-											// given - when host cluster is not ready, then it should use the cache
-											r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+										// when
+										res, err = r.Reconcile(context.TODO(), joeReq)
 
+										// then
+										require.NoError(t, err)
+										assert.Equal(t, reconcile.Result{}, res)
+										AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
+											HasConditions(Provisioning())
+										AssertThatCluster(t, fakeClient).
+											HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+											HasResource(joeUsername+"-dev", &toolchainv1alpha1.Idler{}).
+											HasResource(joeUsername+"-stage", &toolchainv1alpha1.Idler{}) // created
+
+										t.Run("provision joe's dev and stage DBaaSTenant", func(t *testing.T) {
 											// when
 											res, err := r.Reconcile(context.TODO(), joeReq)
 
@@ -765,15 +782,75 @@ func TestProvisionTwoUsers(t *testing.T) {
 												HasSpecNamespaces("dev").
 												HasConditions(Provisioning())
 											AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-												HasLabel("toolchain.dev.openshift.com/owner", joeUsername).
-												HasLabel("toolchain.dev.openshift.com/type", "dev").
-												HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-												HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-												HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-												HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
+												DoesNotExist()
 											AssertThatCluster(t, fakeClient).
-												HasResource("for-"+joeUsername, &quotav1.ClusterResourceQuota{}).
-												HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+												HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+												HasResource(joeUsername+"-dev", &toolchainv1alpha1.Idler{}).
+												HasResource(joeUsername+"-stage", &toolchainv1alpha1.Idler{}).
+												HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}) // created
+
+											// when
+											res, err = r.Reconcile(context.TODO(), joeReq)
+
+											// then
+											require.NoError(t, err)
+											assert.Equal(t, reconcile.Result{}, res)
+											AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
+												HasConditions(Provisioning())
+											AssertThatCluster(t, fakeClient).
+												HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+												HasResource(joeUsername+"-dev", &toolchainv1alpha1.Idler{}).
+												HasResource(joeUsername+"-stage", &toolchainv1alpha1.Idler{}).
+												HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}).
+												HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{}) // created
+
+											t.Run("provision joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
+												// when
+												res, err := r.Reconcile(context.TODO(), joeReq)
+
+												// then
+												require.NoError(t, err)
+												assert.Equal(t, reconcile.Result{}, res)
+												AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
+													HasFinalizer().
+													HasSpecNamespaces("dev").
+													HasConditions(Provisioning())
+												AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
+													HasLabel("toolchain.dev.openshift.com/owner", joeUsername).
+													HasLabel("toolchain.dev.openshift.com/type", "dev").
+													HasNoLabel("toolchain.dev.openshift.com/templateref").
+													HasNoLabel("toolchain.dev.openshift.com/tier").
+													HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
+												AssertThatCluster(t, fakeClient).
+													HasResource("for-"+username, &quotav1.ClusterResourceQuota{}).
+													HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+
+												t.Run("provision inner resources of joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
+													// given - when host cluster is not ready, then it should use the cache
+													r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
+													// when
+													res, err := r.Reconcile(context.TODO(), joeReq)
+
+													// then
+													require.NoError(t, err)
+													assert.Equal(t, reconcile.Result{}, res)
+													AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
+														HasFinalizer().
+														HasSpecNamespaces("dev").
+														HasConditions(Provisioning())
+													AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
+														HasLabel("toolchain.dev.openshift.com/owner", joeUsername).
+														HasLabel("toolchain.dev.openshift.com/type", "dev").
+														HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
+														HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+														HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+														HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
+													AssertThatCluster(t, fakeClient).
+														HasResource("for-"+joeUsername, &quotav1.ClusterResourceQuota{}).
+														HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+												})
+											})
 										})
 									})
 								})
@@ -888,37 +965,36 @@ func TestReconcilePromotion(t *testing.T) {
 							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 							WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // created
 
-					t.Run("delete redundant namespace", func(t *testing.T) {
+					t.Run("create 2 DBaaSTenants", func(t *testing.T) {
+						// when
+						_, err = r.Reconcile(context.TODO(), req)
+						// then
+						require.NoError(t, err)
+						AssertThatCluster(t, fakeClient).
+							HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{},
+								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
+								WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // created
 
-						// when - should delete the -stage namespace
-						_, err := r.Reconcile(context.TODO(), req)
-
+						// when
+						_, err = r.Reconcile(context.TODO(), req)
 						// then
 						require.NoError(t, err)
 						AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 							HasFinalizer().
 							HasConditions(Updating())
 						AssertThatCluster(t, fakeClient).
-							HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+							HasResource("tenant-"+username+"-dev", &dbaasv1alpha1.DBaaSTenant{}). // still exists
+							HasResource("tenant-"+username+"-stage", &dbaasv1alpha1.DBaaSTenant{},
 								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-								WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
-						AssertThatNamespace(t, stageNS.Name, r.Client).
-							DoesNotExist() // namespace was deleted
-						AssertThatNamespace(t, devNS.Name, r.Client).
-							HasNoOwnerReference().
-							HasLabel("toolchain.dev.openshift.com/owner", username).
-							HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
-							HasLabel("toolchain.dev.openshift.com/type", "dev").
-							HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-							HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded yet
+								WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // created
 
-						t.Run("upgrade the dev namespace", func(t *testing.T) {
-							// when - should upgrade the namespace
-							_, err = r.Reconcile(context.TODO(), req)
+						t.Run("delete redundant namespace", func(t *testing.T) {
+
+							// when - should delete the -stage namespace
+							_, err := r.Reconcile(context.TODO(), req)
 
 							// then
 							require.NoError(t, err)
-							// NSTemplateSet provisioning is complete
 							AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 								HasFinalizer().
 								HasConditions(Updating())
@@ -927,23 +1003,17 @@ func TestReconcilePromotion(t *testing.T) {
 									WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 									WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
 							AssertThatNamespace(t, stageNS.Name, r.Client).
-								DoesNotExist()
-							AssertThatNamespace(t, username+"-dev", r.Client).
+								DoesNotExist() // namespace was deleted
+							AssertThatNamespace(t, devNS.Name, r.Client).
 								HasNoOwnerReference().
 								HasLabel("toolchain.dev.openshift.com/owner", username).
-								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-								HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+								HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
 								HasLabel("toolchain.dev.openshift.com/type", "dev").
 								HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-								HasResource("exec-pods", &rbacv1.Role{}).
-								HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
-								HasResource("crtadmin-view", &rbacv1.RoleBinding{})
+								HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded yet
 
-							t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
-								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
-
-								// when - should check if everything is OK and set status to provisioned
+							t.Run("upgrade the dev namespace", func(t *testing.T) {
+								// when - should upgrade the namespace
 								_, err = r.Reconcile(context.TODO(), req)
 
 								// then
@@ -951,18 +1021,49 @@ func TestReconcilePromotion(t *testing.T) {
 								// NSTemplateSet provisioning is complete
 								AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 									HasFinalizer().
-									HasConditions(Provisioned())
+									HasConditions(Updating())
 								AssertThatCluster(t, fakeClient).
 									HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+										WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
 										WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+								AssertThatNamespace(t, stageNS.Name, r.Client).
+									DoesNotExist()
 								AssertThatNamespace(t, username+"-dev", r.Client).
 									HasNoOwnerReference().
-									HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
 									HasLabel("toolchain.dev.openshift.com/owner", username).
-									HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // not updgraded yet
+									HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
+									HasLabel("toolchain.dev.openshift.com/tier", "advanced").
 									HasLabel("toolchain.dev.openshift.com/type", "dev").
 									HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-									HasResource("crtadmin-pods", &rbacv1.RoleBinding{}) // role has been removed
+									HasResource("exec-pods", &rbacv1.Role{}).
+									HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+									HasResource("crtadmin-view", &rbacv1.RoleBinding{})
+
+								t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
+									// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
+									r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
+									// when - should check if everything is OK and set status to provisioned
+									_, err = r.Reconcile(context.TODO(), req)
+
+									// then
+									require.NoError(t, err)
+									// NSTemplateSet provisioning is complete
+									AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+										HasFinalizer().
+										HasConditions(Provisioned())
+									AssertThatCluster(t, fakeClient).
+										HasResource("for-"+username, &quotav1.ClusterResourceQuota{},
+											WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+									AssertThatNamespace(t, username+"-dev", r.Client).
+										HasNoOwnerReference().
+										HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
+										HasLabel("toolchain.dev.openshift.com/owner", username).
+										HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // not updgraded yet
+										HasLabel("toolchain.dev.openshift.com/type", "dev").
+										HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+										HasResource("crtadmin-pods", &rbacv1.RoleBinding{}) // role has been removed
+								})
 							})
 						})
 					})
@@ -1453,7 +1554,7 @@ func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runt
 }
 
 func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {
-	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
+	apiClient, fakeClient := prepareAPIClient(t, true, initObjs...)
 	return &statusManager{
 		APIClient: apiClient,
 	}, fakeClient
@@ -1474,7 +1575,7 @@ func prepareClusterResourcesManager(t *testing.T, initObjs ...runtime.Object) (*
 }
 
 func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *test.FakeClient) {
-	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
+	apiClient, fakeClient := prepareAPIClient(t, true, initObjs...)
 	return NewReconciler(apiClient), fakeClient
 }
 
@@ -1736,6 +1837,28 @@ func newIdler(username, name, tierName string) *toolchainv1alpha1.Idler { // nol
 	return idler
 }
 
+func newDBaaSTenant(username, nsType, tierName string) *dbaasv1alpha1.DBaaSTenant {
+	return &dbaasv1alpha1.DBaaSTenant{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: dbaasv1alpha1.SchemeBuilder.GroupVersion.String(),
+			Kind:       "DBaaSTenant",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("tenant-%s-%s", username, nsType),
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
+				"toolchain.dev.openshift.com/tier":        tierName,
+				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tierName, "clusterresources", "abcde11"),
+				"toolchain.dev.openshift.com/owner":       username,
+				"toolchain.dev.openshift.com/type":        "clusterresources",
+			},
+			Annotations: map[string]string{
+				toolchainv1alpha1.TierTemplateObjectOptionalResourceAnnotation: "yes",
+			},
+		},
+	}
+}
+
 type objectMetaOption func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta
 
 func withTemplateRefUsingRevision(revision string) objectMetaOption {
@@ -1763,7 +1886,7 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	tmpls := map[string]map[string]map[string]string{
 		"advanced": {
 			"clusterresources": {
-				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerStage), test.WithParams(username)),
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerStage, dbaasTenantDev, dbaasTenantStage), test.WithParams(username)),
 				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username)),
 			},
 			"dev": {
@@ -1820,6 +1943,23 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 			},
 			"stage": {
 				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole), test.WithParams(username)),
+			},
+			"admin": { // space roles
+				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+			},
+		},
+		"withdbaasupdate": {
+			"clusterresources": {
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerStage, dbaasTenantDevUpdated, dbaasTenantStageUpdated), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(username)),
+			},
+			"dev": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole, crtAdminViewRb), test.WithParams(username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole), test.WithParams(username)),
+			},
+			"stage": {
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole, crtAdminViewRb), test.WithParams(username)),
 				"abcde12": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole), test.WithParams(username)),
 			},
 			"admin": { // space roles
@@ -2070,5 +2210,50 @@ var (
   subjects:
     - kind: User
       name: ${USERNAME}
+`
+	dbaasTenantDev test.TemplateObject = `
+- apiVersion: dbaas.redhat.com/v1alpha1
+  kind: DBaaSTenant
+  metadata:
+    annotations:
+      toolchain.dev.openshift.com/optional-resource: "yes"
+    name: "tenant-${USERNAME}-dev"
+  spec:
+    inventoryNamespace: ${USERNAME}-dev
+`
+	dbaasTenantStage test.TemplateObject = `
+- apiVersion: dbaas.redhat.com/v1alpha1
+  kind: DBaaSTenant
+  metadata:
+    annotations:
+      toolchain.dev.openshift.com/optional-resource: "yes"
+    name: "tenant-${USERNAME}-stage"
+  spec:
+    inventoryNamespace: ${USERNAME}-stage
+`
+	dbaasTenantDevUpdated test.TemplateObject = `
+- apiVersion: dbaas.redhat.com/v1alpha1
+  kind: DBaaSTenant
+  metadata:
+    annotations:
+      toolchain.dev.openshift.com/optional-resource: "yes"
+    labels:
+      toolchain.dev.openshift.com/label: "something"
+    name: "tenant-${USERNAME}-dev"
+  spec:
+    inventoryNamespace: ${USERNAME}-dev
+`
+
+	dbaasTenantStageUpdated test.TemplateObject = `
+- apiVersion: dbaas.redhat.com/v1alpha1
+  kind: DBaaSTenant
+  metadata:
+    annotations:
+      toolchain.dev.openshift.com/optional-resource: "yes"
+    labels:
+      toolchain.dev.openshift.com/label: "something"
+    name: "tenant-${USERNAME}-stage"
+  spec:
+    inventoryNamespace: ${USERNAME}-stage
 `
 )

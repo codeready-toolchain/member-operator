@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -101,6 +102,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 			}
 			return applycl.SortObjectsByName(list), nil
 		}),
+
 	newToolchainObjectKind(
 		dbaasv1alpha1.GroupVersion.WithKind("DBaaSTenant"),
 		&dbaasv1alpha1.DBaaSTenant{},
@@ -125,6 +127,11 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	username := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
 	var err error
+
+	for _, clusterResourceKind := range clusterResourceKinds {
+		userTierLogger.Info("temp", "kind", clusterResourceKind.gvk.Kind)
+	}
+
 	if nsTmplSet.Spec.ClusterResources != nil {
 		tierTemplate, err = getTierTemplate(r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
@@ -237,6 +244,23 @@ CurrentObjects:
 					if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
 						return false, err
 					}
+
+					// Special handling of DBaaSTenants is required because an admission webhook "vdbaastenant.kb.io" denies updates. Delete them and allow them to be created again as a workaround.
+					if currentObject.GetObjectKind().GroupVersionKind().Kind == "DBaaSTenant" {
+						dbaasTenant := currentObject.DeepCopyObject().(runtimeclient.Object)
+						err := r.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(currentObject), dbaasTenant)
+						if err != nil {
+							return false, err
+						} else if util.IsBeingDeleted(dbaasTenant) {
+							return false, fmt.Errorf("DBaaSTenant is currently being deleted")
+						}
+						logger.Info("deleting existing DBaaSTenant resource before applying a new version")
+						if err := r.Client.Delete(context.TODO(), dbaasTenant); err != nil {
+							return false, err
+						}
+						return true, err // dbaasTenant deletion should trigger another reconcile
+					}
+
 					return r.apply(logger, nsTmplSet, tierTemplate, newObject)
 				}
 				continue CurrentObjects

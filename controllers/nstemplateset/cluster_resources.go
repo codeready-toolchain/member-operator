@@ -102,7 +102,6 @@ var clusterResourceKinds = []toolchainObjectKind{
 			}
 			return applycl.SortObjectsByName(list), nil
 		}),
-
 	newToolchainObjectKind(
 		dbaasv1alpha1.GroupVersion.WithKind("DBaaSTenant"),
 		&dbaasv1alpha1.DBaaSTenant{},
@@ -127,10 +126,6 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 	username := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
 	var err error
-
-	for _, clusterResourceKind := range clusterResourceKinds {
-		userTierLogger.Info("temp", "kind", clusterResourceKind.gvk.Kind)
-	}
 
 	if nsTmplSet.Spec.ClusterResources != nil {
 		tierTemplate, err = getTierTemplate(r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
@@ -254,7 +249,7 @@ CurrentObjects:
 						} else if util.IsBeingDeleted(dbaasTenant) {
 							return false, fmt.Errorf("DBaaSTenant is currently being deleted")
 						}
-						logger.Info("deleting existing DBaaSTenant resource before applying a new version")
+						logger.Info("Deleting existing DBaaSTenant resource before applying a new version")
 						if err := r.Client.Delete(context.TODO(), dbaasTenant); err != nil {
 							return false, err
 						}

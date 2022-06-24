@@ -1837,7 +1837,7 @@ func newIdler(username, name, tierName string) *toolchainv1alpha1.Idler { // nol
 	return idler
 }
 
-func newDBaaSTenant(username, nsType, tierName string) *dbaasv1alpha1.DBaaSTenant {
+func newDBaaSTenant(username, nsType, tierName string) *dbaasv1alpha1.DBaaSTenant { //nolint: unparam
 	return &dbaasv1alpha1.DBaaSTenant{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: dbaasv1alpha1.SchemeBuilder.GroupVersion.String(),

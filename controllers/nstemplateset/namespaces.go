@@ -76,16 +76,70 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) error {
 	logger.Info("ensuring namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
 
-	// create namespace before created inner resources because creating the namespace may take some time
+	namespaceNeedsUpdate := false
 	if userNamespace == nil {
+		// userNamespace does not exist, need to create the namespace
+		namespaceNeedsUpdate = true
+		logger.Info("namespace needs to be created")
+	} else {
+		// userNamespace exists, check if the namespace needs to be updated
+		tmplObj, err := r.getNamespaceObjFromTemplate(tierTemplate, userNamespace)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace object from template for namespace type '%s'", tierTemplate.typeName)
+		}
+
+		namespaceNeedsUpdate = !r.namespaceHasExpectedAnnotationsAndLabelsFromTemplate(logger, tmplObj, userNamespace)
+		logger.Info("namespace needs to be updated", "namespace", userNamespace.Name)
+	}
+
+	// create namespace before creating inner resources because creating the namespace may take some time
+	if namespaceNeedsUpdate {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tierTemplate)
 	}
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tierTemplate, userNamespace)
 }
 
+func (r *namespacesManager) getNamespaceObjFromTemplate(tierTemplate *tierTemplate, userNamespace *corev1.Namespace) (runtimeclient.Object, error) {
+	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: userNamespace.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainNamespaces)
+	if err != nil {
+		return nil, err
+	}
+
+	var tmplObj runtimeclient.Object
+	for _, object := range objs {
+		if object.GetName() == userNamespace.Name {
+			tmplObj = object
+		}
+	}
+	return tmplObj, nil
+}
+
+// namespaceHasExpectedAnnotationsAndLabels checks if the namespace has the expected annotation and labels from the template object
+func (r *namespacesManager) namespaceHasExpectedAnnotationsAndLabelsFromTemplate(logger logr.Logger, tmplObj runtimeclient.Object, userNamespace *corev1.Namespace) bool {
+	if !mapContains(userNamespace.Annotations, tmplObj.GetAnnotations()) ||
+		!mapContains(userNamespace.Labels, tmplObj.GetLabels()) {
+		return false
+	}
+
+	return true
+}
+
+func mapContains(actual, contains map[string]string) bool {
+	for containsKey, containsValue := range contains {
+		v, ok := actual[containsKey]
+		if !ok {
+			return false
+		}
+		if v != containsValue {
+			return false
+		}
+	}
+	return true
+}
+
 // ensureNamespaceResource ensures that the namespace exists.
 func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate) error {
-	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
+	logger.Info("ensuring namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: nsTmplSet.GetName()}, template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tierTemplate.typeName)
@@ -152,6 +206,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	// Adding label indicating that the namespace is up-to-date with TierTemplate
 	namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] = tierTemplate.templateRef
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = tierTemplate.tierName
+	logger.Info("namespace after applied inner ns resources", "ns", namespace)
 	if err := r.Client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
@@ -290,9 +345,17 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
 func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
 	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
+
+	tmplObj, err := r.getNamespaceObjFromTemplate(tierTemplate, ns)
+	if err != nil {
+		return false, err
+	}
+	isNamespaceResourceUpToDate := r.namespaceHasExpectedAnnotationsAndLabelsFromTemplate(logger, tmplObj, ns)
+
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
-		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
+		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
+		isNamespaceResourceUpToDate {
 
 		newObjs, err := tierTemplate.process(r.Scheme, map[string]string{Username: ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainAllButNamespaces)
 		if err != nil {

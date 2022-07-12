@@ -310,7 +310,7 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 	}
 
 	// User API check (not applicable after migration from Che to Dev Spaces)
-	if !config.IsDevSpacesMode() {
+	if !config.Che().IsDevSpacesMode() {
 		if err := r.CheClient.UserAPICheck(); err != nil {
 			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserAPICheckFailedReason, err.Error())
 			memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}

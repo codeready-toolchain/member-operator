@@ -107,10 +107,6 @@ func (c *Configuration) Webhook() WebhookConfig {
 	return WebhookConfig{c.cfg.Webhook}
 }
 
-func (c *Configuration) IsDevSpacesMode() bool {
-	return c.Che().Namespace() == "crw" && c.Che().RouteName() == "devspaces"
-}
-
 type AuthConfig struct {
 	auth toolchainv1alpha1.AuthConfig
 }
@@ -173,6 +169,10 @@ func (a CheConfig) Namespace() string {
 
 func (a CheConfig) RouteName() string {
 	return commonconfig.GetString(a.che.RouteName, "codeready")
+}
+
+func (a CheConfig) IsDevSpacesMode() bool {
+	return a.Namespace() == "crw" && a.RouteName() == "devspaces"
 }
 
 type ConsoleConfig struct {

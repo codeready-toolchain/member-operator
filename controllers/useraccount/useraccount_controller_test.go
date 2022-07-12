@@ -1351,125 +1351,192 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 	})
 
 	t.Run("che user deletion is enabled", func(t *testing.T) {
-		memberOperatorSecret := newSecretWithCheAdminCreds()
+		t.Run("codeready workspaces case", func(t *testing.T) {
+			memberOperatorSecret := newSecretWithCheAdminCreds()
 
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
-			testconfig.Che().
-				UserDeletionEnabled(true).
-				KeycloakRouteName("keycloak").
-				Secret().
-				Ref("test-secret").
-				CheAdminUsernameKey("che.admin.username").
-				CheAdminPasswordKey("che.admin.password"))
+			cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
+				testconfig.Che().
+					UserDeletionEnabled(true).
+					KeycloakRouteName("keycloak").
+					Secret().
+					Ref("test-secret").
+					CheAdminUsernameKey("che.admin.username").
+					CheAdminPasswordKey("che.admin.password"))
 
-		t.Run("get token error", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenFail(mockCallsCounter)
-			userAcc := newUserAccount(username, userID)
-			r, _, _, config := prepareReconcile(t, username, cfg, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			t.Run("get token error", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockTokenFail(mockCallsCounter)
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, cfg, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
-			//when
-			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+				//when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
-			// then
-			require.EqualError(t, err, `request to find Che user 'sugar' failed: unable to obtain access token for che, Response status: '400 Bad Request'. Response body: ''`)
-			useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
-			require.Empty(t, userAcc.Status.Conditions)
-			require.Equal(t, 1, *mockCallsCounter) // 1. get token
+				// then
+				require.EqualError(t, err, `request to find Che user 'sugar' failed: unable to obtain access token for che, Response status: '400 Bad Request'. Response body: ''`)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Empty(t, userAcc.Status.Conditions)
+				require.Equal(t, 1, *mockCallsCounter) // 1. get token
+			})
+
+			t.Run("user not found", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockTokenSuccess(mockCallsCounter)
+				gockFindUserNoBody(username, 404, mockCallsCounter)
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+
+				// then
+				require.NoError(t, err)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
+			})
+
+			t.Run("find user error", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockTokenSuccess(mockCallsCounter)
+				gockFindUserNoBody(username, 400, mockCallsCounter)
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+
+				// then
+				require.EqualError(t, err, `request to find Che user 'sugar' failed, Response status: '400 Bad Request' Body: ''`)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
+			})
+
+			t.Run("find user ID parse error", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockTokenSuccess(mockCallsCounter)
+				gockFindUserNoBody(username, 200, mockCallsCounter)
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+
+				// then
+				require.EqualError(t, err, `unable to get Che user ID for user 'sugar': error unmarshalling Che user json  : unexpected end of JSON input`)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. user exists check 3. get user ID
+			})
+
+			t.Run("delete error", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockTokenSuccess(mockCallsCounter)
+				gockFindUserTimes(username, 2, mockCallsCounter)
+				gockDeleteUser(400, mockCallsCounter)
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+
+				// then
+				require.EqualError(t, err, `this error is expected if deletion is still in progress: unable to delete Che user with ID 'abc1234', Response status: '400 Bad Request' Body: ''`)
+				useraccount.AssertThatUserAccount(t, username, r.Client).Exists()
+				require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
+			})
+
+			t.Run("successful lookup and delete", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockTokenSuccess(mockCallsCounter)
+				gockFindUserTimes(username, 2, mockCallsCounter)
+				gockDeleteUser(204, mockCallsCounter)
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+
+				// then
+				require.NoError(t, err)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
+			})
 		})
 
-		t.Run("user not found", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserNoBody(username, 404, mockCallsCounter)
-			userAcc := newUserAccount(username, userID)
-			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		t.Run("Dev Spaces case", func(t *testing.T) {
+			cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
+				testconfig.Che().
+					UserDeletionEnabled(true).
+					RouteName("devspaces"). // devspaces configuration
+					Namespace("crw"))
 
-			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+			t.Run("success", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockDeleteDevSpacesUser(200, username+"user", mockCallsCounter)
 
-			// then
-			require.NoError(t, err)
-			useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
-			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
-		})
+				userAcc := newUserAccount(username, userID)
+				// only devspaces configuration, useraccount and user exist - no member operator secret, no che/keycloak routes
+				r, _, _, config := prepareReconcile(t, username, cfg, userAcc, newUserFromUserAccount(userAcc))
 
-		t.Run("find user error", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserNoBody(username, 400, mockCallsCounter)
-			userAcc := newUserAccount(username, userID)
-			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
-			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+				// then
+				require.NoError(t, err)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 1, *mockCallsCounter) // 1. delete user call to db cleaner service
+			})
 
-			// then
-			require.EqualError(t, err, `request to find Che user 'sugar' failed, Response status: '400 Bad Request' Body: ''`)
-			useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
-			require.Equal(t, 2, *mockCallsCounter) // 1. get token 2. user exists check
-		})
+			t.Run("no user found", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
 
-		t.Run("find user ID parse error", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserNoBody(username, 200, mockCallsCounter)
-			userAcc := newUserAccount(username, userID)
-			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+				userAcc := newUserAccount(username, userID)
+				r, _, _, config := prepareReconcile(t, username, cfg, userAcc) // no user resource exists
 
-			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
-			// then
-			require.EqualError(t, err, `unable to get Che user ID for user 'sugar': error unmarshalling Che user json  : unexpected end of JSON input`)
-			useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
-			require.Equal(t, 3, *mockCallsCounter) // 1. get token 2. user exists check 3. get user ID
-		})
+				// then
+				require.NoError(t, err)
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 0, *mockCallsCounter) // no calls to db cleaner service delete api
+			})
 
-		t.Run("delete error", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserTimes(username, 2, mockCallsCounter)
-			gockDeleteUser(400, mockCallsCounter)
-			userAcc := newUserAccount(username, userID)
-			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+			t.Run("list user error", func(t *testing.T) {
+				// given
+				mockCallsCounter := new(int)
+				defer gock.OffAll()
+				gockDeleteDevSpacesUser(200, username+"user", mockCallsCounter)
 
-			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
+				userAcc := newUserAccount(username, userID)
+				r, _, cl, config := prepareReconcile(t, username, cfg, userAcc)
+				cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error { // list error
+					return fmt.Errorf("list error")
+				}
 
-			// then
-			require.EqualError(t, err, `this error is expected if deletion is still in progress: unable to delete Che user with ID 'abc1234', Response status: '400 Bad Request' Body: ''`)
-			useraccount.AssertThatUserAccount(t, username, r.Client).Exists()
-			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
-		})
+				// when
+				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
-		t.Run("successful lookup and delete", func(t *testing.T) {
-			// given
-			mockCallsCounter := new(int)
-			defer gock.OffAll()
-			gockTokenSuccess(mockCallsCounter)
-			gockFindUserTimes(username, 2, mockCallsCounter)
-			gockDeleteUser(204, mockCallsCounter)
-			userAcc := newUserAccount(username, userID)
-			r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
-
-			// when
-			err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
-
-			// then
-			require.NoError(t, err)
-			useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
-			require.Equal(t, 4, *mockCallsCounter) // 1. get token 2. check user exists 3. get user ID 4. delete user
+				// then
+				require.EqualError(t, err, "list error")
+				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
+				require.Equal(t, 0, *mockCallsCounter) // no calls to db cleaner service delete api
+			})
 		})
 
 	})
@@ -1559,6 +1626,26 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 	return userAcc
 }
 
+func newUserFromUserAccount(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
+	userUID := types.UID(userAcc.Name + "user")
+	return &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: userAcc.Name,
+			UID:  userUID,
+			Labels: map[string]string{
+				toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+			},
+			Annotations: map[string]string{
+				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
+			},
+		},
+		Identities: []string{
+			ToIdentityName(userAcc.Spec.UserID, "fakeIdentityProvider"),
+		},
+	}
+}
+
 func newReconcileRequest(name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -1632,32 +1719,21 @@ func terminating(msg string) toolchainv1alpha1.Condition {
 }
 
 func cheRoute(tls bool) *routev1.Route { //nolint: unparam
-	r := &routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "codeready",
-			Namespace: "codeready-workspaces-operator",
-		},
-		Spec: routev1.RouteSpec{
-			Host: fmt.Sprintf("codeready-codeready-workspaces-operator.%s", test.MemberClusterName),
-			Path: "",
-		},
-	}
-	if tls {
-		r.Spec.TLS = &routev1.TLSConfig{
-			Termination: "edge",
-		}
-	}
-	return r
+	return testRoute("codeready", "codeready-workspaces-operator", "codeready-codeready-workspaces-operator", tls)
 }
 
 func keycloackRoute(tls bool) *routev1.Route { //nolint: unparam
+	return testRoute("keycloak", "codeready-workspaces-operator", "keycloak-codeready-workspaces-operator", tls)
+}
+
+func testRoute(name, namespace, serviceName string, tls bool) *routev1.Route { //nolint: unparam
 	r := &routev1.Route{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "keycloak",
-			Namespace: "codeready-workspaces-operator",
+			Name:      name,
+			Namespace: namespace,
 		},
 		Spec: routev1.RouteSpec{
-			Host: fmt.Sprintf("keycloak-codeready-workspaces-operator.%s", test.MemberClusterName),
+			Host: fmt.Sprintf("%s.%s", serviceName, test.MemberClusterName),
 			Path: "",
 		},
 	}
@@ -1734,6 +1810,14 @@ func gockDeleteUser(code int, calls *int) {
 		Delete("api/user").
 		SetMatcher(SpyOnGockCalls(calls)).
 		MatchHeader("Authorization", "Bearer abc.123.xyz").
+		Persist().
+		Reply(code)
+}
+
+func gockDeleteDevSpacesUser(code int, userID string, calls *int) {
+	gock.New("http://che-db-cleaner.crw").
+		Delete(userID).
+		SetMatcher(SpyOnGockCalls(calls)).
 		Persist().
 		Reply(code)
 }

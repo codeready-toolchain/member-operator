@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -203,4 +204,40 @@ func readCheUserFromJSON(jsonString string) (*User, error) {
 		return nil, errors.Wrapf(err, "error unmarshalling Che user json %s ", jsonString)
 	}
 	return &cheUser, nil
+}
+
+// DevSpacesDBCleanerDelete deletes the user from the Dev Spaces database via the che-db-cleaner service
+// curl -X DELETE http://crw.che-db-cleaner/<userid>
+func (c *Client) DevSpacesDBCleanerDelete(userID string) error {
+
+	config, err := membercfg.GetConfiguration(c.k8sClient)
+	if err != nil {
+		return err
+	}
+
+	// Dev Spaces URL
+	devSpacesURL := fmt.Sprintf("http://che-db-cleaner.%s/%s", config.Che().Namespace(), userID)
+
+	// create request
+	req, err := http.NewRequestWithContext(context.TODO(), http.MethodDelete, devSpacesURL, nil)
+	if err != nil {
+		return errors.Wrapf(err, "unable to create Dev Spaces delete request")
+	}
+
+	// do the request
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Dev Spaces user with ID '%s'", userID)
+	}
+	defer rest.CloseResponse(res)
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
+		resBody, readError := rest.ReadBody(res.Body)
+		if readError != nil {
+			log.Error(readError, "error while reading body of the delete Dev Spaces user response")
+		}
+		err = errors.Errorf("unable to delete Dev Spaces user with ID '%s', Response status: '%s' Body: '%s'", userID, res.Status, resBody)
+	} else if res.StatusCode == http.StatusNotFound {
+		log.Info("The Dev Spaces user was not deleted because it wasn't found", "userID", userID)
+	}
+	return err
 }

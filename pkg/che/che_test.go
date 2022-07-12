@@ -525,6 +525,73 @@ func TestCheRequest(t *testing.T) {
 	})
 }
 
+func TestDeleteDevSpacesUser(t *testing.T) {
+	// given
+	config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().Namespace("crw").RouteName("devspaces"))
+	dbCleanerURL := "http://che-db-cleaner.crw/"
+
+	t.Run("success", func(t *testing.T) {
+		// given
+		cl, _ := prepareClientAndConfig(t, config)
+		cheClient := &Client{
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+		}
+
+		// when
+		defer gock.OffAll()
+		gock.New(dbCleanerURL).
+			Delete("johnsmith456").
+			Persist().
+			Reply(200)
+		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("404 response", func(t *testing.T) {
+		// given
+		cl, _ := prepareClientAndConfig(t, config)
+		cheClient := &Client{
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+		}
+
+		// when
+		defer gock.OffAll()
+		gock.New(dbCleanerURL).
+			Delete("johnsmith456").
+			Persist().
+			Reply(404)
+		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("400 response", func(t *testing.T) {
+		// given
+		cl, _ := prepareClientAndConfig(t, config)
+		cheClient := &Client{
+			httpClient: http.DefaultClient,
+			k8sClient:  cl,
+		}
+
+		// when
+		defer gock.OffAll()
+		gock.New(dbCleanerURL).
+			Delete("johnsmith456").
+			Persist().
+			Reply(400).
+			BodyString("400 error")
+		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")
+
+		// then
+		require.Error(t, err, "unable to delete Dev Spaces user with ID 'johnsmith456', Response status: '400 Bad Request' Body: '400 error'")
+	})
+}
+
 func tokenCacheWithValidToken() *TokenCache {
 	return &TokenCache{
 		httpClient: http.DefaultClient,

@@ -207,7 +207,7 @@ func readCheUserFromJSON(jsonString string) (*User, error) {
 }
 
 // DevSpacesDBCleanerDelete deletes the user from the Dev Spaces database via the che-db-cleaner service
-// curl -X DELETE http://crw.che-db-cleaner/<userid>
+// curl -X DELETE http://che-db-cleaner.crw/<userid>
 func (c *Client) DevSpacesDBCleanerDelete(userID string) error {
 
 	config, err := membercfg.GetConfiguration(c.k8sClient)

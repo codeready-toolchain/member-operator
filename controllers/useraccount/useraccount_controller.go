@@ -616,7 +616,11 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 	}
 
 	if config.Che().Namespace() == "crw" && config.Che().RouteName() == "devspaces" {
-		return r.deleteDevSpacesUser(logger, userAcc)
+		err := r.deleteDevSpacesUser(logger, userAcc)
+		if err != nil {
+			logger.Error(err, "DevSpaces user deletion failed", "user account", userAcc.Name)
+		}
+		return nil // log error but do not fail deletion if the DevSpaces db cleanup failed, treat it as a best effort
 	}
 
 	userExists, err := r.CheClient.UserExists(userAcc.Name)

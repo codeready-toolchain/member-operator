@@ -1533,7 +1533,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 				err := r.lookupAndDeleteCheUser(logf.Log, config, userAcc)
 
 				// then
-				require.EqualError(t, err, "list error")
+				require.NoError(t, err) // error is logged but not returned because the DevSpaces db cleanup is treated as a best effort but not required
 				useraccount.AssertThatUserAccount(t, username, r.Client).HasNoConditions()
 				require.Equal(t, 0, *mockCallsCounter) // no calls to db cleaner service delete api
 			})

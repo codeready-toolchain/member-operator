@@ -58,10 +58,10 @@ func (c *Client) UserExists(username string) (bool, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
 	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return false, errors.Wrapf(err, "request to find Che user '%s' failed", username)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode == http.StatusOK {
 		log.Info("User found", "name", username)
 		return true, nil
@@ -81,10 +81,10 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
 	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData)
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return "", errors.Wrapf(err, "unable to get Che user ID for user '%s'", username)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK {
 		resBody, readError := rest.ReadBody(res.Body)
 		if readError != nil {
@@ -104,10 +104,10 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 func (c *Client) DeleteUser(userID string) error {
 	log.Info("Deleting user", "userID", userID)
 	res, err := c.cheRequest(http.MethodDelete, path.Join(cheUserPath, userID), nil) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Che user with ID '%s'", userID)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusNotFound {
 		resBody, readError := rest.ReadBody(res.Body)
 		if readError != nil {
@@ -124,10 +124,10 @@ func (c *Client) DeleteUser(userID string) error {
 func (c *Client) UserAPICheck() error {
 	reqData := url.Values{}
 	res, err := c.cheRequest(http.MethodGet, cheUserPath, reqData) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return errors.Wrapf(err, "che user API check failed")
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode == http.StatusOK {
 		return nil
 	}
@@ -225,11 +225,11 @@ func (c *Client) DevSpacesDBCleanerDelete(userID string) error {
 	}
 
 	// do the request
-	res, err := c.httpClient.Do(req)
+	res, err := c.httpClient.Do(req) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Dev Spaces user with ID '%s'", userID)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
 		resBody, readError := rest.ReadBody(res.Body)
 		if readError != nil {

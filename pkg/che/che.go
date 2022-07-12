@@ -230,14 +230,18 @@ func (c *Client) DevSpacesDBCleanerDelete(userID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Dev Spaces user with ID '%s'", userID)
 	}
-	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
+
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		log.Info("The Dev Spaces user was not deleted because it wasn't found", "userID", userID)
+	default:
 		resBody, readError := rest.ReadBody(res.Body)
 		if readError != nil {
 			log.Error(readError, "error while reading body of the delete Dev Spaces user response")
 		}
 		err = errors.Errorf("unable to delete Dev Spaces user with ID '%s', Response status: '%s' Body: '%s'", userID, res.Status, resBody)
-	} else if res.StatusCode == http.StatusNotFound {
-		log.Info("The Dev Spaces user was not deleted because it wasn't found", "userID", userID)
 	}
+
 	return err
 }

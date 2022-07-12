@@ -8,7 +8,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
-	"github.com/codeready-toolchain/member-operator/pkg/utils/user"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -428,7 +427,7 @@ func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchai
 // if the user existed and something wrong happened. If the users don't exist,
 // this func returns `false, nil`
 func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	userList, err := user.GetUsersByOwnerName(r.Client, userAcc.Name)
+	userList, err := getUsersByOwnerName(r.Client, userAcc.Name)
 	if err != nil {
 		return false, err
 	}
@@ -652,7 +651,7 @@ func (r *Reconciler) deleteDevSpacesUser(logger logr.Logger, userAcc *toolchainv
 	logger.Info("Deleting OpenShift Dev Spaces user")
 
 	// look up user resource to get UID
-	userList, err := user.GetUsersByOwnerName(r.Client, userAcc.Name)
+	userList, err := getUsersByOwnerName(r.Client, userAcc.Name)
 	if err != nil {
 		return err
 	}
@@ -668,4 +667,15 @@ func (r *Reconciler) deleteDevSpacesUser(logger logr.Logger, userAcc *toolchainv
 func listByOwnerLabel(owner string) client.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: owner}
 	return client.MatchingLabels(labels)
+}
+
+// getUsersByOwnerName gets the user resources by matching owner label.
+func getUsersByOwnerName(cl client.Client, owner string) ([]userv1.User, error) {
+	userList := &userv1.UserList{}
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: owner}
+	err := cl.List(context.TODO(), userList, client.MatchingLabels(labels))
+	if err != nil {
+		return []userv1.User{}, err
+	}
+	return userList.Items, nil
 }

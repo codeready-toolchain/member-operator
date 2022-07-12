@@ -614,7 +614,7 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 		return nil
 	}
 
-	if config.Che().Namespace() == "crw" && config.Che().RouteName() == "devspaces" {
+	if config.IsDevSpacesMode() {
 		err := r.deleteDevSpacesUser(logger, userAcc)
 		if err != nil {
 			logger.Error(err, "DevSpaces user deletion failed", "user account", userAcc.Name)

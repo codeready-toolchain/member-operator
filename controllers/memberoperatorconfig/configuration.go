@@ -107,6 +107,10 @@ func (c *Configuration) Webhook() WebhookConfig {
 	return WebhookConfig{c.cfg.Webhook}
 }
 
+func (c *Configuration) IsDevSpacesMode() bool {
+	return c.Che().Namespace() == "crw" && c.Che().RouteName() == "devspaces"
+}
+
 type AuthConfig struct {
 	auth toolchainv1alpha1.AuthConfig
 }

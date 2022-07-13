@@ -112,8 +112,11 @@ func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(logger logr.L
 		}
 	}
 
-	if !mapContains(userNamespace.GetLabels(), tmplObj.GetLabels()) ||
-		!mapContains(userNamespace.GetAnnotations(), tmplObj.GetAnnotations()) {
+	if tmplObj == nil {
+		return false, fmt.Errorf("no matching template object found for namespace %s", userNamespace.Name)
+	}
+
+	if !mapContains(userNamespace.GetLabels(), tmplObj.GetLabels()) {
 		return false, nil
 	}
 
@@ -121,10 +124,10 @@ func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(logger logr.L
 }
 
 func mapContains(actual, contains map[string]string) bool {
-	if actual == nil && contains == nil {
-		return true
-	} else if actual == nil || contains == nil {
-		return false
+	if contains == nil {
+		return true // contains has no values
+	} else if actual == nil {
+		return false // actual has no values and contains has values
 	}
 
 	for containsKey, containsValue := range contains {
@@ -348,15 +351,9 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
 	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
 
-	isNamespaceResourceUpToDate, err := r.namespaceHasExpectedLabelsFromTemplate(logger, tierTemplate, ns)
-	if err != nil {
-		return false, err
-	}
-
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
-		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
-		isNamespaceResourceUpToDate {
+		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
 		newObjs, err := tierTemplate.process(r.Scheme, map[string]string{Username: ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainAllButNamespaces)
 		if err != nil {

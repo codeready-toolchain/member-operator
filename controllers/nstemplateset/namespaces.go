@@ -74,7 +74,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 
 // ensureNamespace ensures that the namespace exists and that it contains all the expected resources
 func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) error {
-	logger.Info("creating namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
+	logger.Info("ensuring namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
 
 	namespaceNeedsUpdate := false
 	if userNamespace == nil {
@@ -144,7 +144,7 @@ func mapContains(actual, contains map[string]string) bool {
 
 // ensureNamespaceResource ensures that the namespace exists.
 func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate) error {
-	logger.Info("ensuring namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
+	logger.Info("creating namespace", "username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
 	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: nsTmplSet.GetName()}, template.RetainNamespaces)
 	if err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace type '%s'", tierTemplate.typeName)

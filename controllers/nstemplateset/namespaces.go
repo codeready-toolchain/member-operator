@@ -74,7 +74,7 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 
 // ensureNamespace ensures that the namespace exists and that it contains all the expected resources
 func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) error {
-	logger.Info("ensuring namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
+	logger.Info("creating namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
 
 	namespaceNeedsUpdate := false
 	if userNamespace == nil {
@@ -211,7 +211,6 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	// Adding label indicating that the namespace is up-to-date with TierTemplate
 	namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey] = tierTemplate.templateRef
 	namespace.Labels[toolchainv1alpha1.TierLabelKey] = tierTemplate.tierName
-	logger.Info("namespace after applied inner ns resources", "ns", namespace)
 	if err := r.Client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
@@ -350,7 +349,6 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
 func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
 	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
-
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {

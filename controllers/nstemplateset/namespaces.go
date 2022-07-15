@@ -99,7 +99,7 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 }
 
 // namespaceHasExpectedLabelsFromTemplate checks if the namespace has the expected labels from the template object
-func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(logger logr.Logger, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) (bool, error) {
+func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(tierTemplate *tierTemplate, userNamespace *corev1.Namespace) (bool, error) {
 	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: userNamespace.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainNamespaces)
 	if err != nil {
 		return false, err

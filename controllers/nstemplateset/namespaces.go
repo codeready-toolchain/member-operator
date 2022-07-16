@@ -83,7 +83,7 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 		logger.Info("namespace needs to be created")
 	} else {
 		// userNamespace exists, check if the namespace needs to be updated
-		upToDate, err := r.namespaceHasExpectedLabelsFromTemplate(logger, tierTemplate, userNamespace)
+		upToDate, err := r.namespaceHasExpectedLabelsFromTemplate(tierTemplate, userNamespace)
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace object from template for namespace type '%s'", tierTemplate.typeName)
 		}

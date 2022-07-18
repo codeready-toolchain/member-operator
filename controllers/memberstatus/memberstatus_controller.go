@@ -295,13 +295,13 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 	}
 
 	if !r.isCheAdminUserConfigured(config) {
-		err := fmt.Errorf("Che admin user credentials are not configured but Che user deletion is enabled")
+		err := fmt.Errorf("the Che admin user credentials are not configured but Che user deletion is enabled")
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheAdminUserNotConfiguredReason, err.Error())
 		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		return err
 	}
 
-	// Get che route for testing user API
+	// Ensure it's possible to construct the che URL for using the Che user API
 	if _, err := r.cheDashboardURL(config); err != nil {
 		wrappedErr := errs.Wrapf(err, "Che dashboard URL unavailable but Che user deletion is enabled")
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, wrappedErr.Error())
@@ -309,11 +309,13 @@ func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolch
 		return err
 	}
 
-	// User API check
-	if err := r.CheClient.UserAPICheck(); err != nil {
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserAPICheckFailedReason, err.Error())
-		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-		return err
+	// User API check (not applicable after migration from Che to Dev Spaces)
+	if !config.Che().IsDevSpacesMode() {
+		if err := r.CheClient.UserAPICheck(); err != nil {
+			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserAPICheckFailedReason, err.Error())
+			memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
+			return err
+		}
 	}
 
 	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheReadyReason)

@@ -427,24 +427,23 @@ func (r *Reconciler) deleteIdentityAndUser(logger logr.Logger, userAcc *toolchai
 // if the user existed and something wrong happened. If the users don't exist,
 // this func returns `false, nil`
 func (r *Reconciler) deleteUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) (bool, error) {
-	userList := &userv1.UserList{}
-	err := r.Client.List(context.TODO(), userList, listByOwnerLabel(userAcc.Name))
+	userList, err := getUsersByOwnerName(r.Client, userAcc.Name)
 	if err != nil {
 		return false, err
 	}
 
-	if len(userList.Items) == 0 {
+	if len(userList) == 0 {
 		return false, nil
 	}
 
 	logger.Info("deleting the User resources")
 
 	// Delete User associated with UserAccount
-	if err := r.Client.Delete(context.TODO(), &userList.Items[0]); err != nil {
+	if err := r.Client.Delete(context.TODO(), &userList[0]); err != nil {
 		return false, err
 	}
 	// Return here, as deleting the user should cause another reconcile of the UserAccount
-	logger.Info(fmt.Sprintf("deleted User resource [%s]", userList.Items[0].Name))
+	logger.Info(fmt.Sprintf("deleted User resource [%s]", userList[0].Name))
 	return true, nil
 }
 
@@ -615,6 +614,10 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 		return nil
 	}
 
+	if config.Che().IsDevSpacesMode() {
+		return r.deleteDevSpacesUser(logger, userAcc)
+	}
+
 	userExists, err := r.CheClient.UserExists(userAcc.Name)
 	if err != nil {
 		return err
@@ -640,8 +643,35 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 	return nil
 }
 
+func (r *Reconciler) deleteDevSpacesUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
+	logger.Info("Deleting OpenShift Dev Spaces user")
+
+	// look up user resource to get UID
+	userList, err := getUsersByOwnerName(r.Client, userAcc.Name)
+	if err != nil {
+		return err
+	}
+
+	if len(userList) == 0 {
+		return nil
+	}
+
+	return r.CheClient.DevSpacesDBCleanerDelete(string(userList[0].GetObjectMeta().GetUID()))
+}
+
 // listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given owner name
 func listByOwnerLabel(owner string) client.ListOption {
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: owner}
 	return client.MatchingLabels(labels)
+}
+
+// getUsersByOwnerName gets the user resources by matching owner label.
+func getUsersByOwnerName(cl client.Client, owner string) ([]userv1.User, error) {
+	userList := &userv1.UserList{}
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: owner}
+	err := cl.List(context.TODO(), userList, client.MatchingLabels(labels))
+	if err != nil {
+		return []userv1.User{}, err
+	}
+	return userList.Items, nil
 }

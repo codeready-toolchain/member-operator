@@ -18,6 +18,6 @@ func ReadBody(body io.ReadCloser) (string, error) {
 func CloseResponse(res *http.Response) {
 	if res != nil {
 		io.Copy(ioutil.Discard, res.Body) //nolint: errcheck
-		defer res.Body.Close()
+		res.Body.Close()
 	}
 }

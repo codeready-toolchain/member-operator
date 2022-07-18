@@ -1,6 +1,7 @@
 package che
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -527,21 +528,30 @@ func TestCheRequest(t *testing.T) {
 
 func TestDeleteDevSpacesUser(t *testing.T) {
 	// given
-	config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().Namespace("crw").RouteName("devspaces"))
+	config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().
+		Namespace("crw").
+		RouteName("devspaces").
+		Secret().
+		Ref("test-secret").
+		CheAdminUsernameKey("che.admin.username").
+		CheAdminPasswordKey("che.admin.password"))
 	dbCleanerURL := "http://che-db-cleaner.crw/"
+	testSecret := newTestSecret()
 
 	t.Run("success", func(t *testing.T) {
 		// given
-		cl, _ := prepareClientAndConfig(t, config)
+		cl, _ := prepareClientAndConfig(t, config, testSecret)
 		cheClient := &Client{
 			httpClient: http.DefaultClient,
 			k8sClient:  cl,
 		}
+		encodedAuth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", "test-che-user", "test-che-password")))
 
 		// when
 		defer gock.OffAll()
 		gock.New(dbCleanerURL).
 			Delete("johnsmith456").
+			MatchHeader("Authorization", "Basic "+encodedAuth).
 			Persist().
 			Reply(200)
 		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")

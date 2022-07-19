@@ -3,6 +3,7 @@ package che
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -223,6 +224,12 @@ func (c *Client) DevSpacesDBCleanerDelete(userID string) error {
 	if err != nil {
 		return errors.Wrapf(err, "unable to create Dev Spaces delete request")
 	}
+
+	// add basic auth
+	user := config.Che().AdminUserName()
+	pass := config.Che().AdminPassword()
+	encoded := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", user, pass)))
+	req.Header.Add("Authorization", "Basic "+encoded)
 
 	// do the request
 	res, err := c.httpClient.Do(req) // nolint:bodyclose // see `defer rest.CloseResponse(res)`

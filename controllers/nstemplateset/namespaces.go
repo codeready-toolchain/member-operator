@@ -76,10 +76,10 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) error {
 	logger.Info("ensuring namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
 
-	namespaceNeedsUpdate := false
+	createOrUpdateNamespace := false
 	if userNamespace == nil {
 		// userNamespace does not exist, need to create the namespace
-		namespaceNeedsUpdate = true
+		createOrUpdateNamespace = true
 		logger.Info("namespace needs to be created")
 	} else {
 		// userNamespace exists, check if the namespace needs to be updated
@@ -87,18 +87,19 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 		if err != nil {
 			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace object from template for namespace type '%s'", tierTemplate.typeName)
 		}
-		namespaceNeedsUpdate = !upToDate
+		createOrUpdateNamespace = !upToDate
 		logger.Info("namespace needs to be updated", "namespace", userNamespace.Name)
 	}
 
 	// create namespace before creating inner resources because creating the namespace may take some time
-	if namespaceNeedsUpdate {
+	if createOrUpdateNamespace {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tierTemplate)
 	}
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tierTemplate, userNamespace)
 }
 
 // namespaceHasExpectedLabelsFromTemplate checks if the namespace has the expected labels from the template object
+// note: checks only if the namespace has labels that match the provided template, it does not check whether any labels could have been removed
 func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(tierTemplate *tierTemplate, userNamespace *corev1.Namespace) (bool, error) {
 	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: userNamespace.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainNamespaces)
 	if err != nil {

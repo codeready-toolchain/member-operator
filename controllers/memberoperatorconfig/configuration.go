@@ -171,6 +171,10 @@ func (a CheConfig) RouteName() string {
 	return commonconfig.GetString(a.che.RouteName, "codeready")
 }
 
+func (a CheConfig) IsDevSpacesMode() bool {
+	return a.Namespace() == "crw" && a.RouteName() == "devspaces"
+}
+
 type ConsoleConfig struct {
 	console toolchainv1alpha1.ConsoleConfig
 }

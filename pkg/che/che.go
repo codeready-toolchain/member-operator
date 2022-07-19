@@ -3,7 +3,9 @@ package che
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -57,10 +59,10 @@ func (c *Client) UserExists(username string) (bool, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
 	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return false, errors.Wrapf(err, "request to find Che user '%s' failed", username)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode == http.StatusOK {
 		log.Info("User found", "name", username)
 		return true, nil
@@ -80,10 +82,10 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
 	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData)
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return "", errors.Wrapf(err, "unable to get Che user ID for user '%s'", username)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusOK {
 		resBody, readError := rest.ReadBody(res.Body)
 		if readError != nil {
@@ -103,10 +105,10 @@ func (c *Client) GetUserIDByUsername(username string) (string, error) {
 func (c *Client) DeleteUser(userID string) error {
 	log.Info("Deleting user", "userID", userID)
 	res, err := c.cheRequest(http.MethodDelete, path.Join(cheUserPath, userID), nil) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Che user with ID '%s'", userID)
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusNotFound {
 		resBody, readError := rest.ReadBody(res.Body)
 		if readError != nil {
@@ -123,10 +125,10 @@ func (c *Client) DeleteUser(userID string) error {
 func (c *Client) UserAPICheck() error {
 	reqData := url.Values{}
 	res, err := c.cheRequest(http.MethodGet, cheUserPath, reqData) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
 	if err != nil {
 		return errors.Wrapf(err, "che user API check failed")
 	}
-	defer rest.CloseResponse(res)
 	if res.StatusCode == http.StatusOK {
 		return nil
 	}
@@ -203,4 +205,50 @@ func readCheUserFromJSON(jsonString string) (*User, error) {
 		return nil, errors.Wrapf(err, "error unmarshalling Che user json %s ", jsonString)
 	}
 	return &cheUser, nil
+}
+
+// DevSpacesDBCleanerDelete deletes the user from the Dev Spaces database via the che-db-cleaner service
+// curl -X DELETE http://che-db-cleaner.crw/<userid>
+func (c *Client) DevSpacesDBCleanerDelete(userID string) error {
+
+	config, err := membercfg.GetConfiguration(c.k8sClient)
+	if err != nil {
+		return err
+	}
+
+	// Dev Spaces URL
+	devSpacesURL := fmt.Sprintf("http://che-db-cleaner.%s/%s", config.Che().Namespace(), userID)
+
+	// create request
+	req, err := http.NewRequestWithContext(context.TODO(), http.MethodDelete, devSpacesURL, nil)
+	if err != nil {
+		return errors.Wrapf(err, "unable to create Dev Spaces delete request")
+	}
+
+	// add basic auth
+	user := config.Che().AdminUserName()
+	pass := config.Che().AdminPassword()
+	encoded := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", user, pass)))
+	req.Header.Add("Authorization", "Basic "+encoded)
+
+	// do the request
+	res, err := c.httpClient.Do(req) // nolint:bodyclose // see `defer rest.CloseResponse(res)`
+	defer rest.CloseResponse(res)
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete Dev Spaces user with ID '%s'", userID)
+	}
+
+	switch res.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		log.Info("The Dev Spaces user was not deleted because it wasn't found", "userID", userID)
+	default:
+		resBody, readError := rest.ReadBody(res.Body)
+		if readError != nil {
+			log.Error(readError, "error while reading body of the delete Dev Spaces user response")
+		}
+		err = errors.Errorf("unable to delete Dev Spaces user with ID '%s', Response status: '%s' Body: '%s'", userID, res.Status, resBody)
+	}
+
+	return err
 }

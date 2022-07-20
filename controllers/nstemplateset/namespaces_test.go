@@ -159,7 +159,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 				Name: "johnsmith-other", Labels: map[string]string{
 					"toolchain.dev.openshift.com/tier":        "basic",
 					"toolchain.dev.openshift.com/type":        "other",
-					"toolchain.dev.openshift.com/templateref": "basic-other-abcde13",
+					"toolchain.dev.openshift.com/templateref": "basic-other-abcde15",
 					"toolchain.dev.openshift.com/owner":       "johnsmith",
 				},
 			},
@@ -248,7 +248,7 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 		{
 			tierName:    "basic",
 			typeName:    "other",
-			templateRef: "basic-other-abcde13",
+			templateRef: "basic-other-abcde15",
 		},
 	}
 	return userNamespaces, tierTemplates
@@ -1102,13 +1102,94 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
 				HasLabel("toolchain.dev.openshift.com/tier", "advanced")
 		})
+
+		t.Run("update to basic abcde13 tier that has a new namespace label", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde13", "dev"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
+
+			// when
+			_, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatNamespace(t, username+"-dev", cl).
+				HasNoOwnerReference().
+				HasLabel("toolchain.dev.openshift.com/owner", username).
+				HasLabel("toolchain.dev.openshift.com/type", "dev").
+				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd")
+
+			t.Run("next reconcile sets templateref and tier labels", func(t *testing.T) {
+				// when
+				_, err := manager.ensure(logger, nsTmplSet)
+				// then
+				require.NoError(t, err)
+				AssertThatNSTemplateSet(t, namespaceName, username, cl).
+					HasFinalizer().
+					HasConditions(Updating())
+				AssertThatNamespace(t, username+"-dev", cl).
+					HasNoOwnerReference().
+					HasLabel("toolchain.dev.openshift.com/owner", username).
+					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+					HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd").
+					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde13").
+					HasLabel("toolchain.dev.openshift.com/tier", "basic")
+			})
+		})
+
+		t.Run("update that has a namespace label change", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde13", "dev"))
+			additionalLabels := map[string]string{"argocd.argoproj.io/managed-by": "gitops-service-argocd-original"}
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde13"), withLabels(additionalLabels))
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
+
+			// when
+			_, err := manager.ensure(logger, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			AssertThatNSTemplateSet(t, namespaceName, username, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatNamespace(t, username+"-dev", cl).
+				HasNoOwnerReference().
+				HasLabel("toolchain.dev.openshift.com/owner", username).
+				HasLabel("toolchain.dev.openshift.com/type", "dev").
+				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd")
+
+			t.Run("next reconcile sets templateref and tier labels", func(t *testing.T) {
+				// when
+				_, err := manager.ensure(logger, nsTmplSet)
+				// then
+				require.NoError(t, err)
+				AssertThatNSTemplateSet(t, namespaceName, username, cl).
+					HasFinalizer().
+					HasConditions(Updating())
+				AssertThatNamespace(t, username+"-dev", cl).
+					HasNoOwnerReference().
+					HasLabel("toolchain.dev.openshift.com/owner", username).
+					HasLabel("toolchain.dev.openshift.com/type", "dev").
+					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+					HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd").
+					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde13").
+					HasLabel("toolchain.dev.openshift.com/tier", "basic")
+			})
+		})
 	})
 
 	t.Run("failure", func(t *testing.T) {
 
-		t.Run("update to abcde13 fails because it find the new template", func(t *testing.T) {
+		t.Run("update to abcde15 fails because it find the new template", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde13", "dev"))
+			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde15", "dev"))
 			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
@@ -1120,7 +1201,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
 				HasConditions(UnableToProvisionNamespace(
-					"unable to retrieve the TierTemplate 'basic-dev-abcde13' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde13\" not found"))
+					"unable to retrieve the TierTemplate 'basic-dev-abcde15' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde15\" not found"))
 			AssertThatNamespace(t, username+"-dev", cl).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
@@ -1130,10 +1211,10 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 		})
 
-		t.Run("update from abcde13 fails because it find current template", func(t *testing.T) {
+		t.Run("update from abcde15 fails because it find current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev"))
-			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde13"))
+			devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde15"))
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
@@ -1144,13 +1225,13 @@ func TestUpdateNamespaces(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, username, cl).
 				HasFinalizer().
 				HasConditions(UpdateFailed(
-					"unable to retrieve the TierTemplate 'basic-dev-abcde13' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde13\" not found"))
+					"unable to retrieve the TierTemplate 'basic-dev-abcde15' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde15\" not found"))
 			AssertThatNamespace(t, username+"-dev", cl).
 				HasNoOwnerReference().
 				HasLabel("toolchain.dev.openshift.com/owner", username).
 				HasLabel("toolchain.dev.openshift.com/type", "dev").
 				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde13").
+				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde15").
 				HasLabel("toolchain.dev.openshift.com/tier", "basic")
 		})
 	})

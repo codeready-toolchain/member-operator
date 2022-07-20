@@ -76,11 +76,71 @@ func (r *namespacesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, userNamespace *corev1.Namespace) error {
 	logger.Info("ensuring namespace", "namespace", tierTemplate.typeName, "tier", nsTmplSet.Spec.TierName)
 
-	// create namespace before created inner resources because creating the namespace may take some time
+	createOrUpdateNamespace := false
 	if userNamespace == nil {
+		// userNamespace does not exist, need to create the namespace
+		createOrUpdateNamespace = true
+		logger.Info("namespace needs to be created")
+	} else {
+		// userNamespace exists, check if the namespace needs to be updated
+		upToDate, err := r.namespaceHasExpectedLabelsFromTemplate(tierTemplate, userNamespace)
+		if err != nil {
+			return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to get namespace object from template for namespace type '%s'", tierTemplate.typeName)
+		}
+		createOrUpdateNamespace = !upToDate
+		logger.Info("namespace needs to be updated", "namespace", userNamespace.Name)
+	}
+
+	// create namespace before creating inner resources because creating the namespace may take some time
+	if createOrUpdateNamespace {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tierTemplate)
 	}
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tierTemplate, userNamespace)
+}
+
+// namespaceHasExpectedLabelsFromTemplate checks if the namespace has the expected labels from the template object
+// note: checks only if the namespace has labels that match the provided template, it does not check whether any labels could have been removed
+func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(tierTemplate *tierTemplate, userNamespace *corev1.Namespace) (bool, error) {
+	objs, err := tierTemplate.process(r.Scheme, map[string]string{Username: userNamespace.GetLabels()[toolchainv1alpha1.OwnerLabelKey]}, template.RetainNamespaces)
+	if err != nil {
+		return false, err
+	}
+
+	var tmplObj runtimeclient.Object
+	for _, object := range objs {
+		if object.GetName() == userNamespace.Name {
+			tmplObj = object
+		}
+	}
+
+	if tmplObj == nil {
+		return false, fmt.Errorf("no matching template object found for namespace %s", userNamespace.Name)
+	}
+
+	if !mapContains(userNamespace.GetLabels(), tmplObj.GetLabels()) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func mapContains(actual, contains map[string]string) bool {
+	if contains == nil {
+		return true // contains has no values
+	} else if actual == nil {
+		return false // actual has no values and contains has values
+	}
+
+	for containsKey, containsValue := range contains {
+		v, ok := actual[containsKey]
+		if !ok {
+			return false
+		}
+		if v != containsValue {
+			return false
+		}
+	}
+	return true
 }
 
 // ensureNamespaceResource ensures that the namespace exists.

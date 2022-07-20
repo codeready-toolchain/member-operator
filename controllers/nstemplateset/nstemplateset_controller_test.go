@@ -1738,6 +1738,15 @@ func newIdler(username, name, tierName string) *toolchainv1alpha1.Idler { // nol
 
 type objectMetaOption func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta
 
+func withLabels(labels map[string]string) objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		for k, v := range labels {
+			meta.Labels[k] = v
+		}
+		return meta
+	}
+}
+
 func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
 		meta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, revision)
@@ -1783,6 +1792,7 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 			"dev": {
 				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb), test.WithParams(username)),
 				"abcde12": test.CreateTemplate(test.WithObjects(ns, crtAdminRb), test.WithParams(username)),
+				"abcde13": test.CreateTemplate(test.WithObjects(nsWithArgoLabel, crtAdminRb), test.WithParams(username)), // ns label change
 			},
 			"stage": {
 				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb), test.WithParams(username)),
@@ -1883,6 +1893,16 @@ var (
   metadata:
     name: ${USERNAME}-NSTYPE
 `
+
+	nsWithArgoLabel test.TemplateObject = `
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: ${USERNAME}-NSTYPE
+    labels:
+      argocd.argoproj.io/managed-by: gitops-service-argocd
+`
+
 	execPodsRole test.TemplateObject = `
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: Role

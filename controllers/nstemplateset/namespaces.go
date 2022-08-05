@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"sort"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+
 	rbac "k8s.io/api/rbac/v1"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -154,9 +157,18 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	if err := r.Client.Update(context.TODO(), namespace); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to update namespace '%s'", nsName)
 	}
+	// ensure the namespace created is ready
+	userNamespaceCreated := &corev1.Namespace{}
+	if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: namespace.Name}, userNamespaceCreated); err != nil {
+		if errors.IsNotFound(err) {
+			return fmt.Errorf(`Unable to get the usernamespace '%s'`, namespace.Name)
+		}
+	}
+	if userNamespaceCreated.Status.Phase != "Active" {
+		return fmt.Errorf(`Namespace %s is in %s Phase`, userNamespaceCreated.Name, userNamespaceCreated.Status.Phase)
+	}
 
 	logger.Info("namespace provisioned with all required resources", "templateRef", tierTemplate.templateRef)
-
 	// TODO add validation for other objects
 	return nil // nothing changed, no error occurred
 }

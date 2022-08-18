@@ -24,7 +24,7 @@ func Deploy(cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemor
 		return err
 	}
 
-	applyClient := applycl.NewApplyClient(cl, s)
+	applyClient := applycl.NewApplyClient(cl)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, obj := range objs {
 		if _, err := applyClient.ApplyObject(obj); err != nil {

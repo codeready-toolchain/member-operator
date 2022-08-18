@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/RHEcosystemAppEng/dbaas-operator v0.1.4-0.20220222181358-34f519992531
-	github.com/codeready-toolchain/api v0.0.0-20220609025355-2975f9599a9e
+	github.com/codeready-toolchain/api v0.0.0-20220620073500-4403ea044a96
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20220609030046-0cf4fe5a7bb4
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-cmp v0.5.6
@@ -23,5 +23,7 @@ require (
 	k8s.io/metrics v0.22.7
 	sigs.k8s.io/controller-runtime v0.10.3
 )
+
+replace github.com/codeready-toolchain/toolchain-common => github.com/xcoulon/toolchain-common v0.0.0-20220818135810-8a5387a22f71
 
 go 1.16

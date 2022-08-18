@@ -26,7 +26,7 @@ func Webhook(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}
 
-	applyClient := applycl.NewApplyClient(cl, s)
+	applyClient := applycl.NewApplyClient(cl)
 	// create all objects that are within the template, and update only when the object has changed.
 	// if the object was either created or updated, then return and wait for another reconcile
 	for _, obj := range objs {

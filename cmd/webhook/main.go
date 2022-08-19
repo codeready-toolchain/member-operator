@@ -49,7 +49,7 @@ func main() {
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutate)
 	mux.HandleFunc("/validate-users-rolebindings", validator.HandleValidate)
 
-	webhookServer := &http.Server{
+	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)
 		Addr:    ":8443",
 		Handler: mux,
 	}

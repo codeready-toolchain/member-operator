@@ -60,7 +60,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when creating only one object because the other one already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -75,7 +75,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -92,7 +92,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		apiClient, fakeClient := prepareAPIClient(t)
 		// the version is different
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha2"))
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -108,7 +108,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha1"))
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(role, devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -123,7 +123,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("don't update SA when it already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
 			return fmt.Errorf("should not update")
@@ -141,7 +141,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("update Role and don't update SA when it already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
 		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
 			if obj.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
@@ -162,7 +162,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("create SA when it doesn't exist yet", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient, scheme.Scheme).Apply(copyObjects(devNs, role), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role), additionalLabel)
 		require.NoError(t, err)
 
 		// when

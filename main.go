@@ -255,7 +255,7 @@ func main() {
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")
 		memberStatusName := membercfg.MemberStatusName
-		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), mgr.GetScheme(), namespace, memberStatusName); err != nil {
+		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), namespace, memberStatusName); err != nil {
 			setupLog.Error(err, "cannot create/update MemberStatus resource")
 			os.Exit(1)
 		}

@@ -25,7 +25,7 @@ type APIClient struct {
 // ApplyToolchainObjects applies the given ToolchainObjects with the given labels.
 // If any object is marked as optional, then it checks if the API group is available - if not, then it skips the object.
 func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []runtimeclient.Object, newLabels map[string]string) (bool, error) {
-	applyClient := applycl.NewApplyClient(c.Client, c.Scheme)
+	applyClient := applycl.NewApplyClient(c.Client)
 	anyApplied := false
 
 	for _, object := range toolchainObjects {

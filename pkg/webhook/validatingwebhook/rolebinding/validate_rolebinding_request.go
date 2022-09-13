@@ -1,4 +1,4 @@
-package validatingwebhook
+package rolebinding
 
 import (
 	"context"
@@ -11,18 +11,14 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 
 	userv1 "github.com/openshift/api/user/v1"
-	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"k8s.io/apimachinery/pkg/types"
-
 	"github.com/pkg/errors"
+	admissionv1 "k8s.io/api/admission/v1"
 	rbac "k8s.io/api/rbac/v1"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
+	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -61,10 +57,10 @@ func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 }
 
 func validate(body []byte, client runtimeClient.Client) []byte {
-	admReview := v1.AdmissionReview{}
+	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		log.Error(err, "unable to deserialize the admission review object", "body", body)
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", body))
+		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
+		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", string(body)))
 	}
 	// let's unmarshal the object to be sure that it's a rolebinding
 	rb := rbac.RoleBinding{}
@@ -90,13 +86,13 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 			}, requestingUser)
 
 			if err != nil {
-				log.Error(fmt.Errorf("Cannot find the user: %w", err), "unable to find the user requesting creation")
+				log.Error(err, "unable to find the user requesting the rolebinding creation", "username", admReview.Request.UserInfo.Username)
 				// We do not want to deny if it's an unknown user, continue to make another attempt to get user. at the end of loop request is allowed
 				continue
 			}
 			//check if the requesting user is a sandbox user
 			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
-				log.Info("trying to give access which is restricted", "sandbox user is trying to create a rolebinding giving wider access", "AdmissionReview", admReview)
+				log.Info("sandbox user is trying to create a rolebinding giving wider access", "AdmissionReview", admReview)
 				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("please create a rolebinding for a specific user or service account to avoid this error"), "this is a Dev Sandbox enforced restriction. you are trying to create a rolebinding giving access to a larger audience, i.e : %v and requesting user: %+v", sub.Name, requestingUser.Labels))
 			}
 			//At this point, it is clear the user isn't a sandbox user, allow request
@@ -106,8 +102,8 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	return allowAdmissionRequest(admReview)
 }
 
-func denyAdmissionRequest(admReview v1.AdmissionReview, err error) []byte {
-	response := &v1.AdmissionResponse{
+func denyAdmissionRequest(admReview admissionv1.AdmissionReview, err error) []byte {
+	response := &admissionv1.AdmissionResponse{
 		Allowed: false,
 		Result: &metav1.Status{
 			Message: err.Error(),
@@ -125,8 +121,8 @@ func denyAdmissionRequest(admReview v1.AdmissionReview, err error) []byte {
 	return responseBody
 }
 
-func allowAdmissionRequest(admReview v1.AdmissionReview) []byte {
-	resp := &v1.AdmissionResponse{
+func allowAdmissionRequest(admReview admissionv1.AdmissionReview) []byte {
+	resp := &admissionv1.AdmissionResponse{
 		Allowed: true,
 		UID:     admReview.Request.UID,
 	}

@@ -13,15 +13,16 @@ import (
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
+	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"k8s.io/client-go/discovery"
 
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
@@ -117,7 +118,7 @@ func main() {
 		setupLog.Error(err, "")
 		os.Exit(1)
 	}
-	klogv1.SetOutputBySeverity("INFO", klogWriter{}) // tell klog v1 to use the custom writer
+	klogv1.SetOutputBySeverity("INFO", klog.Writer{}) // tell klog v1 to use the custom writer
 	// END : hack to redirect klogv1 calls to klog v2
 
 	printVersion()
@@ -312,33 +313,4 @@ func getCRTConfiguration(config *rest.Config) (membercfg.Configuration, error) {
 	}
 
 	return membercfg.GetConfiguration(cl)
-}
-
-// OutputCallDepth is the stack depth where we can find the origin of this call
-const OutputCallDepth = 6
-
-// DefaultPrefixLength is the length of the log prefix that we have to strip out
-const DefaultPrefixLength = 53
-
-// klogWriter is used in SetOutputBySeverity call below to redirect
-// any calls to klogv1 to end up in klogv2
-type klogWriter struct{}
-
-func (kw klogWriter) Write(p []byte) (n int, err error) {
-	if len(p) < DefaultPrefixLength {
-		klogv2.InfoDepth(OutputCallDepth, string(p))
-		return len(p), nil
-	}
-	if p[0] == 'I' {
-		klogv2.InfoDepth(OutputCallDepth, string(p[DefaultPrefixLength:]))
-	} else if p[0] == 'W' {
-		klogv2.WarningDepth(OutputCallDepth, string(p[DefaultPrefixLength:]))
-	} else if p[0] == 'E' {
-		klogv2.ErrorDepth(OutputCallDepth, string(p[DefaultPrefixLength:]))
-	} else if p[0] == 'F' {
-		klogv2.FatalDepth(OutputCallDepth, string(p[DefaultPrefixLength:]))
-	} else {
-		klogv2.InfoDepth(OutputCallDepth, string(p[DefaultPrefixLength:]))
-	}
-	return len(p), nil
 }

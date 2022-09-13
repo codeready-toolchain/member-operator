@@ -1,4 +1,4 @@
-package validatingwebhook
+package rolebinding
 
 import (
 	"bytes"
@@ -8,18 +8,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	userv1 "github.com/openshift/api/user/v1"
-	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestHandleValidateBlocked(t *testing.T) {
@@ -149,8 +147,8 @@ func verifyRequestAllowed(t *testing.T, response []byte, UID string) {
 	assert.Equal(t, UID, string(reviewResponse.UID))
 }
 
-func toReviewResponse(t *testing.T, content []byte) *v1.AdmissionResponse {
-	r := v1.AdmissionReview{}
+func toReviewResponse(t *testing.T, content []byte) *admissionv1.AdmissionResponse {
+	r := admissionv1.AdmissionReview{}
 	err := json.Unmarshal(content, &r)
 	require.NoError(t, err)
 	return r.Response

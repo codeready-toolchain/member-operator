@@ -18,6 +18,10 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/scale"
 
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -182,6 +186,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	scalesClient, err := newScalesClient(cfg)
+
 	// initialize che client
 	che.InitDefaultCheClient(allNamespacesClient)
 
@@ -198,6 +204,7 @@ func main() {
 		Scheme:              mgr.GetScheme(),
 		AllNamespacesClient: allNamespacesClient,
 		Client:              mgr.GetClient(),
+		ScalesClient:        scalesClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr); err != nil {
@@ -298,6 +305,21 @@ func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, er
 		return nil, nil, err
 	}
 	return clusterAllNamespaces.GetClient(), clusterAllNamespaces.GetCache(), nil
+}
+
+func newScalesClient(config *rest.Config) (scale.ScalesGetter, error) {
+	if c, err := kubernetes.NewForConfig(config); err == nil {
+		// Polymorphic scale client
+		groupResources, err := restmapper.GetAPIGroupResources(c.Discovery())
+		if err != nil {
+			return nil, err
+		}
+		mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+		resolver := scale.NewDiscoveryScaleKindResolver(c.Discovery())
+		return scale.NewForConfig(config, mapper, dynamic.LegacyAPIPathResolverFunc, resolver)
+	} else {
+		return nil, err
+	}
 }
 
 // getCRTConfiguration creates the client used for configuration and

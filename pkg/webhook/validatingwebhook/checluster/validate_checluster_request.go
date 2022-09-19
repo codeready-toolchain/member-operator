@@ -12,7 +12,7 @@ import (
 
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -57,7 +57,7 @@ func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 
 func validate(body []byte, client runtimeClient.Client) []byte {
 	log.Info("incoming request", "body", string(body))
-	admReview := v1.AdmissionReview{}
+	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
 		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", string(body)))
@@ -85,8 +85,8 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	return allowAdmissionRequest(admReview)
 }
 
-func denyAdmissionRequest(admReview v1.AdmissionReview, err error) []byte {
-	response := &v1.AdmissionResponse{
+func denyAdmissionRequest(admReview admissionv1.AdmissionReview, err error) []byte {
+	response := &admissionv1.AdmissionResponse{
 		Allowed: false,
 		Result: &metav1.Status{
 			Message: err.Error(),
@@ -104,8 +104,8 @@ func denyAdmissionRequest(admReview v1.AdmissionReview, err error) []byte {
 	return responseBody
 }
 
-func allowAdmissionRequest(admReview v1.AdmissionReview) []byte {
-	resp := &v1.AdmissionResponse{
+func allowAdmissionRequest(admReview admissionv1.AdmissionReview) []byte {
+	resp := &admissionv1.AdmissionResponse{
 		Allowed: true,
 		UID:     admReview.Request.UID,
 	}

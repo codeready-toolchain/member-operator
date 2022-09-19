@@ -1,4 +1,4 @@
-package rolebinding
+package validatingwebhook
 
 import (
 	"bytes"
@@ -16,17 +16,13 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestHandleValidateBlocked(t *testing.T) {
-	cl := createFakeClient("johnsmith", true)
-	validator := &Validator{
-		Client: cl,
-	}
+	v := newRoleBindingRequestValidator(t, "johnsmith", true)
 	// given
-	ts := httptest.NewServer(http.HandlerFunc(validator.HandleValidate))
+	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
 	defer ts.Close()
 
 	// when
@@ -44,33 +40,33 @@ func TestHandleValidateBlocked(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts is denied", func(t *testing.T) {
-		cl := createFakeClient("johnsmith", true)
+		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := validate(sandboxUserForAllServiceAccountsJSON, cl)
+		response := v.validate(sandboxUserForAllServiceAccountsJSON)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
 
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts: is denied", func(t *testing.T) {
-		cl := createFakeClient("johnsmith", true)
+		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := validate(sandboxUserForAllServiceAccountsJSON2, cl)
+		response := v.validate(sandboxUserForAllServiceAccountsJSON2)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad7g8")
 	})
 
 	t.Run("sandbox user trying to create rolebinding for all authenticated users is denied", func(t *testing.T) {
-		cl := createFakeClient("johnsmith", true)
+		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := validate(sandboxUserForAllUsersJSON, cl)
+		response := v.validate(sandboxUserForAllUsersJSON)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad8k8")
 	})
 
 	t.Run("sandbox user trying to create rolebinding for all authenticated: is denied", func(t *testing.T) {
-		cl := createFakeClient("johnsmith", true)
+		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := validate(sandboxUserForAllUsersJSON2, cl)
+		response := v.validate(sandboxUserForAllUsersJSON2)
 		// then
 		verifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad9l9")
 	})
@@ -79,34 +75,34 @@ func TestValidate(t *testing.T) {
 func TestValidateAllow(t *testing.T) {
 
 	t.Run("SA or kubeadmin trying to create rolebinding is allowed", func(t *testing.T) {
-		cl := createFakeClient("system:kubeadmin", false)
+		v := newRoleBindingRequestValidator(t, "system:kubeadmin", false)
 		// when user is kubeadmin
-		response := validate(allowedUserJSON, cl)
+		response := v.validate(allowedUserJSON)
 
 		// then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6g7")
 	})
 
 	t.Run("non sandbox user trying to create rolebinding is allowed", func(t *testing.T) {
-		cl := createFakeClient("nonsandbox", false)
+		v := newRoleBindingRequestValidator(t, "nonsandbox", false)
 		// when
-		response := validate(nonSandboxUserJSON, cl)
+		response := v.validate(nonSandboxUserJSON)
 		// then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f7")
 	})
 
 	t.Run("unable to find the requesting user, allow request", func(t *testing.T) {
-		cl := createFakeClient("random-user", true)
+		v := newRoleBindingRequestValidator(t, "random-user", true)
 		// when
-		response := validate(sandboxUserForAllServiceAccountsJSON, cl)
+		response := v.validate(sandboxUserForAllServiceAccountsJSON)
 		// then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
 
 	t.Run("sandbox user creating a rolebinding for a specific user is allowed", func(t *testing.T) {
-		cl := createFakeClient("laracroft", true)
+		v := newRoleBindingRequestValidator(t, "laracroft", true)
 		//when
-		response := validate(allowedRbJSON, cl)
+		response := v.validate(allowedRbJSON)
 		//then
 		verifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad8g8")
 	})
@@ -116,17 +112,21 @@ func TestValidateAllow(t *testing.T) {
 func TestValidateFailsOnInvalidJson(t *testing.T) {
 	// given
 	rawJSON := []byte(`something wrong !`)
+	v := &RoleBindingRequestValidator{}
 
 	// when
-	response := validate(rawJSON, nil)
+	response := v.validate(rawJSON)
 
 	// then
 	verifyRequestBlocked(t, response, "cannot unmarshal string into Go value of type struct", "")
 }
 
 func TestValidateFailsOnInvalidObjectJson(t *testing.T) {
+	// given
+	v := &RoleBindingRequestValidator{}
+
 	// when
-	response := validate(incorrectRequestObjectJSON, nil)
+	response := v.validate(incorrectRequestObjectJSON)
 
 	// then
 	verifyRequestBlocked(t, response, "unable to unmarshal object or object is not a rolebinding", "a68769e5-d817-4617-bec5-90efa2bad6f8")
@@ -154,12 +154,9 @@ func toReviewResponse(t *testing.T, content []byte) *admissionv1.AdmissionRespon
 	return r.Response
 }
 
-func createFakeClient(username string, sandboxUser bool) runtimeclient.Client {
-	s := scheme.Scheme
-	err := userv1.Install(s)
-	if err != nil {
-		return nil
-	}
+func newRoleBindingRequestValidator(t *testing.T, username string, sandboxUser bool) *RoleBindingRequestValidator {
+	err := userv1.Install(scheme.Scheme)
+	require.NoError(t, err)
 	testUser := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: username,
@@ -170,7 +167,10 @@ func createFakeClient(username string, sandboxUser bool) runtimeclient.Client {
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 		}
 	}
-	return fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
+	cl := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(testUser).Build()
+	return &RoleBindingRequestValidator{
+		Client: cl,
+	}
 }
 
 var incorrectRequestObjectJSON = []byte(`{

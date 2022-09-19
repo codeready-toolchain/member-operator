@@ -1,4 +1,4 @@
-package rolebinding
+package validatingwebhook
 
 import (
 	"context"
@@ -14,27 +14,15 @@ import (
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	rbac "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var (
-	runtimeScheme = runtime.NewScheme()
-	codecs        = serializer.NewCodecFactory(runtimeScheme)
-	deserializer  = codecs.UniversalDeserializer()
-
-	log = logf.Log.WithName("users_rolebindings_validating_webhook")
-)
-
-type Validator struct {
+type RoleBindingRequestValidator struct {
 	Client runtimeClient.Client
 }
 
-func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
+func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
 	body, err := ioutil.ReadAll(r.Body)
 	defer func() {
@@ -48,7 +36,7 @@ func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 		respBody = []byte(fmt.Sprintf("unable to read the body of the request: %s", err))
 	} else {
 		// validate the request
-		respBody = validate(body, v.Client)
+		respBody = v.validate(body)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := w.Write(respBody); err != nil {
@@ -56,7 +44,7 @@ func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func validate(body []byte, client runtimeClient.Client) []byte {
+func (v RoleBindingRequestValidator) validate(body []byte) []byte {
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
@@ -81,7 +69,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	for _, sub := range subjects {
 		if containsSubject(subjectsList, sub) {
 			requestingUser := &userv1.User{}
-			err := client.Get(context.TODO(), types.NamespacedName{
+			err := v.Client.Get(context.TODO(), types.NamespacedName{
 				Name: admReview.Request.UserInfo.Username,
 			}, requestingUser)
 
@@ -100,39 +88,6 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 		}
 	}
 	return allowAdmissionRequest(admReview)
-}
-
-func denyAdmissionRequest(admReview admissionv1.AdmissionReview, err error) []byte {
-	response := &admissionv1.AdmissionResponse{
-		Allowed: false,
-		Result: &metav1.Status{
-			Message: err.Error(),
-		},
-	}
-	if admReview.Request != nil {
-		response.UID = admReview.Request.UID
-	}
-	admReview.Response = response
-	responseBody, err := json.Marshal(admReview)
-	if err != nil {
-		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
-		return []byte("unable to marshal the admission review with response")
-	}
-	return responseBody
-}
-
-func allowAdmissionRequest(admReview admissionv1.AdmissionReview) []byte {
-	resp := &admissionv1.AdmissionResponse{
-		Allowed: true,
-		UID:     admReview.Request.UID,
-	}
-	admReview.Response = resp
-	responseBody, err := json.Marshal(admReview)
-	if err != nil {
-		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
-		return []byte("unable to marshal the admission review with response")
-	}
-	return responseBody
 }
 
 func getBlockSubjectList() []rbac.Subject {

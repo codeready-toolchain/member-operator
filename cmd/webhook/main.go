@@ -11,8 +11,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
-	checlustervalidatingwebhook "github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook/checluster"
-	rolebindingvalidatingwebhook "github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook/rolebinding"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook"
 
 	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
@@ -90,10 +89,10 @@ func main() {
 		setupLog.Error(err, "creating a new client failed")
 		os.Exit(1)
 	}
-	rolebindingValidator := &rolebindingvalidatingwebhook.Validator{
+	rolebindingValidator := &validatingwebhook.RoleBindingRequestValidator{
 		Client: cl,
 	}
-	checlusterValidator := &checlustervalidatingwebhook.Validator{
+	checlusterValidator := &validatingwebhook.CheClusterRequestValidator{
 		Client: cl,
 	}
 	mux := http.NewServeMux()

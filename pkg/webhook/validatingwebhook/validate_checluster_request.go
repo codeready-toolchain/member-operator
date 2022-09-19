@@ -1,8 +1,7 @@
-package checluster
+package validatingwebhook
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,27 +12,15 @@ import (
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var (
-	runtimeScheme = runtime.NewScheme()
-	codecs        = serializer.NewCodecFactory(runtimeScheme)
-	deserializer  = codecs.UniversalDeserializer()
-
-	log = logf.Log.WithName("users_checluster_validating_webhook")
-)
-
-type Validator struct {
+type CheClusterRequestValidator struct {
 	Client runtimeClient.Client
 }
 
-func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
+func (v CheClusterRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
 	body, err := ioutil.ReadAll(r.Body)
 	defer func() {
@@ -47,7 +34,7 @@ func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 		respBody = []byte(fmt.Sprintf("unable to read the body of the request: %s", err))
 	} else {
 		// validate the request
-		respBody = validate(body, v.Client)
+		respBody = v.validate(body)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := w.Write(respBody); err != nil {
@@ -55,7 +42,7 @@ func (v Validator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func validate(body []byte, client runtimeClient.Client) []byte {
+func (v CheClusterRequestValidator) validate(body []byte) []byte {
 	log.Info("incoming request", "body", string(body))
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
@@ -69,7 +56,7 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	}
 	//check if the requesting user is a sandbox user
 	requestingUser := &userv1.User{}
-	err := client.Get(context.TODO(), types.NamespacedName{
+	err := v.Client.Get(context.TODO(), types.NamespacedName{
 		Name: admReview.Request.UserInfo.Username,
 	}, requestingUser)
 
@@ -83,37 +70,4 @@ func validate(body []byte, client runtimeClient.Client) []byte {
 	}
 	// at this point, it is clear the user isn't a sandbox user, allow request
 	return allowAdmissionRequest(admReview)
-}
-
-func denyAdmissionRequest(admReview admissionv1.AdmissionReview, err error) []byte {
-	response := &admissionv1.AdmissionResponse{
-		Allowed: false,
-		Result: &metav1.Status{
-			Message: err.Error(),
-		},
-	}
-	if admReview.Request != nil {
-		response.UID = admReview.Request.UID
-	}
-	admReview.Response = response
-	responseBody, err := json.Marshal(admReview)
-	if err != nil {
-		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
-		return []byte("unable to marshal the admission review with response")
-	}
-	return responseBody
-}
-
-func allowAdmissionRequest(admReview admissionv1.AdmissionReview) []byte {
-	resp := &admissionv1.AdmissionResponse{
-		Allowed: true,
-		UID:     admReview.Request.UID,
-	}
-	admReview.Response = resp
-	responseBody, err := json.Marshal(admReview)
-	if err != nil {
-		log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
-		return []byte("unable to marshal the admission review with response")
-	}
-	return responseBody
 }

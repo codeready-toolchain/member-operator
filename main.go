@@ -187,6 +187,10 @@ func main() {
 	}
 
 	scalesClient, err := newScalesClient(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create scales client")
+		os.Exit(1)
+	}
 
 	// initialize che client
 	che.InitDefaultCheClient(allNamespacesClient)
@@ -308,18 +312,18 @@ func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, er
 }
 
 func newScalesClient(config *rest.Config) (scale.ScalesGetter, error) {
-	if c, err := kubernetes.NewForConfig(config); err == nil {
-		// Polymorphic scale client
-		groupResources, err := restmapper.GetAPIGroupResources(c.Discovery())
-		if err != nil {
-			return nil, err
-		}
-		mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
-		resolver := scale.NewDiscoveryScaleKindResolver(c.Discovery())
-		return scale.NewForConfig(config, mapper, dynamic.LegacyAPIPathResolverFunc, resolver)
-	} else {
+	c, err := kubernetes.NewForConfig(config)
+	if err != nil {
 		return nil, err
 	}
+	// Polymorphic scale client
+	groupResources, err := restmapper.GetAPIGroupResources(c.Discovery())
+	if err != nil {
+		return nil, err
+	}
+	mapper := restmapper.NewDiscoveryRESTMapper(groupResources)
+	resolver := scale.NewDiscoveryScaleKindResolver(c.Discovery())
+	return scale.NewForConfig(config, mapper, dynamic.LegacyAPIPathResolverFunc, resolver)
 }
 
 // getCRTConfiguration creates the client used for configuration and

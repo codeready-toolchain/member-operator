@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestHandleValidateBlocked(t *testing.T) {
+func TestHandleValidateRolebBndingAdmissionRequestBlocked(t *testing.T) {
 	v := newRoleBindingRequestValidator(t, "johnsmith", true)
 	// given
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
@@ -38,7 +38,7 @@ func TestHandleValidateBlocked(t *testing.T) {
 	verifyRequestBlocked(t, body, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 }
 
-func TestValidate(t *testing.T) {
+func TestValidateRolebBndingAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts is denied", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
@@ -72,7 +72,7 @@ func TestValidate(t *testing.T) {
 	})
 }
 
-func TestValidateAllow(t *testing.T) {
+func TestValidateRolebBndingAdmissionRequestAllowed(t *testing.T) {
 
 	t.Run("SA or kubeadmin trying to create rolebinding is allowed", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "system:kubeadmin", false)
@@ -109,7 +109,7 @@ func TestValidateAllow(t *testing.T) {
 
 }
 
-func TestValidateFailsOnInvalidJson(t *testing.T) {
+func TestValidateRolebBndingAdmissionRequestFailsOnInvalidJson(t *testing.T) {
 	// given
 	rawJSON := []byte(`something wrong !`)
 	v := &RoleBindingRequestValidator{}
@@ -121,7 +121,7 @@ func TestValidateFailsOnInvalidJson(t *testing.T) {
 	verifyRequestBlocked(t, response, "cannot unmarshal string into Go value of type struct", "")
 }
 
-func TestValidateFailsOnInvalidObjectJson(t *testing.T) {
+func TestValidateRolebBndingAdmissionRequestFailsOnInvalidObjectJson(t *testing.T) {
 	// given
 	v := &RoleBindingRequestValidator{}
 

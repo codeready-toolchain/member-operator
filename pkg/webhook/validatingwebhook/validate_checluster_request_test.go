@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestHandleValidate(t *testing.T) {
+func TestHandleValidateCheClusterAdmissionRequest(t *testing.T) {
 	// given
 	v := newCheClusterValidator(t)
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))

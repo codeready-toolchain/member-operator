@@ -10,6 +10,8 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -30,6 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
+	schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithKind("Integration"):          schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithResource("integrations"),
+	schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -42,6 +49,7 @@ type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
+	ScalesClient        scale.ScalesGetter
 	GetHostCluster      cluster.GetHostClusterFunc
 	Namespace           string
 }
@@ -278,12 +286,44 @@ func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string,
 		return false, err
 	}
 	zero := int32(0)
+
+	for _, deploymentOwner := range d.OwnerReferences {
+		if supportedScaleResource := getSupportedScaleResource(deploymentOwner); supportedScaleResource != nil {
+			// check for owner with scale sub resource
+			if scaleResource, err := r.ScalesClient.Scales(d.Namespace).Get(context.TODO(), supportedScaleResource.GroupResource(), deploymentOwner.Name, metav1.GetOptions{}); err == nil {
+				scaleResource.Spec.Replicas = zero
+				_, err = r.ScalesClient.Scales(d.Namespace).Update(context.TODO(), supportedScaleResource.GroupResource(), scaleResource, metav1.UpdateOptions{})
+
+				if err == nil {
+					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
+					return true, nil
+				}
+
+				return false, err
+			} else if !errors.IsNotFound(err) {
+				return false, err
+			}
+		}
+	}
+
 	d.Spec.Replicas = &zero
 	if err := r.AllNamespacesClient.Update(context.TODO(), d); err != nil {
 		return false, err
 	}
 	logger.Info("Deployment scaled to zero", "name", d.Name)
 	return true, nil
+}
+
+func getSupportedScaleResource(ownerReference metav1.OwnerReference) *schema.GroupVersionResource {
+	if ownerGVK, err := schema.ParseGroupVersion(ownerReference.APIVersion); err == nil {
+		for groupVersionKind, groupVersionResource := range SupportedScaleResources {
+			if groupVersionKind.String() == ownerGVK.WithKind(ownerReference.Kind).String() {
+				return &groupVersionResource
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {

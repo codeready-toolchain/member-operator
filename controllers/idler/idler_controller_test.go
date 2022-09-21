@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +31,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
+	fakescale "k8s.io/client-go/scale/fake"
+	clienttest "k8s.io/client-go/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -158,8 +162,11 @@ func TestEnsureIdling(t *testing.T) {
 				JobExists(podsTooEarlyToKill.job).
 				JobExists(noise.job).
 				DeploymentScaledUp(podsRunningForTooLong.deployment).
+				DeploymentScaledUp(podsRunningForTooLong.scaleResource).
 				DeploymentScaledUp(podsTooEarlyToKill.deployment).
+				DeploymentScaledUp(podsTooEarlyToKill.scaleResource).
 				DeploymentScaledUp(noise.deployment).
+				DeploymentScaledUp(noise.scaleResource).
 				ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
 				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 				ReplicaSetScaledUp(noise.replicaSet).
@@ -200,8 +207,11 @@ func TestEnsureIdling(t *testing.T) {
 					JobExists(podsTooEarlyToKill.job).
 					JobExists(noise.job).
 					DeploymentScaledDown(podsRunningForTooLong.deployment).
+					DeploymentScaledDown(podsRunningForTooLong.scaleResource).
 					DeploymentScaledUp(podsTooEarlyToKill.deployment).
+					DeploymentScaledUp(podsTooEarlyToKill.scaleResource).
 					DeploymentScaledUp(noise.deployment).
+					DeploymentScaledUp(noise.scaleResource).
 					ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
 					ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 					ReplicaSetScaledUp(noise.replicaSet).
@@ -770,6 +780,7 @@ type payloads struct {
 	allPods []*corev1.Pod
 
 	deployment            *appsv1.Deployment
+	scaleResource         *appsv1.Deployment
 	replicaSet            *appsv1.ReplicaSet
 	daemonSet             *appsv1.DaemonSet
 	statefulSet           *appsv1.StatefulSet
@@ -798,6 +809,33 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	err = r.AllNamespacesClient.Create(context.TODO(), rs)
 	require.NoError(t, err)
 	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
+
+	// Deployment with owner reference and scale sub resource
+	sr := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s%s-deployment-scale", namePrefix, namespace),
+			Namespace: namespace,
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "camel.apache.org/v1",
+					Kind:       "Integration",
+					Name:       fmt.Sprintf("%s%s-integration", namePrefix, namespace),
+				},
+			},
+		},
+		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
+	}
+	err = r.AllNamespacesClient.Create(context.TODO(), sr)
+	require.NoError(t, err)
+	rssr := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", sr.Name), Namespace: namespace},
+		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
+	}
+	err = controllerutil.SetControllerReference(sr, rssr, r.Scheme)
+	require.NoError(t, err)
+	err = r.AllNamespacesClient.Create(context.TODO(), rssr)
+	require.NoError(t, err)
+	controlledPods = createPods(t, r, rssr, sTime, controlledPods)
 
 	// Standalone ReplicaSet
 	standaloneRs := &appsv1.ReplicaSet{
@@ -888,6 +926,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		controlledPods:        controlledPods,
 		allPods:               append(standalonePods, controlledPods...),
 		deployment:            d,
+		scaleResource:         sr,
 		replicaSet:            standaloneRs,
 		daemonSet:             ds,
 		statefulSet:           sts,
@@ -919,9 +958,53 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
+
+	scalesClient := fakescale.FakeScaleClient{}
+	scalesClient.AddReactor("update", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
+		action := rawAction.(clienttest.UpdateAction)    // nolint: forcetypeassert
+		obj := action.GetObject().(*autoscalingv1.Scale) // nolint: forcetypeassert
+		replicas := obj.Spec.Replicas
+
+		// update owned deployment
+		d := &appsv1.Deployment{}
+		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: strings.Replace(obj.Name, "integration", "deployment-scale", 1), Namespace: obj.Namespace}, d)
+		if err != nil {
+			return false, nil, err
+		}
+		d.Spec.Replicas = &replicas
+		err = allNamespacesClient.Update(context.TODO(), d)
+		if err != nil {
+			return false, nil, err
+		}
+
+		return true, &autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      obj.Name,
+				Namespace: action.GetNamespace(),
+			},
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: replicas,
+			},
+		}, nil
+	})
+	scalesClient.AddReactor("get", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
+		action := rawAction.(clienttest.GetAction) // nolint: forcetypeassert
+		obj := &autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      action.GetName(),
+				Namespace: action.GetNamespace(),
+			},
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: 3,
+			},
+		}
+		return true, obj, nil
+	})
+
 	r := &Reconciler{
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
+		ScalesClient:        &scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		Namespace:           test.MemberOperatorNs,

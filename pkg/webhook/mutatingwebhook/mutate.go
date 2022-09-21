@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-	"k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -78,7 +78,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 func mutate(body []byte) []byte {
 	admReview := v1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		log.Error(err, "unable to deserialize the admission review object", "body", body)
+		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
 		admReview.Response = responseWithError(err)
 	} else {
 		admReview.Response = createAdmissionReviewResponse(admReview)

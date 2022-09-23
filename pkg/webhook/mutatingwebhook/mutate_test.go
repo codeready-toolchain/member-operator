@@ -3,7 +3,7 @@ package mutatingwebhook
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,7 +23,7 @@ func TestHandleMutateSuccess(t *testing.T) {
 
 	// then
 	assert.NoError(t, err)
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	defer func() {
 		require.NoError(t, resp.Body.Close())
 	}()

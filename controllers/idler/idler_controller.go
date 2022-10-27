@@ -9,6 +9,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/scale"
@@ -293,6 +294,24 @@ func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string,
 			if scaleResource, err := r.ScalesClient.Scales(d.Namespace).Get(context.TODO(), supportedScaleResource.GroupResource(), deploymentOwner.Name, metav1.GetOptions{}); err == nil {
 				scaleResource.Spec.Replicas = zero
 				_, err = r.ScalesClient.Scales(d.Namespace).Update(context.TODO(), supportedScaleResource.GroupResource(), scaleResource, metav1.UpdateOptions{})
+
+				if err == nil {
+					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
+					return true, nil
+				}
+
+				return false, err
+			} else if errors.IsInternalError(err) { // Internal error indicates that the specReplicasPath is not set on the custom resource - just update the scale resource
+				scale := autoscalingv1.Scale{
+					ObjectMeta: ctrl.ObjectMeta{
+						Name:      deploymentOwner.Name,
+						Namespace: d.Namespace,
+					},
+					Spec: autoscalingv1.ScaleSpec{
+						Replicas: zero,
+					},
+				}
+				_, err = r.ScalesClient.Scales(d.Namespace).Update(context.TODO(), supportedScaleResource.GroupResource(), &scale, metav1.UpdateOptions{})
 
 				if err == nil {
 					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)

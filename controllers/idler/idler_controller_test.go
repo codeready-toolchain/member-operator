@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -162,11 +162,14 @@ func TestEnsureIdling(t *testing.T) {
 				JobExists(podsTooEarlyToKill.job).
 				JobExists(noise.job).
 				DeploymentScaledUp(podsRunningForTooLong.deployment).
-				DeploymentScaledUp(podsRunningForTooLong.scaleResource).
+				DeploymentScaledUp(podsRunningForTooLong.integration).
+				DeploymentScaledUp(podsRunningForTooLong.kameletBinding).
 				DeploymentScaledUp(podsTooEarlyToKill.deployment).
-				DeploymentScaledUp(podsTooEarlyToKill.scaleResource).
+				DeploymentScaledUp(podsTooEarlyToKill.integration).
+				DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
 				DeploymentScaledUp(noise.deployment).
-				DeploymentScaledUp(noise.scaleResource).
+				DeploymentScaledUp(noise.integration).
+				DeploymentScaledUp(noise.kameletBinding).
 				ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
 				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 				ReplicaSetScaledUp(noise.replicaSet).
@@ -207,11 +210,14 @@ func TestEnsureIdling(t *testing.T) {
 					JobExists(podsTooEarlyToKill.job).
 					JobExists(noise.job).
 					DeploymentScaledDown(podsRunningForTooLong.deployment).
-					DeploymentScaledDown(podsRunningForTooLong.scaleResource).
+					DeploymentScaledDown(podsRunningForTooLong.integration).
+					DeploymentScaledDown(podsRunningForTooLong.kameletBinding).
 					DeploymentScaledUp(podsTooEarlyToKill.deployment).
-					DeploymentScaledUp(podsTooEarlyToKill.scaleResource).
+					DeploymentScaledUp(podsTooEarlyToKill.integration).
+					DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
 					DeploymentScaledUp(noise.deployment).
-					DeploymentScaledUp(noise.scaleResource).
+					DeploymentScaledUp(noise.integration).
+					DeploymentScaledUp(noise.kameletBinding).
 					ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
 					ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 					ReplicaSetScaledUp(noise.replicaSet).
@@ -780,7 +786,8 @@ type payloads struct {
 	allPods []*corev1.Pod
 
 	deployment            *appsv1.Deployment
-	scaleResource         *appsv1.Deployment
+	integration           *appsv1.Deployment
+	kameletBinding        *appsv1.Deployment
 	replicaSet            *appsv1.ReplicaSet
 	daemonSet             *appsv1.DaemonSet
 	statefulSet           *appsv1.StatefulSet
@@ -810,10 +817,10 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
 
-	// Deployment with owner reference and scale sub resource
-	sr := &appsv1.Deployment{
+	// Deployment with Camel K integration as an owner reference and a scale sub resource
+	integration := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s%s-deployment-scale", namePrefix, namespace),
+			Name:      fmt.Sprintf("%s%s-integration-deployment", namePrefix, namespace),
 			Namespace: namespace,
 			OwnerReferences: []v1.OwnerReference{
 				{
@@ -825,17 +832,44 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		},
 		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
 	}
-	err = r.AllNamespacesClient.Create(context.TODO(), sr)
+	err = r.AllNamespacesClient.Create(context.TODO(), integration)
 	require.NoError(t, err)
-	rssr := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", sr.Name), Namespace: namespace},
+	integrationRS := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", integration.Name), Namespace: namespace},
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
 	}
-	err = controllerutil.SetControllerReference(sr, rssr, r.Scheme)
+	err = controllerutil.SetControllerReference(integration, integrationRS, r.Scheme)
 	require.NoError(t, err)
-	err = r.AllNamespacesClient.Create(context.TODO(), rssr)
+	err = r.AllNamespacesClient.Create(context.TODO(), integrationRS)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, rssr, sTime, controlledPods)
+	controlledPods = createPods(t, r, integrationRS, sTime, controlledPods)
+
+	// Deployment with Camel K integration as an owner reference and a scale sub resource
+	binding := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s%s-binding-deployment", namePrefix, namespace),
+			Namespace: namespace,
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "camel.apache.org/v1alpha1",
+					Kind:       "KameletBinding",
+					Name:       fmt.Sprintf("%s%s-binding", namePrefix, namespace),
+				},
+			},
+		},
+		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
+	}
+	err = r.AllNamespacesClient.Create(context.TODO(), binding)
+	require.NoError(t, err)
+	bindingRS := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", binding.Name), Namespace: namespace},
+		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
+	}
+	err = controllerutil.SetControllerReference(binding, bindingRS, r.Scheme)
+	require.NoError(t, err)
+	err = r.AllNamespacesClient.Create(context.TODO(), bindingRS)
+	require.NoError(t, err)
+	controlledPods = createPods(t, r, bindingRS, sTime, controlledPods)
 
 	// Standalone ReplicaSet
 	standaloneRs := &appsv1.ReplicaSet{
@@ -926,7 +960,8 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		controlledPods:        controlledPods,
 		allPods:               append(standalonePods, controlledPods...),
 		deployment:            d,
-		scaleResource:         sr,
+		integration:           integration,
+		kameletBinding:        binding,
 		replicaSet:            standaloneRs,
 		daemonSet:             ds,
 		statefulSet:           sts,
@@ -967,7 +1002,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 
 		// update owned deployment
 		d := &appsv1.Deployment{}
-		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: strings.Replace(obj.Name, "integration", "deployment-scale", 1), Namespace: obj.Namespace}, d)
+		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: obj.Name + "-deployment", Namespace: obj.Namespace}, d)
 		if err != nil {
 			return false, nil, err
 		}
@@ -987,7 +1022,20 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 			},
 		}, nil
 	})
-	scalesClient.AddReactor("get", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
+
+	// Mock internal server error for Camel K integrations in order to replicate default behavior with missing spec.replicas field
+	scalesClient.AddReactor("get", "integrations", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
+		return true, nil, &apierrors.StatusError{
+			ErrStatus: v1.Status{
+				Message: "Internal error occurred: the spec replicas field \".spec.replicas\" does not exist",
+				Reason:  metav1.StatusReasonInternalError,
+				Code:    http.StatusInternalServerError,
+			},
+		}
+	})
+
+	// Mock proper scale resource for Camel K KameletBinding resources
+	scalesClient.AddReactor("get", "kameletbindings", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
 		action := rawAction.(clienttest.GetAction) // nolint: forcetypeassert
 		obj := &autoscalingv1.Scale{
 			ObjectMeta: metav1.ObjectMeta{

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -162,15 +161,6 @@ func TestClusterResourceKinds(t *testing.T) {
 		// then
 		assert.Equal(t, &toolchainv1alpha1.Idler{}, clusterResource.object)
 		assert.Equal(t, toolchainv1alpha1.GroupVersion.WithKind("Idler"), clusterResource.gvk)
-	})
-
-	t.Run("verify DBaaSTenant is in clusterResourceKinds", func(t *testing.T) {
-		// given
-		clusterResource := clusterResourceKinds[3]
-
-		// then
-		assert.Equal(t, &dbaasv1alpha1.DBaaSTenant{}, clusterResource.object)
-		assert.Equal(t, dbaasv1alpha1.GroupVersion.WithKind("DBaaSTenant"), clusterResource.gvk)
 	})
 }
 

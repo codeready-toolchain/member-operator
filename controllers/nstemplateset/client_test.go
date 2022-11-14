@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -13,6 +12,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,7 +29,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	logf.SetLogger(logger)
 	role := newRole("john-dev", "edit-john", "john")
 	devNs := newNamespace("advanced", "john", "dev")
-	dBaaSTenant := newDBaaSTenant("john-dev-tenant", "john")
+	optionalDeployment := newOptionalDeployment("john-dev-deployment", "john")
 	additionalLabel := map[string]string{
 		"foo": "bar",
 	}
@@ -72,14 +72,14 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
-	t.Run("when only DBaaSTenant is supposed to be applied but the group for DBaaS is not present", func(t *testing.T) {
+	t.Run("when only Deployment is supposed to be applied but the apps group is not present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(dBaaSTenant), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(optionalDeployment), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -87,16 +87,16 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
-	t.Run("when only DBaaSTenant is supposed to be applied, the group for DBaaS is present, but not the version", func(t *testing.T) {
+	t.Run("when only Deployment is supposed to be applied, the apps group is present, but not the version", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		// the version is different
-		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha2"))
+		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("apps", "v1alpha2"))
 		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(dBaaSTenant), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(optionalDeployment), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -104,15 +104,15 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, false)
 	})
 
-	t.Run("when only DBaaSTenant is supposed to be applied and the group for DBaaS is present", func(t *testing.T) {
+	t.Run("when only Deployment is supposed to be applied and the apps group is present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("dbaas.redhat.com", "v1alpha1"))
+		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("apps", "v1"))
 		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(dBaaSTenant), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(optionalDeployment), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -183,7 +183,7 @@ func copyObjects(objects ...runtimeclient.Object) []runtimeclient.Object {
 	return objs
 }
 
-func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool) {
+func assertObjects(t *testing.T, client *test.FakeClient, expectOptionalDeployment bool) {
 	AssertThatRole(t, "john-dev", "edit-john", client).
 		Exists(). // created
 		HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -198,27 +198,27 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectDBaaSTenant bool
 	AssertObject(t, client, "john-dev", "appstudio-user-sa", sa, func() {
 		assert.Equal(t, map[string]string{"foo": "bar"}, sa.Labels)
 	})
-	dBaaSTenant := &dbaasv1alpha1.DBaaSTenant{}
-	if expectDBaaSTenant {
-		AssertObject(t, client, "", "john-dev-tenant", dBaaSTenant, func() {
-			assert.Contains(t, dBaaSTenant.Labels, toolchainv1alpha1.ProviderLabelKey)
-			assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, dBaaSTenant.Labels[toolchainv1alpha1.ProviderLabelKey])
-			assert.Contains(t, dBaaSTenant.Labels, toolchainv1alpha1.OwnerLabelKey)
-			assert.Equal(t, "john", dBaaSTenant.Labels[toolchainv1alpha1.OwnerLabelKey])
-			assert.Contains(t, dBaaSTenant.Labels, "foo")
-			assert.Equal(t, "bar", dBaaSTenant.Labels["foo"])
+	optionalDeployment := &appsv1.Deployment{}
+	if expectOptionalDeployment {
+		AssertObject(t, client, "", "john-dev-deployment", optionalDeployment, func() {
+			assert.Contains(t, optionalDeployment.Labels, toolchainv1alpha1.ProviderLabelKey)
+			assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, optionalDeployment.Labels[toolchainv1alpha1.ProviderLabelKey])
+			assert.Contains(t, optionalDeployment.Labels, toolchainv1alpha1.OwnerLabelKey)
+			assert.Equal(t, "john", optionalDeployment.Labels[toolchainv1alpha1.OwnerLabelKey])
+			assert.Contains(t, optionalDeployment.Labels, "foo")
+			assert.Equal(t, "bar", optionalDeployment.Labels["foo"])
 		})
 	} else {
 		// should not exist
-		AssertObjectNotFound(t, client, "john-dev", "john-dev-tenant", dBaaSTenant)
+		AssertObjectNotFound(t, client, "john-dev", "john-dev-deployment", optionalDeployment)
 	}
 }
 
-func newDBaaSTenant(name, owner string) *dbaasv1alpha1.DBaaSTenant {
-	return &dbaasv1alpha1.DBaaSTenant{
+func newOptionalDeployment(name, owner string) *appsv1.Deployment {
+	return &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: dbaasv1alpha1.SchemeBuilder.GroupVersion.String(),
-			Kind:       "DBaaSTenant",
+			APIVersion: appsv1.SchemeGroupVersion.String(),
+			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,

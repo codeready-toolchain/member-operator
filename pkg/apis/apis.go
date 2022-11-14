@@ -1,7 +1,6 @@
 package apis
 
 import (
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
@@ -41,8 +40,7 @@ func AddToScheme(s *runtime.Scheme) error {
 		metrics.AddToScheme,
 		routev1.Install,
 		admissionregistrationv1.AddToScheme,
-		schedulingv1.AddToScheme,
-		dbaasv1alpha1.AddToScheme)
+		schedulingv1.AddToScheme)
 
 	return addToSchemes.AddToScheme(s)
 }

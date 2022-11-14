@@ -8,7 +8,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	dbaasv1alpha1 "github.com/RHEcosystemAppEng/dbaas-operator/api/v1alpha1"
 	"github.com/go-logr/logr"
 	quotav1 "github.com/openshift/api/quota/v1"
 	errs "github.com/pkg/errors"
@@ -92,20 +91,6 @@ var clusterResourceKinds = []toolchainObjectKind{
 		&toolchainv1alpha1.Idler{},
 		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
 			itemList := &toolchainv1alpha1.IdlerList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
-				return nil, err
-			}
-			list := make([]runtimeclient.Object, len(itemList.Items))
-			for index := range itemList.Items {
-				list[index] = &itemList.Items[index]
-			}
-			return applycl.SortObjectsByName(list), nil
-		}),
-	newToolchainObjectKind(
-		dbaasv1alpha1.GroupVersion.WithKind("DBaaSTenant"),
-		&dbaasv1alpha1.DBaaSTenant{},
-		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
-			itemList := &dbaasv1alpha1.DBaaSTenantList{}
 			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
 				return nil, err
 			}

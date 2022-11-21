@@ -1,0 +1,26 @@
+# permissions to scale Camel K resources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: camel-k-role
+rules:
+- apiGroups:
+    - camel.apache.org
+  resources:
+    - integrations
+    - kameletbindings
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - camel.apache.org
+  resources:
+    - integrations/scale
+    - integrations/status
+    - kameletbindings/scale
+    - kameletbindings/status
+  verbs:
+    - get
+    - patch
+    - update

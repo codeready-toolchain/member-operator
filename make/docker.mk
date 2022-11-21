@@ -4,12 +4,13 @@ IMAGE_TAG ?= ${GIT_COMMIT_ID_SHORT}
 IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${IMAGE_TAG}
 QUAY_USERNAME ?= ${QUAY_NAMESPACE}
 WEBHOOK_IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}-webhook:${IMAGE_TAG}
+IMAGE_PLATFORM ?= linux/amd64
 
 .PHONY: docker-image
 ## Build the binary image
 docker-image: build
-	$(Q)docker build -f build/Dockerfile -t ${IMAGE} .
-	$(Q)docker build -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
+	$(Q)docker build --platform ${IMAGE_PLATFORM} -f build/Dockerfile -t ${IMAGE} .
+	$(Q)docker build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
 
 .PHONY: docker-push
 ## Push the binary image to quay.io registry
@@ -20,8 +21,8 @@ docker-push: check-namespace docker-image
 .PHONY: podman-image
 ## Build the binary image
 podman-image: build
-	$(Q)podman build -f build/Dockerfile -t ${IMAGE} .
-	$(Q)podman build -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
+	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile -t ${IMAGE} .
+	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
 
 .PHONY: podman-push
 ## Push the binary image to quay.io registry

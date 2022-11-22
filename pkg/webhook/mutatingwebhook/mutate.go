@@ -3,7 +3,7 @@ package mutatingwebhook
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 
@@ -55,7 +55,7 @@ func patchedContent() []byte {
 
 func HandleMutate(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	defer func() {
 		if err := r.Body.Close(); err != nil {
 			log.Error(err, "unable to close the body")

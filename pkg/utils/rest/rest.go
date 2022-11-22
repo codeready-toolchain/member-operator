@@ -3,7 +3,6 @@ package rest
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -17,7 +16,7 @@ func ReadBody(body io.ReadCloser) (string, error) {
 // CloseResponse reads the body and close the response. To be used to prevent file descriptor leaks.
 func CloseResponse(res *http.Response) {
 	if res != nil {
-		io.Copy(ioutil.Discard, res.Body) //nolint: errcheck
+		io.Copy(io.Discard, res.Body) //nolint: errcheck
 		res.Body.Close()
 	}
 }

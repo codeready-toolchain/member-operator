@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20221121081259-4f672e808b89
+	github.com/codeready-toolchain/api v0.0.0-20221122101422-7c02c4c86dc7
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20221117081323-252a38460fa1
 	github.com/go-logr/logr v1.2.0
 	github.com/google/go-cmp v0.5.7
@@ -103,6 +103,6 @@ require (
 go 1.18
 
 replace (
-	github.com/codeready-toolchain/api v0.0.0-20221102132326-7a7f4eb137db => github.com/ranakan19/api v0.0.0-20221122050106-406cc22306f2
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20221102133138-cb707e6790f7 => github.com/ranakan19/toolchain-common v0.0.0-20221123064031-269baea3d763
+	github.com/codeready-toolchain/api v0.0.0-20221121081259-4f672e808b89 => github.com/ranakan19/api v0.0.0-20221201091806-57fc665ce345
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20221117081323-252a38460fa1 => github.com/ranakan19/toolchain-common v0.0.0-20221201182049-e9ceb160687f
 )

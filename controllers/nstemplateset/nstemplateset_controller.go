@@ -114,7 +114,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logger.Error(err, "failed to get NSTemplateSet")
+			logger.Info("NSTemplateSet not found")
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "failed to get NSTemplateSet")

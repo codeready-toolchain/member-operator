@@ -57,6 +57,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@v3
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         version: v1.45.0
         skip-pkg-cache: true
         skip-build-cache: true

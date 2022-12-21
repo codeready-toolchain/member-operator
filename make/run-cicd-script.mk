@@ -1,4 +1,3 @@
-
 OWNER_AND_BRANCH_LOCATION=mfrancisc/toolchain-cicd/feature/ASC-224_SpaceRequest
 GH_SCRIPTS_URL=https://raw.githubusercontent.com/${OWNER_AND_BRANCH_LOCATION}
 

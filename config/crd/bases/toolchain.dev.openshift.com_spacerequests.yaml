@@ -49,11 +49,11 @@ spec:
             description: SpaceRequestSpec defines the desired state of Space
             properties:
               targetClusterLabelKeys:
-                additionalProperties:
-                  type: string
                 description: TargetClusterLabelKeys one or more label keys that define
                   a set of clusters where the Space can be provisioned.
-                type: object
+                items:
+                  type: string
+                type: array
               tierName:
                 description: TierName is a required property introduced to retain
                   the name of the tier for which this Space is provisioned.

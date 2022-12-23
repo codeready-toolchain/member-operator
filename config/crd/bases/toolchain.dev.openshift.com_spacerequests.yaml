@@ -19,6 +19,9 @@ spec:
     - jsonPath: .spec.tierName
       name: Tier
       type: string
+    - jsonPath: .status.targetClusterURL
+      name: TargetClusterURL
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
@@ -45,25 +48,25 @@ spec:
           spec:
             description: SpaceRequestSpec defines the desired state of Space
             properties:
-              targetClusterLabels:
+              targetClusterLabelKeys:
                 additionalProperties:
                   type: string
-                description: TargetClusterLabels one or more labels that define a
-                  set of clusters where the Space can be provisioned.
+                description: TargetClusterLabelKeys one or more label keys that define
+                  a set of clusters where the Space can be provisioned.
                 type: object
               tierName:
                 description: TierName is a required property introduced to retain
-                  the name of the tier for which this Space is provisioned If not
-                  set then the tier name will be set automatically
+                  the name of the tier for which this Space is provisioned.
                 type: string
+            required:
+            - tierName
             type: object
           status:
             description: SpaceRequestStatus defines the observed state of Space
             properties:
               conditions:
-                description: 'Conditions is an array of current Master User Record
-                  conditions Supported condition types: Provisioning, UserAccountNotReady
-                  and Ready'
+                description: 'Conditions is an array of SpaceRequest conditions Supported
+                  condition types: Provisioning, SpaceNotReady and Ready'
                 items:
                   properties:
                     lastTransitionTime:
@@ -97,8 +100,8 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               namespaceAccess:
-                description: The status of user accounts in the member clusters which
-                  belong to this MasterUserRecord
+                description: NamespaceAccess is the list with the provisioned namespace
+                  and secret to access it
                 items:
                   description: NamespaceAccess defines the name of the namespace and
                     the secret reference to access it
@@ -121,8 +124,8 @@ spec:
               targetClusterURL:
                 description: TargetClusterURL The API URL of the cluster where Space
                   is currently provisioned Can be empty if provisioning did not start
-                  or failed To be used to de-provision the NSTemplateSet if the Spec.TargetCluster
-                  is either changed or removed
+                  or failed The URL is just for informative purposes for developers
+                  and controllers that are placed in member clusters.
                 type: string
             type: object
         type: object

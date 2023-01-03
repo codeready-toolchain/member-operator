@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20221205081558-245f157cb403
+	github.com/codeready-toolchain/api v0.0.0-20230103141323-375dcd1ea10e
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20221220133846-3415e8af3654
 	github.com/go-logr/logr v1.2.0
 	github.com/google/go-cmp v0.5.7
@@ -99,7 +99,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/codeready-toolchain/api => github.com/mfrancisc/api v0.0.0-20221223074505-79248bd7bec5
 
 go 1.18

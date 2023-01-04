@@ -46,6 +46,11 @@ spec:
       kind: UserAccount
       name: useraccounts.toolchain.dev.openshift.com
       version: v1alpha1
+    - description: SpaceRequest allows to request creation of a Space
+      displayName: Space Request
+      kind: SpaceRequest
+      name: spacerequests.toolchain.dev.openshift.com
+      version: v1alpha1
   description: Toolchain Member Operator
   displayName: Toolchain Member Operator
   icon:

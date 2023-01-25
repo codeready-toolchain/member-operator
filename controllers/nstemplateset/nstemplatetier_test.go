@@ -271,7 +271,7 @@ func TestGetTierTemplate(t *testing.T) {
 		for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
 			for i := 0; i < 1000; i++ {
 				waitForFinished.Add(1)
-				go func() {
+				go func(tierTemplate *toolchainv1alpha1.TierTemplate) {
 					// given
 					defer waitForFinished.Done()
 					latch.Wait()
@@ -286,7 +286,7 @@ func TestGetTierTemplate(t *testing.T) {
 					// then
 					assert.NoError(t, err)
 					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
-				}()
+				}(tierTemplate)
 			}
 		}
 

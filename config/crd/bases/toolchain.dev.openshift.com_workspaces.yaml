@@ -1,0 +1,80 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.9.2
+  creationTimestamp: null
+  name: workspaces.toolchain.dev.openshift.com
+spec:
+  group: toolchain.dev.openshift.com
+  names:
+    kind: Workspace
+    listKind: WorkspaceList
+    plural: workspaces
+    singular: workspace
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.owner
+      name: Owner
+      type: string
+    - jsonPath: .status.role
+      name: Role
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Workspace is the Schema for the workspaces API but it is only
+          for use by the Proxy. There will be no actual Workspace CRs in the host/member
+          clusters. The CRD will be installed in member clusters for API discovery
+          purposes only. The schema will be used by the proxy's workspace lister API.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          status:
+            description: WorkspaceStatus defines the observed state of a Workspace
+            properties:
+              namespaces:
+                description: The list of namespaces belonging to the Workspace.
+                items:
+                  description: WorkspaceNamespace the information about a namespace
+                    within a Workspace
+                  properties:
+                    name:
+                      description: Name the name of the namespace.
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              owner:
+                description: Owner the name of the UserSignup that owns the workspace.
+                  It’s the user who is being charged for the usage and whose quota
+                  is used for the workspace. There is only one user for this kind
+                  of relationship and it can be transferred to someone else during
+                  the lifetime of the workspace. By default, it’s the creator who
+                  becomes the owner as well.
+                type: string
+              role:
+                description: Role defines what kind of permissions the user has in
+                  the given workspace.
+                type: string
+            type: object
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}

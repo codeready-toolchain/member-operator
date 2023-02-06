@@ -436,3 +436,10 @@ func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj ru
 	}
 	return false, nil
 }
+
+func (r *namespacesManager) setProvisionedNamespaceList(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (err error) {
+	logger.Info("setting provisioned namespaces", "username", nsTmplSet.GetName())
+	username := nsTmplSet.GetName()
+	userNamespaces, err := fetchNamespacesByOwner(r.Client, username)
+	return r.statusManager.updateStatusProvisionedNamespaces(nsTmplSet, userNamespaces)
+}

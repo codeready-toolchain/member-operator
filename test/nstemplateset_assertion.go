@@ -66,6 +66,13 @@ func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Con
 	return a
 }
 
+func (a *NSTemplateSetAssertion) HasProvisionedNamespaces(expected ...toolchainv1alpha1.Namespace) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	require.Equal(a.t, expected, a.nsTmplSet.Status.ProvisionedNamespaces)
+	return a
+}
+
 func (a *NSTemplateSetAssertion) HasNoOwnerReferences() *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)

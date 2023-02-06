@@ -157,6 +157,39 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
 	})
 
+	t.Run("status should contain provisioned namespaces", func(t *testing.T) {
+		// given
+		condition := toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+		}
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(condition))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+		rb2 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, rb, rb2)
+
+		// when
+		_, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasProvisionedNamespaces([]toolchainv1alpha1.Namespace{
+				{
+					Name: username + "-dev",
+					Type: "default", // check that default type is added to first NS in alphabetical order
+				},
+				{
+					Name: username + "-stage",
+					Type: "", // other namespaces do not have type for now...
+				},
+			}...).
+			HasConditions(Provisioned())
+	})
+
 	t.Run("should not create ClusterResource objects when the field is nil but provision namespace", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"))

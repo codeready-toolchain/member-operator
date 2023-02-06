@@ -441,5 +441,8 @@ func (r *namespacesManager) setProvisionedNamespaceList(logger logr.Logger, nsTm
 	logger.Info("setting provisioned namespaces", "username", nsTmplSet.GetName())
 	username := nsTmplSet.GetName()
 	userNamespaces, err := fetchNamespacesByOwner(r.Client, username)
+	if err != nil {
+		return err
+	}
 	return r.statusManager.updateStatusProvisionedNamespaces(nsTmplSet, userNamespaces)
 }

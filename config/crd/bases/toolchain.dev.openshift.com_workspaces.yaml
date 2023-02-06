@@ -48,14 +48,15 @@ spec:
               namespaces:
                 description: The list of namespaces belonging to the Workspace.
                 items:
-                  description: WorkspaceNamespace the information about a namespace
-                    within a Workspace
+                  description: SpaceNamespace is a common type to define the information
+                    about a namespace within a Space Used in NSTemplateSet status
+                    and Workspace status
                   properties:
                     name:
                       description: Name the name of the namespace.
                       type: string
                     type:
-                      description: Name the name of the namespace.
+                      description: Type the type of the namespace. eg. default
                       type: string
                   type: object
                 type: array

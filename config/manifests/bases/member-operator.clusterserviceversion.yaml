@@ -51,6 +51,13 @@ spec:
       kind: SpaceRequest
       name: spacerequests.toolchain.dev.openshift.com
       version: v1alpha1
+    - description: Workspace is only for use by the Proxy Space Lister API. There
+        will be no actual Workspace CRs in the host/member clusters. See workspace_types.go
+        in the api repo for more details.
+      displayName: Workspace
+      kind: Workspace
+      name: workspaces.toolchain.dev.openshift.com
+      version: v1alpha1
   description: Toolchain Member Operator
   displayName: Toolchain Member Operator
   icon:

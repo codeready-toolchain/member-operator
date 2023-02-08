@@ -60,9 +60,9 @@ func (r *statusManager) updateStatusProvisionedNamespaces(nsTmplSet *toolchainv1
 		return nil
 	}
 
-	var provisionedNamespaces []toolchainv1alpha1.Namespace
+	var provisionedNamespaces []toolchainv1alpha1.SpaceNamespace
 	for _, ns := range namespaces {
-		provisionedNamespaces = append(provisionedNamespaces, toolchainv1alpha1.Namespace{
+		provisionedNamespaces = append(provisionedNamespaces, toolchainv1alpha1.SpaceNamespace{
 			Name: ns.Name,
 		})
 	}

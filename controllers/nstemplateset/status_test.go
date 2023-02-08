@@ -70,7 +70,7 @@ func TestUpdateStatus(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasProvisionedNamespaces([]toolchainv1alpha1.Namespace{
+			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace{
 				{
 					Name: username + "-dev",
 					Type: "default", // check that default type is added to first NS in alphabetical order
@@ -99,7 +99,7 @@ func TestUpdateStatus(t *testing.T) {
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
-			HasProvisionedNamespaces([]toolchainv1alpha1.Namespace(nil)...) // provisioned namespaces list is nil
+			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace(nil)...) // provisioned namespaces list is nil
 	})
 
 	t.Run("status not updated because not changed", func(t *testing.T) {

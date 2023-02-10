@@ -73,6 +73,11 @@ spec:
                 description: Role defines what kind of permissions the user has in
                   the given workspace.
                 type: string
+              type:
+                description: Type defines the type of workspace. For example, "home"
+                  for a user's given workspace upon first signing up. It is currently
+                  valid for this value to be empty.
+                type: string
             type: object
         type: object
         x-kubernetes-preserve-unknown-fields: true

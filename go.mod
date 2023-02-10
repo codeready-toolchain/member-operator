@@ -40,7 +40,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/emicklei/go-restful v2.12.0+incompatible // indirect
+	github.com/emicklei/go-restful v2.16.0+incompatible // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/form3tech-oss/jwt-go v3.2.3+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.5.1 // indirect
@@ -102,4 +102,4 @@ require (
 
 go 1.18
 
-replace github.com/codeready-toolchain/api => github.com/mfrancisc/api v0.0.0-20230208190910-4c0c1d514378
+replace github.com/codeready-toolchain/api => github.com/mfrancisc/api v0.0.0-20230210102142-7059558f1382

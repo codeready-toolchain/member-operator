@@ -52,14 +52,10 @@ func TestUpdateStatus(t *testing.T) {
 
 	t.Run("update provisioned namespaces", func(t *testing.T) {
 		// given
-		conditions := []toolchainv1alpha1.Condition{{
-			Type:   toolchainv1alpha1.ConditionReady,
-			Status: corev1.ConditionTrue,
-		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic")
 		namespaces := []corev1.Namespace{
-			{ObjectMeta: metav1.ObjectMeta{Name: username + "-dev"}},
 			{ObjectMeta: metav1.ObjectMeta{Name: username + "-stage"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: username + "-dev"}},
 		}
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 

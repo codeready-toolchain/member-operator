@@ -276,20 +276,10 @@ func fetchNamespacesByOwner(cl runtimeclient.Client, username string) ([]corev1.
 	if err := cl.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
 		return nil, err
 	}
-	names := make([]string, len(userNamespaceList.Items))
-	for i, ns := range userNamespaceList.Items {
-		names[i] = ns.Name
-	}
-	sort.Strings(names)
-	sortedNamespaces := make([]corev1.Namespace, len(userNamespaceList.Items))
-	for i, name := range names {
-		for _, ns := range userNamespaceList.Items {
-			if ns.Name == name {
-				sortedNamespaces[i] = ns
-				break
-			}
-		}
-	}
+	// sort namespaces by name
+	sort.Slice(userNamespaceList.Items, func(i, j int) bool {
+		return userNamespaceList.Items[i].Name < userNamespaceList.Items[j].Name
+	})
 	return userNamespaceList.Items, nil
 }
 

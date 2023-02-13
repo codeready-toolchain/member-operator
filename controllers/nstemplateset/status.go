@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -50,6 +51,29 @@ func (r *statusManager) updateStatusConditions(nsTmplSet *toolchainv1alpha1.NSTe
 		// Nothing changed
 		return nil
 	}
+	return r.Client.Status().Update(context.TODO(), nsTmplSet)
+}
+
+func (r *statusManager) updateStatusProvisionedNamespaces(nsTmplSet *toolchainv1alpha1.NSTemplateSet, namespaces []corev1.Namespace) error {
+	if len(namespaces) == 0 {
+		// no namespaces to set
+		return nil
+	}
+
+	var provisionedNamespaces []toolchainv1alpha1.SpaceNamespace
+	for _, ns := range namespaces {
+		provisionedNamespaces = append(provisionedNamespaces, toolchainv1alpha1.SpaceNamespace{
+			Name: ns.Name,
+		})
+	}
+	// todo update logic that sets the type of namespace
+	// for now we just set "default" to the first namespace in alphabetical order
+	sort.Slice(provisionedNamespaces, func(i, j int) bool {
+		return provisionedNamespaces[i].Name < provisionedNamespaces[j].Name
+	})
+	provisionedNamespaces[0].Type = "default"
+
+	nsTmplSet.Status.ProvisionedNamespaces = provisionedNamespaces
 	return r.Client.Status().Update(context.TODO(), nsTmplSet)
 }
 

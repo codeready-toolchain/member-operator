@@ -59,10 +59,24 @@ func (a *NSTemplateSetAssertion) HasNoConditions() *NSTemplateSetAssertion {
 	return a
 }
 
+func (a *NSTemplateSetAssertion) HasNoProvisionedNamespaces() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	require.Empty(a.t, a.nsTmplSet.Status.ProvisionedNamespaces)
+	return a
+}
+
 func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
 	test.AssertConditionsMatch(a.t, a.nsTmplSet.Status.Conditions, expected...)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasProvisionedNamespaces(expected ...toolchainv1alpha1.SpaceNamespace) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	require.Equal(a.t, expected, a.nsTmplSet.Status.ProvisionedNamespaces)
 	return a
 }
 

@@ -386,6 +386,34 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 			object.SetAnnotations(annotations)
 			changed = true
 		}
+
+		annotations = object.GetAnnotations()
+		set := false
+		userID, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]
+		if ok {
+			accountID, ok := userAcc.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey]
+			// *IF* both userID and accountID properties are set, then set them on the User resource, otherwise clear
+			// the values if they exist
+			if ok {
+				set = true
+				if annotations == nil {
+					annotations = map[string]string{}
+				}
+				annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = userID
+				annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey] = accountID
+				object.SetAnnotations(annotations)
+				changed = true
+			}
+		}
+
+		// Delete the UserID and AccountID annotations if they don't exist in the UserAccount
+		if !set && object.GetAnnotations() != nil {
+			annotations = object.GetAnnotations()
+			delete(annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
+			delete(annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+			object.SetAnnotations(annotations)
+			changed = true
+		}
 	}
 	return changed
 }

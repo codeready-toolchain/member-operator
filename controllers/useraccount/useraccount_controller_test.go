@@ -165,7 +165,7 @@ func TestReconcile(t *testing.T) {
 					require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
 
 					t.Run("test missing AccountID annotation propagates to User", func(t *testing.T) {
-						// Remove the UserID annotation from the UserAccount and reconcile again
+						// Remove the AccountID annotation from the UserAccount and reconcile again
 						delete(userAcc.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
 						r, req, _, _ = prepareReconcile(t, username, userAcc)
 						//when

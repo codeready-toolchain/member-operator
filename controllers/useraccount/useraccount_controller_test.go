@@ -134,6 +134,68 @@ func TestReconcile(t *testing.T) {
 
 			// Check the identity is not created yet
 			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
+
+			t.Run("test missing UserID annotation propagates to User", func(t *testing.T) {
+				// Remove the UserID annotation from the UserAccount and reconcile again
+				delete(userAcc.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
+				r, req, _, _ = prepareReconcile(t, username, userAcc)
+				//when
+				res, err = r.Reconcile(context.TODO(), req)
+				//then
+				require.NoError(t, err)
+				assert.Equal(t, reconcile.Result{}, res)
+
+				// Check the created/updated user
+				user := assertUser(t, r, userAcc)
+				require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
+				require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+
+				t.Run("reset UserID annotation and reconcile again", func(t *testing.T) {
+					userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = "123456"
+					r, req, _, _ = prepareReconcile(t, username, userAcc)
+					//when
+					res, err = r.Reconcile(context.TODO(), req)
+					//then
+					require.NoError(t, err)
+					assert.Equal(t, reconcile.Result{}, res)
+
+					// Check the created/updated user
+					user := assertUser(t, r, userAcc)
+					require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey])
+					require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
+
+					t.Run("test missing AccountID annotation propagates to User", func(t *testing.T) {
+						// Remove the UserID annotation from the UserAccount and reconcile again
+						delete(userAcc.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+						r, req, _, _ = prepareReconcile(t, username, userAcc)
+						//when
+						res, err = r.Reconcile(context.TODO(), req)
+						//then
+						require.NoError(t, err)
+						assert.Equal(t, reconcile.Result{}, res)
+
+						// Check the created/updated user
+						user := assertUser(t, r, userAcc)
+						require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
+						require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+
+						t.Run("reset AccountID annotation and reconcile again", func(t *testing.T) {
+							userAcc.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey] = "987654"
+							r, req, _, _ = prepareReconcile(t, username, userAcc)
+							//when
+							res, err = r.Reconcile(context.TODO(), req)
+							//then
+							require.NoError(t, err)
+							assert.Equal(t, reconcile.Result{}, res)
+
+							// Check the created/updated user
+							user := assertUser(t, r, userAcc)
+							require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey])
+							require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
+						})
+					})
+				})
+			})
 		}
 
 		t.Run("create", func(t *testing.T) {

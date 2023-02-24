@@ -1,4 +1,4 @@
-package consoleplugin
+package main
 
 func main() {
 

@@ -1,0 +1,5 @@
+package consoleplugin
+
+func main() {
+
+}

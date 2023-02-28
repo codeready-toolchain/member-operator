@@ -350,7 +350,7 @@ func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string,
 	rs := &appsv1.ReplicaSet{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Error(err, "replica set is not found; ignoring: it might be already deleted")
+			logger.Info("replica set is not found; ignoring: it might be already deleted")
 			return true, nil
 		}
 		logger.Error(err, "error deleting rs")

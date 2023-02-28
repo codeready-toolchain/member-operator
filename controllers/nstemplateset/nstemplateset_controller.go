@@ -145,6 +145,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
 	}
 
+	// update provisioned namespace list
+	if err := r.namespaces.setProvisionedNamespaceList(logger, nsTmplSet); err != nil {
+		logger.Error(err, "failed to set provisioned namespaces list")
+		return reconcile.Result{}, err
+	}
+
 	if createdOrUpdated, err := r.spaceRoles.ensure(logger, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update roles in space")
 		return reconcile.Result{}, err

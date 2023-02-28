@@ -6,17 +6,16 @@ import (
 	"fmt"
 	"testing"
 
-	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
-
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -49,6 +48,54 @@ func TestUpdateStatus(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
 			HasFinalizer().
 			HasConditions(condition)
+	})
+
+	t.Run("update provisioned namespaces", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic")
+		namespaces := []corev1.Namespace{
+			{ObjectMeta: metav1.ObjectMeta{Name: username + "-stage"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: username + "-dev"}},
+		}
+		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
+
+		// when
+		err := statusManager.updateStatusProvisionedNamespaces(nsTmplSet, namespaces)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace{
+				{
+					Name: username + "-dev",
+					Type: "default", // check that default type is added to first NS in alphabetical order
+				},
+				{
+					Name: username + "-stage",
+					Type: "", // other namespaces do not have type for now...
+				},
+			}...)
+	})
+
+	t.Run("no provisioned namespaces", func(t *testing.T) {
+		// given
+		conditions := []toolchainv1alpha1.Condition{{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+		}}
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(conditions...))
+		namespaces := []corev1.Namespace{} // empty list of user namespaces are given for some weired issue
+		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
+
+		// when
+		err := statusManager.updateStatusProvisionedNamespaces(nsTmplSet, namespaces)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace(nil)...) // provisioned namespaces list is nil
 	})
 
 	t.Run("status not updated because not changed", func(t *testing.T) {

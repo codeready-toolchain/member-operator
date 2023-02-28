@@ -157,6 +157,39 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasResource("for-"+username, &quotav1.ClusterResourceQuota{})
 	})
 
+	t.Run("status should contain provisioned namespaces", func(t *testing.T) {
+		// given
+		condition := toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+		}
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "stage", "dev"), withConditions(condition))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+		rb2 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, rb, rb2)
+
+		// when
+		_, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace{
+				{
+					Name: username + "-dev",
+					Type: "default", // check that default type is added to first NS in alphabetical order
+				},
+				{
+					Name: username + "-stage",
+					Type: "", // other namespaces do not have type for now...
+				},
+			}...).
+			HasConditions(Provisioned())
+	})
+
 	t.Run("should not create ClusterResource objects when the field is nil but provision namespace", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, username, "advanced", withNamespaces("abcde11", "dev", "stage"))
@@ -1211,6 +1244,37 @@ func TestReconcileProvisionFail(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "WATCH_NAMESPACE must be set")
 		assert.Equal(t, reconcile.Result{}, res)
+	})
+
+	t.Run("fail to set provisioned namespaces list", func(t *testing.T) {
+		// given
+		restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+		t.Cleanup(restore)
+		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"))
+		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
+		rb := newRoleBinding(devNS.Name, "crtadmin-pods", username)
+		rb2 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, rb, rb2)
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+			if nsTmpl, ok := obj.(*toolchainv1alpha1.NSTemplateSet); ok {
+				if len(nsTmpl.Status.ProvisionedNamespaces) > 0 {
+					return errors.New("unable to update provisioned namespaces list")
+				}
+			}
+			return nil
+		}
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to update provisioned namespaces list")
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+			HasFinalizer().
+			HasNoConditions().
+			HasNoProvisionedNamespaces() // since we're unable to update the provisioned namespaces in status
 	})
 }
 

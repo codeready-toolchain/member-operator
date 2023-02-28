@@ -62,4 +62,12 @@ resources:
   kind: SpaceRequest
   path: ../github.com/codeready-toolchain/api/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: false
+  controller: true
+  group: toolchain.dev.openshift.com
+  kind: Workspace
+  path: ../github.com/codeready-toolchain/api/api/v1alpha1
+  version: v1alpha1
 version: "3"

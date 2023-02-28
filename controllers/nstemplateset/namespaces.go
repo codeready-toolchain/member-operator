@@ -276,20 +276,10 @@ func fetchNamespacesByOwner(cl runtimeclient.Client, username string) ([]corev1.
 	if err := cl.List(context.TODO(), userNamespaceList, listByOwnerLabel(username)); err != nil {
 		return nil, err
 	}
-	names := make([]string, len(userNamespaceList.Items))
-	for i, ns := range userNamespaceList.Items {
-		names[i] = ns.Name
-	}
-	sort.Strings(names)
-	sortedNamespaces := make([]corev1.Namespace, len(userNamespaceList.Items))
-	for i, name := range names {
-		for _, ns := range userNamespaceList.Items {
-			if ns.Name == name {
-				sortedNamespaces[i] = ns
-				break
-			}
-		}
-	}
+	// sort namespaces by name
+	sort.Slice(userNamespaceList.Items, func(i, j int) bool {
+		return userNamespaceList.Items[i].Name < userNamespaceList.Items[j].Name
+	})
 	return userNamespaceList.Items, nil
 }
 
@@ -435,4 +425,14 @@ func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj ru
 		}
 	}
 	return false, nil
+}
+
+func (r *namespacesManager) setProvisionedNamespaceList(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (err error) {
+	logger.Info("setting provisioned namespaces", "username", nsTmplSet.GetName())
+	username := nsTmplSet.GetName()
+	userNamespaces, err := fetchNamespacesByOwner(r.Client, username)
+	if err != nil {
+		return err
+	}
+	return r.statusManager.updateStatusProvisionedNamespaces(nsTmplSet, userNamespaces)
 }

@@ -87,7 +87,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	logger.Info("ensuring idling")
-	if idler.Spec.TimeoutSeconds < 1 {
+	if idler.Spec.TimeoutSeconds == 0 {
+		logger.Info("no idling when timeout is 0")
+		return reconcile.Result{}, nil
+	}
+	if idler.Spec.TimeoutSeconds < 0 {
 		// Make sure the timeout is bigger than 0
 		err := errs.New("timeoutSeconds should be bigger than 0")
 		logger.Error(err, "failed to ensure idling")

@@ -343,28 +343,47 @@ func TestEnsureIdling(t *testing.T) {
 }
 
 func TestEnsureIdlingFailed(t *testing.T) {
-	t.Run("Fail if Idler.Spec.TimeoutSec is invalid", func(t *testing.T) {
-		assertInvalidTimeout := func(timeout int32) {
-			// given
-			idler := &toolchainv1alpha1.Idler{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "john-dev",
-				},
-				Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: timeout},
-			}
-			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, reconcile.Result{}, res)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("timeoutSeconds should be bigger than 0"))
+	t.Run("Ignore when Idler.Spec.TimeoutSec is zero", func(t *testing.T) {
+		// given
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "john-dev",
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{
+				TimeoutSeconds: 0,
+			},
 		}
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
-		assertInvalidTimeout(0)
-		assertInvalidTimeout(-1)
+		// when
+		res, err := reconciler.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasNoConditions()
+	})
+
+	t.Run("Fail if Idler.Spec.TimeoutSec is invalid", func(t *testing.T) {
+		// given
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "john-dev",
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{
+				TimeoutSeconds: -1,
+			},
+		}
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+
+		// when
+		res, err := reconciler.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("timeoutSeconds should be bigger than 0"))
 	})
 
 	t.Run("Fail if can't list pods", func(t *testing.T) {

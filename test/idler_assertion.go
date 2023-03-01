@@ -62,6 +62,13 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 	return a
 }
 
+func (a *IdlerAssertion) HasNoConditions() *IdlerAssertion {
+	err := a.loadIdlerAssertion()
+	require.NoError(a.t, err)
+	require.Empty(a.t, a.idler.Status.Conditions)
+	return a
+}
+
 func (a *IdlerAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) *IdlerAssertion {
 	err := a.loadIdlerAssertion()
 	require.NoError(a.t, err)

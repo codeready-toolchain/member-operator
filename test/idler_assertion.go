@@ -62,13 +62,6 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 	return a
 }
 
-func (a *IdlerAssertion) HasNoConditions() *IdlerAssertion {
-	err := a.loadIdlerAssertion()
-	require.NoError(a.t, err)
-	require.Empty(a.t, a.idler.Status.Conditions)
-	return a
-}
-
 func (a *IdlerAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) *IdlerAssertion {
 	err := a.loadIdlerAssertion()
 	require.NoError(a.t, err)
@@ -97,6 +90,14 @@ func Running() toolchainv1alpha1.Condition {
 		Type:   toolchainv1alpha1.ConditionReady,
 		Status: corev1.ConditionTrue,
 		Reason: toolchainv1alpha1.IdlerRunningReason,
+	}
+}
+
+func IdlerNoDeactivation() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionTrue,
+		Reason: toolchainv1alpha1.IdlerNoDeactivationReason,
 	}
 }
 

@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -362,7 +361,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasNoConditions()
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.IdlerNoDeactivation())
 	})
 
 	t.Run("Fail if Idler.Spec.TimeoutSec is invalid", func(t *testing.T) {
@@ -841,7 +840,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-integration-deployment", namePrefix, namespace),
 			Namespace: namespace,
-			OwnerReferences: []v1.OwnerReference{
+			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: "camel.apache.org/v1",
 					Kind:       "Integration",
@@ -868,7 +867,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-binding-deployment", namePrefix, namespace),
 			Namespace: namespace,
-			OwnerReferences: []v1.OwnerReference{
+			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: "camel.apache.org/v1alpha1",
 					Kind:       "KameletBinding",
@@ -990,7 +989,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 }
 
-func createPods(t *testing.T, r *Reconciler, owner v1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
+func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
@@ -1045,7 +1044,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 	// Mock internal server error for Camel K integrations in order to replicate default behavior with missing spec.replicas field
 	scalesClient.AddReactor("get", "integrations", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
 		return true, nil, &apierrors.StatusError{
-			ErrStatus: v1.Status{
+			ErrStatus: metav1.Status{
 				Message: "Internal error occurred: the spec replicas field \".spec.replicas\" does not exist",
 				Reason:  metav1.StatusReasonInternalError,
 				Code:    http.StatusInternalServerError,

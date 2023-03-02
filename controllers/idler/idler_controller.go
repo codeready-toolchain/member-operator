@@ -89,7 +89,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	logger.Info("ensuring idling")
 	if idler.Spec.TimeoutSeconds == 0 {
 		logger.Info("no idling when timeout is 0")
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, r.setStatusNoDeactivation(idler)
 	}
 	if idler.Spec.TimeoutSeconds < 0 {
 		// Make sure the timeout is bigger than 0
@@ -558,6 +558,16 @@ func (r *Reconciler) setStatusReady(idler *toolchainv1alpha1.Idler) error {
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.IdlerRunningReason,
+		})
+}
+
+func (r *Reconciler) setStatusNoDeactivation(idler *toolchainv1alpha1.Idler) error {
+	return r.updateStatusConditions(
+		idler,
+		toolchainv1alpha1.Condition{
+			Type:   toolchainv1alpha1.ConditionReady,
+			Status: corev1.ConditionTrue,
+			Reason: toolchainv1alpha1.IdlerNoDeactivationReason,
 		})
 }
 

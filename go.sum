@@ -116,6 +116,8 @@ github.com/cncf/xds/go v0.0.0-20210312221358-fbca930ec8ed/go.mod h1:eXthEFrGJvWH
 github.com/cockroachdb/datadriven v0.0.0-20200714090401-bf6692d28da5/go.mod h1:h6jFvWxBdQXxjopDMZyH2UVceIRfR84bdzbkoKrsWNo=
 github.com/cockroachdb/errors v1.2.4/go.mod h1:rQD95gz6FARkaKkQXUksEje/d9a6wBJoCr5oaCLELYA=
 github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f/go.mod h1:i/u985jwjWRlyHXQbwatDASoW0RMlZ/3i9yJHE2xLkI=
+github.com/codeready-toolchain/api v0.0.0-20230306095116-b9d21ffdc975 h1:ouK91X6iv+9Tf3QqS3iJZjBtW6jKUcJvCqyFrr5fr6I=
+github.com/codeready-toolchain/api v0.0.0-20230306095116-b9d21ffdc975/go.mod h1:aj9qh6GGNUXC50oE+/MVDFTpPp17vDyJDSSibb86qNE=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20230217033022-295cba634c6d h1:TicIFB12s4Ooa9J+MDOIekVMqZ5y0vFfjzWw2F7tfGM=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20230217033022-295cba634c6d/go.mod h1:ViXCgmJb02OHoOhvISD5hHh84RfJ49L/+Km4DCtdrCU=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
@@ -556,8 +558,6 @@ github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGrc=
-github.com/xcoulon/api v0.0.0-20230302104513-541c6411fd03 h1:EjWSBCrRSdwQysv0UP/RUS3acLGZdA5vHU0h31dQB44=
-github.com/xcoulon/api v0.0.0-20230302104513-541c6411fd03/go.mod h1:aj9qh6GGNUXC50oE+/MVDFTpPp17vDyJDSSibb86qNE=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xlab/treeprint v0.0.0-20181112141820-a009c3971eca/go.mod h1:ce1O1j6UtZfjr22oyGxGLbauSBp2YVXpARAosm7dHBg=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=

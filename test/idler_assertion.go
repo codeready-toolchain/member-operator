@@ -93,6 +93,14 @@ func Running() toolchainv1alpha1.Condition {
 	}
 }
 
+func IdlerNoDeactivation() toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionTrue,
+		Reason: toolchainv1alpha1.IdlerNoDeactivationReason,
+	}
+}
+
 func IdlerNotificationCreated() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:   toolchainv1alpha1.IdlerTriggeredNotificationCreated,

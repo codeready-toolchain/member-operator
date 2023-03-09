@@ -23,6 +23,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.12.2
 )
 
+replace github.com/codeready-toolchain/api => github.com/xcoulon/api v0.0.0-20230309130658-36746d2a78a2
+
 require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect

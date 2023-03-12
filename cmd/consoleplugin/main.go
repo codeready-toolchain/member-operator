@@ -6,18 +6,13 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/healthcheck"
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
-	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
-	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 	"net/http"
 	"os"
 	"os/signal"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"syscall"
 )
@@ -69,28 +64,33 @@ func main() {
 	// END : hack to redirect klogv1 calls to klog v2
 
 	setupLog.Info("Configuring web console plugin server ...")
-	runtimeScheme := runtime.NewScheme()
-	cfg, err := config.GetConfig()
-	if err != nil {
-		setupLog.Error(err, "getting config failed")
-		os.Exit(1)
-	}
-	err = userv1.Install(runtimeScheme)
-	if err != nil {
-		setupLog.Error(err, "adding user to scheme failed")
-		os.Exit(1)
-	}
-	_, err = client.New(cfg, client.Options{
-		Scheme: runtimeScheme,
-	})
-	if err != nil {
-		setupLog.Error(err, "creating a new client failed")
-		os.Exit(1)
-	}
+
+	/*
+			runtimeScheme := runtime.NewScheme()
+		cfg, err := config.GetConfig()
+		if err != nil {
+			setupLog.Error(err, "getting config failed")
+			os.Exit(1)
+		}
+		err = userv1.Install(runtimeScheme)
+		if err != nil {
+			setupLog.Error(err, "adding user to scheme failed")
+			os.Exit(1)
+		}
+
+			_, err = client.New(cfg, client.Options{
+				Scheme: runtimeScheme,
+			})
+			if err != nil {
+				setupLog.Error(err, "creating a new client failed")
+				os.Exit(1)
+			}*/
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", scriptserver.HandleScriptRequest)
+	s := scriptserver.NewScriptServer()
+
+	mux.HandleFunc("/", s.HandleScriptRequest)
 	mux.HandleFunc("/api/v1/status", healthcheck.HandleHealthCheck)
 
 	consolePluginServer := &http.Server{ //nolint:gosec
@@ -102,7 +102,13 @@ func main() {
 
 	go func() {
 		setupLog.Info("Listening...")
-		if err := consolePluginServer.ListenAndServeTLS("/etc/webhook/certs/"+cert.ServerCert, "/etc/webhook/certs/"+cert.ServerKey); err != nil {
+
+		/*if err := consolePluginServer.ListenAndServeTLS("/etc/webhook/certs/"+cert.ServerCert, "/etc/webhook/certs/"+cert.ServerKey); err != nil {
+			setupLog.Error(err, "Listening and serving TLS failed")
+			os.Exit(1)
+		}
+		*/
+		if err := consolePluginServer.ListenAndServe(); err != nil {
 			setupLog.Error(err, "Listening and serving TLS failed")
 			os.Exit(1)
 		}

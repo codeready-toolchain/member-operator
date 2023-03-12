@@ -11,6 +11,7 @@ var (
 
 func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
+	respBody = []byte("OK")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(respBody); err != nil {
 		log.Error(err, "unable to write response")

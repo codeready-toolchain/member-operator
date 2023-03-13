@@ -81,7 +81,7 @@ func (c *Client) UserExists(username string) (bool, error) {
 func (c *Client) GetUserIDByUsername(username string) (string, error) {
 	reqData := url.Values{}
 	reqData.Set("name", username)
-	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData)
+	res, err := c.cheRequest(http.MethodGet, cheUserFindPath, reqData) //nolint:bodyclose //see `defer rest.CloseResponse(res)` below
 	defer rest.CloseResponse(res)
 	if err != nil {
 		return "", errors.Wrapf(err, "unable to get Che user ID for user '%s'", username)

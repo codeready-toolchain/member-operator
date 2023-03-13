@@ -20,11 +20,11 @@ spec:
       name: User ID
       priority: 1
       type: string
-    - jsonPath: .spec.nsLimit
-      name: NS Limit
+    - jsonPath: .metadata.creationTimestamp
+      name: Created_at
       type: string
-    - jsonPath: .spec.nsTemplateSet.tierName
-      name: Tier Name
+    - jsonPath: .metadata.labels.toolchain\.dev\.openshift\.com/tier
+      name: Tier
       type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready

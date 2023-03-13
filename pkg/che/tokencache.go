@@ -90,7 +90,7 @@ func (tc *TokenCache) obtainAndCacheNewToken(cl client.Client, cfg membercfg.Con
 
 	authURL := cheKeycloakURL + tokenPath
 	log.Info("Obtaining new token", "URL", authURL)
-	res, err := tc.httpClient.PostForm(authURL, reqData)
+	res, err := tc.httpClient.PostForm(authURL, reqData) //nolint:bodyclose //see `defer rest.CloseResponse(res)` below
 	defer rest.CloseResponse(res)
 	if err != nil {
 		return TokenSet{}, err

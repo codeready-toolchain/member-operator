@@ -1,9 +1,8 @@
 package scriptserver
 
 import (
-	"fmt"
+	"embed"
 	"net/http"
-	"os"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sync"
 )
@@ -11,6 +10,9 @@ import (
 var (
 	log = logf.Log.WithName("web_console_script_server_webhook")
 )
+
+//go:embed static/*
+var staticFiles embed.FS
 
 type scriptServer struct {
 	rw    sync.RWMutex
@@ -60,7 +62,7 @@ func (s *scriptServer) validateCachedResource(path string) ([]byte, error) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
-	fileData, err := os.ReadFile(fmt.Sprintf("%s%s", "cmd/consoleplugin/static", path))
+	fileData, err := staticFiles.ReadFile("static" + path)
 	if err != nil {
 		return nil, err
 	}

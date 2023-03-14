@@ -9,7 +9,7 @@ var (
 	log = logf.Log.WithName("web_console_health_check")
 )
 
-func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
+func HandleHealthCheck(w http.ResponseWriter, _ *http.Request) {
 	var respBody []byte
 	respBody = []byte("OK")
 	w.WriteHeader(http.StatusOK)

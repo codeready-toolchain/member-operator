@@ -14,12 +14,16 @@ var (
 //go:embed static/*
 var staticFiles embed.FS
 
+type ScriptServer interface {
+	HandleScriptRequest(w http.ResponseWriter, r *http.Request)
+}
+
 type scriptServer struct {
 	rw    sync.RWMutex
 	cache map[string][]byte
 }
 
-func NewScriptServer() *scriptServer {
+func NewScriptServer() ScriptServer {
 	return &scriptServer{
 		cache: map[string][]byte{},
 	}

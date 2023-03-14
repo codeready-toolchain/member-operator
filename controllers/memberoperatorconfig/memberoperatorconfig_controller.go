@@ -2,6 +2,7 @@ package memberoperatorconfig
 
 import (
 	"context"
+	deploy2 "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -64,6 +65,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
+	if err := r.handleWebConsolePluginDeploy(reqLogger, crtConfig, request.Namespace); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -100,6 +105,20 @@ func (r *Reconciler) handleUserPodsWebhookDeploy(logger logr.Logger, cfg Configu
 		logger.Info("(Re)Deployed users' pods webhook")
 	} else {
 		logger.Info("Skipping deployment of users' pods webhook")
+	}
+	return nil
+}
+
+func (r *Reconciler) handleWebConsolePluginDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+	if cfg.WebConsolePlugin().Deploy() {
+		webconsolepluginImage := os.Getenv("MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE")
+		logger.Info("(Re)Deploying web console plugin")
+		if err := deploy2.ConsolePlugin(r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
+			return err
+		}
+		logger.Info("(Re)Deployed web console plugin")
+	} else {
+		logger.Info("Skipping deployment of web console plugin")
 	}
 	return nil
 }

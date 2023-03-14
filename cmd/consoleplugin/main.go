@@ -6,7 +6,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/healthcheck"
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
 	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -107,8 +106,8 @@ func main() {
 	go func() {
 		setupLog.Info("Listening...")
 
-		if err := consolePluginServer.ListenAndServeTLS("/etc/webhook/certs/"+cert.ServerCert, "/etc/webhook/certs/"+cert.ServerKey); err != nil {
-			setupLog.Error(err, "Listening and serving TLS failed")
+		if err := consolePluginServer.ListenAndServe(); err != nil {
+			setupLog.Error(err, "Listening and serving failed")
 			os.Exit(1)
 		}
 	}()

@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	log = logf.Log.WithName("web_console_script_server_webhook")
+	log = logf.Log.WithName("web_console_script_server")
 )
 
 //go:embed static/*

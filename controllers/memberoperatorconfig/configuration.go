@@ -107,6 +107,10 @@ func (c *Configuration) Webhook() WebhookConfig {
 	return WebhookConfig{c.cfg.Webhook}
 }
 
+func (c *Configuration) WebConsolePlugin() WebConsolePluginConfig {
+	return WebConsolePluginConfig{}
+}
+
 type AuthConfig struct {
 	auth toolchainv1alpha1.AuthConfig
 }
@@ -230,5 +234,13 @@ type WebhookConfig struct {
 }
 
 func (a WebhookConfig) Deploy() bool {
+	return commonconfig.GetBool(a.w.Deploy, true)
+}
+
+type WebConsolePluginConfig struct {
+	w toolchainv1alpha1.WebConsolePlugin
+}
+
+func (a WebConsolePluginConfig) Deploy() bool {
 	return commonconfig.GetBool(a.w.Deploy, true)
 }

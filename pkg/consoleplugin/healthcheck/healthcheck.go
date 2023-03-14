@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	log = logf.Log.WithName("web_console_health_check_webhook")
+	log = logf.Log.WithName("web_console_health_check")
 )
 
 func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {

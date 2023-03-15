@@ -1,4 +1,5 @@
-OWNER_AND_BRANCH_LOCATION=codeready-toolchain/toolchain-cicd/master
+#OWNER_AND_BRANCH_LOCATION=codeready-toolchain/toolchain-cicd/master
+OWNER_AND_BRANCH_LOCATION=sbryzak/toolchain-cicd/add_consoleplugin_image
 GH_SCRIPTS_URL=https://raw.githubusercontent.com/${OWNER_AND_BRANCH_LOCATION}
 
 .PHONY: run-cicd-script

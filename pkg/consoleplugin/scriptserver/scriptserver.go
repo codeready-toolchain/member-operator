@@ -36,8 +36,8 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 		log.Error(err, "error while loading resource")
 	}
 
-	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(data); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		log.Error(err, "unable to write response")
 	}
 }

@@ -3,15 +3,13 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/healthcheck"
-	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
+	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
-	"net/http"
 	"os"
 	"os/signal"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -89,28 +87,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	mux := http.NewServeMux()
+	consolePluginServer := consoleplugin.NewConsolePluginServer(setupLog)
 
-	s := scriptserver.NewScriptServer()
-
-	mux.HandleFunc("/", s.HandleScriptRequest)
-	mux.HandleFunc("/api/v1/status", healthcheck.HandleHealthCheck)
-
-	consolePluginServer := &http.Server{ //nolint:gosec
-		Addr:    ":8080",
-		Handler: mux,
-	}
-
-	setupLog.Info("Web Console Plugin server configured.")
-
-	go func() {
-		setupLog.Info("Listening...")
-
-		if err := consolePluginServer.ListenAndServe(); err != nil {
-			setupLog.Error(err, "Listening and serving failed")
-			os.Exit(1)
-		}
-	}()
+	consolePluginServer.Start()
 
 	// listen to OS shutdown signal
 	signalChan := make(chan os.Signal, 1)

@@ -130,7 +130,7 @@ objects:
         name: "8080"
         targetPort: 8080
     selector:
-      app: member-operator-console-plugin
+      run: member-operator-console-plugin
 parameters:
   - name: NAMESPACE
     value: 'toolchain-member-operator'

@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook"
 

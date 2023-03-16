@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
+	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestCreateCerts(t *testing.T) {
-	sKey, serverCertPEM, caCertBytes, err := cert.CreateCerts("got-the-hook", "cool-webhook", time.Now().AddDate(1, 0, 0))
+	sKey, serverCertPEM, caCertBytes, err := cert.CreateCerts("got-the-service", "cool-service", time.Now().AddDate(1, 0, 0))
 	if err != nil {
 		t.Fatal("Failed to create certs", err)
 	}
@@ -45,7 +45,7 @@ func TestCreateCerts(t *testing.T) {
 	}
 
 	// Verify common name
-	const expectedCommonName = "got-the-hook.cool-webhook.svc"
+	const expectedCommonName = "got-the-service.cool-service.svc"
 
 	if caParsedCert.Subject.CommonName != expectedCommonName {
 		t.Fatalf("Unexpected Cert Common Name %q, wanted %q", caParsedCert.Subject.CommonName, expectedCommonName)
@@ -53,10 +53,10 @@ func TestCreateCerts(t *testing.T) {
 
 	// Verify domain names
 	expectedDNSNames := []string{
-		"got-the-hook",
-		"got-the-hook.cool-webhook",
-		"got-the-hook.cool-webhook.svc",
-		"got-the-hook.cool-webhook.svc.cluster.local",
+		"got-the-service",
+		"got-the-service.cool-service",
+		"got-the-service.cool-service.svc",
+		"got-the-service.cool-service.svc.cluster.local",
 	}
 	if diff := cmp.Diff(caParsedCert.DNSNames, expectedDNSNames); diff != "" {
 		t.Fatal("Unexpected CA Cert DNS Name (-want +got) :", diff)

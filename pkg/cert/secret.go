@@ -24,17 +24,11 @@ const (
 	// the keypair.
 	CACert = "ca-cert.pem"
 
-	// certSecretName is a name of the secret
-	certSecretName = "webhook-certs" // nolint:gosec
-
 	// Expiration is a default duration after which the certificates should expire
 	Expiration = 365 * 24 * time.Hour
-
-	// serviceName is the name of webhook service
-	serviceName = "member-operator-webhook"
 )
 
-func EnsureSecret(cl client.Client, namespace string, expiration time.Duration) ([]byte, error) {
+func EnsureSecret(cl client.Client, namespace, certSecretName, serviceName string, expiration time.Duration) ([]byte, error) {
 	certSecret := &corev1.Secret{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: certSecretName}, certSecret); err != nil && !errors.IsNotFound(err) {
 		return nil, err

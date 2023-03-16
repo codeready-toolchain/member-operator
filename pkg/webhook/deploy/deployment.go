@@ -2,8 +2,7 @@ package deploy
 
 import (
 	"encoding/base64"
-
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/cert"
+	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/userspodswebhook"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
@@ -15,8 +14,16 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// certSecretName is a name of the secret
+	certSecretName = "webhook-certs" // nolint:gosec
+
+	// serviceName is the name of webhook service
+	serviceName = "member-operator-webhook"
+)
+
 func Webhook(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
-	caBundle, err := cert.EnsureSecret(cl, namespace, cert.Expiration)
+	caBundle, err := cert.EnsureSecret(cl, namespace, certSecretName, serviceName, cert.Expiration)
 	if err != nil {
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}

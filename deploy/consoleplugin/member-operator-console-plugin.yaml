@@ -64,7 +64,7 @@ objects:
           image: ${IMAGE}
           ports:
             - containerPort: 8080
-            - containerPort: 8443
+            - containerPort: 9443
           command:
             - member-operator-console-plugin
           imagePullPolicy: IfNotPresent
@@ -123,9 +123,9 @@ objects:
       run: member-operator-console-plugin
   spec:
     ports:
-      - port: 443
-        name: "443"
-        targetPort: 8443
+      - port: 9443
+        name: "9443"
+        targetPort: 9443
       - port: 8080
         name: "8080"
         targetPort: 8080

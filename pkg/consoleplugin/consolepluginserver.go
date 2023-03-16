@@ -25,7 +25,7 @@ func NewConsolePluginServer(log logr.Logger) *Server {
 	ss := scriptserver.NewScriptServer()
 	s.mux.HandleFunc("/", ss.HandleScriptRequest)
 	s.svr = &http.Server{ //nolint:gosec
-		Addr:    ":8443",
+		Addr:    ":9443",
 		Handler: s.mux,
 	}
 

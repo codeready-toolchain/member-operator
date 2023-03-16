@@ -4,6 +4,7 @@ import (
 	"embed"
 	"net/http"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"strings"
 	"sync"
 )
 
@@ -41,6 +42,12 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Error(err, "unable to write response", "URI", r.RequestURI, "Method", r.Method)
 	}
+	if strings.HasSuffix(r.RequestURI, ".js") {
+		w.Header().Set("Content-Type", "application/json")
+	} else if strings.HasSuffix(r.RequestURI, ".json") {
+		w.Header().Set("Content-Type", "application/json")
+	}
+
 	log.Info("OK", "URI", r.RequestURI, "Method", r.Method)
 }
 

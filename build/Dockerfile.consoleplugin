@@ -16,6 +16,6 @@ RUN  /usr/local/bin/user_setup
 
 ENTRYPOINT ["/usr/local/bin/member-operator-console-plugin"]
 
-EXPOSE 8080
+EXPOSE 8080 8443
 
 USER ${USER_UID}

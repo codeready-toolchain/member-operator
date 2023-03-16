@@ -3,125 +3,132 @@ kind: Template
 metadata:
   name: member-operator-console-plugin
 objects:
-  - apiVersion: v1
-    kind: ServiceAccount
-    metadata:
-      labels:
-        provider: codeready-toolchain
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    labels:
+      provider: codeready-toolchain
+    name: member-operator-console-plugin
+    namespace: ${NAMESPACE}
+- kind: Role
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    labels:
+      provider: codeready-toolchain
+    name: member-operator-console-plugin
+    namespace: ${NAMESPACE}
+  rules:
+    - apiGroups:
+        - toolchain.dev.openshift.com
+      resources:
+        - memberoperatorconfigs
+      verbs:
+        - get
+        - list
+        - watch
+- kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    labels:
+      provider: codeready-toolchain
+    name: member-operator-console-plugin
+    namespace: ${NAMESPACE}
+  subjects:
+    - kind: ServiceAccount
       name: member-operator-console-plugin
-      namespace: ${NAMESPACE}
-  - kind: Role
-    apiVersion: rbac.authorization.k8s.io/v1
-    metadata:
-      labels:
-        provider: codeready-toolchain
-      name: member-operator-console-plugin
-      namespace: ${NAMESPACE}
-    rules:
-      - apiGroups:
-          - toolchain.dev.openshift.com
-        resources:
-          - memberoperatorconfigs
-        verbs:
-          - get
-          - list
-          - watch
-  - kind: RoleBinding
-    apiVersion: rbac.authorization.k8s.io/v1
-    metadata:
-      labels:
-        provider: codeready-toolchain
-      name: member-operator-console-plugin
-      namespace: ${NAMESPACE}
-    subjects:
-      - kind: ServiceAccount
+  roleRef:
+    kind: Role
+    name: member-operator-console-plugin
+    apiGroup: rbac.authorization.k8s.io
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    labels:
+      provider: codeready-toolchain
+    name: member-operator-console-plugin
+    namespace: ${NAMESPACE}
+  spec:
+    replicas: ${{REPLICAS}}
+    selector:
+      matchLabels:
         name: member-operator-console-plugin
-    roleRef:
-      kind: Role
-      name: member-operator-console-plugin
-      apiGroup: rbac.authorization.k8s.io
-  - kind: Deployment
-    apiVersion: apps/v1
-    metadata:
-      labels:
-        provider: codeready-toolchain
-      name: member-operator-console-plugin
-      namespace: ${NAMESPACE}
-    spec:
-      replicas: ${{REPLICAS}}
-      selector:
-        matchLabels:
+    template:
+      metadata:
+        labels:
           name: member-operator-console-plugin
-      template:
-        metadata:
-          labels:
-            name: member-operator-console-plugin
-            run: member-operator-console-plugin
-        spec:
-          serviceAccountName: member-operator-console-plugin
-          containers:
-            - name: member-operator-console-plugin
-              image: ${IMAGE}
-              ports:
-                - containerPort: 8080
-              command:
-                - member-operator-console-plugin
-              imagePullPolicy: IfNotPresent
-              livenessProbe:
-                failureThreshold: 3
-                httpGet:
-                  path: /api/v1/health
-                  port: 8080
-                  scheme: HTTP
-                initialDelaySeconds: 1
-                periodSeconds: 10
-                successThreshold: 1
-                timeoutSeconds: 1
-              readinessProbe:
-                failureThreshold: 30
-                httpGet:
-                  path: /api/v1/health
-                  port: 8080
-                  scheme: HTTP
-                initialDelaySeconds: 1
-                periodSeconds: 1
-                successThreshold: 1
-                timeoutSeconds: 1
-              startupProbe:
-                failureThreshold: 180
-                httpGet:
-                  path: /api/v1/health
-                  port: 8080
-                  scheme: HTTP
-                initialDelaySeconds: 1
-                periodSeconds: 1
-                successThreshold: 1
-                timeoutSeconds: 1
-              env:
-                - name: WATCH_NAMESPACE
-                  value: ${NAMESPACE}
-              resources:
-                requests:
-                  cpu: "50m"
-                  memory: "10M"
-  - kind: Service
-    apiVersion: v1
-    metadata:
-      name: member-operator-console-plugin
-      namespace: ${NAMESPACE}
-      labels:
-        provider: codeready-toolchain
-        run: member-operator-console-plugin
-    spec:
-      ports:
-        - name: "8080"
-          protocol: TCP
-          port: 80
-          targetPort: 8080
-      selector:
-        run: member-operator-console-plugin
-      type: ClusterIP
-      sessionAffinity: null
+          run: member-operator-console-plugin
+      spec:
+        serviceAccountName: member-operator-console-plugin
+        containers:
+        - name: member-operator-console-plugin
+          image: ${IMAGE}
+          ports:
+            - containerPort: 8080
+            - containerPort: 8443
+          command:
+            - member-operator-console-plugin
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 1
+          startupProbe:
+            failureThreshold: 180
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 1
+          env:
+            - name: WATCH_NAMESPACE
+              value: ${NAMESPACE}
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "10M"
+          volumeMounts:
+          - name: consoleplugin-certs
+            mountPath: /etc/consoleplugin/certs
+            readOnly: true
+        volumes:
+        - name: consoleplugin-certs
+          secret:
+            secretName: consoleplugin-certs
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: member-operator-console-plugin
+    namespace: ${NAMESPACE}
+    labels:
+      provider: codeready-toolchain
+      run: member-operator-console-plugin
+  spec:
+    ports:
+      - port: 443
+        targetPort: 8443
+      - port: 8080
+        targetPort: 8080
+    selector:
+      app: member-operator-console-plugin
 parameters:
   - name: NAMESPACE
     value: 'toolchain-member-operator'

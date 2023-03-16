@@ -87,6 +87,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	startConsolePluginService()
+
+	startHealthStatusService()
+}
+
+func startConsolePluginService() {
 	consolePluginServer := consoleplugin.NewConsolePluginServer(setupLog)
 
 	consolePluginServer.Start()
@@ -99,5 +105,21 @@ func main() {
 	setupLog.Info("Received OS shutdown signal - shutting down Web Console Plugin server gracefully...")
 	if err := consolePluginServer.Shutdown(context.Background()); err != nil {
 		setupLog.Error(err, "Unable to shutdown the Web Console Plugin server")
+	}
+}
+
+func startHealthStatusService() {
+	healthServer := consoleplugin.NewConsolePluginHealthServer(setupLog)
+
+	healthServer.Start()
+
+	// listen to OS shutdown signal
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	<-signalChan
+
+	setupLog.Info("Received OS shutdown signal - shutting down Web Console Plugin health status server gracefully...")
+	if err := healthServer.Shutdown(context.Background()); err != nil {
+		setupLog.Error(err, "Unable to shutdown the Web Console Plugin health status server")
 	}
 }

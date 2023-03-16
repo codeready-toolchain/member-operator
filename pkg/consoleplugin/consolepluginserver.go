@@ -2,11 +2,13 @@ package consoleplugin
 
 import (
 	"context"
-	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/healthcheck"
-	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
-	"github.com/go-logr/logr"
 	"net/http"
 	"os"
+
+	"github.com/codeready-toolchain/member-operator/pkg/cert"
+	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
+
+	"github.com/go-logr/logr"
 )
 
 type Server struct {
@@ -19,30 +21,24 @@ func NewConsolePluginServer(log logr.Logger) Server {
 	s := Server{
 		log: log,
 	}
-
 	s.mux = http.NewServeMux()
-
 	ss := scriptserver.NewScriptServer()
-
-	s.mux.HandleFunc("/api/v1/status", healthcheck.HandleHealthCheck)
 	s.mux.HandleFunc("/", ss.HandleScriptRequest)
-
 	s.svr = &http.Server{ //nolint:gosec
-		Addr:    ":8080",
+		Addr:    ":8443",
 		Handler: s.mux,
 	}
 
 	s.log.Info("Web Console Plugin server configured.")
-
 	return s
 }
 
 func (s *Server) Start() {
 	go func() {
-		s.log.Info("Listening...")
+		s.log.Info("Listening console plugin endpoint...")
 
-		if err := s.svr.ListenAndServe(); err != nil {
-			s.log.Error(err, "Listening and serving failed")
+		if err := s.svr.ListenAndServeTLS("/etc/consoleplugin/certs/"+cert.ServerCert, "/etc/consoleplugin/certs/"+cert.ServerKey); err != nil {
+			s.log.Error(err, "Listening and serving console plugin endpoint failed")
 			os.Exit(1)
 		}
 	}()

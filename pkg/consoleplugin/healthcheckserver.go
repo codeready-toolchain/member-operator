@@ -11,8 +11,8 @@ import (
 
 type HealthServer Server
 
-func NewConsolePluginHealthServer(log logr.Logger) HealthServer {
-	s := HealthServer{
+func NewConsolePluginHealthServer(log logr.Logger) *HealthServer {
+	s := &HealthServer{
 		log: log,
 	}
 	s.mux = http.NewServeMux()

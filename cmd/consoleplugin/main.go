@@ -7,6 +7,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/appengine/log"
 	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
@@ -17,9 +18,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"syscall"
+	"time"
 )
 
+const gracefulTimeout = time.Second * 15
+
 var setupLog = ctrl.Log.WithName("setup")
+
+type shutdown interface {
+	Shutdown(ctx context.Context) error
+}
 
 func main() {
 
@@ -87,39 +95,45 @@ func main() {
 		os.Exit(1)
 	}
 
-	startConsolePluginService()
+	pluginServer := startConsolePluginService()
+	healthServer := startHealthStatusService()
 
-	startHealthStatusService()
+	gracefulShutdown(gracefulTimeout, pluginServer, healthServer)
 }
 
-func startConsolePluginService() {
+func startConsolePluginService() *consoleplugin.Server {
 	consolePluginServer := consoleplugin.NewConsolePluginServer(setupLog)
-
 	consolePluginServer.Start()
 
-	// listen to OS shutdown signal
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	<-signalChan
-
-	setupLog.Info("Received OS shutdown signal - shutting down Web Console Plugin server gracefully...")
-	if err := consolePluginServer.Shutdown(context.Background()); err != nil {
-		setupLog.Error(err, "Unable to shutdown the Web Console Plugin server")
-	}
+	return consolePluginServer
 }
 
-func startHealthStatusService() {
+func startHealthStatusService() *consoleplugin.HealthServer {
 	healthServer := consoleplugin.NewConsolePluginHealthServer(setupLog)
-
 	healthServer.Start()
 
-	// listen to OS shutdown signal
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	<-signalChan
+	return healthServer
+}
 
-	setupLog.Info("Received OS shutdown signal - shutting down Web Console Plugin health status server gracefully...")
-	if err := healthServer.Shutdown(context.Background()); err != nil {
-		setupLog.Error(err, "Unable to shutdown the Web Console Plugin health status server")
+func gracefulShutdown(timeout time.Duration, hs ...shutdown) {
+	// For a channel used for notification of just one signal value, a buffer of
+	// size 1 is sufficient.
+	stop := make(chan os.Signal, 1)
+
+	// We'll accept graceful shutdowns when quit via SIGINT (Ctrl+C) or SIGTERM
+	// (Ctrl+/). SIGKILL, SIGQUIT will not be caught.
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	sigReceived := <-stop
+	log.Infof(nil, "Signal received: %+v", sigReceived.String())
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	log.Infof(nil, "Shutdown with timeout: %s", timeout.String())
+	for _, s := range hs {
+		if err := s.Shutdown(ctx); err != nil {
+			setupLog.Error(err, "Shutdown error")
+		} else {
+			setupLog.Info("Server stopped")
+		}
 	}
 }

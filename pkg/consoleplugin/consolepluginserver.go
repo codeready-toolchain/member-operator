@@ -17,8 +17,8 @@ type Server struct {
 	log logr.Logger
 }
 
-func NewConsolePluginServer(log logr.Logger) Server {
-	s := Server{
+func NewConsolePluginServer(log logr.Logger) *Server {
+	s := &Server{
 		log: log,
 	}
 	s.mux = http.NewServeMux()

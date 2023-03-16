@@ -1,11 +1,16 @@
 package scriptserver
 
 import (
+	"bytes"
 	"embed"
 	"net/http"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"strings"
 	"sync"
+)
+
+const (
+	pendoTestK = "df54af19-2d86-4f23-7616-81c1822ecaf3"
 )
 
 var (
@@ -38,17 +43,22 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 		log.Error(err, "error while loading resource", "URI", r.RequestURI, "Method", r.Method)
 	}
 
+	var contentType string
+	if strings.HasSuffix(r.RequestURI, ".js") {
+		contentType = "application/javascript"
+	} else if strings.HasSuffix(r.RequestURI, ".json") {
+		contentType = "application/json"
+	}
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType) // Has to be set before calling w.WriteHeader()!
+	}
+
 	if _, err := w.Write(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Error(err, "unable to write response", "URI", r.RequestURI, "Method", r.Method)
 	}
-	if strings.HasSuffix(r.RequestURI, ".js") {
-		w.Header().Set("Content-Type", "application/json")
-	} else if strings.HasSuffix(r.RequestURI, ".json") {
-		w.Header().Set("Content-Type", "application/json")
-	}
 
-	log.Info("OK", "URI", r.RequestURI, "Method", r.Method)
+	log.Info("OK", "URI", r.RequestURI, "Method", r.Method, "Content-Type", w.Header().Get("Content-Type"))
 }
 
 func (s *scriptServer) loadResource(path string) ([]byte, error) {
@@ -80,7 +90,12 @@ func (s *scriptServer) validateCachedResource(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	s.cache[path] = fileData
+	fileDataWithKey := s.insertPendoKey(fileData, pendoTestK) // TODO load the key from configuration instead
+	s.cache[path] = fileDataWithKey
 
-	return fileData, nil
+	return fileDataWithKey, nil
+}
+
+func (s *scriptServer) insertPendoKey(originalFileContent []byte, key string) []byte {
+	return bytes.Replace(originalFileContent, []byte("{INSERT_KEY_HERE}"), []byte(key), -1)
 }

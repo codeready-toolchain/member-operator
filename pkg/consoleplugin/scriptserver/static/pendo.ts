@@ -21,7 +21,7 @@
         z = e.getElementsByTagName(n)[0];
         z.parentNode.insertBefore(y, z);
     })(window, document, 'script', 'pendo');
-})('');
+})('{INSERT_KEY_HERE}');
 
 const PREFIX = 'toolchain.dev.openshift.com/';
 

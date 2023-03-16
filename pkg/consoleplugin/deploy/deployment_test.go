@@ -23,7 +23,6 @@ import (
 
 const (
 	imgLoc = "quay.io/cool/member-operator-console-plugin:123"
-	saname = "member-operator-console-plugin"
 )
 
 func TestGetTemplateObjects(t *testing.T) {
@@ -65,7 +64,7 @@ func TestDeploy(t *testing.T) {
 		}
 
 		deploymentObj := &appsv1.Deployment{}
-		unmarshalObj(t, deployment(test.MemberOperatorNs, saname, "quay.io/some/cool:unknown"), deploymentObj)
+		unmarshalObj(t, deployment(test.MemberOperatorNs), deploymentObj)
 		deploymentObj.Labels = map[string]string{
 			"provider": "foo",
 		}
@@ -127,7 +126,7 @@ func verifyDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	})
 
 	expDeployment := &appsv1.Deployment{}
-	unmarshalObj(t, deployment(test.MemberOperatorNs, saname, imgLoc), expDeployment)
+	unmarshalObj(t, deployment(test.MemberOperatorNs), expDeployment)
 	actualDeployment := &appsv1.Deployment{}
 	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-console-plugin", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
@@ -164,7 +163,7 @@ func service(namespace string) string {
 }
 
 // contains an empty spec because we do not verify the actual spec value
-func deployment(namespace, sa string, image string) string {
+func deployment(namespace string) string {
 	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"},"spec":{}}`, namespace)
 }
 

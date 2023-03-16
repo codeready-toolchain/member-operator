@@ -11,14 +11,6 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	// certSecretName is a name of the secret
-	certSecretName = "consoleplugin-certs" // nolint:gosec
-
-	// serviceName is the name of member-operator-console-plugin service
-	serviceName = "member-operator-console-plugin"
-)
-
 func ConsolePlugin(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
 	objs, err := getTemplateObjects(s, namespace, image)
 	if err != nil {

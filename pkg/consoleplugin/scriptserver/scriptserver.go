@@ -34,12 +34,12 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 	data, err := s.loadResource(r.RequestURI)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		log.Error(err, "error while loading resource", r.RequestURI, "Method", r.Method)
+		log.Error(err, "error while loading resource", "URI", r.RequestURI, "Method", r.Method)
 	}
 
 	if _, err := w.Write(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Error(err, "unable to write response", r.RequestURI, "Method", r.Method)
+		log.Error(err, "unable to write response", "URI", r.RequestURI, "Method", r.Method)
 	}
 	log.Info("OK", "URI", r.RequestURI, "Method", r.Method)
 }

@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
@@ -11,7 +12,20 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	// certSecretName is a name of the secret
+	certSecretName = "consoleplugin-certs" // nolint:gosec
+
+	// serviceName is the name of member-operator-console-plugin service
+	serviceName = "member-operator-console-plugin"
+)
+
 func ConsolePlugin(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
+	_, err := cert.EnsureSecret(cl, namespace, certSecretName, serviceName, cert.Expiration)
+	if err != nil {
+		return errs.Wrap(err, "cannot ensure console plugin service cert secret")
+	}
+
 	objs, err := getTemplateObjects(s, namespace, image)
 	if err != nil {
 		return errs.Wrap(err, "cannot deploy console plugin template")

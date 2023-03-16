@@ -71,7 +71,7 @@ objects:
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /api/v1/health
+              path: /api/v1/status
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 1
@@ -81,7 +81,7 @@ objects:
           readinessProbe:
             failureThreshold: 30
             httpGet:
-              path: /api/v1/health
+              path: /api/v1/status
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 1
@@ -91,7 +91,7 @@ objects:
           startupProbe:
             failureThreshold: 180
             httpGet:
-              path: /api/v1/health
+              path: /api/v1/status
               port: 8080
               scheme: HTTP
             initialDelaySeconds: 1

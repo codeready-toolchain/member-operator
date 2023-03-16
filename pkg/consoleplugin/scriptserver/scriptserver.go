@@ -30,16 +30,18 @@ func NewScriptServer() ScriptServer {
 }
 
 func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Request) {
+	log.Info("Requesting...", "URI", r.RequestURI, "Method", r.Method)
 	data, err := s.loadResource(r.RequestURI)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		log.Error(err, "error while loading resource")
+		log.Error(err, "error while loading resource", r.RequestURI, "Method", r.Method)
 	}
 
 	if _, err := w.Write(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Error(err, "unable to write response")
+		log.Error(err, "unable to write response", r.RequestURI, "Method", r.Method)
 	}
+	log.Info("OK", "URI", r.RequestURI, "Method", r.Method)
 }
 
 func (s *scriptServer) loadResource(path string) ([]byte, error) {

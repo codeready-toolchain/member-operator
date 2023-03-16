@@ -7,7 +7,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
-	"google.golang.org/appengine/log"
 	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
@@ -124,11 +123,11 @@ func gracefulShutdown(timeout time.Duration, hs ...shutdown) {
 	// (Ctrl+/). SIGKILL, SIGQUIT will not be caught.
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	sigReceived := <-stop
-	log.Infof(nil, "Signal received: %+v", sigReceived.String())
+	setupLog.Info("Signal received", "signal", sigReceived.String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	log.Infof(nil, "Shutdown with timeout: %s", timeout.String())
+	setupLog.Info("Shutdown with timeout", "timeout", timeout.String())
 	for _, s := range hs {
 		if err := s.Shutdown(ctx); err != nil {
 			setupLog.Error(err, "Shutdown error")

@@ -124,8 +124,10 @@ objects:
   spec:
     ports:
       - port: 443
+        name: "443"
         targetPort: 8443
       - port: 8080
+        name: "8080"
         targetPort: 8080
     selector:
       app: member-operator-console-plugin

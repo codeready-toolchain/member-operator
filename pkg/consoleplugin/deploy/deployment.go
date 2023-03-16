@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
@@ -21,11 +20,6 @@ const (
 )
 
 func ConsolePlugin(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
-	_, err := cert.EnsureSecret(cl, namespace, certSecretName, serviceName, cert.Expiration)
-	if err != nil {
-		return errs.Wrap(err, "cannot ensure console plugin service cert secret")
-	}
-
 	objs, err := getTemplateObjects(s, namespace, image)
 	if err != nil {
 		return errs.Wrap(err, "cannot deploy console plugin template")

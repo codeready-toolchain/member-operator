@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
 
 	"github.com/go-logr/logr"
@@ -37,7 +36,7 @@ func (s *Server) Start() {
 	go func() {
 		s.log.Info("Listening console plugin endpoint...")
 
-		if err := s.svr.ListenAndServeTLS("/etc/consoleplugin/certs/"+cert.ServerCert, "/etc/consoleplugin/certs/"+cert.ServerKey); err != nil {
+		if err := s.svr.ListenAndServeTLS("/etc/consoleplugin/certs/tls.crt", "/etc/consoleplugin/certs/tls.key"); err != nil {
 			s.log.Error(err, "Listening and serving console plugin endpoint failed")
 			os.Exit(1)
 		}

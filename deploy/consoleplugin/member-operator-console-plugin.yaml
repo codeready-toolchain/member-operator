@@ -112,12 +112,14 @@ objects:
         volumes:
         - name: consoleplugin-certs
           secret:
-            secretName: consoleplugin-certs
+            secretName: member-operator-console-plugin
 - kind: Service
   apiVersion: v1
   metadata:
     name: member-operator-console-plugin
     namespace: ${NAMESPACE}
+    annotations:
+      service.beta.openshift.io/serving-cert-secret-name: member-operator-console-plugin
     labels:
       provider: codeready-toolchain
       run: member-operator-console-plugin

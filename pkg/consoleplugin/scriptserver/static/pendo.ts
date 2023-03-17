@@ -34,8 +34,8 @@ export default (eventType: string, properties?: any) => {
     if (eventType === 'identify') {
         const { user } = properties;
         if (user) {
-            const ssoUserId = user.metadata.annotation?.[SSO_USER_ID];
-            const ssoAccountId = user.metadata.annotation?.[SSO_ACCOUNT_ID];
+            const ssoUserId = user.metadata.annotations?.[SSO_USER_ID];
+            const ssoAccountId = user.metadata.annotations?.[SSO_ACCOUNT_ID];
             if (ssoUserId && (window as any).pendo) {
                 initialized = true;
                 (window as any).pendo[initialized ? 'identify' : 'initialize']({

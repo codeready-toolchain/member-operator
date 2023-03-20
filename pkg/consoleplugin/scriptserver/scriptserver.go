@@ -36,17 +36,25 @@ func NewScriptServer() ScriptServer {
 }
 
 func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Request) {
-	log.Info("Requesting...", "URI", r.RequestURI, "Method", r.Method)
-	data, err := s.loadResource(r.RequestURI)
+	var path string
+	if r.RequestURI == "/status" {
+		// Health status check. Use plugin-manifest.json as our health status endpoint but do not log the request to reduce noise in the logs.
+		path = "/plugin-manifest.json"
+	} else {
+		path = r.RequestURI
+		log.Info("Requesting...", "URI", path, "Method", r.Method)
+	}
+
+	data, err := s.loadResource(path)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		log.Error(err, "error while loading resource", "URI", r.RequestURI, "Method", r.Method)
+		log.Error(err, "error while loading resource", "URI", path, "Method", r.Method)
 	}
 
 	var contentType string
-	if strings.HasSuffix(r.RequestURI, ".js") {
+	if strings.HasSuffix(path, ".js") {
 		contentType = "application/javascript"
-	} else if strings.HasSuffix(r.RequestURI, ".json") {
+	} else if strings.HasSuffix(path, ".json") {
 		contentType = "application/json"
 	}
 	if contentType != "" {
@@ -55,10 +63,10 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 
 	if _, err := w.Write(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		log.Error(err, "unable to write response", "URI", r.RequestURI, "Method", r.Method)
+		log.Error(err, "unable to write response", "URI", path, "Method", r.Method)
 	}
 
-	log.Info("OK", "URI", r.RequestURI, "Method", r.Method, "Content-Type", w.Header().Get("Content-Type"))
+	log.Info("OK", "URI", path, "Method", r.Method, "Content-Type", w.Header().Get("Content-Type"))
 }
 
 func (s *scriptServer) loadResource(path string) ([]byte, error) {

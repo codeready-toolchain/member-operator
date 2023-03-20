@@ -95,9 +95,8 @@ func main() {
 	}
 
 	pluginServer := startConsolePluginService()
-	healthServer := startHealthStatusService()
 
-	gracefulShutdown(gracefulTimeout, pluginServer, healthServer)
+	gracefulShutdown(gracefulTimeout, pluginServer)
 }
 
 func startConsolePluginService() *consoleplugin.Server {
@@ -105,13 +104,6 @@ func startConsolePluginService() *consoleplugin.Server {
 	consolePluginServer.Start()
 
 	return consolePluginServer
-}
-
-func startHealthStatusService() *consoleplugin.HealthServer {
-	healthServer := consoleplugin.NewConsolePluginHealthServer(setupLog)
-	healthServer.Start()
-
-	return healthServer
 }
 
 func gracefulShutdown(timeout time.Duration, hs ...shutdown) {

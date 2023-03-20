@@ -70,7 +70,7 @@ objects:
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /plugin-manifest.json
+              path: /status
               port: 9443
               scheme: HTTPS
             initialDelaySeconds: 1
@@ -80,7 +80,7 @@ objects:
           readinessProbe:
             failureThreshold: 30
             httpGet:
-              path: /plugin-manifest.json
+              path: /status
               port: 9443
               scheme: HTTPS
             initialDelaySeconds: 1
@@ -90,7 +90,7 @@ objects:
           startupProbe:
             failureThreshold: 180
             httpGet:
-              path: /plugin-manifest.json
+              path: /status
               port: 9443
               scheme: HTTPS
             initialDelaySeconds: 1

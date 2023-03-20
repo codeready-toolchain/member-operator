@@ -66,7 +66,9 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 		log.Error(err, "unable to write response", "URI", path, "Method", r.Method)
 	}
 
-	log.Info("OK", "URI", path, "Method", r.Method, "Content-Type", w.Header().Get("Content-Type"))
+	if r.RequestURI != "/status" {
+		log.Info("OK", "URI", path, "Method", r.Method, "Content-Type", w.Header().Get("Content-Type"))
+	}
 }
 
 func (s *scriptServer) loadResource(path string) ([]byte, error) {

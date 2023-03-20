@@ -63,7 +63,6 @@ objects:
         - name: member-operator-console-plugin
           image: ${IMAGE}
           ports:
-            - containerPort: 8080
             - containerPort: 9443
           command:
             - member-operator-console-plugin
@@ -71,9 +70,9 @@ objects:
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /api/v1/status
-              port: 8080
-              scheme: HTTP
+              path: /status
+              port: 9443
+              scheme: HTTPS
             initialDelaySeconds: 1
             periodSeconds: 10
             successThreshold: 1
@@ -81,9 +80,9 @@ objects:
           readinessProbe:
             failureThreshold: 30
             httpGet:
-              path: /api/v1/status
-              port: 8080
-              scheme: HTTP
+              path: /status
+              port: 9443
+              scheme: HTTPS
             initialDelaySeconds: 1
             periodSeconds: 1
             successThreshold: 1
@@ -91,9 +90,9 @@ objects:
           startupProbe:
             failureThreshold: 180
             httpGet:
-              path: /api/v1/status
-              port: 8080
-              scheme: HTTP
+              path: /status
+              port: 9443
+              scheme: HTTPS
             initialDelaySeconds: 1
             periodSeconds: 1
             successThreshold: 1
@@ -128,9 +127,6 @@ objects:
       - port: 9443
         name: "9443"
         targetPort: 9443
-      - port: 8080
-        name: "8080"
-        targetPort: 8080
     selector:
       run: member-operator-console-plugin
 parameters:

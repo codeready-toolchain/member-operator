@@ -2,7 +2,7 @@ package memberoperatorconfig
 
 import (
 	"context"
-	deploy2 "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
+	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -113,7 +113,7 @@ func (r *Reconciler) handleWebConsolePluginDeploy(logger logr.Logger, cfg Config
 	if cfg.WebConsolePlugin().Deploy() {
 		webconsolepluginImage := os.Getenv("MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE")
 		logger.Info("(Re)Deploying web console plugin")
-		if err := deploy2.ConsolePlugin(r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
+		if err := consoledeploy.ConsolePlugin(r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
 			return err
 		}
 		logger.Info("(Re)Deployed web console plugin")

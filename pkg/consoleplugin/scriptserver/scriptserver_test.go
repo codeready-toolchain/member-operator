@@ -19,7 +19,7 @@ func TestScriptServer(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	require.Len(t, body, 1932)
+	require.Len(t, body, 1934)
 	require.True(t, strings.HasPrefix(string(body), "// initialize pendo"))
 
 }

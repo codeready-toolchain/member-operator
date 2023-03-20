@@ -242,5 +242,5 @@ type WebConsolePluginConfig struct {
 }
 
 func (a WebConsolePluginConfig) Deploy() bool {
-	return commonconfig.GetBool(a.w.Deploy, true)
+	return commonconfig.GetBool(a.w.Deploy, false)
 }

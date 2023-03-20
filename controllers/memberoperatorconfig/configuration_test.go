@@ -318,6 +318,21 @@ func TestWebhook(t *testing.T) {
 	})
 }
 
+func TestWebConsolePlugin(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.False(t, memberOperatorCfg.WebConsolePlugin().Deploy())
+	})
+	t.Run("non-default", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(false))
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.False(t, memberOperatorCfg.WebConsolePlugin().Deploy())
+	})
+}
+
 func newSecret(name string, data map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{

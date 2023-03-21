@@ -326,10 +326,10 @@ func TestWebConsolePlugin(t *testing.T) {
 		assert.False(t, memberOperatorCfg.WebConsolePlugin().Deploy())
 	})
 	t.Run("non-default", func(t *testing.T) {
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(false))
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
 		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
 
-		assert.False(t, memberOperatorCfg.WebConsolePlugin().Deploy())
+		assert.True(t, memberOperatorCfg.WebConsolePlugin().Deploy())
 	})
 	t.Run("with PendoKey set", func(t *testing.T) {
 		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().PendoKey("XXXX"))

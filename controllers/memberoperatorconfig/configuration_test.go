@@ -331,6 +331,18 @@ func TestWebConsolePlugin(t *testing.T) {
 
 		assert.False(t, memberOperatorCfg.WebConsolePlugin().Deploy())
 	})
+	t.Run("with PendoKey set", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().PendoKey("XXXX"))
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.Equal(t, "XXXX", memberOperatorCfg.WebConsolePlugin().PendoKey())
+	})
+	t.Run("with PendoHost set", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().PendoHost("abc.pendo.io"))
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.Equal(t, "abc.pendo.io", memberOperatorCfg.WebConsolePlugin().PendoHost())
+	})
 }
 
 func newSecret(name string, data map[string][]byte) *corev1.Secret {

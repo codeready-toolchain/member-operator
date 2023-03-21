@@ -108,7 +108,7 @@ func (c *Configuration) Webhook() WebhookConfig {
 }
 
 func (c *Configuration) WebConsolePlugin() WebConsolePluginConfig {
-	return WebConsolePluginConfig{}
+	return WebConsolePluginConfig{c.cfg.WebConsolePlugin}
 }
 
 type AuthConfig struct {

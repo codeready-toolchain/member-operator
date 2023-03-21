@@ -172,7 +172,7 @@ func serviceAccount(namespace string) string {
 }
 
 func role() string {
-	return `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"toolchain-member-operator"},"rules":[{"apiGroups":["toolchain.dev.openshift.com"],"resources":["memberoperatorconfigs"],"verbs":["get","list","watch"]}]}`
+	return `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"toolchain-member-operator"},"rules":[{"apiGroups":["toolchain.dev.openshift.com"],"resources":["memberoperatorconfigs"],"verbs":["get","list","watch"]},{"apiGroups":[""],"resources":["secrets"],"verbs":["get","list","watch"]}]}`
 }
 
 func roleBinding(namespace string) string {

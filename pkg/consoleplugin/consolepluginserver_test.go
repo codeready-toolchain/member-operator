@@ -33,14 +33,14 @@ func TestConsolePluginServer(t *testing.T) {
 
 	// Confirm we get a not found for a bad request
 	resp, err := cl.Get("http://localhost:9443/foo")
-	defer resp.Body.Close()
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	// Confirm that the script server correctly returns its resources
 	resp, err = cl.Get("http://localhost:9443/pendo.ts")
-	defer resp.Body.Close()
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Len(t, body, 1898)

@@ -14,6 +14,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 
 	"go.uber.org/zap/zapcore"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
@@ -85,7 +86,11 @@ func main() {
 	}
 
 	if err := toolchainv1alpha1.AddToScheme(runtimeScheme); err != nil {
-		setupLog.Error(err, "adding to scheme failed")
+		setupLog.Error(err, "adding toolchain api to scheme failed")
+		os.Exit(1)
+	}
+	if err := corev1.AddToScheme(runtimeScheme); err != nil {
+		setupLog.Error(err, "adding core api to scheme failed")
 		os.Exit(1)
 	}
 

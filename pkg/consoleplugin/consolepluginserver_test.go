@@ -1,6 +1,7 @@
 package consoleplugin
 
 import (
+	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"io"
 	"net/http"
 	"strings"
@@ -21,7 +22,9 @@ func TestConsolePluginServer(t *testing.T) {
 
 	log := ctrl.Log.WithName("test")
 
-	s := NewConsolePluginServer(log, ConsolePluginServerOptionNoTLS)
+	cfg := memberoperatorconfig.WebConsolePluginConfig{}
+
+	s := NewConsolePluginServer(cfg, log, ConsolePluginServerOptionNoTLS)
 
 	s.Start()
 	waitForReady(t)
@@ -38,7 +41,7 @@ func TestConsolePluginServer(t *testing.T) {
 	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Len(t, body, 1934)
+	require.Len(t, body, 1898)
 	require.True(t, strings.HasPrefix(string(body), "// initialize pendo"))
 }
 

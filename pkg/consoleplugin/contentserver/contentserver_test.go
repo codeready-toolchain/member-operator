@@ -1,6 +1,7 @@
-package contentserver
+package contentserver_test
 
 import (
+	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/contentserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -10,17 +11,47 @@ import (
 	"testing"
 )
 
-func TestScriptServer(t *testing.T) {
-	s := NewContentServer()
+var (
+	DefaultConfig = NewContentServerTestConfig("ABC", "cdn.pendo.io")
+)
+
+type ContentServerTestConfig struct {
+	pendoKey  string
+	pendoHost string
+}
+
+func (c *ContentServerTestConfig) PendoKey() string {
+	return c.pendoKey
+}
+
+func (c *ContentServerTestConfig) PendoHost() string {
+	return c.pendoHost
+}
+
+func NewContentServerTestConfig(pendoKey, pendoHost string) *ContentServerTestConfig {
+	return &ContentServerTestConfig{
+		pendoKey:  pendoKey,
+		pendoHost: pendoHost,
+	}
+}
+
+func TestContentServer(t *testing.T) {
+	s := contentserver.NewContentServer(NewContentServerTestConfig("9473265123", "cdn.pendo.io"))
 
 	body := handleScriptRequest(t, s, "/pendo.ts")
-	require.Len(t, body, 1934)
+	require.Len(t, body, 1908)
 	require.True(t, strings.HasPrefix(body, "// initialize pendo"))
+	require.Contains(t, body, "9473265123")
+	require.Contains(t, body, "cdn.pendo.io")
+	require.True(t, strings.HasSuffix(strings.TrimSpace(body), "};"))
 
+	body = handleScriptRequest(t, s, "/plugin-entry.js")
+	require.Len(t, body, 2970)
+	require.True(t, strings.HasPrefix(body, "window.loadPluginEntry("))
 }
 
 func TestHealthStatusEndpoint(t *testing.T) {
-	s := NewContentServer()
+	s := contentserver.NewContentServer(DefaultConfig)
 
 	status := handleScriptRequest(t, s, "/status")
 	pluginManifest := handleScriptRequest(t, s, "/plugin-manifest.json")
@@ -29,7 +60,7 @@ func TestHealthStatusEndpoint(t *testing.T) {
 	assert.Equal(t, status, pluginManifest)
 }
 
-func handleScriptRequest(t *testing.T, server ContentServer, path string) string {
+func handleScriptRequest(t *testing.T, server contentserver.ContentServer, path string) string {
 	req := httptest.NewRequest("GET", path, nil)
 	resp := httptest.NewRecorder()
 
@@ -37,9 +68,6 @@ func handleScriptRequest(t *testing.T, server ContentServer, path string) string
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-
-	require.Len(t, body, 1934)
-	require.True(t, strings.HasPrefix(string(body), "// initialize pendo"))
 
 	assert.Equal(t, http.StatusOK, resp.Code)
 	return string(body)

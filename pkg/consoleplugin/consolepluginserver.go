@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	ConsolePluginServerOptionNoTLS = ConsolePluginServerOption("notls")
+	ConsolePluginServerOptionNoTLS = ServerOption("notls")
 )
 
-type ConsolePluginServerOption string
+type ServerOption string
 
 type Server struct {
 	mux     *http.ServeMux
@@ -26,7 +26,7 @@ type Server struct {
 }
 
 func NewConsolePluginServer(config memberoperatorconfig.WebConsolePluginConfig, log logr.Logger,
-	options ...ConsolePluginServerOption) *Server {
+	options ...ServerOption) *Server {
 	s := &Server{
 		log: log,
 	}

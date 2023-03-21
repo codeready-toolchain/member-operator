@@ -20,18 +20,18 @@ type ContentServer interface {
 	HandleContentRequest(w http.ResponseWriter, r *http.Request)
 }
 
-type ContentServerConfig interface {
+type Config interface {
 	PendoKey() string
 	PendoHost() string
 }
 
 type contentServer struct {
-	config ContentServerConfig
+	config Config
 	rw     sync.RWMutex
 	cache  map[string][]byte
 }
 
-func NewContentServer(config ContentServerConfig) ContentServer {
+func NewContentServer(config Config) ContentServer {
 	return &contentServer{
 		config: config,
 		cache:  map[string][]byte{},

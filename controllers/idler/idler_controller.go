@@ -214,10 +214,7 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 		}
 	}
 	// set notification created condition
-	if err := r.setStatusIdlerNotificationCreated(idler); err != nil {
-		return err
-	}
-	return nil
+	return r.setStatusIdlerNotificationCreated(idler)
 }
 
 func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {

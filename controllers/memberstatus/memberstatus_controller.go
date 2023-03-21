@@ -166,7 +166,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
+func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, _ membercfg.Configuration) error {
 	operatorStatus := &toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
 		Revision:       version.Commit,
@@ -196,7 +196,7 @@ func (r *Reconciler) memberOperatorHandleStatus(reqLogger logr.Logger, memberSta
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status
-func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
+func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, _ membercfg.Configuration) error {
 	memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole = map[string]int{}
 	allocatableValues, err := r.getAllocatableValues(reqLogger)
 	if err != nil {
@@ -281,7 +281,7 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 
 // cheHandleStatus checks all necessary aspects related integration between the member operator and Che
 // Returns an error if any problems are discovered.
-func (r *Reconciler) cheHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
+func (r *Reconciler) cheHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	if memberStatus.Status.Che == nil {
 		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
 	}

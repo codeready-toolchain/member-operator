@@ -1862,7 +1862,7 @@ func gockFindUserTimes(name string, times int, calls *int) { //nolint: unparam
 		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
 }
 
-func gockFindUserNoBody(name string, code int, calls *int) { //nolint: unparam
+func gockFindUserNoBody(_ string, code int, calls *int) { //nolint: unparam
 	gock.New(testCheURL).
 		Get("api/user/find").
 		SetMatcher(SpyOnGockCalls(calls)).

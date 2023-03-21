@@ -17,11 +17,11 @@
             })(v[w]);
         y = e.createElement(n);
         y.async = !0;
-        y.src = 'https://cdn.pendo.io/agent/static/' + apiKey + '/pendo.js';
+        y.src = 'https://{PENDO_HOST}/agent/static/' + apiKey + '/pendo.js';
         z = e.getElementsByTagName(n)[0];
         z.parentNode.insertBefore(y, z);
     })(window, document, 'script', 'pendo');
-})('{INSERT_KEY_HERE}');
+})('{PENDO_KEY}');
 
 const PREFIX = 'toolchain.dev.openshift.com/';
 

@@ -2,11 +2,12 @@ package consoleplugin
 
 import (
 	"context"
+	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"k8s.io/utils/strings/slices"
 	"net/http"
 	"os"
 
-	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/scriptserver"
+	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/contentserver"
 
 	"github.com/go-logr/logr"
 )
@@ -24,7 +25,8 @@ type Server struct {
 	options []string
 }
 
-func NewConsolePluginServer(log logr.Logger, options ...ConsolePluginServerOption) *Server {
+func NewConsolePluginServer(config memberoperatorconfig.WebConsolePluginConfig, log logr.Logger,
+	options ...ConsolePluginServerOption) *Server {
 	s := &Server{
 		log: log,
 	}
@@ -34,8 +36,8 @@ func NewConsolePluginServer(log logr.Logger, options ...ConsolePluginServerOptio
 	}
 
 	s.mux = http.NewServeMux()
-	ss := scriptserver.NewScriptServer()
-	s.mux.HandleFunc("/", ss.HandleScriptRequest)
+	ss := contentserver.NewContentServer(config)
+	s.mux.HandleFunc("/", ss.HandleContentRequest)
 	s.svr = &http.Server{ //nolint:gosec
 		Addr:    ":9443",
 		Handler: s.mux,

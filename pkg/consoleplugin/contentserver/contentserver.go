@@ -1,4 +1,4 @@
-package scriptserver
+package contentserver
 
 import (
 	"bytes"
@@ -9,33 +9,36 @@ import (
 	"sync"
 )
 
-const (
-	pendoTestK = "df54af19-2d86-4f23-7616-81c1822ecaf3"
-)
-
 var (
-	log = logf.Log.WithName("web_console_script_server")
+	log = logf.Log.WithName("web_console_content_server")
 )
 
 //go:embed static/*
 var staticFiles embed.FS
 
-type ScriptServer interface {
-	HandleScriptRequest(w http.ResponseWriter, r *http.Request)
+type ContentServer interface {
+	HandleContentRequest(w http.ResponseWriter, r *http.Request)
 }
 
-type scriptServer struct {
-	rw    sync.RWMutex
-	cache map[string][]byte
+type ContentServerConfig interface {
+	PendoKey() string
+	PendoHost() string
 }
 
-func NewScriptServer() ScriptServer {
-	return &scriptServer{
-		cache: map[string][]byte{},
+type contentServer struct {
+	config ContentServerConfig
+	rw     sync.RWMutex
+	cache  map[string][]byte
+}
+
+func NewContentServer(config ContentServerConfig) ContentServer {
+	return &contentServer{
+		config: config,
+		cache:  map[string][]byte{},
 	}
 }
 
-func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Request) {
+func (s *contentServer) HandleContentRequest(w http.ResponseWriter, r *http.Request) {
 	var path string
 	if r.RequestURI == "/status" {
 		// Health status check. Use plugin-manifest.json as our health status endpoint but do not log the request to reduce noise in the logs.
@@ -71,7 +74,7 @@ func (s *scriptServer) HandleScriptRequest(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (s *scriptServer) loadResource(path string) ([]byte, error) {
+func (s *contentServer) loadResource(path string) ([]byte, error) {
 	data := s.loadResourceFromCache(path)
 	if data != nil {
 		return data, nil
@@ -80,7 +83,7 @@ func (s *scriptServer) loadResource(path string) ([]byte, error) {
 	return s.validateCachedResource(path)
 }
 
-func (s *scriptServer) loadResourceFromCache(path string) []byte {
+func (s *contentServer) loadResourceFromCache(path string) []byte {
 	s.rw.RLock()
 	defer s.rw.RUnlock()
 
@@ -91,7 +94,7 @@ func (s *scriptServer) loadResourceFromCache(path string) []byte {
 	return nil
 }
 
-func (s *scriptServer) validateCachedResource(path string) ([]byte, error) {
+func (s *contentServer) validateCachedResource(path string) ([]byte, error) {
 	s.rw.Lock()
 	defer s.rw.Unlock()
 
@@ -100,12 +103,17 @@ func (s *scriptServer) validateCachedResource(path string) ([]byte, error) {
 		return nil, err
 	}
 
-	fileDataWithKey := s.insertPendoKey(fileData, pendoTestK) // TODO load the key from configuration instead
-	s.cache[path] = fileDataWithKey
+	transformed := s.insertPendoKey(fileData, s.config.PendoKey())
+	transformed = s.insertPendoHost(transformed, s.config.PendoHost())
+	s.cache[path] = transformed
 
-	return fileDataWithKey, nil
+	return transformed, nil
 }
 
-func (s *scriptServer) insertPendoKey(originalFileContent []byte, key string) []byte {
-	return bytes.Replace(originalFileContent, []byte("{INSERT_KEY_HERE}"), []byte(key), -1)
+func (s *contentServer) insertPendoKey(content []byte, key string) []byte {
+	return bytes.Replace(content, []byte("{PENDO_KEY}"), []byte(key), -1)
+}
+
+func (s *contentServer) insertPendoHost(content []byte, host string) []byte {
+	return bytes.Replace(content, []byte("{PENDO_HOST}"), []byte(host), -1)
 }

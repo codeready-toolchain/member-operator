@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	userv1 "github.com/openshift/api/user/v1"
@@ -86,7 +87,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, err = client.New(cfg, client.Options{
+	cl, err := client.New(cfg, client.Options{
 		Scheme: runtimeScheme,
 	})
 	if err != nil {
@@ -94,13 +95,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	pluginServer := startConsolePluginService()
+	config, err := memberoperatorconfig.GetConfiguration(cl)
+	if err != nil {
+		setupLog.Error(err, "Error retrieving Configuration")
+		os.Exit(1)
+	}
+
+	pluginServer := startConsolePluginService(config.WebConsolePlugin())
 
 	gracefulShutdown(gracefulTimeout, pluginServer)
 }
 
-func startConsolePluginService() *consoleplugin.Server {
-	consolePluginServer := consoleplugin.NewConsolePluginServer(setupLog)
+func startConsolePluginService(config memberoperatorconfig.WebConsolePluginConfig) *consoleplugin.Server {
+	consolePluginServer := consoleplugin.NewConsolePluginServer(config, setupLog)
 	consolePluginServer.Start()
 
 	return consolePluginServer

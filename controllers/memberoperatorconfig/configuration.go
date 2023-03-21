@@ -244,3 +244,11 @@ type WebConsolePluginConfig struct {
 func (a WebConsolePluginConfig) Deploy() bool {
 	return commonconfig.GetBool(a.w.Deploy, false)
 }
+
+func (a WebConsolePluginConfig) PendoKey() string {
+	return commonconfig.GetString(a.w.PendoKey, "")
+}
+
+func (a WebConsolePluginConfig) PendoHost() string {
+	return commonconfig.GetString(a.w.PendoHost, "cdn.pendo.io")
+}

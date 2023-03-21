@@ -1,4 +1,4 @@
-package scriptserver
+package contentserver
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestScriptServer(t *testing.T) {
-	s := NewScriptServer()
+	s := NewContentServer()
 
 	body := handleScriptRequest(t, s, "/pendo.ts")
 	require.Len(t, body, 1934)
@@ -20,7 +20,7 @@ func TestScriptServer(t *testing.T) {
 }
 
 func TestHealthStatusEndpoint(t *testing.T) {
-	s := NewScriptServer()
+	s := NewContentServer()
 
 	status := handleScriptRequest(t, s, "/status")
 	pluginManifest := handleScriptRequest(t, s, "/plugin-manifest.json")
@@ -29,11 +29,11 @@ func TestHealthStatusEndpoint(t *testing.T) {
 	assert.Equal(t, status, pluginManifest)
 }
 
-func handleScriptRequest(t *testing.T, server ScriptServer, path string) string {
+func handleScriptRequest(t *testing.T, server ContentServer, path string) string {
 	req := httptest.NewRequest("GET", path, nil)
 	resp := httptest.NewRecorder()
 
-	server.HandleScriptRequest(resp, req)
+	server.HandleContentRequest(resp, req)
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)

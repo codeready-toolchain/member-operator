@@ -3,22 +3,24 @@ package main
 import (
 	"context"
 	"flag"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
-	userv1 "github.com/openshift/api/user/v1"
+
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
-	"os"
-	"os/signal"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"syscall"
-	"time"
 )
 
 const gracefulTimeout = time.Second * 15
@@ -81,9 +83,9 @@ func main() {
 		setupLog.Error(err, "getting config failed")
 		os.Exit(1)
 	}
-	err = userv1.Install(runtimeScheme)
-	if err != nil {
-		setupLog.Error(err, "adding user to scheme failed")
+
+	if err := toolchainv1alpha1.AddToScheme(runtimeScheme); err != nil {
+		setupLog.Error(err, "adding to scheme failed")
 		os.Exit(1)
 	}
 

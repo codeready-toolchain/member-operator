@@ -3,6 +3,7 @@ package memberoperatorconfig
 import (
 	"context"
 	"fmt"
+	errs "github.com/pkg/errors"
 	"os"
 	"testing"
 	"time"
@@ -264,6 +265,62 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 
 		// then
 		require.EqualError(t, err, "cannot deploy webhook template: client error")
+	})
+}
+
+func TestHandleWebConsolePluginDeploy(t *testing.T) {
+	t.Run("deployment not created when webconsoleplugin deploy is false", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(false))
+		controller, cl := prepareReconcile(t, config)
+
+		actualConfig, err := GetConfiguration(cl)
+		require.NoError(t, err)
+
+		// when
+		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		actualDeployment := &appsv1.Deployment{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-console-plugin"), actualDeployment)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+	})
+
+	t.Run("deployment created when webconsoleplugin deploy is true", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
+		controller, cl := prepareReconcile(t, config)
+		actualConfig, err := GetConfiguration(cl)
+		require.NoError(t, err)
+
+		// when
+		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		actualDeployment := &appsv1.Deployment{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-console-plugin"), actualDeployment)
+		require.NoError(t, err)
+	})
+
+	t.Run("deployment error", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
+		controller, cl := prepareReconcile(t, config)
+		actualConfig, err := GetConfiguration(cl)
+		require.NoError(t, err)
+
+		// when
+		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+			return fmt.Errorf("client error")
+		}
+		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.ErrorContains(t, err, "cannot deploy console plugin template")
+		require.ErrorContains(t, errs.Cause(err), "client error")
 	})
 }
 

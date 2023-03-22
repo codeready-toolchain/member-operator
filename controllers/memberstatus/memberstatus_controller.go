@@ -221,8 +221,6 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 
 				// let's remove the used allocatable value from the map so we can later check if all values were used
 				delete(allocatableValues, nodeMetric.Name)
-			} else {
-				reqLogger.Info("skipping NodeMetrics resource: no corresponding node to monitor", "name", nodeMetric.Name)
 			}
 			continue
 		}

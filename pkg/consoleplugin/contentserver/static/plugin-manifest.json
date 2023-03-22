@@ -1,0 +1,19 @@
+{
+  "name": "toolchain-member-web-console-plugin",
+  "version": "0.0.1",
+  "displayName": "OpenShift Console Pendo Plugin",
+  "description": "Runs pendo on the console.",
+  "dependencies": {
+    "@console/pluginAPI": "*"
+  },
+  "extensions": [
+    {
+      "type": "console.telemetry/listener",
+      "properties": {
+        "listener": {
+          "$codeRef": "pendo"
+        }
+      }
+    }
+  ]
+}

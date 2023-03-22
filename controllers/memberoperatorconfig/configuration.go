@@ -107,6 +107,10 @@ func (c *Configuration) Webhook() WebhookConfig {
 	return WebhookConfig{c.cfg.Webhook}
 }
 
+func (c *Configuration) WebConsolePlugin() WebConsolePluginConfig {
+	return WebConsolePluginConfig{c.cfg.WebConsolePlugin}
+}
+
 type AuthConfig struct {
 	auth toolchainv1alpha1.AuthConfig
 }
@@ -231,4 +235,20 @@ type WebhookConfig struct {
 
 func (a WebhookConfig) Deploy() bool {
 	return commonconfig.GetBool(a.w.Deploy, true)
+}
+
+type WebConsolePluginConfig struct {
+	w toolchainv1alpha1.WebConsolePlugin
+}
+
+func (a WebConsolePluginConfig) Deploy() bool {
+	return commonconfig.GetBool(a.w.Deploy, false)
+}
+
+func (a WebConsolePluginConfig) PendoKey() string {
+	return commonconfig.GetString(a.w.PendoKey, "")
+}
+
+func (a WebConsolePluginConfig) PendoHost() string {
+	return commonconfig.GetString(a.w.PendoHost, "cdn.pendo.io")
 }

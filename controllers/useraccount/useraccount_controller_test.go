@@ -380,7 +380,7 @@ func TestReconcile(t *testing.T) {
 		defer gock.OffAll()
 		gockTokenSuccess(mockCallsCounter)
 		gockFindUserTimes(username, 2, mockCallsCounter)
-		gockFindUserNoBody(username, 404, mockCallsCounter)
+		gockFindUserNoBody(404, mockCallsCounter)
 		gockDeleteUser(204, mockCallsCounter)
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
@@ -664,7 +664,7 @@ func TestReconcile(t *testing.T) {
 		mockCallsCounter := new(int)
 		defer gock.OffAll()
 		gockTokenSuccess(mockCallsCounter)
-		gockFindUserNoBody("johnsmith", 400, mockCallsCounter) // respond with 400 error to simulate find user request failure
+		gockFindUserNoBody(400, mockCallsCounter) // respond with 400 error to simulate find user request failure
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID)
@@ -1450,7 +1450,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 				mockCallsCounter := new(int)
 				defer gock.OffAll()
 				gockTokenSuccess(mockCallsCounter)
-				gockFindUserNoBody(username, 404, mockCallsCounter)
+				gockFindUserNoBody(404, mockCallsCounter)
 				userAcc := newUserAccount(username, userID)
 				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
@@ -1468,7 +1468,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 				mockCallsCounter := new(int)
 				defer gock.OffAll()
 				gockTokenSuccess(mockCallsCounter)
-				gockFindUserNoBody(username, 400, mockCallsCounter)
+				gockFindUserNoBody(400, mockCallsCounter)
 				userAcc := newUserAccount(username, userID)
 				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
@@ -1486,7 +1486,7 @@ func TestLookupAndDeleteCheUser(t *testing.T) {
 				mockCallsCounter := new(int)
 				defer gock.OffAll()
 				gockTokenSuccess(mockCallsCounter)
-				gockFindUserNoBody(username, 200, mockCallsCounter)
+				gockFindUserNoBody(200, mockCallsCounter)
 				userAcc := newUserAccount(username, userID)
 				r, _, _, config := prepareReconcile(t, username, userAcc, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
@@ -1862,7 +1862,7 @@ func gockFindUserTimes(name string, times int, calls *int) { //nolint: unparam
 		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
 }
 
-func gockFindUserNoBody(name string, code int, calls *int) { //nolint: unparam
+func gockFindUserNoBody(code int, calls *int) { //nolint: unparam
 	gock.New(testCheURL).
 		Get("api/user/find").
 		SetMatcher(SpyOnGockCalls(calls)).

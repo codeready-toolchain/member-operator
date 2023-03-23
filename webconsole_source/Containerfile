@@ -1,0 +1,6 @@
+FROM quay.io/cajieh0/nodejs:16 AS build
+ADD . /usr/src/app
+WORKDIR /usr/src/app
+RUN yarn install && yarn build
+RUN ls -l
+RUN cp -r dist/* /dist

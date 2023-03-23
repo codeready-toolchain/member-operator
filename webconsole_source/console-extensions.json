@@ -1,0 +1,10 @@
+[
+  {
+    "type": "console.telemetry/listener",
+    "properties": {
+      "listener": {
+        "$codeRef": "pendo"
+      }
+    }
+  }
+]

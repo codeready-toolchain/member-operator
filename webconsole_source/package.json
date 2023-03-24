@@ -1,5 +1,5 @@
 {
-  "name": "console-plugin-template",
+  "name": "toolchain-member-web-console-plugin",
   "version": "0.0.1",
   "private": true,
   "repository": "git@github.com:spadgett/console-plugin-template.git",
@@ -57,7 +57,7 @@
     "webpack-dev-server": "^4.7.4"
   },
   "consolePlugin": {
-    "name": "console-plugin-template",
+    "name": "toolchain-member-web-console-plugin",
     "version": "0.0.1",
     "displayName": "OpenShift Console Pendo Plugin",
     "description": "Runs pendo on the console.",

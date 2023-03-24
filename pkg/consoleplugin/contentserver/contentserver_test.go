@@ -38,12 +38,10 @@ func NewContentServerTestConfig(pendoKey, pendoHost string) *ContentServerTestCo
 func TestContentServer(t *testing.T) {
 	s := contentserver.NewContentServer(NewContentServerTestConfig("9473265123", "cdn.pendo.io"))
 
-	body := handleScriptRequest(t, s, "/pendo.ts")
-	require.Len(t, body, 1908)
-	require.True(t, strings.HasPrefix(body, "// initialize pendo"))
-	require.Contains(t, body, "9473265123")
-	require.Contains(t, body, "cdn.pendo.io")
-	require.True(t, strings.HasSuffix(strings.TrimSpace(body), "};"))
+	body := handleScriptRequest(t, s, "/plugin-manifest.json")
+	require.Len(t, body, 397)
+	require.True(t, strings.HasPrefix(body, "{\n  \"name\": \"toolchain-member-web-console-plugin\","))
+	require.True(t, strings.HasSuffix(strings.TrimSpace(body), "}"))
 
 	body = handleScriptRequest(t, s, "/plugin-entry.js")
 	require.Len(t, body, 2970)

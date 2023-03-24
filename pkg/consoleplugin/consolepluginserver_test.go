@@ -38,13 +38,13 @@ func TestConsolePluginServer(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	// Confirm that the script server correctly returns its resources
-	resp, err = cl.Get("http://localhost:9443/pendo.ts")
+	resp, err = cl.Get("http://localhost:9443/plugin-entry.js")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Len(t, body, 1898)
-	require.True(t, strings.HasPrefix(string(body), "// initialize pendo"))
+	require.Len(t, body, 2970)
+	require.True(t, strings.HasPrefix(string(body), "window.loadPluginEntry(\"toolchain-member-web-console-plugin@0.0.1\""))
 }
 
 func waitForReady(t *testing.T) {

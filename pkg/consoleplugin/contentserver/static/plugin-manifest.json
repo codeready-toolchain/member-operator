@@ -1,5 +1,5 @@
 {
-  "name": "toolchain-member-web-console-plugin",
+  "name": "console-plugin-template",
   "version": "0.0.1",
   "displayName": "OpenShift Console Pendo Plugin",
   "description": "Runs pendo on the console.",

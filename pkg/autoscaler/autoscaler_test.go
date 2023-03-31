@@ -123,7 +123,7 @@ func TestDelete(t *testing.T) {
 	t.Run("when loading previously deployed objects fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("some error")
 		}
 

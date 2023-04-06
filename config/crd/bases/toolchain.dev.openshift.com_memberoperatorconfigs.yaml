@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.9.2
+    controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
   name: memberoperatorconfigs.toolchain.dev.openshift.com
 spec:
@@ -15,154 +15,154 @@ spec:
     singular: memberoperatorconfig
   scope: Namespaced
   versions:
-    - name: v1alpha1
-      schema:
-        openAPIV3Schema:
-          description: MemberOperatorConfig keeps all configuration parameters needed
-            in member operator
-          properties:
-            apiVersion:
-              description: 'APIVersion defines the versioned schema of this representation
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: MemberOperatorConfig keeps all configuration parameters needed
+          in member operator
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
               of an object. Servers should convert recognized schemas to the latest
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-              type: string
-            kind:
-              description: 'Kind is a string value representing the REST resource this
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
               submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-              type: string
-            metadata:
-              type: object
-            spec:
-              description: MemberOperatorConfigSpec contains all configuration parameters
-                of the member operator
-              properties:
-                auth:
-                  description: Keeps parameters concerned with authentication
-                  properties:
-                    idp:
-                      description: Represents the configured identity provider
-                      type: string
-                  type: object
-                autoscaler:
-                  description: Keeps parameters concerned with the autoscaler
-                  properties:
-                    bufferMemory:
-                      description: Represents how much memory should be required by
-                        the autoscaler buffer
-                      type: string
-                    bufferReplicas:
-                      description: Represents the number of autoscaler buffer replicas
-                        to request
-                      type: integer
-                    deploy:
-                      description: Defines the flag that determines whether to deploy
-                        the autoscaler buffer
-                      type: boolean
-                  type: object
-                che:
-                  description: Keeps parameters concerned with Che/CRW
-                  properties:
-                    keycloakRouteName:
-                      description: Defines the Che/CRW Keycloak route name
-                      type: string
-                    namespace:
-                      description: Defines the Che/CRW operator namespace
-                      type: string
-                    required:
-                      description: Defines a flag that indicates whether the Che/CRW
-                        operator is required to be installed on the cluster. May be
-                        used in monitoring.
-                      type: boolean
-                    routeName:
-                      description: Defines the Che/CRW route name
-                      type: string
-                    secret:
-                      description: Defines all secrets related to Che configuration
-                      properties:
-                        cheAdminPasswordKey:
-                          description: The key for the Che admin password in the secret
-                            values map
-                          type: string
-                        cheAdminUsernameKey:
-                          description: The key for the Che admin username in the secret
-                            values map
-                          type: string
-                        ref:
-                          description: Reference is the name of the secret resource
-                            to look up
-                          type: string
-                      type: object
-                    userDeletionEnabled:
-                      description: Defines a flag to turn the Che user deletion logic
-                        on/off
-                      type: boolean
-                  type: object
-                console:
-                  description: Keeps parameters concerned with the console
-                  properties:
-                    namespace:
-                      description: Defines the console route namespace
-                      type: string
-                    routeName:
-                      description: Defines the console route name
-                      type: string
-                  type: object
-                memberStatus:
-                  description: Keeps parameters concerned with member status
-                  properties:
-                    refreshPeriod:
-                      description: Defines the period between refreshes of the member
-                        status
-                      type: string
-                  type: object
-                skipUserCreation:
-                  description: Defines the flag that determines whether User and Identity
-                    resources should be created for a UserAccount
-                  type: boolean
-                toolchainCluster:
-                  description: Keeps parameters concerned with the toolchaincluster
-                  properties:
-                    healthCheckPeriod:
-                      description: Defines the period in between health checks
-                      type: string
-                    healthCheckTimeout:
-                      description: Defines the timeout for each health check
-                      type: string
-                  type: object
-                webConsolePlugin:
-                  description: WebConsolePlugin is used to configure the Web Console
-                    Plugin parameters
-                  properties:
-                    deploy:
-                      description: Deploy determines whether the plugin will be deployed
-                        or not
-                      type: boolean
-                    pendoHost:
-                      description: PendoHost allows a host URL to be configured instead
-                        of communicating directly with the Pendo domain
-                      type: string
-                    pendoKey:
-                      description: PendoKey is the key value used to interact with the
-                        Pendo API
-                      type: string
-                  type: object
-                webhook:
-                  description: Keeps parameters concerned with the webhook
-                  properties:
-                    deploy:
-                      description: Defines the flag that determines whether to deploy
-                        the Webhook
-                      type: boolean
-                  type: object
-              type: object
-            status:
-              description: MemberOperatorConfigStatus defines the observed state of
-                MemberOperatorConfig
-              type: object
-          type: object
-          x-kubernetes-preserve-unknown-fields: true
-      served: true
-      storage: true
-      subresources:
-        status: {}
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MemberOperatorConfigSpec contains all configuration parameters
+              of the member operator
+            properties:
+              auth:
+                description: Keeps parameters concerned with authentication
+                properties:
+                  idp:
+                    description: Represents the configured identity provider
+                    type: string
+                type: object
+              autoscaler:
+                description: Keeps parameters concerned with the autoscaler
+                properties:
+                  bufferMemory:
+                    description: Represents how much memory should be required by
+                      the autoscaler buffer
+                    type: string
+                  bufferReplicas:
+                    description: Represents the number of autoscaler buffer replicas
+                      to request
+                    type: integer
+                  deploy:
+                    description: Defines the flag that determines whether to deploy
+                      the autoscaler buffer
+                    type: boolean
+                type: object
+              che:
+                description: Keeps parameters concerned with Che/CRW
+                properties:
+                  keycloakRouteName:
+                    description: Defines the Che/CRW Keycloak route name
+                    type: string
+                  namespace:
+                    description: Defines the Che/CRW operator namespace
+                    type: string
+                  required:
+                    description: Defines a flag that indicates whether the Che/CRW
+                      operator is required to be installed on the cluster. May be
+                      used in monitoring.
+                    type: boolean
+                  routeName:
+                    description: Defines the Che/CRW route name
+                    type: string
+                  secret:
+                    description: Defines all secrets related to Che configuration
+                    properties:
+                      cheAdminPasswordKey:
+                        description: The key for the Che admin password in the secret
+                          values map
+                        type: string
+                      cheAdminUsernameKey:
+                        description: The key for the Che admin username in the secret
+                          values map
+                        type: string
+                      ref:
+                        description: Reference is the name of the secret resource
+                          to look up
+                        type: string
+                    type: object
+                  userDeletionEnabled:
+                    description: Defines a flag to turn the Che user deletion logic
+                      on/off
+                    type: boolean
+                type: object
+              console:
+                description: Keeps parameters concerned with the console
+                properties:
+                  namespace:
+                    description: Defines the console route namespace
+                    type: string
+                  routeName:
+                    description: Defines the console route name
+                    type: string
+                type: object
+              memberStatus:
+                description: Keeps parameters concerned with member status
+                properties:
+                  refreshPeriod:
+                    description: Defines the period between refreshes of the member
+                      status
+                    type: string
+                type: object
+              skipUserCreation:
+                description: Defines the flag that determines whether User and Identity
+                  resources should be created for a UserAccount
+                type: boolean
+              toolchainCluster:
+                description: Keeps parameters concerned with the toolchaincluster
+                properties:
+                  healthCheckPeriod:
+                    description: Defines the period in between health checks
+                    type: string
+                  healthCheckTimeout:
+                    description: Defines the timeout for each health check
+                    type: string
+                type: object
+              webConsolePlugin:
+                description: WebConsolePlugin is used to configure the Web Console
+                  Plugin parameters
+                properties:
+                  deploy:
+                    description: Deploy determines whether the plugin will be deployed
+                      or not
+                    type: boolean
+                  pendoHost:
+                    description: PendoHost allows a host URL to be configured instead
+                      of communicating directly with the Pendo domain
+                    type: string
+                  pendoKey:
+                    description: PendoKey is the key value used to interact with the
+                      Pendo API
+                    type: string
+                type: object
+              webhook:
+                description: Keeps parameters concerned with the webhook
+                properties:
+                  deploy:
+                    description: Defines the flag that determines whether to deploy
+                      the Webhook
+                    type: boolean
+                type: object
+            type: object
+          status:
+            description: MemberOperatorConfigStatus defines the observed state of
+              MemberOperatorConfig
+            type: object
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}

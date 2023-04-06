@@ -3,10 +3,11 @@ package memberoperatorconfig
 import (
 	"context"
 	"fmt"
-	errs "github.com/pkg/errors"
 	"os"
 	"testing"
 	"time"
+
+	errs "github.com/pkg/errors"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -61,7 +62,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 func TestReconcileWhenGetConfigurationReturnsError(t *testing.T) {
 	// given
 	cl := test.NewFakeClient(t)
-	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+	cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 		return fmt.Errorf("get error")
 	}
 	controller := Reconciler{
@@ -180,7 +181,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
 		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
@@ -258,7 +259,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
 		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
@@ -313,7 +314,7 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
 		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)

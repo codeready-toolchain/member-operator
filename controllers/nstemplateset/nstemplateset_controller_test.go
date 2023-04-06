@@ -1199,7 +1199,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 	t.Run("fail to get nstmplset", func(t *testing.T) {
 		// given
 		r, req, fakeClient := prepareReconcile(t, namespaceName, username)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return errors.New("unable to get NSTemplate")
 		}
 

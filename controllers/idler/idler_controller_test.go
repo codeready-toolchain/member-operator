@@ -56,7 +56,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("Fail to get Idler resource", func(t *testing.T) {
 		// given
 		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler", getHostCluster)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			if key.Name == "cant-get-idler" {
 				return errors.New("can't get idler")
 			}
@@ -427,11 +427,11 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return errors.New(errMsg)
 					}
-					return allCl.Client.Get(ctx, key, obj)
+					return allCl.Client.Get(ctx, key, obj, opts...)
 				}
 
 				//when
@@ -459,14 +459,14 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return apierrors.NewNotFound(schema.GroupResource{
 							Group:    "",
 							Resource: reflect.TypeOf(obj).Name(),
 						}, key.Name)
 					}
-					return allCl.Client.Get(ctx, key, obj)
+					return allCl.Client.Get(ctx, key, obj, opts...)
 				}
 
 				//when

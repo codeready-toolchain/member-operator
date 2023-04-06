@@ -77,7 +77,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		requestName := defaultMemberStatusName
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
-		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj client.Object) error {
+		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf(expectedErrMsg)
 		}
 

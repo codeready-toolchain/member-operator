@@ -38,12 +38,12 @@ export default (eventType: string, properties?: any) => {
             const ssoUserId = user.metadata.annotations?.[SSO_USER_ID];
             const ssoAccountId = user.metadata.annotations?.[SSO_ACCOUNT_ID];
             const email = user.metadata.annotations?.[SSO_EMAIL];
-            const domain = email.match(/@(.+)/)[1];
+            const domain = email?.match(/@(.+)/)?.[1];
             if (ssoUserId && (window as any).pendo) {
                 (window as any).pendo[initialized ? 'identify' : 'initialize']({
                     visitor: {
                         id: ssoUserId,
-                        email_domain: domain,
+                        ...(domain ? { email_domain: domain } : {}),
                     },
                     ...(ssoAccountId
                         ? {

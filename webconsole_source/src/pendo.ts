@@ -27,7 +27,7 @@ const PREFIX = 'toolchain.dev.openshift.com/';
 
 const SSO_USER_ID = `${PREFIX}sso-user-id`;
 const SSO_ACCOUNT_ID = `${PREFIX}sso-account-id`;
-const SSO_EMAIL :string = `${PREFIX}user-email`;
+const SSO_EMAIL = `${PREFIX}user-email`;
 
 let initialized = false;
 

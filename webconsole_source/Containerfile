@@ -1,7 +1,16 @@
-FROM quay.io/cajieh0/nodejs:16 AS build
-ADD . /usr/src/app
-WORKDIR /usr/src/app
+# See https://catalog.redhat.com/software/containers/ubi8/nodejs-16/615aee9fc739c0a4123a87e1
+FROM registry.access.redhat.com/ubi8/nodejs-16 AS build
+
+LABEL maintainer "Devtools <devtools@redhat.com>"
+LABEL author "Devtools <devtools@redhat.com>"
+
+# RUN yum install -y --quiet yarn
+RUN node --version
+RUN npm i -g corepack
+
+ADD . /opt/app-root/src
+WORKDIR /opt/app-root/src
 RUN rm -f dist/*
 RUN yarn install && yarn build
 RUN ls -l
-RUN cp -r dist/* /dist
+# RUN cp -r dist/* /dist

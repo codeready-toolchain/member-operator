@@ -24,7 +24,7 @@ RUN yum -y module enable nodejs:$NODEJS_VERSION && \
 ADD . /opt/app-root/src
 WORKDIR /opt/app-root/src
 RUN whoami
-RUN rm -f dist/*
+RUN rm -f /opt/app-root/dist/*
 RUN node --version
 RUN npm i -g corepack
 RUN which yarn

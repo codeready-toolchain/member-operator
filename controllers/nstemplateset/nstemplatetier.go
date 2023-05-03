@@ -78,6 +78,7 @@ type tierTemplate struct {
 const (
 	MemberOperatorNS = "MEMBER_OPERATOR_NAMESPACE"
 	Username         = "USERNAME"
+	SpaceName        = "SPACE_NAME"
 	Namespace        = "NAMESPACE"
 )
 

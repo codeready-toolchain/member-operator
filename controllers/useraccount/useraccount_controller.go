@@ -296,6 +296,16 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 		}
 	}
 
+	// Check if the sso-user-id annotation is set, and if it is create an additional identity if it is a different value
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, val, userAcc, user)
+			if createdOrUpdated || err != nil {
+				return nil, createdOrUpdated, err
+			}
+		}
+	}
+
 	return identity, false, nil
 }
 

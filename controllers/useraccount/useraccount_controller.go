@@ -296,7 +296,9 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 		}
 	}
 
-	// Check if the sso-user-id annotation is set, and if it is create an additional identity if it is a different value
+	// Check if the sso-user-id annotation is set, and if it is create an additional identity if it is a different value.
+	// So we always have an identity with the name generated out of SSO UserID (stored as sso_userid annotation) in addition to the identity with the name generated out of the SSO Token sub claim (stored as UserAccount.Spec.UserID).
+	// This additional Identity is not created if the SSO UserID == SSO Token sub claim.
 	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
 		if val != userAcc.Spec.UserID {
 			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, val, userAcc, user)

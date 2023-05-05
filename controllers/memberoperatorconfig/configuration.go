@@ -8,7 +8,7 @@ import (
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -26,7 +26,7 @@ type Configuration struct {
 
 // GetConfiguration returns a Configuration using the cache, or if the cache was not initialized
 // then retrieves the latest config using the provided client and updates the cache
-func GetConfiguration(cl client.Client) (Configuration, error) {
+func GetConfiguration(cl runtimeclient.Client) (Configuration, error) {
 	config, secrets, err := commonconfig.GetConfig(cl, &toolchainv1alpha1.MemberOperatorConfig{})
 	if err != nil {
 		// return default config
@@ -43,7 +43,7 @@ func GetCachedConfiguration() Configuration {
 }
 
 // ForceLoadConfiguration updates the cache using the provided client and returns the latest Configuration
-func ForceLoadConfiguration(cl client.Client) (Configuration, error) {
+func ForceLoadConfiguration(cl runtimeclient.Client) (Configuration, error) {
 	config, secrets, err := commonconfig.LoadLatest(cl, &toolchainv1alpha1.MemberOperatorConfig{})
 	if err != nil {
 		// return default config

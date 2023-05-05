@@ -13,7 +13,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,7 +51,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.NotEmpty(t, caCert)
-		actualSecret := &v1.Secret{}
+		actualSecret := &corev1.Secret{}
 		AssertObject(t, fakeClient, test.MemberOperatorNs, "service-certs", actualSecret, func() {
 			assert.NotEmpty(t, actualSecret.Data[ServerKey])
 			assert.NotEmpty(t, actualSecret.Data[ServerCert])
@@ -61,7 +61,7 @@ func TestEnsureCertSecret(t *testing.T) {
 
 	t.Run("when secret already exists with wrong values", func(t *testing.T) {
 		// given
-		secret := &v1.Secret{
+		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: test.MemberOperatorNs,
 				Name:      "service-certs",
@@ -79,7 +79,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.NotEqual(t, "ca-cert-data", string(caCert))
-		actualSecret := &v1.Secret{}
+		actualSecret := &corev1.Secret{}
 		AssertObject(t, fakeClient, test.MemberOperatorNs, "service-certs", actualSecret, func() {
 			assert.NotEmpty(t, actualSecret.Data[ServerKey])
 			assert.NotEmpty(t, actualSecret.Data[ServerCert])
@@ -105,7 +105,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.NotEqual(t, secret.Data[CACert], caCert)
-		actualSecret := &v1.Secret{}
+		actualSecret := &corev1.Secret{}
 		AssertObject(t, fakeClient, test.MemberOperatorNs, "service-certs", actualSecret, func() {
 			assert.NotEmpty(t, actualSecret.Data[ServerKey])
 			assert.NotEmpty(t, actualSecret.Data[ServerCert])
@@ -129,7 +129,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, secret.Data[CACert], caCert)
-		actualSecret := &v1.Secret{}
+		actualSecret := &corev1.Secret{}
 		AssertObject(t, fakeClient, test.MemberOperatorNs, "service-certs", actualSecret, func() {
 			assert.Equal(t, secret.Data[ServerKey], actualSecret.Data[ServerKey])
 			assert.Equal(t, secret.Data[ServerCert], actualSecret.Data[ServerCert])
@@ -152,7 +152,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		fakeClient.MockGet = nil
 		require.Error(t, err)
 		assert.Empty(t, caCert)
-		actualSecret := &v1.Secret{}
+		actualSecret := &corev1.Secret{}
 		AssertObjectNotFound(t, fakeClient, test.MemberOperatorNs, "service-certs", actualSecret)
 	})
 
@@ -169,7 +169,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		// then
 		require.Error(t, err)
 		assert.Empty(t, caCert)
-		actualSecret := &v1.Secret{}
+		actualSecret := &corev1.Secret{}
 		AssertObjectNotFound(t, fakeClient, test.MemberOperatorNs, "service-certs", actualSecret)
 	})
 }

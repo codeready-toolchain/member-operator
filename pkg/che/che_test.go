@@ -16,7 +16,7 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/h2non/gock.v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -634,8 +634,8 @@ func cheRoute(tls bool) *routev1.Route { //nolint: unparam
 	return r
 }
 
-func newTestSecret() *v1.Secret {
-	return &v1.Secret{
+func newTestSecret() *corev1.Secret {
+	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
 			Namespace: test.MemberOperatorNs,

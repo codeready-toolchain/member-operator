@@ -5,11 +5,11 @@ import (
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // CreateOrUpdateResources creates a memberstatus resource with the given name in the given namespace
-func CreateOrUpdateResources(client client.Client, namespace, memberStatusName string) error {
+func CreateOrUpdateResources(client runtimeclient.Client, namespace, memberStatusName string) error {
 	memberStatus := &toolchainv1alpha1.MemberStatus{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,

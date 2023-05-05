@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -73,7 +73,7 @@ func TestDeployWebhook(t *testing.T) {
 		prioClass.Labels = map[string]string{}
 		prioClass.Value = 10
 
-		serviceObj := &v1.Service{}
+		serviceObj := &corev1.Service{}
 		unmarshalObj(t, service(test.MemberOperatorNs), serviceObj)
 		serviceObj.Spec.Ports[0].Port = 8080
 		serviceObj.Spec.Selector = nil
@@ -123,17 +123,17 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 		assert.Equal(t, expPrioClass.Description, actualPrioClass.Description)
 	})
 
-	expService := &v1.Service{}
+	expService := &corev1.Service{}
 	unmarshalObj(t, service(test.MemberOperatorNs), expService)
-	actualService := &v1.Service{}
+	actualService := &corev1.Service{}
 	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-webhook", actualService, func() {
 		assert.Equal(t, expService.Labels, actualService.Labels)
 		assert.Equal(t, expService.Spec, actualService.Spec)
 	})
 
-	expServiceAcc := &v1.ServiceAccount{}
+	expServiceAcc := &corev1.ServiceAccount{}
 	unmarshalObj(t, serviceAccount(test.MemberOperatorNs), expServiceAcc)
-	actualServiceAcc := &v1.ServiceAccount{}
+	actualServiceAcc := &corev1.ServiceAccount{}
 	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-webhook-sa", actualServiceAcc, func() {
 		assert.Equal(t, expServiceAcc.Namespace, actualServiceAcc.Namespace)
 	})
@@ -161,7 +161,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 		assert.Equal(t, expDeployment.Spec, actualDeployment.Spec)
 	})
 
-	secret := &v1.Secret{}
+	secret := &corev1.Secret{}
 	err := fakeClient.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "webhook-certs"), secret)
 	require.NoError(t, err)
 

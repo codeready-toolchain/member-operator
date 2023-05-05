@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,7 +76,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 }
 
 func mutate(body []byte) []byte {
-	admReview := v1.AdmissionReview{}
+	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
 		admReview.Response = responseWithError(err)
@@ -90,15 +90,15 @@ func mutate(body []byte) []byte {
 	return responseBody
 }
 
-func responseWithError(err error) *v1.AdmissionResponse {
-	return &v1.AdmissionResponse{
+func responseWithError(err error) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
 		Result: &metav1.Status{
 			Message: err.Error(),
 		},
 	}
 }
 
-func createAdmissionReviewResponse(admReview v1.AdmissionReview) *v1.AdmissionResponse {
+func createAdmissionReviewResponse(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	if admReview.Request == nil {
 		err := fmt.Errorf("admission review request is nil")
 		log.Error(err, "cannot read the admission review request", "AdmissionReview", admReview)
@@ -112,8 +112,8 @@ func createAdmissionReviewResponse(admReview v1.AdmissionReview) *v1.AdmissionRe
 		return responseWithError(errors.Wrapf(err, "unable unmarshal pod json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 
-	patchType := v1.PatchTypeJSONPatch
-	resp := &v1.AdmissionResponse{
+	patchType := admissionv1.PatchTypeJSONPatch
+	resp := &admissionv1.AdmissionResponse{
 		Allowed:   true,
 		UID:       admReview.Request.UID,
 		PatchType: &patchType,

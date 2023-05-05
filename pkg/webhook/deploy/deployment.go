@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"encoding/base64"
+
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/userspodswebhook"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"

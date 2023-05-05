@@ -10,19 +10,17 @@ import (
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
-
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/h2non/gock.v1"
-
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -31,7 +29,7 @@ const (
 	testKeycloakURL = "https://keycloak-codeready-workspaces-operator.member-cluster"
 )
 
-func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Client, membercfg.Configuration) {
+func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (runtimeclient.Client, membercfg.Configuration) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 
@@ -48,7 +46,7 @@ func prepareClientAndConfig(t *testing.T, initObjs ...runtime.Object) (client.Cl
 
 func TestGetToken(t *testing.T) {
 	// given
-	testSecret := &v1.Secret{
+	testSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret",
 			Namespace: test.MemberOperatorNs,

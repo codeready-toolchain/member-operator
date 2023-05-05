@@ -17,7 +17,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/utils/route"
 
 	"github.com/pkg/errors"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -34,19 +34,19 @@ var DefaultClient *Client
 // Client is a client for interacting with Che services
 type Client struct {
 	httpClient *http.Client
-	k8sClient  client.Client
+	k8sClient  runtimeclient.Client
 	tokenCache *TokenCache
 }
 
 // InitDefaultCheClient initializes the default Che client instance
-func InitDefaultCheClient(cl client.Client) {
+func InitDefaultCheClient(cl runtimeclient.Client) {
 	defaultHTTPClient := newHTTPClient()
 	tc := NewTokenCache(defaultHTTPClient)
 	DefaultClient = NewCheClient(defaultHTTPClient, cl, tc)
 }
 
 // NewCheClient creates a new instance of a Che client
-func NewCheClient(httpCl *http.Client, cl client.Client, tc *TokenCache) *Client {
+func NewCheClient(httpCl *http.Client, cl runtimeclient.Client, tc *TokenCache) *Client {
 	return &Client{
 		httpClient: httpCl,
 		k8sClient:  cl,

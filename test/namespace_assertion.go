@@ -4,7 +4,6 @@ import (
 	"context"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/stretchr/testify/assert"
@@ -12,12 +11,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type NamespaceAssertion struct {
 	namespace      *corev1.Namespace
-	client         client.Client
+	client         runtimeclient.Client
 	namespacedName types.NamespacedName
 	t              test.T
 }
@@ -29,7 +28,7 @@ func (a *NamespaceAssertion) loadNamespace() error {
 	return err
 }
 
-func AssertThatNamespace(t test.T, name string, client client.Client) *NamespaceAssertion {
+func AssertThatNamespace(t test.T, name string, client runtimeclient.Client) *NamespaceAssertion {
 	return &NamespaceAssertion{
 		client:         client,
 		namespacedName: types.NamespacedName{Name: name},
@@ -88,7 +87,7 @@ func (a *NamespaceAssertion) HasNoLabel(key string) *NamespaceAssertion {
 	return a
 }
 
-func (a *NamespaceAssertion) HasResource(name string, obj client.Object) *NamespaceAssertion {
+func (a *NamespaceAssertion) HasResource(name string, obj runtimeclient.Object) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
@@ -101,7 +100,7 @@ func (a *NamespaceAssertion) HasResource(name string, obj client.Object) *Namesp
 	return a
 }
 
-func (a *NamespaceAssertion) HasNoResource(name string, obj client.Object) *NamespaceAssertion {
+func (a *NamespaceAssertion) HasNoResource(name string, obj runtimeclient.Object) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)
@@ -110,7 +109,7 @@ func (a *NamespaceAssertion) HasNoResource(name string, obj client.Object) *Name
 	return a
 }
 
-func (a *NamespaceAssertion) ResourceHasOwnerLabel(name string, obj client.Object, owner string) *NamespaceAssertion {
+func (a *NamespaceAssertion) ResourceHasOwnerLabel(name string, obj runtimeclient.Object, owner string) *NamespaceAssertion {
 	err := a.loadNamespace()
 	require.NoError(a.t, err)
 	err = a.client.Get(context.TODO(), types.NamespacedName{Namespace: a.namespace.Name, Name: name}, obj)

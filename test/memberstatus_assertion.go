@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type MemberStatusAssertion struct {
 	memberStatus   *toolchainv1alpha1.MemberStatus
-	client         client.Client
+	client         runtimeclient.Client
 	namespacedName types.NamespacedName
 	t              test.T
 }
@@ -28,7 +28,7 @@ func (a *MemberStatusAssertion) loadMemberStatus() error {
 	return err
 }
 
-func AssertThatMemberStatus(t test.T, namespace, name string, client client.Client) *MemberStatusAssertion {
+func AssertThatMemberStatus(t test.T, namespace, name string, client runtimeclient.Client) *MemberStatusAssertion {
 	return &MemberStatusAssertion{
 		client:         client,
 		namespacedName: test.NamespacedName(namespace, name),

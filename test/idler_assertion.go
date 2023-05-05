@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	batchv1 "k8s.io/api/batch/v1"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -14,16 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type IdlerAssertion struct {
 	idler          *toolchainv1alpha1.Idler
-	client         client.Client
+	client         runtimeclient.Client
 	namespacedName types.NamespacedName
 	t              *testing.T
 }
@@ -38,7 +37,7 @@ func (a *IdlerAssertion) loadIdlerAssertion() error {
 	return err
 }
 
-func AssertThatIdler(t *testing.T, name string, client client.Client) *IdlerAssertion {
+func AssertThatIdler(t *testing.T, name string, client runtimeclient.Client) *IdlerAssertion {
 	return &IdlerAssertion{
 		client:         client,
 		namespacedName: types.NamespacedName{Name: name},
@@ -55,7 +54,7 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 		startTimeNoMilSec := pod.Status.StartTime.Truncate(time.Second)
 		expected := toolchainv1alpha1.Pod{
 			Name:      pod.Name,
-			StartTime: v1.NewTime(startTimeNoMilSec),
+			StartTime: metav1.NewTime(startTimeNoMilSec),
 		}
 		assert.Contains(a.t, a.idler.Status.Pods, expected)
 	}
@@ -119,11 +118,11 @@ func IdlerNotificationCreationFailed(message string) toolchainv1alpha1.Condition
 }
 
 type IdleablePayloadAssertion struct {
-	client client.Client
+	client runtimeclient.Client
 	t      *testing.T
 }
 
-func AssertThatInIdleableCluster(t *testing.T, client client.Client) *IdleablePayloadAssertion {
+func AssertThatInIdleableCluster(t *testing.T, client runtimeclient.Client) *IdleablePayloadAssertion {
 	return &IdleablePayloadAssertion{
 		client: client,
 		t:      t,

@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -715,26 +716,26 @@ func newMemberDeploymentWithConditions(deploymentConditions ...appsv1.Deployment
 	}
 }
 
-func newGetHostClusterReady(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterReady(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc {
 	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionTrue, metav1.Now())
 }
 
-func newGetHostClusterNotReady(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterNotReady(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc {
 	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionFalse, metav1.Now())
 }
 
-func newGetHostClusterProbeNotWorking(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterProbeNotWorking(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc {
 	aMinuteAgo := metav1.Time{
 		Time: time.Now().Add(time.Duration(-60 * time.Second)),
 	}
 	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionTrue, aMinuteAgo)
 }
 
-func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterNotExist(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc {
 	return NewGetHostClusterWithProbe(fakeClient, false, corev1.ConditionFalse, metav1.Now())
 }
 
-func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	fakeClient := test.NewFakeClient(t, initObjs...)
@@ -850,7 +851,7 @@ func cheRoute(tls bool) *routev1.Route {
 	return r
 }
 
-func cheTestClient(cl client.Client) *che.Client {
+func cheTestClient(cl runtimeclient.Client) *che.Client {
 	tokenCache := che.NewTokenCacheWithToken(
 		http.DefaultClient,
 		&che.TokenSet{

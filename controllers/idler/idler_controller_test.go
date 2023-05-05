@@ -16,6 +16,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
@@ -32,7 +33,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	fakescale "k8s.io/client-go/scale/fake"
 	clienttest "k8s.io/client-go/testing"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -1004,7 +1005,7 @@ func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime meta
 	return podsToTrack
 }
 
-func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
+func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1090,7 +1091,7 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha
 	return reconciler, req, cl, allCl
 }
 
-func getHostCluster(fakeClient client.Client) cluster.GetHostClusterFunc {
+func getHostCluster(fakeClient runtimeclient.Client) cluster.GetHostClusterFunc {
 	return memberoperatortest.NewGetHostCluster(fakeClient, true, corev1.ConditionTrue)
 }
 

@@ -15,11 +15,11 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
-	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type RoleBindingRequestValidator struct {
-	Client runtimeClient.Client
+	Client runtimeclient.Client
 }
 
 func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {

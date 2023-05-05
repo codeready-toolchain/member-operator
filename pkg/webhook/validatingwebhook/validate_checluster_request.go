@@ -13,11 +13,11 @@ import (
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
-	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type CheClusterRequestValidator struct {
-	Client runtimeClient.Client
+	Client runtimeclient.Client
 }
 
 func (v CheClusterRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {

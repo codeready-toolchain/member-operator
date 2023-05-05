@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type NSTemplateSetAssertion struct {
 	nsTmplSet      *toolchainv1alpha1.NSTemplateSet
-	client         client.Client
+	client         runtimeclient.Client
 	namespacedName types.NamespacedName
 	t              test.T
 }
@@ -31,7 +31,7 @@ func (a *NSTemplateSetAssertion) loadNSTemplateSet() error {
 	return err
 }
 
-func AssertThatNSTemplateSet(t test.T, namespace, name string, client client.Client) *NSTemplateSetAssertion {
+func AssertThatNSTemplateSet(t test.T, namespace, name string, client runtimeclient.Client) *NSTemplateSetAssertion {
 	return &NSTemplateSetAssertion{
 		client:         client,
 		namespacedName: test.NamespacedName(namespace, name),
@@ -48,7 +48,7 @@ func (a *NSTemplateSetAssertion) Exists() *NSTemplateSetAssertion {
 func (a *NSTemplateSetAssertion) DoesNotExist() *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.Error(a.t, err)
-	assert.IsType(a.t, v1.StatusReasonNotFound, errors.ReasonForError(err))
+	assert.IsType(a.t, metav1.StatusReasonNotFound, errors.ReasonForError(err))
 	return a
 }
 

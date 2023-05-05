@@ -7,11 +7,11 @@ import (
 
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // GetRouteURL gets the URL of the route with the given name and namespace using the given client
-func GetRouteURL(cl client.Client, namespace, name string) (string, error) {
+func GetRouteURL(cl runtimeclient.Client, namespace, name string) (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: namespace, Name: name}
 	err := cl.Get(context.TODO(), namespacedName, route)

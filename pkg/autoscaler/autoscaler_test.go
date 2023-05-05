@@ -9,16 +9,16 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestGetTemplateObjects(t *testing.T) {
@@ -90,7 +90,7 @@ func TestDelete(t *testing.T) {
 	s := setScheme(t)
 	prioClass := unmarshalPriorityClass(t, priorityClass())
 	dm := unmarshalDeployment(t, deployment("100Mi", 3))
-	namespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: test.MemberOperatorNs}}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: test.MemberOperatorNs}}
 
 	t.Run("when previously deployed", func(t *testing.T) {
 		// given

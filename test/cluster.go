@@ -5,16 +5,15 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	v1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewGetHostCluster returns cluster.GetHostClusterFunc function. The cluster.CachedToolchainCluster
 // that is returned by the function then contains the given client and the given status.
 // If ok == false, then the function returns nil for the cluster.
-func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) cluster.GetHostClusterFunc {
+func NewGetHostCluster(cl runtimeclient.Client, ok bool, status corev1.ConditionStatus) cluster.GetHostClusterFunc {
 	if !ok {
 		return func() (*cluster.CachedToolchainCluster, bool) {
 			return nil, false
@@ -42,7 +41,7 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 // NewGetHostClusterWithProbe returns a cluster.GetHostClusterFunc function which returns a cluster.CachedToolchainCluster.
 // The returned cluster.CachedToolchainCluster contains the given client and the given status and lastProbeTime.
 // If ok == false, then the function returns nil for the cluster.
-func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionStatus, lastProbeTime metav1.Time) cluster.GetHostClusterFunc {
+func NewGetHostClusterWithProbe(cl runtimeclient.Client, ok bool, status corev1.ConditionStatus, lastProbeTime metav1.Time) cluster.GetHostClusterFunc {
 	if !ok {
 		return func() (*cluster.CachedToolchainCluster, bool) {
 			return nil, false

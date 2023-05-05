@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 	Expiration = 365 * 24 * time.Hour
 )
 
-func EnsureSecret(cl client.Client, namespace, certSecretName, serviceName string, expiration time.Duration) ([]byte, error) {
+func EnsureSecret(cl runtimeclient.Client, namespace, certSecretName, serviceName string, expiration time.Duration) ([]byte, error) {
 	certSecret := &corev1.Secret{}
 	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: certSecretName}, certSecret); err != nil && !errors.IsNotFound(err) {
 		return nil, err

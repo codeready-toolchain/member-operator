@@ -25,6 +25,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -50,7 +51,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 
 // Reconciler reconciles a UserAccount object
 type Reconciler struct {
-	Client    client.Client
+	Client    runtimeclient.Client
 	Scheme    *runtime.Scheme
 	CheClient *che.Client
 }
@@ -418,7 +419,7 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 	return changed
 }
 
-func addLabelsAndAnnotations(object client.Object, cl client.Client, userAcc *toolchainv1alpha1.UserAccount, isUserResource bool) error {
+func addLabelsAndAnnotations(object client.Object, cl runtimeclient.Client, userAcc *toolchainv1alpha1.UserAccount, isUserResource bool) error {
 	if setLabelsAndAnnotations(object, userAcc, isUserResource) {
 		return cl.Update(context.TODO(), object)
 	}
@@ -695,7 +696,7 @@ func listByOwnerLabel(owner string) client.ListOption {
 }
 
 // getUsersByOwnerName gets the user resources by matching owner label.
-func getUsersByOwnerName(cl client.Client, owner string) ([]userv1.User, error) {
+func getUsersByOwnerName(cl runtimeclient.Client, owner string) ([]userv1.User, error) {
 	userList := &userv1.UserList{}
 	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: owner}
 	err := cl.List(context.TODO(), userList, client.MatchingLabels(labels))

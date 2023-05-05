@@ -10,9 +10,9 @@ import (
 	. "github.com/codeready-toolchain/member-operator/test"
 	. "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestCreateOrUpdateResources(t *testing.T) {

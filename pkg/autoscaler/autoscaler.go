@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -36,7 +35,7 @@ func Deploy(cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemor
 
 // Delete deletes the autoscaling buffer app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
-func Delete(cl client.Client, s *runtime.Scheme, namespace string) (bool, error) {
+func Delete(cl runtimeclient.Client, s *runtime.Scheme, namespace string) (bool, error) {
 	objs, err := getTemplateObjects(s, namespace, "0", 0)
 	if err != nil {
 		return false, err

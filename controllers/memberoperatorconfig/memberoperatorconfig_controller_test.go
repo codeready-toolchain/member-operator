@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -325,7 +326,7 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 	})
 }
 
-func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*Reconciler, client.Client) {
+func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*Reconciler, runtimeclient.Client) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_WEBHOOK_IMAGE", "webhookimage")
 	t.Cleanup(restore)

@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type RoleBindingAssertion struct {
 	rolebinding    *rbacv1.RoleBinding
-	client         client.Client
+	client         runtimeclient.Client
 	namespacedName types.NamespacedName
 	t              test.T
 }
@@ -27,7 +27,7 @@ func (a *RoleBindingAssertion) loadRoleBinding() error {
 	return err
 }
 
-func AssertThatRoleBinding(t test.T, namespace, name string, client client.Client) *RoleBindingAssertion {
+func AssertThatRoleBinding(t test.T, namespace, name string, client runtimeclient.Client) *RoleBindingAssertion {
 	return &RoleBindingAssertion{
 		client:         client,
 		namespacedName: test.NamespacedName(namespace, name),

@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,7 +57,7 @@ func TestDeploy(t *testing.T) {
 
 	t.Run("when updated", func(t *testing.T) {
 		// given
-		serviceObj := &v1.Service{}
+		serviceObj := &corev1.Service{}
 		unmarshalObj(t, service(test.MemberOperatorNs), serviceObj)
 		serviceObj.Labels = map[string]string{
 			"provider": "foo",
@@ -95,17 +95,17 @@ func TestDeploy(t *testing.T) {
 }
 
 func verifyDeployment(t *testing.T, fakeClient *test.FakeClient) {
-	expService := &v1.Service{}
+	expService := &corev1.Service{}
 	unmarshalObj(t, service(test.MemberOperatorNs), expService)
-	actualService := &v1.Service{}
+	actualService := &corev1.Service{}
 	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-console-plugin", actualService, func() {
 		assert.Equal(t, expService.Labels, actualService.Labels)
 		assert.NotEmpty(t, actualService.Spec)
 	})
 
-	expServiceAcc := &v1.ServiceAccount{}
+	expServiceAcc := &corev1.ServiceAccount{}
 	unmarshalObj(t, serviceAccount(test.MemberOperatorNs), expServiceAcc)
-	actualServiceAcc := &v1.ServiceAccount{}
+	actualServiceAcc := &corev1.ServiceAccount{}
 	AssertObject(t, fakeClient, test.MemberOperatorNs, "member-operator-console-plugin", actualServiceAcc, func() {
 		assert.Equal(t, expServiceAcc.Namespace, actualServiceAcc.Namespace)
 	})

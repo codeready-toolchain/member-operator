@@ -36,6 +36,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	runtimecluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -302,7 +303,7 @@ func main() {
 // This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one.
 // This will help keeping a reasonable memory usage for this operator since the cache won't store all other namespace scoped
 // resources (secrets, etc.).
-func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, error) {
+func newAllNamespacesClient(config *rest.Config) (runtimeclient.Client, cache.Cache, error) {
 	clusterAllNamespaces, err := runtimecluster.New(config, func(clusterOptions *runtimecluster.Options) {
 		clusterOptions.Scheme = scheme
 	})

@@ -250,6 +250,13 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
+	// If the SSO UserID annotation present, then an additional identity is required to be created
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
+		}
+	}
+
 	stringSlicesEqual := func(a, b []string) bool {
 		if len(a) != len(b) {
 			return false
@@ -621,15 +628,25 @@ func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccou
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
+	identities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
+	if userAcc.Spec.OriginalSub != "" {
+		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
+	}
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
+		}
+	}
+
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()},
+		Identities: identities,
 	}
+
 	return user
 }
-
 func newIdentity(user *userv1.User) *userv1.Identity {
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{},

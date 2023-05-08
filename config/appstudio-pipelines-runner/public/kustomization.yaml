@@ -1,0 +1,6 @@
+# This contains only the copy of the ClusterRole appstudio-pipelines-runner (without any additional changes)
+# so the RoleBindings applied as part of the tenant templates can refer to this one ClusterRole
+# This is needed because OLM aggregates all ClusterRoles that are applied to the operator SA into one.
+# see: https://github.com/codeready-toolchain/host-operator/pull/797
+resources:
+- ../base

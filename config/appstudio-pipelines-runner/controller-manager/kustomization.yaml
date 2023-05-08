@@ -1,0 +1,11 @@
+# Contains the ClusterRole and ClusterRoleBinding that grants necessary permissions
+# to the operator SA. It adds a prefix to both of them to differentiate the ClusterRole
+# from the one that should be created in the member cluster directly. This is needed
+# because OLM aggregates all ClusterRoles that are applied to the operator SA into one.
+# So having two ClusterRoles with different names solves the problem.
+# see: https://github.com/codeready-toolchain/host-operator/pull/797
+resources:
+- ../base
+- appstudio_pipelines_runner_binding.yaml
+
+namePrefix: controller-manager-

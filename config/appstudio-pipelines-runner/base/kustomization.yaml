@@ -1,0 +1,3 @@
+# Definition of the appstudio-pipelines-runner ClusterRole
+resources:
+- appstudio_pipelines_runner_role.yaml

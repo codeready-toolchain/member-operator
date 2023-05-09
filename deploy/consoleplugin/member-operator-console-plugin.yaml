@@ -7,14 +7,14 @@ objects:
   kind: ServiceAccount
   metadata:
     labels:
-      provider: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
     name: member-operator-console-plugin
     namespace: ${NAMESPACE}
 - kind: Role
   apiVersion: rbac.authorization.k8s.io/v1
   metadata:
     labels:
-      provider: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
     name: member-operator-console-plugin
     namespace: ${NAMESPACE}
   rules:
@@ -38,7 +38,7 @@ objects:
   apiVersion: rbac.authorization.k8s.io/v1
   metadata:
     labels:
-      provider: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
     name: member-operator-console-plugin
     namespace: ${NAMESPACE}
   subjects:
@@ -52,7 +52,7 @@ objects:
   apiVersion: apps/v1
   metadata:
     labels:
-      provider: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
     name: member-operator-console-plugin
     namespace: ${NAMESPACE}
   spec:
@@ -128,7 +128,7 @@ objects:
     annotations:
       service.beta.openshift.io/serving-cert-secret-name: member-operator-console-plugin
     labels:
-      provider: codeready-toolchain
+      toolchain.dev.openshift.com/provider: codeready-toolchain
       run: member-operator-console-plugin
   spec:
     ports:

@@ -109,6 +109,7 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ns *corev1.Namespace, spaceRole
 			objs, err := tierTemplate.process(r.Scheme, map[string]string{
 				Namespace: ns.Name,
 				Username:  username,
+				SpaceName: username,
 			})
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)

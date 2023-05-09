@@ -159,22 +159,22 @@ func unmarshalObj(t *testing.T, content string, target runtime.Object) {
 
 // contains an empty spec because we do not verify the actual spec value
 func service(namespace string) string {
-	return fmt.Sprintf(`{"apiVersion":"v1","kind":"Service","metadata":{"labels":{"provider":"codeready-toolchain","run":"member-operator-console-plugin"},"name":"member-operator-console-plugin","namespace":"%s"},"spec":{}}`, namespace)
+	return fmt.Sprintf(`{"apiVersion":"v1","kind":"Service","metadata":{"labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain","run":"member-operator-console-plugin"},"name":"member-operator-console-plugin","namespace":"%s"},"spec":{}}`, namespace)
 }
 
 // contains an empty spec because we do not verify the actual spec value
 func deployment(namespace string) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"},"spec":{}}`, namespace)
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"},"spec":{}}`, namespace)
 }
 
 func serviceAccount(namespace string) string {
-	return fmt.Sprintf(`{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"}}`, namespace)
+	return fmt.Sprintf(`{"apiVersion":"v1","kind":"ServiceAccount","metadata":{"labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"}}`, namespace)
 }
 
 func role() string {
-	return `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"toolchain-member-operator"},"rules":[{"apiGroups":["toolchain.dev.openshift.com"],"resources":["memberoperatorconfigs"],"verbs":["get","list","watch"]},{"apiGroups":[""],"resources":["secrets"],"verbs":["get","list","watch"]}]}`
+	return `{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"toolchain-member-operator"},"rules":[{"apiGroups":["toolchain.dev.openshift.com"],"resources":["memberoperatorconfigs"],"verbs":["get","list","watch"]},{"apiGroups":[""],"resources":["secrets"],"verbs":["get","list","watch"]}]}`
 }
 
 func roleBinding(namespace string) string {
-	return fmt.Sprintf(`{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"labels":{"provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"member-operator-console-plugin"},"subjects":[{"kind":"ServiceAccount","name":"member-operator-console-plugin"}]}`, namespace)
+	return fmt.Sprintf(`{"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"},"name":"member-operator-console-plugin","namespace":"%s"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"member-operator-console-plugin"},"subjects":[{"kind":"ServiceAccount","name":"member-operator-console-plugin"}]}`, namespace)
 }

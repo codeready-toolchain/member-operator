@@ -1,0 +1,6 @@
+# ClusterRole and necessary permissions for the operator SA, so it is able to
+# apply Rolebindings to the pipelines SAs that will run Pipelines in appstudio.
+# see: https://github.com/codeready-toolchain/host-operator/pull/797
+resources:
+- public
+- controller-manager

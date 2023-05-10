@@ -5,3 +5,5 @@ resources:
 - ../default
 - ../samples
 - ../scorecard
+# appstudio-pipelines-runner permissions
+- ../appstudio-pipelines-runner

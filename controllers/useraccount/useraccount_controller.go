@@ -250,6 +250,14 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
+	// Also if the sso-user-id annotation is set, then another additional identity is required if it is a different value to the Spec.UserID
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(
+				userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
+		}
+	}
+
 	stringSlicesEqual := func(a, b []string) bool {
 		if len(a) != len(b) {
 			return false

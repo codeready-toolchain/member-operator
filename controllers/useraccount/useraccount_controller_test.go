@@ -59,10 +59,25 @@ func TestReconcile(t *testing.T) {
 
 	// given
 	userAcc := newUserAccount(username, userID)
+
 	userUID := types.UID(username + "user")
-	preexistingIdentity := &userv1.Identity{
+	preexistingIdentity1 := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+			UID:  types.UID(userAcc.Name + "identity"),
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/owner": username,
+				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
+			},
+		},
+		User: corev1.ObjectReference{
+			Name: username,
+			UID:  userUID,
+		},
+	}
+	preexistingIdentity2 := &userv1.Identity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ToIdentityName(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()),
 			UID:  types.UID(userAcc.Name + "identity"),
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/owner": username,
@@ -113,7 +128,7 @@ func TestReconcile(t *testing.T) {
 
 	// First cycle of reconcile. Freshly created UserAccount.
 	t.Run("create or update user OK", func(t *testing.T) {
-		reconcile := func(r *Reconciler, req reconcile.Request) {
+		reconcile := func(r *Reconciler, req reconcile.Request, expectedIdentities ...*userv1.Identity) {
 			//when
 			res, err := r.Reconcile(context.TODO(), req)
 
@@ -128,7 +143,7 @@ func TestReconcile(t *testing.T) {
 			// Check the created/updated user
 			user := assertUser(t, r, userAcc)
 			user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
-			checkMapping(t, user, preexistingIdentity)
+			checkMapping(t, user, expectedIdentities...)
 			require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey])
 			require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
 
@@ -200,7 +215,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("create", func(t *testing.T) {
 			r, req, _, _ := prepareReconcile(t, username, userAcc)
-			reconcile(r, req)
+			reconcile(r, req, preexistingIdentity1)
 		})
 
 		t.Run("update", func(t *testing.T) {
@@ -210,7 +225,7 @@ func TestReconcile(t *testing.T) {
 				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username, toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue},
 			}}
 			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
-			reconcile(r, req)
+			reconcile(r, req, preexistingIdentity1, preexistingIdentity2)
 		})
 	})
 
@@ -349,7 +364,7 @@ func TestReconcile(t *testing.T) {
 	// Last cycle of reconcile. User, Identity created/updated.
 	t.Run("provisioned", func(t *testing.T) {
 		// given
-		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, cl, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -386,7 +401,8 @@ func TestReconcile(t *testing.T) {
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity1,
+			memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 		t.Run("first reconcile deletes identity", func(t *testing.T) {
 			// given
@@ -470,7 +486,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("user & identity are there - it should remove identity as it has the owner label set", func(t *testing.T) {
 			// given
-			r, req, cl, _ := prepareReconcile(t, username, cfg, appStudioAccount, preexistingUser, preexistingIdentity)
+			r, req, cl, _ := prepareReconcile(t, username, cfg, appStudioAccount, preexistingUser, preexistingIdentity1)
 
 			// when
 			_, err := r.Reconcile(context.TODO(), req)
@@ -487,7 +503,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("user is there - it should remove the user and not identity as it doesn't have owner label set", func(t *testing.T) {
 			// given
-			withoutLabel := preexistingIdentity.DeepCopy()
+			withoutLabel := preexistingIdentity1.DeepCopy()
 			withoutLabel.Labels = nil
 			r, req, cl, _ := prepareReconcile(t, username, cfg, appStudioAccount, withoutLabel, preexistingUser)
 
@@ -508,7 +524,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("user & identity are there, but none of them should be removed - they don't have owner label set", func(t *testing.T) {
 			// given
-			identityWithoutLabel := preexistingIdentity.DeepCopy()
+			identityWithoutLabel := preexistingIdentity1.DeepCopy()
 			identityWithoutLabel.Labels = nil
 			userWithoutLabel := preexistingUser.DeepCopy()
 			userWithoutLabel.Labels = nil
@@ -561,7 +577,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("add finalizer fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		// Mock setting finalizer failure
 		fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
@@ -580,7 +596,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("remove finalizer fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -668,7 +684,7 @@ func TestReconcile(t *testing.T) {
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, fakeClient, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity1, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -707,7 +723,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("delete identity fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -746,7 +762,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("delete identity fails when list identity client call returns error", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -785,7 +801,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("delete user fails when list user call returns error", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -835,7 +851,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("delete user/identity fails", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity)
+		r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentity1)
 
 		//when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -1012,7 +1028,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			withoutAnyLabel := preexistingUser.DeepCopy()
 			withoutAnyLabel.Labels = nil
-			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyLabel, preexistingIdentity)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyLabel, preexistingIdentity1)
 
 			// when
 			res, err := r.Reconcile(context.TODO(), req)
@@ -1027,7 +1043,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			withoutLabel := preexistingUser.DeepCopy()
 			delete(withoutLabel.Labels, toolchainv1alpha1.ProviderLabelKey)
-			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingIdentity)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingIdentity1)
 
 			// when
 			res, err := r.Reconcile(context.TODO(), req)
@@ -1042,7 +1058,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			withoutAnyAnnotation := preexistingUser.DeepCopy()
 			withoutAnyAnnotation.Annotations = nil
-			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyAnnotation, preexistingIdentity)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyAnnotation, preexistingIdentity1)
 
 			// when
 			res, err := r.Reconcile(context.TODO(), req)
@@ -1057,7 +1073,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			withoutAnyAnnotation := preexistingUser.DeepCopy()
 			withoutAnyAnnotation.Annotations = map[string]string{"dummy-email": "foo@bar.com"}
-			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyAnnotation, preexistingIdentity)
+			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutAnyAnnotation, preexistingIdentity1)
 
 			// when
 			res, err := r.Reconcile(context.TODO(), req)
@@ -1073,7 +1089,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("Identity with nil labels", func(t *testing.T) {
 			// given
-			withoutLabel := preexistingIdentity.DeepCopy()
+			withoutLabel := preexistingIdentity1.DeepCopy()
 			withoutLabel.Labels = nil
 			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingUser)
 
@@ -1088,7 +1104,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("Identity with another label defined", func(t *testing.T) {
 			// given
-			withoutLabel := preexistingIdentity.DeepCopy()
+			withoutLabel := preexistingIdentity1.DeepCopy()
 			delete(withoutLabel.Labels, toolchainv1alpha1.ProviderLabelKey)
 			r, req, _, _ := prepareReconcile(t, username, userAcc, withoutLabel, preexistingUser)
 
@@ -1101,6 +1117,152 @@ func TestReconcile(t *testing.T) {
 			assertIdentity(t, r, userAcc, config.Auth().Idp())
 		})
 	})
+}
+
+func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
+	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
+	require.NoError(t, err)
+
+	userID := uuid.NewV4().String()
+	username := "kjones"
+
+	userAcc := newUserAccount(username, userID)
+	userAcc.Spec.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
+	userUID := types.UID(username + "user")
+
+	preexistingUser := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: userAcc.Name,
+			UID:  userUID,
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/owner": username,
+				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
+			},
+			Annotations: map[string]string{
+				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
+			},
+		},
+		Identities: []string{
+			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+		},
+	}
+
+	// create user identity mapping
+	r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
+	res, err := r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	updatedUser := assertUser(t, r, userAcc)
+
+	// create first identity
+	r, req, _, _ = prepareReconcile(t, username, userAcc, updatedUser)
+	res, err = r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	// Check the created/updated identity
+	identity1 := assertIdentity(t, r, userAcc, config.Auth().Idp())
+
+	// create second identity
+	r, req, _, _ = prepareReconcile(t, username, userAcc, updatedUser, identity1)
+	res, err = r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	// Check the second created/updated identity
+	identity2 := &userv1.Identity{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(
+		fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))),
+		config.Auth().Idp())}, identity2)
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), identity2.Name)
+	require.Equal(t, userAcc.Name, identity2.Labels["toolchain.dev.openshift.com/owner"])
+	assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
+
+	// Reconcile to establish the mapping
+	r, req, _, _ = prepareReconcile(t, username, userAcc, updatedUser, identity1, identity2)
+	res, err = r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	// Check the user identity mapping
+	checkMapping(t, updatedUser, identity1, identity2)
+}
+
+func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
+	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
+	require.NoError(t, err)
+
+	userID := uuid.NewV4().String()
+	username := "hcollins"
+
+	userAcc := newUserAccount(username, userID)
+	userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = "ABCDE:98765"
+	userUID := types.UID(username + "user")
+
+	preexistingUser := &userv1.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: userAcc.Name,
+			UID:  userUID,
+			Labels: map[string]string{
+				"toolchain.dev.openshift.com/owner": username,
+				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
+			},
+			Annotations: map[string]string{
+				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
+			},
+		},
+		Identities: []string{
+			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+		},
+	}
+
+	// create user identity mapping
+	r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
+	res, err := r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	updatedUser := assertUser(t, r, userAcc)
+
+	// create first identity
+	r, req, _, _ = prepareReconcile(t, username, userAcc, updatedUser)
+	res, err = r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	// Check the created/updated identity
+	identity1 := assertIdentity(t, r, userAcc, config.Auth().Idp())
+
+	// create second identity
+	r, req, _, _ = prepareReconcile(t, username, userAcc, updatedUser, identity1)
+	res, err = r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	// Check the second created/updated identity
+	identity2 := &userv1.Identity{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(
+		fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]))),
+		config.Auth().Idp())}, identity2)
+	require.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString(
+		[]byte(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]))), identity2.Name)
+	require.Equal(t, userAcc.Name, identity2.Labels["toolchain.dev.openshift.com/owner"])
+	assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
+
+	// Reconcile to establish the mapping
+	r, req, _, _ = prepareReconcile(t, username, userAcc, updatedUser, identity1, identity2)
+	res, err = r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	// Reload the User
+	updatedUser = assertUser(t, r, userAcc)
+
+	// Check the user identity mapping
+	checkMapping(t, updatedUser, identity1, identity2)
 }
 
 func TestUpdateStatus(t *testing.T) {

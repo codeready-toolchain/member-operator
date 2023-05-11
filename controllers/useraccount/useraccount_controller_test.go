@@ -1700,6 +1700,7 @@ func newUserFromUserAccount(userAcc *toolchainv1alpha1.UserAccount) *userv1.User
 			UID:  userUID,
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
+				toolchainv1alpha1.SpaceLabelKey:    userAcc.Name,
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{

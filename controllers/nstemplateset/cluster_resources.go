@@ -178,6 +178,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, object runtimeclient.Object) (bool, error) {
 	var labels = map[string]string{
 		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
+		toolchainv1alpha1.SpaceLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:        toolchainv1alpha1.ClusterResourcesTemplateType,
 		toolchainv1alpha1.TemplateRefLabelKey: tierTemplate.templateRef,
 		toolchainv1alpha1.TierLabelKey:        tierTemplate.tierName,
@@ -327,6 +328,18 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 
 // isUpToDate returns true if the currentObject uses the corresponding templateRef and tier labels
 func isUpToDate(currentObject, _ runtimeclient.Object, tierTemplate *tierTemplate) bool {
+	// --- start temporary logic
+	// this will trigger an update in order to set the SpaceLabelKey on all the objects with the OwnerLabelKey
+	ownerValue, hasOwnerLabelKey := currentObject.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
+	if hasOwnerLabelKey {
+		// check if SpaceLabelKey is set, if not then we need to update the object in order to set it.
+		spaceValue, hasSpaceLabelKey := currentObject.GetLabels()[toolchainv1alpha1.SpaceLabelKey]
+		if !hasSpaceLabelKey || spaceValue != ownerValue {
+			return false
+		}
+	}
+	// -- end of temporary migration logic
+
 	return currentObject.GetLabels() != nil &&
 		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
 		currentObject.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName

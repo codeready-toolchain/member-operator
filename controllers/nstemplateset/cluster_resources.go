@@ -330,6 +330,22 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 func isUpToDate(currentObject, _ runtimeclient.Object, tierTemplate *tierTemplate) bool {
 	// --- start temporary logic
 	// this will trigger an update in order to set the SpaceLabelKey on all the objects with the OwnerLabelKey
+	if hasSpaceLabelSet(currentObject) == false {
+		return false
+	}
+	// -- end of temporary migration logic
+
+	return currentObject.GetLabels() != nil &&
+		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
+		currentObject.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName
+	// && currentObject.IsSame(newObject)  <-- TODO Uncomment when IsSame is implemented for all ToolchainObjects!
+}
+
+func hasSpaceLabelSet(currentObject runtimeclient.Object) bool {
+	if currentObject.GetLabels() == nil {
+		return false
+	}
+
 	ownerValue, hasOwnerLabelKey := currentObject.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
 	if hasOwnerLabelKey {
 		// check if SpaceLabelKey is set, if not then we need to update the object in order to set it.
@@ -338,12 +354,7 @@ func isUpToDate(currentObject, _ runtimeclient.Object, tierTemplate *tierTemplat
 			return false
 		}
 	}
-	// -- end of temporary migration logic
-
-	return currentObject.GetLabels() != nil &&
-		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
-		currentObject.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName
-	// && currentObject.IsSame(newObject)  <-- TODO Uncomment when IsSame is implemented for all ToolchainObjects!
+	return true
 }
 
 func retainObjectsOfSameGVK(gvk schema.GroupVersionKind) template.FilterFunc {

@@ -37,19 +37,20 @@ func TestClusterResourceKinds(t *testing.T) {
 		johnyRuntimeObject := clusterResourceKind.object.DeepCopyObject()
 		johnyObject, ok := johnyRuntimeObject.(client.Object)
 		require.True(t, ok)
-		johnyObject.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
+		johnyObjectLabels := map[string]string{toolchainv1alpha1.OwnerLabelKey: "johny", toolchainv1alpha1.SpaceLabelKey: "johny"}
+		johnyObject.SetLabels(johnyObjectLabels)
 		johnyObject.SetName("johny-object")
 
 		johnyRuntimeObject2 := clusterResourceKind.object.DeepCopyObject()
 		johnyObject2, ok := johnyRuntimeObject2.(client.Object)
 		require.True(t, ok)
-		johnyObject2.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "johny"})
+		johnyObject2.SetLabels(johnyObjectLabels)
 		johnyObject2.SetName("johny-object-2")
 
 		anotherRuntimeObject := clusterResourceKind.object.DeepCopyObject()
 		anotherObject, ok := anotherRuntimeObject.(client.Object)
 		require.True(t, ok)
-		anotherObject.SetLabels(map[string]string{"toolchain.dev.openshift.com/owner": "another"})
+		anotherObject.SetLabels(map[string]string{toolchainv1alpha1.OwnerLabelKey: "another", toolchainv1alpha1.SpaceLabelKey: "another"})
 		anotherObject.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
@@ -398,7 +399,8 @@ func TestDeleteClusterResources(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, username, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(username, "withemptycrq")
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
-		emptyCrq.Labels["toolchain.dev.openshift.com/owner"] = username
+		emptyCrq.Labels[toolchainv1alpha1.OwnerLabelKey] = username
+		emptyCrq.Labels[toolchainv1alpha1.SpaceLabelKey] = username
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq, crb)
 
 		// when
@@ -433,7 +435,8 @@ func TestDeleteClusterResources(t *testing.T) {
 		deletionTS := metav1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
-		emptyCrq.Labels["toolchain.dev.openshift.com/owner"] = username
+		emptyCrq.Labels[toolchainv1alpha1.OwnerLabelKey] = username
+		emptyCrq.Labels[toolchainv1alpha1.SpaceLabelKey] = username
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
 
 		// when

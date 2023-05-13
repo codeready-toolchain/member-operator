@@ -372,6 +372,10 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 
 	if _, exists := labels[toolchainv1alpha1.OwnerLabelKey]; !exists {
 		labels[toolchainv1alpha1.OwnerLabelKey] = userAcc.Name
+		object.SetLabels(labels)
+		changed = true
+	}
+	if _, exists := labels[toolchainv1alpha1.SpaceLabelKey]; !exists {
 		labels[toolchainv1alpha1.SpaceLabelKey] = userAcc.Name
 		object.SetLabels(labels)
 		changed = true

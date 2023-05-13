@@ -362,7 +362,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *cor
 	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
 	// --- start temporary logic
 	// this will trigger an update in order to set the SpaceLabelKey on namespace object
-	if hasSpaceLabelSet(ns) == false {
+	if !hasSpaceLabelSet(ns) {
 		return false, nil
 	}
 	// -- end of temporary migration logic

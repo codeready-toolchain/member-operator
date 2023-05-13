@@ -330,7 +330,7 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 func isUpToDate(currentObject, _ runtimeclient.Object, tierTemplate *tierTemplate) bool {
 	// --- start temporary logic
 	// this will trigger an update in order to set the SpaceLabelKey on all the objects with the OwnerLabelKey
-	if hasSpaceLabelSet(currentObject) == false {
+	if !hasSpaceLabelSet(currentObject) {
 		return false
 	}
 	// -- end of temporary migration logic

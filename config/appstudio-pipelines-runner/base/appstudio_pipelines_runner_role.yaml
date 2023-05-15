@@ -47,6 +47,7 @@ rules:
   - security.openshift.io
   resourceNames:
   - csi-scc
+  - pipelines-scc
   resources:
   - securitycontextconstraints
   verbs:

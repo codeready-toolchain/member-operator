@@ -130,7 +130,7 @@ func TestReconcile(t *testing.T) {
 
 	// First cycle of reconcile. Freshly created UserAccount.
 	t.Run("create or update user OK", func(t *testing.T) {
-		reconcile := func(r *Reconciler, req reconcile.Request, expectedIdentities ...*userv1.Identity) {
+		reconcile := func(r *Reconciler, req reconcile.Request) {
 			//when
 			res, err := r.Reconcile(context.TODO(), req)
 
@@ -218,7 +218,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("create", func(t *testing.T) {
 			r, req, _, _ := prepareReconcile(t, username, userAcc)
-			reconcile(r, req, preexistingIdentity)
+			reconcile(r, req)
 		})
 
 		t.Run("update", func(t *testing.T) {
@@ -228,7 +228,7 @@ func TestReconcile(t *testing.T) {
 				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username, toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue},
 			}}
 			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
-			reconcile(r, req, preexistingIdentity, preexistingIdentityForSsoUserAnnotation)
+			reconcile(r, req)
 		})
 	})
 

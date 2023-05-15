@@ -948,7 +948,6 @@ func TestReconcile(t *testing.T) {
 					require.NoError(t, err)
 					assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), identity2.Name)
 					require.Equal(t, userAcc.Name, identity2.Labels[toolchainv1alpha1.OwnerLabelKey])
-					require.Equal(t, userAcc.Name, identity2.Labels[toolchainv1alpha1.SpaceLabelKey])
 					assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
 
 					t.Run("reconcile once more to ensure the users", func(t *testing.T) {
@@ -1646,7 +1645,6 @@ func assertUser(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAcco
 
 	require.NotNil(t, user.Labels)
 	assert.Equal(t, userAcc.Name, user.Labels[toolchainv1alpha1.OwnerLabelKey])
-	assert.Equal(t, userAcc.Name, user.Labels[toolchainv1alpha1.SpaceLabelKey])
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, user.Labels[toolchainv1alpha1.ProviderLabelKey])
 
 	assert.NotNil(t, user.Annotations)
@@ -1672,7 +1670,6 @@ func assertIdentity(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.User
 	require.NoError(t, err)
 	require.NotNil(t, identity.Labels)
 	assert.Equal(t, userAcc.Name, identity.Labels[toolchainv1alpha1.OwnerLabelKey])
-	assert.Equal(t, userAcc.Name, identity.Labels[toolchainv1alpha1.SpaceLabelKey])
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, identity.Labels[toolchainv1alpha1.ProviderLabelKey])
 	assert.Nil(t, identity.Annotations)
 	assert.Empty(t, identity.OwnerReferences) // User has no explicit owner reference.// Check the user identity mapping

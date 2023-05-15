@@ -1,0 +1,36 @@
+# permissions to scale Camel K resources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: appstudio-api-permissions
+rules:
+- apiGroups:
+  - appstudio.redhat.com
+  - tekton.dev
+  - jvmbuildservice.io
+  resources:
+  - "*"
+  verbs:
+  # TODO fix after changing the ADR and associated appstudio teemplates
+  - "*"
+- apiGroups:
+  - managed-gitops.redhat.com
+  - results.tekton.dev
+  resources:
+  - "*"
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+  - delete
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - configmaps
+  verbs:
+  # TODO fix after changing the ADR and associated appstudio teemplates
+  - "*"

@@ -25,10 +25,10 @@ type clusterResourcesManager struct {
 }
 
 // listExistingResourcesIfAvailable returns a list of comparable Objects representing existing resources in the cluster
-type listExistingResources func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error)
+type listExistingResources func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error)
 
 // listExistingResourcesIfAvailable checks if the API group is available in the cluster and returns a list of comparable Objects representing existing resources in the cluster
-type listExistingResourcesIfAvailable func(cl runtimeclient.Client, username string, availableAPIGroups []metav1.APIGroup) ([]runtimeclient.Object, error)
+type listExistingResourcesIfAvailable func(cl runtimeclient.Client, spacename string, availableAPIGroups []metav1.APIGroup) ([]runtimeclient.Object, error)
 
 // toolchainObjectKind represents a resource kind that should be present in templates containing cluster resources.
 // Such a kind should be watched by NSTempalateSet controller which means that every change of the
@@ -45,11 +45,11 @@ func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject runtimeclie
 	return toolchainObjectKind{
 		gvk:    gvk,
 		object: emptyObject,
-		listExistingResourcesIfAvailable: func(cl runtimeclient.Client, username string, availableAPIGroups []metav1.APIGroup) (objects []runtimeclient.Object, e error) {
+		listExistingResourcesIfAvailable: func(cl runtimeclient.Client, spacename string, availableAPIGroups []metav1.APIGroup) (objects []runtimeclient.Object, e error) {
 			if !apiGroupIsPresent(availableAPIGroups, gvk) {
 				return []runtimeclient.Object{}, nil
 			}
-			return listExistingResources(cl, username)
+			return listExistingResources(cl, spacename)
 		},
 	}
 }
@@ -59,9 +59,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		quotav1.GroupVersion.WithKind("ClusterResourceQuota"),
 		&quotav1.ClusterResourceQuota{},
-		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
+		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &quotav1.ClusterResourceQuotaList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -74,9 +74,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
 		&rbacv1.ClusterRoleBinding{},
-		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
+		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &rbacv1.ClusterRoleBindingList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -89,9 +89,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		toolchainv1alpha1.GroupVersion.WithKind("Idler"),
 		&toolchainv1alpha1.Idler{},
-		func(cl runtimeclient.Client, username string) ([]runtimeclient.Object, error) {
+		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &toolchainv1alpha1.IdlerList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(username)); err != nil {
+			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -105,9 +105,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 // ensure ensures that the cluster resources exist.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
 func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	userTierLogger := logger.WithValues("username", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
+	userTierLogger := logger.WithValues("spacename", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
 	userTierLogger.Info("ensuring cluster resources")
-	username := nsTmplSet.GetName()
+	spacename := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
@@ -126,8 +126,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		// get all objects of the resource kind from the template (if the template is specified)
 		if tierTemplate != nil {
 			newObjs, err = tierTemplate.process(r.Scheme, map[string]string{
-				Username:  username,
-				SpaceName: username,
+				SpaceName: spacename,
 			}, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
 				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
@@ -136,7 +135,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		}
 
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(r.Client, username, r.AvailableAPIGroups)
+		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(r.Client, spacename, r.AvailableAPIGroups)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)

@@ -56,12 +56,12 @@ objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
-    name: ${USERNAME}
+    name: ${SPACE_NAME}
     namespace: ${MEMBER_OPERATOR_NAMESPACE}
   data:
     test: test
 parameters:
-- name: USERNAME
+- name: SPACE_NAME
   required: true
 - name: MEMBER_OPERATOR_NAMESPACE
   required: true
@@ -77,7 +77,6 @@ parameters:
 
 	// when
 	obj, err := tierTemplate.process(s, map[string]string{
-		Username:  "johnsmith",
 		SpaceName: "johnsmith",
 	})
 

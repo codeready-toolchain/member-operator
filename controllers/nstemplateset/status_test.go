@@ -28,12 +28,12 @@ func TestUpdateStatus(t *testing.T) {
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	// given
-	username := "johnsmith"
+	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
 	t.Run("status updated", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 		condition := toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -45,17 +45,17 @@ func TestUpdateStatus(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(condition)
 	})
 
 	t.Run("update provisioned namespaces", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic")
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic")
 		namespaces := []corev1.Namespace{
-			{ObjectMeta: metav1.ObjectMeta{Name: username + "-stage"}},
-			{ObjectMeta: metav1.ObjectMeta{Name: username + "-dev"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: spacename + "-stage"}},
+			{ObjectMeta: metav1.ObjectMeta{Name: spacename + "-dev"}},
 		}
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
@@ -64,15 +64,15 @@ func TestUpdateStatus(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace{
 				{
-					Name: username + "-dev",
+					Name: spacename + "-dev",
 					Type: "default", // check that default type is added to first NS in alphabetical order
 				},
 				{
-					Name: username + "-stage",
+					Name: spacename + "-stage",
 					Type: "", // other namespaces do not have type for now...
 				},
 			}...)
@@ -84,7 +84,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionTrue,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(conditions...))
 		namespaces := []corev1.Namespace{} // empty list of user namespaces are given for some weired issue
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
@@ -93,7 +93,7 @@ func TestUpdateStatus(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace(nil)...) // provisioned namespaces list is nil
 	})
@@ -104,7 +104,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:   toolchainv1alpha1.ConditionReady,
 			Status: corev1.ConditionFalse,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -112,14 +112,14 @@ func TestUpdateStatus(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(conditions...)
 	})
 
 	t.Run("status error wrapped", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"))
 		statusManager, _ := prepareStatusManager(t, nsTmplSet)
 		log := logf.Log.WithName("test")
 
@@ -157,8 +157,8 @@ func TestUpdateStatus(t *testing.T) {
 
 		t.Run("failed to update status during deletion", func(t *testing.T) {
 			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
-			nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))
-			r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet)
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))
+			r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet)
 			fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 				return fmt.Errorf("status update mock error")
 			}
@@ -168,7 +168,7 @@ func TestUpdateStatus(t *testing.T) {
 			// then
 			require.Error(t, err)
 			assert.Equal(t, "failed to set status to 'ready=false/reason=terminating' on NSTemplateSet: status update mock error", err.Error())
-			AssertThatNSTemplateSet(t, namespaceName, username, r.Client).
+			AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
 				HasFinalizer(). // finalizer was not added and nothing else was done
 				HasConditions() // no condition was set to status update error
 		})
@@ -181,7 +181,7 @@ func TestUpdateStatus(t *testing.T) {
 			Status: corev1.ConditionFalse,
 			Reason: toolchainv1alpha1.NSTemplateSetUpdatingReason,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -189,7 +189,7 @@ func TestUpdateStatus(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(conditions...)
 	})
@@ -201,7 +201,7 @@ func TestUpdateStatus(t *testing.T) {
 			Status: corev1.ConditionFalse,
 			Reason: toolchainv1alpha1.NSTemplateSetProvisioningReason,
 		}}
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(conditions...))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -209,7 +209,7 @@ func TestUpdateStatus(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(conditions...)
 	})
@@ -227,12 +227,12 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		Reason:  toolchainv1alpha1.NSTemplateSetUnableToProvisionNamespaceReason,
 		Message: "Operation cannot be fulfilled on namespaces bla bla bla",
 	}
-	username := "johnsmith"
+	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
 	t.Run("when status is set to false with message, then next update to true should remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"), withConditions(failed))
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
@@ -240,30 +240,30 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(Provisioned())
 	})
 
 	t.Run("when status is set to false with message, then next successful reconcile should update it to true and remove the message", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, username, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(failed))
-		devNS := newNamespace("basic", username, "dev", withTemplateRefUsingRevision("abcde11"))
-		stageNS := newNamespace("basic", username, "stage", withTemplateRefUsingRevision("abcde11"))
-		devRole := newRole(devNS.Name, "exec-pods", username)
-		devRb1 := newRoleBinding(devNS.Name, "crtadmin-pods", username)
-		devRb2 := newRoleBinding(devNS.Name, "crtadmin-view", username)
-		stageRole := newRole(stageNS.Name, "exec-pods", username)
-		stageRb1 := newRoleBinding(stageNS.Name, "crtadmin-pods", username)
-		stageRb2 := newRoleBinding(stageNS.Name, "crtadmin-view", username)
-		r, req, fakeClient := prepareReconcile(t, namespaceName, username, nsTmplSet, devNS, stageNS, devRole, devRb1, devRb2, stageRole, stageRb1, stageRb2)
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "stage"), withConditions(failed))
+		devNS := newNamespace("basic", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
+		stageNS := newNamespace("basic", spacename, "stage", withTemplateRefUsingRevision("abcde11"))
+		devRole := newRole(devNS.Name, "exec-pods", spacename)
+		devRb1 := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
+		devRb2 := newRoleBinding(devNS.Name, "crtadmin-view", spacename)
+		stageRole := newRole(stageNS.Name, "exec-pods", spacename)
+		stageRb1 := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
+		stageRb2 := newRoleBinding(stageNS.Name, "crtadmin-view", spacename)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, devRole, devRb1, devRb2, stageRole, stageRb1, stageRb2)
 
 		// when
 		_, err := r.Reconcile(context.TODO(), req)
 
 		// then
 		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, username, fakeClient).
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(Provisioned())
 	})

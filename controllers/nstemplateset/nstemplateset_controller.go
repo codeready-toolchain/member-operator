@@ -184,7 +184,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err,
 			"failed to set status to 'ready=false/reason=terminating' on NSTemplateSet")
 	}
-	username := nsTmplSet.GetName()
+	spacename := nsTmplSet.GetName()
 
 	// delete all namespace one by one
 	allDeleted, err := r.namespaces.ensureDeleted(logger, nsTmplSet)
@@ -214,7 +214,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	util.RemoveFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
 	if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
 		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err,
-			"failed to remove finalizer on NSTemplateSet '%s'", username)
+			"failed to remove finalizer on NSTemplateSet '%s'", spacename)
 	}
 	return reconcile.Result{}, nil
 }
@@ -243,8 +243,8 @@ Current:
 	return nil
 }
 
-// listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given username
-func listByOwnerLabel(username string) runtimeclient.ListOption {
-	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: username}
+// listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given spacename
+func listByOwnerLabel(spacename string) runtimeclient.ListOption {
+	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: spacename}
 	return runtimeclient.MatchingLabels(labels)
 }

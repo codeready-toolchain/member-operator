@@ -52,3 +52,10 @@ rules:
   - securitycontextconstraints
   verbs:
   - use
+- apiGroups:
+  - appstudio.redhat.com
+  resources:
+  - enterprisecontractpolicies
+  verbs:
+  - get
+  - list

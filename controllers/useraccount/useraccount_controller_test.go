@@ -66,7 +66,6 @@ func TestReconcile(t *testing.T) {
 			UID:  types.UID(userAcc.Name + "identity"),
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey:    username,
-				toolchainv1alpha1.SpaceLabelKey:    username,
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 		},
@@ -81,7 +80,6 @@ func TestReconcile(t *testing.T) {
 			UID:  userUID,
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey:    username,
-				toolchainv1alpha1.SpaceLabelKey:    username,
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{
@@ -211,7 +209,6 @@ func TestReconcile(t *testing.T) {
 				UID:  userUID,
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    username,
-					toolchainv1alpha1.SpaceLabelKey:    username,
 					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 				},
 			}}
@@ -249,7 +246,6 @@ func TestReconcile(t *testing.T) {
 				UID:  userUID,
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    username,
-					toolchainv1alpha1.SpaceLabelKey:    username,
 					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 				},
 			}}
@@ -303,7 +299,6 @@ func TestReconcile(t *testing.T) {
 				UID:  types.UID(uuid.NewV4().String()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
-					toolchainv1alpha1.SpaceLabelKey:    userAcc.Name,
 					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 				},
 			}}
@@ -342,7 +337,6 @@ func TestReconcile(t *testing.T) {
 				UID:  types.UID(uuid.NewV4().String()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey: userAcc.Name,
-					toolchainv1alpha1.SpaceLabelKey: userAcc.Name,
 				},
 			}}
 			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
@@ -1232,7 +1226,6 @@ func TestDisabledUserAccount(t *testing.T) {
 			UID:  types.UID(username + "identity"),
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey: username,
-				toolchainv1alpha1.SpaceLabelKey: username,
 			},
 		},
 		User: corev1.ObjectReference{
@@ -1246,7 +1239,6 @@ func TestDisabledUserAccount(t *testing.T) {
 			UID:  userUID,
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey: username,
-				toolchainv1alpha1.SpaceLabelKey: username,
 			},
 		},
 		Identities: []string{
@@ -1723,7 +1715,6 @@ func newUserFromUserAccount(userAcc *toolchainv1alpha1.UserAccount) *userv1.User
 			UID:  userUID,
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
-				toolchainv1alpha1.SpaceLabelKey:    userAcc.Name,
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{

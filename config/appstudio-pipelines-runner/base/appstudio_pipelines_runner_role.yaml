@@ -48,6 +48,7 @@ rules:
   resourceNames:
   - csi-scc
   - pipelines-scc
+  - appstudio-pipelines-scc
   resources:
   - securitycontextconstraints
   verbs:

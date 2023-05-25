@@ -6,12 +6,14 @@ import (
 	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/host-operator/controllers/toolchainconfig"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
+	"github.com/google/go-github/v52/github"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -61,6 +63,8 @@ type Reconciler struct {
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 	AllNamespacesClient client.Client
 	CheClient           *che.Client
+	GithubClient        *github.Client
+	toolchainConfig     toolchainconfig.ToolchainConfig
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses,verbs=get;list;watch;create;update;patch;delete
@@ -174,25 +178,35 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 	}
 
 	// Look up status of member deployment
-	memberOperatorName, err := configuration.GetOperatorName()
-	if err != nil {
-		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, err.Error())
+	memberOperatorName, errDeploy := configuration.GetOperatorName()
+	if errDeploy != nil {
+		errDeploy = errs.Wrap(errDeploy, status.ErrMsgCannotGetDeployment)
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, errDeploy.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
-		return err
+		return errDeploy
 	}
 	memberOperatorDeploymentName := fmt.Sprintf("%s-controller-manager", memberOperatorName)
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// Check member operator deployment status
 	deploymentConditions := status.GetDeploymentStatusConditions(r.Client, memberOperatorDeploymentName, memberStatus.Namespace)
-	err = status.ValidateComponentConditionReady(deploymentConditions...)
-
-	// Update memberstatus
+	errDeploy = status.ValidateComponentConditionReady(deploymentConditions...)
 	operatorStatus.Conditions = deploymentConditions
 	memberStatus.Status.MemberOperator = operatorStatus
-	return err
+
+	// if we are running in production we also
+	// check that deployed version matches source code repository commit
+	if r.toolchainConfig.Environment() == "prod" {
+		versionCondition := status.CheckDeployedVersionIsUpToDate(r.GithubClient, "member-operator", "master", version.Commit)
+		errVersionCheck := status.ValidateComponentConditionReady([]toolchainv1alpha1.Condition{*versionCondition}...)
+		memberStatus.Status.MemberOperator.Conditions = append(memberStatus.Status.MemberOperator.Conditions, *versionCondition)
+		if errVersionCheck != nil {
+			return errVersionCheck // we can return
+		}
+	}
+
+	return errDeploy
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status

@@ -107,16 +107,18 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioned())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			HasLabel("toolchain.dev.openshift.com/owner", spacename).
-			HasLabel("toolchain.dev.openshift.com/type", "dev").
-			HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
-			HasLabel("toolchain.dev.openshift.com/tier", "basic").
+			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+			HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
+			HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
-			HasLabel("toolchain.dev.openshift.com/owner", spacename).
-			HasLabel("toolchain.dev.openshift.com/type", "stage").
-			HasLabel("toolchain.dev.openshift.com/templateref", "basic-stage-abcde11").
-			HasLabel("toolchain.dev.openshift.com/tier", "basic").
+			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.TypeLabelKey, "stage").
+			HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-stage-abcde11").
+			HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 	})
 
@@ -207,11 +209,12 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-dev", r.Client).
 			HasNoOwnerReference().
-			HasLabel("toolchain.dev.openshift.com/owner", spacename).
-			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasNoLabel("toolchain.dev.openshift.com/templateref").
-			HasNoLabel("toolchain.dev.openshift.com/tier")
+			HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
+			HasNoLabel(toolchainv1alpha1.TierLabelKey)
 	})
 
 	t.Run("should recreate rolebinding when missing", func(t *testing.T) {
@@ -660,10 +663,11 @@ func TestProvisionTwoUsers(t *testing.T) {
 						HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
 						HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
 					AssertThatNamespace(t, spacename+"-dev", fakeClient).
-						HasLabel("toolchain.dev.openshift.com/owner", spacename).
-						HasLabel("toolchain.dev.openshift.com/type", "dev").
-						HasNoLabel("toolchain.dev.openshift.com/templateref"). // no label until all the namespace inner resources have been created
-						HasNoLabel("toolchain.dev.openshift.com/tier").
+						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+						HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey). // no label until all the namespace inner resources have been created
+						HasNoLabel(toolchainv1alpha1.TierLabelKey).
 						HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 
 					t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
@@ -681,10 +685,11 @@ func TestProvisionTwoUsers(t *testing.T) {
 							HasSpecNamespaces("dev").
 							HasConditions(Provisioning())
 						AssertThatNamespace(t, spacename+"-dev", fakeClient).
-							HasLabel("toolchain.dev.openshift.com/owner", spacename).
-							HasLabel("toolchain.dev.openshift.com/type", "dev").
-							HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-							HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+							HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+							HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+							HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+							HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+							HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
 							HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 							HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 						AssertThatCluster(t, fakeClient).
@@ -774,10 +779,11 @@ func TestProvisionTwoUsers(t *testing.T) {
 											HasSpecNamespaces("dev").
 											HasConditions(Provisioning())
 										AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-											HasLabel("toolchain.dev.openshift.com/owner", joeUsername).
-											HasLabel("toolchain.dev.openshift.com/type", "dev").
-											HasNoLabel("toolchain.dev.openshift.com/templateref").
-											HasNoLabel("toolchain.dev.openshift.com/tier").
+											HasLabel(toolchainv1alpha1.OwnerLabelKey, joeUsername).
+											HasLabel(toolchainv1alpha1.SpaceLabelKey, joeUsername).
+											HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+											HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
+											HasNoLabel(toolchainv1alpha1.TierLabelKey).
 											HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 										AssertThatCluster(t, fakeClient).
 											HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
@@ -798,10 +804,11 @@ func TestProvisionTwoUsers(t *testing.T) {
 												HasSpecNamespaces("dev").
 												HasConditions(Provisioning())
 											AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-												HasLabel("toolchain.dev.openshift.com/owner", joeUsername).
-												HasLabel("toolchain.dev.openshift.com/type", "dev").
-												HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-												HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+												HasLabel(toolchainv1alpha1.OwnerLabelKey, joeUsername).
+												HasLabel(toolchainv1alpha1.SpaceLabelKey, joeUsername).
+												HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+												HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+												HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
 												HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 												HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 											AssertThatCluster(t, fakeClient).
@@ -858,18 +865,19 @@ func TestReconcilePromotion(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-					WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
+					WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+					WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")). // upgraded
 				HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 			for _, nsType := range []string{"stage", "dev"} {
 				AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 					HasNoOwnerReference().
-					HasLabel("toolchain.dev.openshift.com/owner", spacename).
-					HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11"). // not upgraded yet
-					HasLabel("toolchain.dev.openshift.com/tier", "basic").
-					HasLabel("toolchain.dev.openshift.com/type", nsType).
-					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-"+nsType+"-abcde11"). // not upgraded yet
+					HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
+					HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 					HasResource("exec-pods", &rbacv1.Role{})
 			}
 
@@ -884,17 +892,18 @@ func TestReconcilePromotion(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-						WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-						WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+						WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+						WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 					HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 				for _, nsType := range []string{"stage", "dev"} {
 					AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 						HasNoOwnerReference().
-						HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11"). // not upgraded yet
-						HasLabel("toolchain.dev.openshift.com/owner", spacename).
-						HasLabel("toolchain.dev.openshift.com/tier", "basic"). // not upgraded yet
-						HasLabel("toolchain.dev.openshift.com/type", nsType).
-						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-"+nsType+"-abcde11"). // not upgraded yet
+						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.TierLabelKey, "basic"). // not upgraded yet
+						HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
+						HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 						HasResource("exec-pods", &rbacv1.Role{})
 				}
 
@@ -905,8 +914,8 @@ func TestReconcilePromotion(t *testing.T) {
 					require.NoError(t, err)
 					AssertThatCluster(t, fakeClient).
 						HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{},
-							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-							WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // created
+							WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+							WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")) // created
 
 					// when
 					_, err = r.Reconcile(context.TODO(), req)
@@ -918,8 +927,8 @@ func TestReconcilePromotion(t *testing.T) {
 					AssertThatCluster(t, fakeClient).
 						HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}). // still exists (no need to check again the labels)
 						HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{},
-							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-							WithLabel("toolchain.dev.openshift.com/tier", "advanced")) // created
+							WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+							WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")) // created
 
 					t.Run("delete redundant namespace", func(t *testing.T) {
 
@@ -933,17 +942,18 @@ func TestReconcilePromotion(t *testing.T) {
 							HasConditions(Updating())
 						AssertThatCluster(t, fakeClient).
 							HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-								WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+								WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+								WithLabel(toolchainv1alpha1.TierLabelKey, "advanced"))
 						AssertThatNamespace(t, stageNS.Name, r.Client).
 							DoesNotExist() // namespace was deleted
 						AssertThatNamespace(t, devNS.Name, r.Client).
 							HasNoOwnerReference().
-							HasLabel("toolchain.dev.openshift.com/owner", spacename).
-							HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
-							HasLabel("toolchain.dev.openshift.com/type", "dev").
-							HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-							HasLabel("toolchain.dev.openshift.com/tier", "basic") // not upgraded yet
+							HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+							HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+							HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
+							HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+							HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
+							HasLabel(toolchainv1alpha1.TierLabelKey, "basic") // not upgraded yet
 
 						t.Run("upgrade the dev namespace", func(t *testing.T) {
 							// when - should upgrade the namespace
@@ -957,17 +967,18 @@ func TestReconcilePromotion(t *testing.T) {
 								HasConditions(Updating())
 							AssertThatCluster(t, fakeClient).
 								HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-									WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-									WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+									WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+									WithLabel(toolchainv1alpha1.TierLabelKey, "advanced"))
 							AssertThatNamespace(t, stageNS.Name, r.Client).
 								DoesNotExist()
 							AssertThatNamespace(t, spacename+"-dev", r.Client).
 								HasNoOwnerReference().
-								HasLabel("toolchain.dev.openshift.com/owner", spacename).
-								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-								HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-								HasLabel("toolchain.dev.openshift.com/type", "dev").
-								HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+								HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+								HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+								HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+								HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+								HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+								HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 								HasResource("exec-pods", &rbacv1.Role{}).
 								HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 								HasResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -987,14 +998,15 @@ func TestReconcilePromotion(t *testing.T) {
 									HasConditions(Provisioned())
 								AssertThatCluster(t, fakeClient).
 									HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-										WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+										WithLabel(toolchainv1alpha1.TierLabelKey, "advanced"))
 								AssertThatNamespace(t, spacename+"-dev", r.Client).
 									HasNoOwnerReference().
-									HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-									HasLabel("toolchain.dev.openshift.com/owner", spacename).
-									HasLabel("toolchain.dev.openshift.com/tier", "advanced"). // not updgraded yet
-									HasLabel("toolchain.dev.openshift.com/type", "dev").
-									HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+									HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+									HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+									HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+									HasLabel(toolchainv1alpha1.TierLabelKey, "advanced"). // not updgraded yet
+									HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+									HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 									HasResource("crtadmin-pods", &rbacv1.RoleBinding{}) // role has been removed
 							})
 						})
@@ -1049,20 +1061,21 @@ func TestReconcileUpdate(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
-					WithLabel("toolchain.dev.openshift.com/tier", "advanced")). // upgraded
+					WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+					WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")). // upgraded
 				HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{},
-					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
-					WithLabel("toolchain.dev.openshift.com/tier", "advanced"))
+					WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde11"),
+					WithLabel(toolchainv1alpha1.TierLabelKey, "advanced"))
 
 			for _, nsType := range []string{"stage", "dev"} {
 				AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 					HasNoOwnerReference().
-					HasLabel("toolchain.dev.openshift.com/owner", spacename).
-					HasLabel("toolchain.dev.openshift.com/templateref", "advanced-"+nsType+"-abcde11"). // not upgraded yet
-					HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-					HasLabel("toolchain.dev.openshift.com/type", nsType).
-					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-"+nsType+"-abcde11"). // not upgraded yet
+					HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+					HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 					HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 					HasResource("exec-pods", &rbacv1.Role{}).
 					HasResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1079,17 +1092,18 @@ func TestReconcileUpdate(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-														WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
-														WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+														WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+														WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 					HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}) // deleted
 				for _, nsType := range []string{"stage", "dev"} {
 					AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 						HasNoOwnerReference().
-						HasLabel("toolchain.dev.openshift.com/owner", spacename).
-						HasLabel("toolchain.dev.openshift.com/templateref", "advanced-"+nsType+"-abcde11"). // not upgraded yet
-						HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-						HasLabel("toolchain.dev.openshift.com/type", nsType).
-						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-"+nsType+"-abcde11"). // not upgraded yet
+						HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+						HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
+						HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 						HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 						HasResource("exec-pods", &rbacv1.Role{}).
 						HasResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1107,18 +1121,19 @@ func TestReconcileUpdate(t *testing.T) {
 						HasConditions(Updating())
 					AssertThatCluster(t, fakeClient).
 						HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-							WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
-							WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+							WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+							WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 						HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 					AssertThatNamespace(t, stageNS.Name, r.Client).
 						DoesNotExist() // namespace was deleted
 					AssertThatNamespace(t, devNS.Name, r.Client).
 						HasNoOwnerReference().
-						HasLabel("toolchain.dev.openshift.com/owner", spacename).
-						HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // not upgraded yet
-						HasLabel("toolchain.dev.openshift.com/type", "dev").
-						HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-						HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // not upgraded yet
+						HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+						HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
+						HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
 						HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 						HasResource("exec-pods", &rbacv1.Role{}).
 						HasResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1135,18 +1150,19 @@ func TestReconcileUpdate(t *testing.T) {
 							HasConditions(Updating())
 						AssertThatCluster(t, fakeClient).
 							HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-								WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
-								WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+								WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+								WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 							HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 						AssertThatNamespace(t, stageNS.Name, r.Client).
 							DoesNotExist()
 						AssertThatNamespace(t, devNS.Name, r.Client).
 							HasNoOwnerReference().
-							HasLabel("toolchain.dev.openshift.com/owner", spacename).
-							HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde12"). // upgraded
-							HasLabel("toolchain.dev.openshift.com/type", "dev").
-							HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-							HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+							HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+							HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+							HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
+							HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+							HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
+							HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
 							HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 							HasResource("exec-pods", &rbacv1.Role{}).
 							HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1166,18 +1182,19 @@ func TestReconcileUpdate(t *testing.T) {
 								HasConditions(Provisioned())
 							AssertThatCluster(t, fakeClient).
 								HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-									WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde12"),
-									WithLabel("toolchain.dev.openshift.com/tier", "advanced")).
+									WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+									WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 								HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 							AssertThatNamespace(t, stageNS.Name, r.Client).
 								DoesNotExist()
 							AssertThatNamespace(t, devNS.Name, r.Client).
 								HasNoOwnerReference().
-								HasLabel("toolchain.dev.openshift.com/owner", spacename).
-								HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde12"). // upgraded
-								HasLabel("toolchain.dev.openshift.com/type", "dev").
-								HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-								HasLabel("toolchain.dev.openshift.com/tier", "advanced").
+								HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+								HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+								HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
+								HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+								HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
+								HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
 								HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 								HasResource("exec-pods", &rbacv1.Role{}).
 								HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1661,13 +1678,14 @@ func withConditions(conditions ...toolchainv1alpha1.Condition) nsTmplSetOption {
 
 func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *corev1.Namespace {
 	labels := map[string]string{
-		"toolchain.dev.openshift.com/owner":    owner,
-		"toolchain.dev.openshift.com/type":     typeName,
-		"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+		toolchainv1alpha1.OwnerLabelKey:    owner,
+		toolchainv1alpha1.SpaceLabelKey:    owner,
+		toolchainv1alpha1.TypeLabelKey:     typeName,
+		toolchainv1alpha1.ProviderLabelKey: "codeready-toolchain",
 	}
 	if tier != "" {
-		labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, "abcde11")
-		labels["toolchain.dev.openshift.com/tier"] = tier
+		labels[toolchainv1alpha1.TemplateRefLabelKey] = NewTierTemplateName(tier, typeName, "abcde11")
+		labels[toolchainv1alpha1.TierLabelKey] = tier
 	}
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1688,8 +1706,9 @@ func newRoleBinding(namespace, name, owner string) *rbacv1.RoleBinding { //nolin
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    owner,
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.OwnerLabelKey:    owner,
+				toolchainv1alpha1.SpaceLabelKey:    owner,
 			},
 		},
 	}
@@ -1701,8 +1720,9 @@ func newRole(namespace, name, owner string) *rbacv1.Role { //nolint: unparam
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    owner,
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.OwnerLabelKey:    owner,
+				toolchainv1alpha1.SpaceLabelKey:    owner,
 			},
 		},
 	}
@@ -1716,11 +1736,12 @@ func newTektonClusterRoleBinding(spacename, tier string) *rbacv1.ClusterRoleBind
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":        tier,
-				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "clusterresources", "abcde11"),
-				"toolchain.dev.openshift.com/owner":       spacename,
-				"toolchain.dev.openshift.com/type":        "clusterresources",
+				toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.TierLabelKey:        tier,
+				toolchainv1alpha1.TemplateRefLabelKey: NewTierTemplateName(tier, "clusterresources", "abcde11"),
+				toolchainv1alpha1.OwnerLabelKey:       spacename,
+				toolchainv1alpha1.SpaceLabelKey:       spacename,
+				toolchainv1alpha1.TypeLabelKey:        "clusterresources",
 			},
 			Name:       spacename + "-tekton-view",
 			Generation: int64(1),
@@ -1746,11 +1767,12 @@ func newClusterResourceQuota(spacename, tier string, options ...objectMetaOption
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":        tier,
-				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tier, "clusterresources", "abcde11"),
-				"toolchain.dev.openshift.com/owner":       spacename,
-				"toolchain.dev.openshift.com/type":        "clusterresources",
+				toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.TierLabelKey:        tier,
+				toolchainv1alpha1.TemplateRefLabelKey: NewTierTemplateName(tier, "clusterresources", "abcde11"),
+				toolchainv1alpha1.OwnerLabelKey:       spacename,
+				toolchainv1alpha1.SpaceLabelKey:       spacename,
+				toolchainv1alpha1.TypeLabelKey:        "clusterresources",
 			},
 			Annotations: map[string]string{},
 			Name:        "for-" + spacename,
@@ -1784,11 +1806,12 @@ func newIdler(spacename, name, tierName string) *toolchainv1alpha1.Idler { // no
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider":    "codeready-toolchain",
-				"toolchain.dev.openshift.com/tier":        tierName,
-				"toolchain.dev.openshift.com/templateref": NewTierTemplateName(tierName, "clusterresources", "abcde11"),
-				"toolchain.dev.openshift.com/owner":       spacename,
-				"toolchain.dev.openshift.com/type":        "clusterresources",
+				toolchainv1alpha1.ProviderLabelKey:    "codeready-toolchain",
+				toolchainv1alpha1.TierLabelKey:        tierName,
+				toolchainv1alpha1.TemplateRefLabelKey: NewTierTemplateName(tierName, "clusterresources", "abcde11"),
+				toolchainv1alpha1.OwnerLabelKey:       spacename,
+				toolchainv1alpha1.SpaceLabelKey:       spacename,
+				toolchainv1alpha1.TypeLabelKey:        "clusterresources",
 			},
 			Name:       name,
 			Generation: int64(1),
@@ -1813,7 +1836,7 @@ func withLabels(labels map[string]string) objectMetaOption {
 
 func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
-		meta.Labels["toolchain.dev.openshift.com/templateref"] = NewTierTemplateName(tier, typeName, revision)
+		meta.Labels[toolchainv1alpha1.TemplateRefLabelKey] = NewTierTemplateName(tier, typeName, revision)
 		return meta
 	}
 }

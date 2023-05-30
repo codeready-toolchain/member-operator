@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/host-operator/controllers/toolchainconfig"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -64,7 +63,6 @@ type Reconciler struct {
 	AllNamespacesClient client.Client
 	CheClient           *che.Client
 	GithubClient        *github.Client
-	toolchainConfig     toolchainconfig.ToolchainConfig
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses,verbs=get;list;watch;create;update;patch;delete
@@ -170,7 +168,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, _ membercfg.Configuration) error {
+func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
 	operatorStatus := &toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
 		Revision:       version.Commit,
@@ -197,7 +195,7 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 
 	// if we are running in production we also
 	// check that deployed version matches source code repository commit
-	if r.toolchainConfig.Environment() == "prod" {
+	if memberConfig.MemberEnvironment() == "prod" {
 		versionCondition := status.CheckDeployedVersionIsUpToDate(r.GithubClient, "member-operator", "master", version.Commit)
 		errVersionCheck := status.ValidateComponentConditionReady([]toolchainv1alpha1.Condition{*versionCondition}...)
 		memberStatus.Status.MemberOperator.Conditions = append(memberStatus.Status.MemberOperator.Conditions, *versionCondition)

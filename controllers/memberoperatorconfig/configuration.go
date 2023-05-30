@@ -91,6 +91,10 @@ func (c *Configuration) Console() ConsoleConfig {
 	return ConsoleConfig{console: c.cfg.Console}
 }
 
+func (c *Configuration) MemberEnvironment() string {
+	return commonconfig.GetString(c.cfg.Environment, "prod")
+}
+
 func (c *Configuration) MemberStatus() MemberStatusConfig {
 	return MemberStatusConfig{c.cfg.MemberStatus}
 }

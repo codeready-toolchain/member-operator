@@ -92,7 +92,11 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 	}
 
 	// create namespace before creating inner resources because creating the namespace may take some time
-	if createOrUpdateNamespace {
+	if createOrUpdateNamespace ||
+		// --- start temporary logic
+		// this will trigger an update in order to set the SpaceLabelKey on the namespace object
+		!hasSpaceLabelSet(userNamespace) {
+		// -- end of temporary migration logic
 		return r.ensureNamespaceResource(logger, nsTmplSet, tierTemplate)
 	}
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tierTemplate, userNamespace)
@@ -157,6 +161,7 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 
 	labels := map[string]string{
 		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
+		toolchainv1alpha1.SpaceLabelKey:    nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:     tierTemplate.typeName,
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 	}
@@ -208,6 +213,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
+		toolchainv1alpha1.SpaceLabelKey:    nsTmplSet.GetName(),
 	}
 	if _, err = r.ApplyToolchainObjects(logger, newObjs, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
@@ -350,6 +356,12 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
 func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
 	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
+	// --- start temporary logic
+	// this will trigger an update in order to set the SpaceLabelKey on namespace object
+	if !hasSpaceLabelSet(ns) {
+		return false, nil
+	}
+	// -- end of temporary migration logic
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {

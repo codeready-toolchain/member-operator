@@ -120,5 +120,6 @@ func (a *NamespaceAssertion) ResourceHasOwnerLabel(name string, obj client.Objec
 	labels := obj.GetLabels()
 	assert.Equal(a.t, labels[toolchainv1alpha1.ProviderLabelKey], toolchainv1alpha1.ProviderLabelValue)
 	assert.Equal(a.t, labels[toolchainv1alpha1.OwnerLabelKey], owner)
+	assert.Equal(a.t, labels[toolchainv1alpha1.SpaceLabelKey], owner)
 	return a
 }

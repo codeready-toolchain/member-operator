@@ -53,27 +53,33 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRole(t, "oddity-appstudio", "space-viewer", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user3-space-viewer", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user4-space-viewer", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName())
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			// also verify that the `last-applied-space-roles` annotation was set on namespace
 			lastApplied, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
 			require.NoError(t, err)
@@ -135,7 +141,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				// at this point, the NSTemplateSet is still in `updating` state
 				AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 					HasConditions(Updating())
-					// verify that role bindings for `user1` and `user2`` still exist and thet one was added for `user3`
+				// verify that role bindings for `user1` and `user2`` still exist and thet one was added for `user3`
 				AssertThatRole(t, "oddity-dev", "space-admin", memberClient).Exists()              // unchanged
 				AssertThatRoleBinding(t, "oddity-dev", "user1-space-admin", memberClient).Exists() // unchanged
 				AssertThatRoleBinding(t, "oddity-dev", "user2-space-admin", memberClient).Exists() // unchanged
@@ -193,7 +199,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				// at this point, the NSTemplateSet is still in `updating` state
 				AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 					HasConditions(Updating())
-					// then verify that roles and rolebindings still exist, but nothing changed
+				// then verify that roles and rolebindings still exist, but nothing changed
 				assert.False(t, createdOrUpdated)
 				AssertThatRole(t, "oddity-dev", "space-admin", memberClient).Exists()              // created
 				AssertThatRoleBinding(t, "oddity-dev", "user1-space-admin", memberClient).Exists() // created

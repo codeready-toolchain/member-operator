@@ -14,6 +14,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
+	"github.com/codeready-toolchain/member-operator/pkg/metrics"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -32,7 +33,7 @@ import (
 	"k8s.io/client-go/scale"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
-	metrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
+	kmetrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,6 +54,8 @@ func init() {
 
 	utilruntime.Must(apis.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	metrics.RegisterCustomMetrics()
 }
 
 func printVersion() {
@@ -161,7 +164,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "2fc71baf.toolchain.member.operator",
 		Namespace:              namespace,
-		ClientDisableCacheFor:  []client.Object{&metrics.NodeMetrics{}},
+		ClientDisableCacheFor:  []client.Object{&kmetrics.NodeMetrics{}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

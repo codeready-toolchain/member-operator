@@ -66,8 +66,8 @@ func TestReconcile(t *testing.T) {
 			Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
 			UID:  types.UID(userAcc.Name + "identity"),
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/owner": username,
-				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.OwnerLabelKey:    username,
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 		},
 		User: corev1.ObjectReference{
@@ -95,8 +95,8 @@ func TestReconcile(t *testing.T) {
 			Name: userAcc.Name,
 			UID:  userUID,
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/owner": username,
-				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.OwnerLabelKey:    username,
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{
 				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
@@ -223,9 +223,12 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-				Name:   username,
-				UID:    userUID,
-				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username, toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue},
+				Name: username,
+				UID:  userUID,
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey:    username,
+					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+				},
 			}}
 			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			reconcile(r, req)
@@ -257,9 +260,12 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingUserWithNoMapping := &userv1.User{ObjectMeta: metav1.ObjectMeta{
-				Name:   username,
-				UID:    userUID,
-				Labels: map[string]string{"toolchain.dev.openshift.com/owner": username, toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue},
+				Name: username,
+				UID:  userUID,
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey:    username,
+					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+				},
 			}}
 			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUserWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
@@ -307,9 +313,12 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:   ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-				UID:    types.UID(uuid.NewV4().String()),
-				Labels: map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name, toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue},
+				Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+				UID:  types.UID(uuid.NewV4().String()),
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
+					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+				},
 			}}
 
 			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
@@ -342,9 +351,11 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name:   ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-				UID:    types.UID(uuid.NewV4().String()),
-				Labels: map[string]string{"toolchain.dev.openshift.com/owner": userAcc.Name},
+				Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+				UID:  types.UID(uuid.NewV4().String()),
+				Labels: map[string]string{
+					toolchainv1alpha1.OwnerLabelKey: userAcc.Name,
+				},
 			}}
 			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser, preexistingIdentityWithNoMapping)
 			fakeClient.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
@@ -986,7 +997,7 @@ func TestReconcile(t *testing.T) {
 						config.Auth().Idp())}, identity2)
 					require.NoError(t, err)
 					assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), identity2.Name)
-					require.Equal(t, userAcc.Name, identity2.Labels["toolchain.dev.openshift.com/owner"])
+					require.Equal(t, userAcc.Name, identity2.Labels[toolchainv1alpha1.OwnerLabelKey])
 					assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
 
 					t.Run("reconcile once more to ensure the users", func(t *testing.T) {
@@ -1415,9 +1426,11 @@ func TestDisabledUserAccount(t *testing.T) {
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-			UID:    types.UID(username + "identity"),
-			Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
+			Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+			UID:  types.UID(username + "identity"),
+			Labels: map[string]string{
+				toolchainv1alpha1.OwnerLabelKey: username,
+			},
 		},
 		User: corev1.ObjectReference{
 			Name: username,
@@ -1426,9 +1439,11 @@ func TestDisabledUserAccount(t *testing.T) {
 	}
 	preexistingUser := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   username,
-			UID:    userUID,
-			Labels: map[string]string{"toolchain.dev.openshift.com/owner": username},
+			Name: username,
+			UID:  userUID,
+			Labels: map[string]string{
+				toolchainv1alpha1.OwnerLabelKey: username,
+			},
 		},
 		Identities: []string{
 			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
@@ -1825,7 +1840,7 @@ func assertUser(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAcco
 	require.NoError(t, err)
 
 	require.NotNil(t, user.Labels)
-	assert.Equal(t, userAcc.Name, user.Labels["toolchain.dev.openshift.com/owner"])
+	assert.Equal(t, userAcc.Name, user.Labels[toolchainv1alpha1.OwnerLabelKey])
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, user.Labels[toolchainv1alpha1.ProviderLabelKey])
 
 	assert.NotNil(t, user.Annotations)
@@ -1854,7 +1869,7 @@ func assertIdentityForUserID(t *testing.T, r *Reconciler, userAcc *toolchainv1al
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: identity2.NewIdentityNamingStandard(userID, idp).IdentityName()}, identity)
 	require.NoError(t, err)
 	require.NotNil(t, identity.Labels)
-	assert.Equal(t, userAcc.Name, identity.Labels["toolchain.dev.openshift.com/owner"])
+	assert.Equal(t, userAcc.Name, identity.Labels[toolchainv1alpha1.OwnerLabelKey])
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, identity.Labels[toolchainv1alpha1.ProviderLabelKey])
 	assert.Nil(t, identity.Annotations)
 	assert.Empty(t, identity.OwnerReferences) // User has no explicit owner reference.// Check the user identity mapping

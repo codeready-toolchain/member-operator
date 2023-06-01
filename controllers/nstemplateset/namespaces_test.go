@@ -53,7 +53,7 @@ func TestFindNamespace(t *testing.T) {
 		namespace, found := findNamespace(namespaces, typeName)
 		require.True(t, found)
 		assert.NotNil(t, namespace)
-		assert.Equal(t, typeName, namespace.GetLabels()["toolchain.dev.openshift.com/type"])
+		assert.Equal(t, typeName, namespace.GetLabels()[toolchainv1alpha1.TypeLabelKey])
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -77,7 +77,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
 
-		delete(userNamespaces[1].Labels, "toolchain.dev.openshift.com/templateref")
+		delete(userNamespaces[1].Labels, toolchainv1alpha1.TemplateRefLabelKey)
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
@@ -92,7 +92,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	t.Run("return namespace whose revision is different than in tier", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-stage-123"
+		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "basic-stage-123"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
@@ -107,7 +107,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	t.Run("return namespace whose tier label is different than the tier name", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[0].Labels["toolchain.dev.openshift.com/tier"] = "advanced"
+		userNamespaces[0].Labels[toolchainv1alpha1.TierLabelKey] = "advanced"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
@@ -122,7 +122,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	t.Run("return namespace whose tier is different", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "outdated"
+		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "outdated"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
@@ -139,7 +139,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	t.Run("return namespace that is not part of user namespaces", func(t *testing.T) {
 		// given
 		userNamespaces, tierTemplates := createUserNamespacesAndTierTemplates()
-		userNamespaces[1].Labels["toolchain.dev.openshift.com/templateref"] = "basic-stage-abcde21"
+		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "basic-stage-abcde21"
 
 		// when
 		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
@@ -157,10 +157,11 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces = append(userNamespaces, corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-other", Labels: map[string]string{
-					"toolchain.dev.openshift.com/tier":        "basic",
-					"toolchain.dev.openshift.com/type":        "other",
-					"toolchain.dev.openshift.com/templateref": "basic-other-abcde15",
-					"toolchain.dev.openshift.com/owner":       "johnsmith",
+					toolchainv1alpha1.TierLabelKey:        "basic",
+					toolchainv1alpha1.TypeLabelKey:        "other",
+					toolchainv1alpha1.TemplateRefLabelKey: "basic-other-abcde15",
+					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
+					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -214,10 +215,11 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev", Labels: map[string]string{
-					"toolchain.dev.openshift.com/tier":        "basic",
-					"toolchain.dev.openshift.com/type":        "dev",
-					"toolchain.dev.openshift.com/templateref": "basic-dev-abcde11",
-					"toolchain.dev.openshift.com/owner":       "johnsmith",
+					toolchainv1alpha1.TierLabelKey:        "basic",
+					toolchainv1alpha1.TypeLabelKey:        "dev",
+					toolchainv1alpha1.TemplateRefLabelKey: "basic-dev-abcde11",
+					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
+					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -225,10 +227,11 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-stage", Labels: map[string]string{
-					"toolchain.dev.openshift.com/tier":        "basic",
-					"toolchain.dev.openshift.com/type":        "stage",
-					"toolchain.dev.openshift.com/templateref": "basic-stage-abcde21",
-					"toolchain.dev.openshift.com/owner":       "johnsmith",
+					toolchainv1alpha1.TierLabelKey:        "basic",
+					toolchainv1alpha1.TypeLabelKey:        "stage",
+					toolchainv1alpha1.TemplateRefLabelKey: "basic-stage-abcde21",
+					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
+					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -260,14 +263,14 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev", Labels: map[string]string{
-					"toolchain.dev.openshift.com/type": "dev",
+					toolchainv1alpha1.TypeLabelKey: "dev",
 				},
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-stage", Labels: map[string]string{
-					"toolchain.dev.openshift.com/type": "stage",
+					toolchainv1alpha1.TypeLabelKey: "stage",
 				},
 			},
 		},
@@ -413,11 +416,12 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-dev", manager.Client).
 			HasNoOwnerReference().
-			HasLabel("toolchain.dev.openshift.com/owner", spacename).
-			HasLabel("toolchain.dev.openshift.com/type", "dev").
+			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasNoLabel("toolchain.dev.openshift.com/templateref").
-			HasNoLabel("toolchain.dev.openshift.com/tier")
+			HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
+			HasNoLabel(toolchainv1alpha1.TierLabelKey)
 		AssertThatNamespace(t, spacename+"-stage", manager.Client).
 			DoesNotExist()
 	})
@@ -441,11 +445,12 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasNoOwnerReference().
-			HasLabel("toolchain.dev.openshift.com/owner", spacename).
-			HasLabel("toolchain.dev.openshift.com/type", "stage").
+			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.TypeLabelKey, "stage").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-			HasNoLabel("toolchain.dev.openshift.com/templateref").
-			HasNoLabel("toolchain.dev.openshift.com/tier")
+			HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
+			HasNoLabel(toolchainv1alpha1.TierLabelKey)
 
 	})
 
@@ -466,10 +471,11 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			HasLabel("toolchain.dev.openshift.com/owner", spacename).
-			HasLabel("toolchain.dev.openshift.com/type", "dev").
-			HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
-			HasLabel("toolchain.dev.openshift.com/tier", "basic").
+			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+			HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
+			HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 		AssertThatNamespace(t, spacename+"-stage", manager.Client).
@@ -496,10 +502,11 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		for _, nsType := range []string{"stage", "dev"} {
 			AssertThatNamespace(t, spacename+"-"+nsType, fakeClient).
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", nsType).
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-"+nsType+"-abcde11").
-				HasLabel("toolchain.dev.openshift.com/tier", "basic").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-"+nsType+"-abcde11").
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 		}
@@ -819,11 +826,12 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
-				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
+				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
 		})
@@ -833,7 +841,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
-			devNS.Labels["toolchain.dev.openshift.com/tier"] = "base"
+			devNS.Labels[toolchainv1alpha1.TierLabelKey] = "base"
 			ro := newRole(devNS.Name, "exec-pods", spacename)
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
@@ -849,11 +857,12 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
-				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
+				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
 		})
@@ -879,11 +888,12 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // downgraded
-				HasLabel("toolchain.dev.openshift.com/tier", "basic").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11"). // downgraded
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasNoResource("exec-pods", &rbacv1.Role{}). // role does not exist
 				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -910,11 +920,12 @@ func TestPromoteNamespaces(t *testing.T) {
 				DoesNotExist() // namespace was deleted
 			AssertThatNamespace(t, devNS.Name, cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // not upgraded yet
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11"). // not upgraded yet
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 
 			t.Run("uprade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
 
@@ -929,11 +940,12 @@ func TestPromoteNamespaces(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatNamespace(t, devNS.Name, cl).
 					HasNoOwnerReference().
-					HasLabel("toolchain.dev.openshift.com/owner", spacename).
-					HasLabel("toolchain.dev.openshift.com/type", "dev").
-					HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
-					HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
+					HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 					HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 					HasResource("exec-pods", &rbacv1.Role{})
 			})
@@ -960,11 +972,12 @@ func TestPromoteNamespaces(t *testing.T) {
 					"unable to retrieve the TierTemplate 'fail-dev-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"fail-dev-abcde11\" not found"))
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "fail-dev-abcde11"). // the unknown tier that caused the error
-				HasLabel("toolchain.dev.openshift.com/tier", "fail")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "fail-dev-abcde11"). // the unknown tier that caused the error
+				HasLabel(toolchainv1alpha1.TierLabelKey, "fail")
 		})
 
 		t.Run("fail to delete redundant namespace while upgrading tier", func(t *testing.T) {
@@ -987,18 +1000,20 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(UpdateFailed("mock error: '*v1.Namespace'")) // failed to delete NS
 			AssertThatNamespace(t, spacename+"-stage", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "stage").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-stage-abcde11"). // unchanged, namespace was not deleted
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "stage").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-stage-abcde11"). // unchanged, namespace was not deleted
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11"). // not upgraded
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11"). // not upgraded
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 		})
 	})
 }
@@ -1036,11 +1051,12 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde12"). // upgraded
-				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
+				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasResource("exec-pods", &rbacv1.Role{}).
 				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1066,11 +1082,12 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11"). // upgraded
-				HasLabel("toolchain.dev.openshift.com/tier", "advanced").
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
+				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasResource("exec-pods", &rbacv1.Role{}).
 				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
@@ -1096,11 +1113,12 @@ func TestUpdateNamespaces(t *testing.T) {
 				DoesNotExist() // namespace was deleted
 			AssertThatNamespace(t, devNS.Name, cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "advanced-dev-abcde11").
-				HasLabel("toolchain.dev.openshift.com/tier", "advanced")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced")
 		})
 
 		t.Run("update to basic abcde13 tier that has a new namespace label", func(t *testing.T) {
@@ -1119,9 +1137,10 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd")
 
 			t.Run("next reconcile sets templateref and tier labels", func(t *testing.T) {
@@ -1134,12 +1153,13 @@ func TestUpdateNamespaces(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatNamespace(t, spacename+"-dev", cl).
 					HasNoOwnerReference().
-					HasLabel("toolchain.dev.openshift.com/owner", spacename).
-					HasLabel("toolchain.dev.openshift.com/type", "dev").
-					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd").
-					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde13").
-					HasLabel("toolchain.dev.openshift.com/tier", "basic")
+					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde13").
+					HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
+					HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd")
 			})
 		})
 
@@ -1160,9 +1180,10 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd")
 
 			t.Run("next reconcile sets templateref and tier labels", func(t *testing.T) {
@@ -1175,12 +1196,13 @@ func TestUpdateNamespaces(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatNamespace(t, spacename+"-dev", cl).
 					HasNoOwnerReference().
-					HasLabel("toolchain.dev.openshift.com/owner", spacename).
-					HasLabel("toolchain.dev.openshift.com/type", "dev").
-					HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-					HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd").
-					HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde13").
-					HasLabel("toolchain.dev.openshift.com/tier", "basic")
+					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde13").
+					HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
+					HasLabel("argocd.argoproj.io/managed-by", "gitops-service-argocd")
 			})
 		})
 	})
@@ -1204,11 +1226,12 @@ func TestUpdateNamespaces(t *testing.T) {
 					"unable to retrieve the TierTemplate 'basic-dev-abcde15' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde15\" not found"))
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde11").
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 		})
 
 		t.Run("update from abcde15 fails because it find current template", func(t *testing.T) {
@@ -1228,11 +1251,12 @@ func TestUpdateNamespaces(t *testing.T) {
 					"unable to retrieve the TierTemplate 'basic-dev-abcde15' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde15\" not found"))
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel("toolchain.dev.openshift.com/owner", spacename).
-				HasLabel("toolchain.dev.openshift.com/type", "dev").
-				HasLabel("toolchain.dev.openshift.com/provider", "codeready-toolchain").
-				HasLabel("toolchain.dev.openshift.com/templateref", "basic-dev-abcde15").
-				HasLabel("toolchain.dev.openshift.com/tier", "basic")
+				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde15").
+				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 		})
 	})
 }
@@ -1271,10 +1295,11 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev",
 				Labels: map[string]string{
-					"toolchain.dev.openshift.com/type":        "dev",
-					"toolchain.dev.openshift.com/tier":        "advanced",
-					"toolchain.dev.openshift.com/templateref": "advanced-dev-abcde11",
-					"toolchain.dev.openshift.com/owner":       "johnsmith",
+					toolchainv1alpha1.TypeLabelKey:        "dev",
+					toolchainv1alpha1.TierLabelKey:        "advanced",
+					toolchainv1alpha1.TemplateRefLabelKey: "advanced-dev-abcde11",
+					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
+					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -1316,7 +1341,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 				Namespace: devNS.Name,
 				Name:      "exec-pods",
 				Labels: map[string]string{
-					"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 				},
 			},
 		}
@@ -1338,7 +1363,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 				Namespace: devNS.Name,
 				Name:      "crtadmin-pods",
 				Labels: map[string]string{
-					"toolchain.dev.openshift.com/provider": "codeready-toolchain",
+					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 				},
 			},
 		}

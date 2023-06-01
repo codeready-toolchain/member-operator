@@ -44,6 +44,7 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
+			// fixme: if we need to apply this new SpaceLabelKey value to ServiceAccounts as well, then we might need to remove this check temporarily.
 			if err == nil {
 				logger.Info("the object is a ServiceAccount and already exists - won't be applied")
 				continue

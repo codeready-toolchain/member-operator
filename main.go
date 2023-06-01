@@ -16,10 +16,9 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
+	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"github.com/google/go-github/v52/github"
-
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -217,13 +216,20 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Idler")
 		os.Exit(1)
 	}
+
+	memberOperatorConfig, err := membercfg.GetConfiguration(mgr.GetClient())
+	githubClient, err := commonclient.NewGitHubClient(memberOperatorConfig.GitHubSecret().AccessTokenKey())
+	if err != nil {
+		setupLog.Error(err, "unable to create github client")
+		os.Exit(1)
+	}
 	if err = (&memberstatus.Reconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
 		AllNamespacesClient: allNamespacesClient,
 		CheClient:           che.DefaultClient,
-		GithubClient:        github.NewClient(nil),
+		GithubClient:        githubClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberStatus")
 		os.Exit(1)

@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20230502074949-f8c1d80bac96
+	github.com/codeready-toolchain/api v0.0.0-20230530173150-e8a39402e87c
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20230504150220-4ca56e68a966
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9
@@ -22,7 +22,9 @@ require (
 )
 
 require (
+	github.com/gofri/go-github-ratelimit v1.0.3
 	github.com/google/go-github/v52 v52.0.0
+	golang.org/x/oauth2 v0.7.0
 	k8s.io/apiextensions-apiserver v0.25.0
 	k8s.io/apimachinery v0.25.0
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
@@ -91,7 +93,6 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/net v0.9.0 // indirect
-	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/term v0.7.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
@@ -112,6 +113,6 @@ require (
 
 go 1.19
 
-replace github.com/codeready-toolchain/toolchain-common => github.com/mfrancisc/toolchain-common v0.0.0-20230529173140-a83bdc6c0b40
+replace github.com/codeready-toolchain/toolchain-common => github.com/mfrancisc/toolchain-common v0.0.0-20230601061444-7bf8a4c8a16e
 
-replace github.com/codeready-toolchain/api => github.com/mfrancisc/api v0.0.0-20230526093749-f4f301177237
+replace github.com/codeready-toolchain/api => github.com/mfrancisc/api v0.0.0-20230531115846-9601ce4a7fc4

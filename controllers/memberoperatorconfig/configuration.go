@@ -91,6 +91,13 @@ func (c *Configuration) Console() ConsoleConfig {
 	return ConsoleConfig{console: c.cfg.Console}
 }
 
+func (c *Configuration) GitHubSecret() GitHubSecret {
+	return GitHubSecret{
+		s:       c.cfg.GitHubSecret,
+		secrets: c.secrets,
+	}
+}
+
 func (c *Configuration) MemberEnvironment() string {
 	return commonconfig.GetString(c.cfg.Environment, "prod")
 }
@@ -137,6 +144,21 @@ func (a AutoscalerConfig) BufferMemory() string {
 
 func (a AutoscalerConfig) BufferReplicas() int {
 	return commonconfig.GetInt(a.autoscaler.BufferReplicas, 2) // TODO temporarily changed to e2e value, should be changed back to 1 after autoscaler handling is moved to memberoperatorconfig controller
+}
+
+type GitHubSecret struct {
+	s       toolchainv1alpha1.GitHubSecret
+	secrets map[string]map[string]string
+}
+
+func (gh GitHubSecret) githubSecret(secretKey string) string {
+	secret := commonconfig.GetString(gh.s.Ref, "")
+	return gh.secrets[secret][secretKey]
+}
+
+func (gh GitHubSecret) AccessTokenKey() string {
+	key := commonconfig.GetString(gh.s.AccessTokenKey, "")
+	return gh.githubSecret(key)
 }
 
 type CheConfig struct {

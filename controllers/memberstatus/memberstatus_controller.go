@@ -195,7 +195,7 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 
 	// if we are running in production we also
 	// check that deployed version matches source code repository commit
-	if memberConfig.MemberEnvironment() == "prod" {
+	if memberConfig.MemberEnvironment() == "prod" && memberConfig.GitHubSecret().AccessTokenKey() != "" {
 		versionCondition := status.CheckDeployedVersionIsUpToDate(r.GithubClient, "member-operator", "master", version.Commit)
 		errVersionCheck := status.ValidateComponentConditionReady([]toolchainv1alpha1.Condition{*versionCondition}...)
 		memberStatus.Status.MemberOperator.Conditions = append(memberStatus.Status.MemberOperator.Conditions, *versionCondition)

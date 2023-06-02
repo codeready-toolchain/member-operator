@@ -43,9 +43,11 @@ const (
 	routesTag         statusComponentTag = "routes"
 	cheTag            statusComponentTag = "che"
 
-	labelNodeRoleMaster = "node-role.kubernetes.io/master"
-	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
-	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
+	labelNodeRoleMaster          = "node-role.kubernetes.io/master"
+	labelNodeRoleWorker          = "node-role.kubernetes.io/worker"
+	labelNodeRoleInfra           = "node-role.kubernetes.io/infra"
+	memberOperatorRepoName       = "member-operator"
+	memberOperatorRepoBranchName = "master"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -194,9 +196,9 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 	memberStatus.Status.MemberOperator = operatorStatus
 
 	// if we are running in production we also
-	// check that deployed version matches source code repository commit
-	if memberConfig.MemberEnvironment() == "prod" && memberConfig.GitHubSecret().AccessTokenKey() != "" {
-		versionCondition := status.CheckDeployedVersionIsUpToDate(r.GithubClient, "member-operator", "master", version.Commit)
+	// check that deployed version matches the latest commit from source code repository
+	if isProdEnvironment(memberConfig) {
+		versionCondition := status.CheckDeployedVersionIsUpToDate(r.GithubClient, memberOperatorRepoName, memberOperatorRepoBranchName, version.Commit)
 		errVersionCheck := status.ValidateComponentConditionReady([]toolchainv1alpha1.Condition{*versionCondition}...)
 		memberStatus.Status.MemberOperator.Conditions = append(memberStatus.Status.MemberOperator.Conditions, *versionCondition)
 		if errVersionCheck != nil {
@@ -205,6 +207,10 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 	}
 
 	return errDeploy
+}
+
+func isProdEnvironment(memberConfig membercfg.Configuration) bool {
+	return memberConfig.Environment() == "prod" && memberConfig.GitHubSecret().AccessTokenKey() != ""
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status

@@ -91,15 +91,14 @@ func (c *Configuration) Console() ConsoleConfig {
 	return ConsoleConfig{console: c.cfg.Console}
 }
 
-func (c *Configuration) GitHubSecret() GitHubSecret {
-	return GitHubSecret{
-		s:       c.cfg.GitHubSecret,
-		secrets: c.secrets,
-	}
+func (c *Configuration) Environment() string {
+	return commonconfig.GetString(c.cfg.Environment, "prod")
 }
 
-func (c *Configuration) MemberEnvironment() string {
-	return commonconfig.GetString(c.cfg.Environment, "prod")
+func (c *Configuration) GitHubSecret() GitHubSecret {
+	return GitHubSecret{s: c.cfg.MemberStatus.GitHubSecret,
+		secrets: c.secrets,
+	}
 }
 
 func (c *Configuration) MemberStatus() MemberStatusConfig {

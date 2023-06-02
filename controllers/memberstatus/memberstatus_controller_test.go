@@ -13,11 +13,13 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	. "github.com/codeready-toolchain/member-operator/test"
+	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
+	"github.com/google/go-github/v52/github"
 	routev1 "github.com/openshift/api/route/v1"
 	"gopkg.in/h2non/gock.v1"
 
@@ -44,6 +46,8 @@ const defaultMemberOperatorDeploymentName = "member-operator-controller-manager"
 
 const defaultMemberStatusName = membercfg.MemberStatusName
 
+const buildCommitSHA = "64af1be5c6011fae5497a7c35e2a986d633b3421"
+
 // che test constants
 const (
 	testCheURL  = "http://codeready-codeready-workspaces-operator.member-cluster/che/"
@@ -61,7 +65,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		// given
 		requestName := "bad-name"
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, _ := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
+		reconciler, req, _ := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)))
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -76,7 +80,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		expectedErrMsg := "get failed"
 		requestName := defaultMemberStatusName
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)))
 		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf(expectedErrMsg)
 		}
@@ -113,7 +117,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -130,7 +134,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(
 				forNode("combined-123", []string{"master", "worker"}, "5000000Ki", withMemoryUsage("1000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -150,7 +154,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
 				forNode("infra-123", []string{"infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
 				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -170,7 +174,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				forNode("worker-123", []string{"worker"}, "4000000Ki", withMemoryUsage("3000000Ki")),
 				forNode("infra-123", []string{"worker", "infra"}, "4000000Ki", withMemoryUsage("1250000Ki")),
 				forNode("master-123", []string{"master"}, "6000000Ki", withMemoryUsage("3000000Ki")))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -191,7 +195,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotExist
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -212,7 +216,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterNotReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -232,7 +236,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterProbeNotWorking
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -252,7 +256,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -273,7 +277,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		requestName := defaultMemberStatusName
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -293,7 +297,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentNotAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -313,7 +317,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentNotProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -334,7 +338,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		// let's create another pair of Node and NodeMetrics resources - the resulting array will contain Node as the first object and NodeMetrics as the second object
 		singleNodeAndMetrics := newNodesAndNodeMetrics(forNode("worker", []string{"worker"}, "3000000Ki"))
 		// now use only the first object - Node - and don't add the NodeMetrics so we can simulate a situation when one NodeMetrics is missing
-		reconciler, req, fakeClient := prepareReconcile(t, defaultMemberStatusName, newGetHostClusterReady, allNamespacesCl,
+		reconciler, req, fakeClient := prepareReconcile(t, defaultMemberStatusName, newGetHostClusterReady, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)),
 			append(nodeAndMetrics, singleNodeAndMetrics[0], memberOperatorDeployment, newMemberStatus())...)
 
 		// when
@@ -359,7 +363,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("when missing memory item", func(t *testing.T) {
 			// given
 			nodeAndMetrics := newNodesAndNodeMetrics(forNode("worker-123", []string{"worker"}, "3000000Ki"))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -375,7 +379,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when unable to list Nodes", func(t *testing.T) {
 			// given
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				if _, ok := list.(*corev1.NodeList); ok {
 					return fmt.Errorf("some error")
@@ -397,7 +401,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
 			// given
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 			fakeClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				if _, ok := list.(*v1beta1.NodeMetricsList); ok {
 					return fmt.Errorf("some error")
@@ -426,7 +430,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			singleNodeAndMetrics2 := newNodesAndNodeMetrics(forNode("worker-b", []string{"worker"}, "3000000Ki"))
 			// since the arrays contain Node as the first object and NodeMetrics as the second object, we can now use only the first object from both of the arrays
 			// and don't add the NodeMetrics so we can simulate a situation when the NodeMetrics resources are missing for both of the Nodes
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl,
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)),
 				append(nodeAndMetrics, singleNodeAndMetrics1[0], singleNodeAndMetrics2[0], memberOperatorDeployment, memberStatus)...)
 
 			// when
@@ -452,7 +456,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("che not using tls with path", func(t *testing.T) {
 			// given
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -473,7 +477,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			consoleRoute := consoleRoute()
 			consoleRoute.Spec.Path = ""
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute, cheRoute)
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -490,7 +494,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("console route unavailable", func(t *testing.T) {
 			// given
 			allNamespacesCl := test.NewFakeClient(t, cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -510,7 +514,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 			t.Run("when not required", func(t *testing.T) {
 				// given
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 				// when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -527,7 +531,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			t.Run("when required", func(t *testing.T) {
 				// given
 				config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().Required(true))
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
 
 				// when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -561,7 +565,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			defer gock.OffAll()
 			gock.New(testCheURL).
@@ -594,7 +598,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -620,7 +624,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 
 			// when
 			res, err := reconciler.Reconcile(context.TODO(), req)
@@ -646,7 +650,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					CheAdminUsernameKey("che.admin.username").
 					CheAdminPasswordKey("che.admin.password"))
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1)), append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
 			defer gock.OffAll()
 			gock.New(testCheURL).
 				Get(cheUserPath).
@@ -668,6 +672,122 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCheConditions(cheUserAPICheckError(`che user API check failed, Response status: '400 Bad Request' Body: '{"error":"che error"}'`))
 		})
 	})
+
+	t.Run("member operator deployment version is not up to date", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+		requestName := defaultMemberStatusName
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterReady
+		// we have a secret that contains the access token for GitHub authenticated APIs
+		githubSecret := test.CreateSecret("github", test.MemberOperatorNs, map[string][]byte{
+			"accessToken": []byte("abcd1234"),
+		})
+		commitTimeStamp := time.Now().Add(-time.Hour * 1)
+		latestCommitSHA := "xxxxaaaaa"  // we set the latest commit to something that differs from the `buildCommitSHA` constant
+		version.Commit = buildCommitSHA // let's set the build version to a constant value
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(latestCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config, githubSecret)...)
+
+		// when
+		res, err := reconciler.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+			HasCondition(ComponentsNotReady("memberOperator")).
+			HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason),
+				ConditionNotReady(toolchainv1alpha1.ToolchainStatusDeploymentNotUpToDateReason, "deployment version is not up to date with latest github commit SHA. deployed commit SHA "+version.Commit+" ,github latest SHA "+latestCommitSHA+", expected deployment timestamp: "+commitTimeStamp.Add(status.DeploymentThreshold).Format(time.RFC3339))).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+	})
+
+	t.Run("member operator deployment version is up to date", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+		requestName := defaultMemberStatusName
+		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+		memberStatus := newMemberStatus()
+		getHostClusterFunc := newGetHostClusterReady
+		// we have a secret that contains the access token for GitHub authenticated APIs
+		githubSecret := test.CreateSecret("github", test.MemberOperatorNs, map[string][]byte{
+			"accessToken": []byte("abcd1234"),
+		})
+		commitTimeStamp := time.Now().Add(-time.Hour * 1)
+		version.Commit = buildCommitSHA                                                                                                                                                                                                                                           // let's set the build version to a constant value which matches the latest build github commit
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config, githubSecret)...) // let's pass the build commit
+
+		// when
+		res, err := reconciler.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, requeueResult, res)
+		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+			HasCondition(ComponentsReady()). // all components are ready
+			HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason),
+				ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
+			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+	})
+
+	t.Run("deployment version check is disabled", func(t *testing.T) {
+		t.Run("when environment is not prod", func(t *testing.T) {
+			// given
+			// we set dev as environment
+			config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("dev"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+			requestName := defaultMemberStatusName
+			memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+			memberStatus := newMemberStatus()
+			getHostClusterFunc := newGetHostClusterReady
+			// we have a secret that contains the access token for GitHub authenticated APIs
+			githubSecret := test.CreateSecret("github", test.MemberOperatorNs, map[string][]byte{
+				"accessToken": []byte("abcd1234"),
+			})
+			commitTimeStamp := time.Now().Add(-time.Hour * 1)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config, githubSecret)...) // let's pass the build commit
+
+			// when
+			res, err := reconciler.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).                                                                     // all components are ready
+				HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)). // we have only one condition for the deployment status, no condition for the version match
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+		})
+		//
+		t.Run("when environment is prod but github secret is not present", func(t *testing.T) {
+			// given
+			config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+			requestName := defaultMemberStatusName
+			memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
+			memberStatus := newMemberStatus()
+			getHostClusterFunc := newGetHostClusterReady
+			githubSecret := test.CreateSecret("othersecret", test.HostOperatorNs, map[string][]byte{ // we create some other random secret
+				"mykey": []byte("abcd1234"),
+			})
+			commitTimeStamp := time.Now().Add(-time.Hour * 1)
+			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config, githubSecret)...) // let's pass the build commit
+
+			// when
+			res, err := reconciler.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, requeueResult, res)
+			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+				HasCondition(ComponentsReady()).                                                                     // all components are ready
+				HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)). // we have only one condition for the deployment status, no condition for the version match
+				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+		})
+	})
+
 }
 
 func newMemberSecret(username, password string) *corev1.Secret {
@@ -734,7 +854,7 @@ func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterF
 	return NewGetHostClusterWithProbe(fakeClient, false, corev1.ConditionFalse, metav1.Now())
 }
 
-func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, mockedGitHubClient *github.Client, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	fakeClient := test.NewFakeClient(t, initObjs...)
@@ -744,6 +864,7 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		Scheme:              scheme.Scheme,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		CheClient:           cheTestClient(allNamespacesClient),
+		GithubClient:        mockedGitHubClient,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, requestName)}, fakeClient
 }

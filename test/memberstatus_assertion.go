@@ -64,6 +64,13 @@ func (a *MemberStatusAssertion) HasMemberOperatorConditionErrorMsg(expected stri
 	return a
 }
 
+func (a *MemberStatusAssertion) HasMemberOperatorConditions(expected ...toolchainv1alpha1.Condition) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	test.AssertConditionsMatch(a.t, a.memberStatus.Status.MemberOperator.Conditions, expected...)
+	return a
+}
+
 func (a *MemberStatusAssertion) HasHostConditionErrorMsg(expected string) *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)
@@ -127,5 +134,22 @@ func ComponentsNotReady(components ...string) toolchainv1alpha1.Condition {
 		Status:  corev1.ConditionFalse,
 		Reason:  toolchainv1alpha1.ToolchainStatusComponentsNotReadyReason,
 		Message: fmt.Sprintf("components not ready: %v", components),
+	}
+}
+
+func ConditionReady(reason string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:   toolchainv1alpha1.ConditionReady,
+		Status: corev1.ConditionTrue,
+		Reason: reason,
+	}
+}
+
+func ConditionNotReady(reason, message string) toolchainv1alpha1.Condition {
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.ConditionReady,
+		Status:  corev1.ConditionFalse,
+		Reason:  reason,
+		Message: message,
 	}
 }

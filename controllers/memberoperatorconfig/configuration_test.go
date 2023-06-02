@@ -199,7 +199,9 @@ func TestGitHubSecret(t *testing.T) {
 		assert.Equal(t, "", memberOperatorCfg.GitHubSecret().AccessTokenKey())
 	})
 	t.Run("non-default", func(t *testing.T) {
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberGitHubSecret().Ref("github").AccessTokenKey("accessToken"))
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().
+			GitHubSecretRef("github").
+			GitHubSecretAccessTokenKey("accessToken"))
 
 		gitHubSecretValues := make(map[string]string)
 		gitHubSecretValues["accessToken"] = "abc123"

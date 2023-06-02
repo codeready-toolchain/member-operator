@@ -1188,6 +1188,7 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, res)
 
+	// load the user resource
 	user := &userv1.User{}
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
 	require.NoError(t, err)

@@ -1,8 +1,8 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20230530062528-92fb56c9fd0a
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20230406074039-c486d404e698
+	github.com/codeready-toolchain/api v0.0.0-20230601085531-c1f5bdd73897
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20230530174133-baf8f8452b7a
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.8
 	// using latest commit from 'github.com/openshift/api branch release-4.12'
@@ -22,6 +22,7 @@ require (
 )
 
 require (
+	github.com/prometheus/client_golang v1.12.2
 	k8s.io/apiextensions-apiserver v0.25.0
 	k8s.io/apimachinery v0.25.0
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
@@ -74,7 +75,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/openshift/library-go v0.0.0-20230301092340-c13b89190a26 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.12.2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect

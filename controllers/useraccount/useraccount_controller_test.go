@@ -1181,28 +1181,20 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	// Unset the sso-user-id annotation so that a third identity isn't created
 	delete(userAcc.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
 	userAcc.Spec.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
-	userUID := types.UID(username + "user")
 
-	preexistingUser := &userv1.User{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: userAcc.Name,
-			UID:  userUID,
-			Labels: map[string]string{
-				"toolchain.dev.openshift.com/owner": username,
-				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
-			},
-			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
-			},
-		},
-		Identities: []string{
-			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-		},
-	}
+	// Reconcile to create the user
+	r, req, _, _ := prepareReconcile(t, username, userAcc)
+	res, err := r.Reconcile(context.TODO(), req)
+	require.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, res)
+
+	user := &userv1.User{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
+	require.NoError(t, err)
 
 	// create user identity mapping
-	r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
-	res, err := r.Reconcile(context.TODO(), req)
+	r, req, _, _ = prepareReconcile(t, username, userAcc, user)
+	res, err = r.Reconcile(context.TODO(), req)
 	require.NoError(t, err)
 	assert.Equal(t, reconcile.Result{}, res)
 

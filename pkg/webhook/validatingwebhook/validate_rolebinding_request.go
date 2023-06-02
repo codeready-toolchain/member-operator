@@ -39,7 +39,7 @@ func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *ht
 		respBody = v.validate(body)
 		w.WriteHeader(http.StatusOK)
 	}
-	if _, err := w.Write(respBody); err != nil {
+	if _, err := io.WriteString(w, string(respBody)); err != nil {
 		log.Error(err, "unable to write response")
 	}
 }

@@ -47,7 +47,16 @@ rules:
   - security.openshift.io
   resourceNames:
   - csi-scc
+  - pipelines-scc
+  - appstudio-pipelines-scc
   resources:
   - securitycontextconstraints
   verbs:
   - use
+- apiGroups:
+  - appstudio.redhat.com
+  resources:
+  - enterprisecontractpolicies
+  verbs:
+  - get
+  - list

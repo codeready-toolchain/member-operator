@@ -250,6 +250,14 @@ func (r *Reconciler) ensureUser(logger logr.Logger, config membercfg.Configurati
 		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
+	// Also if the sso-user-id annotation is set, then another additional identity is required if it is a different value to the Spec.UserID
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(
+				userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
+		}
+	}
+
 	stringSlicesEqual := func(a, b []string) bool {
 		if len(a) != len(b) {
 			return false
@@ -293,6 +301,18 @@ func (r *Reconciler) ensureIdentity(logger logr.Logger, config membercfg.Configu
 		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, userAcc.Spec.OriginalSub, userAcc, user)
 		if createdOrUpdated || err != nil {
 			return nil, createdOrUpdated, err
+		}
+	}
+
+	// Check if the sso-user-id annotation is set, and if it is create an additional identity if it is a different value.
+	// So we always have an identity with the name generated out of SSO UserID (stored as sso_userid annotation) in addition to the identity with the name generated out of the SSO Token sub claim (stored as UserAccount.Spec.UserID).
+	// This additional Identity is not created if the SSO UserID == SSO Token sub claim.
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(logger, config, val, userAcc, user)
+			if createdOrUpdated || err != nil {
+				return nil, createdOrUpdated, err
+			}
 		}
 	}
 
@@ -609,15 +629,25 @@ func (r *Reconciler) updateStatusConditions(userAcc *toolchainv1alpha1.UserAccou
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
+	identities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
+	if userAcc.Spec.OriginalSub != "" {
+		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
+	}
+	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
+		if val != userAcc.Spec.UserID {
+			identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
+		}
+	}
+
 	user := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: userAcc.Name,
 		},
-		Identities: []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()},
+		Identities: identities,
 	}
+
 	return user
 }
-
 func newIdentity(user *userv1.User) *userv1.Identity {
 	identity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{},

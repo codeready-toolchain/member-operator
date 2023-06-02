@@ -220,8 +220,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	memberOperatorConfig, err := membercfg.GetConfiguration(mgr.GetClient())
-	githubClient, err := commonclient.NewGitHubClient(memberOperatorConfig.GitHubSecret().AccessTokenKey())
+	githubClient, err := commonclient.NewGitHubClient(crtConfig.GitHubSecret().AccessTokenKey())
 	if err != nil {
 		setupLog.Error(err, "unable to create github client")
 		os.Exit(1)

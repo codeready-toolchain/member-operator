@@ -7,15 +7,6 @@ rules:
 - apiGroups:
   - tekton.dev
   resources:
-  - pipelineruns
-  verbs:
-  - get
-  - list
-  - update
-  - patch
-- apiGroups:
-  - tekton.dev
-  resources:
   - taskruns
   verbs:
   - get
@@ -32,21 +23,9 @@ rules:
   - secrets
   verbs:
   - get
-  - create
-  - patch
-  - delete
-- apiGroups:
-  - sharedresource.openshift.io
-  resourceNames:
-  - redhat-appstudio-user-workload
-  resources:
-  - sharedsecrets
-  verbs:
-  - use
 - apiGroups:
   - security.openshift.io
   resourceNames:
-  - csi-scc
   - appstudio-pipelines-scc
   resources:
   - securitycontextconstraints

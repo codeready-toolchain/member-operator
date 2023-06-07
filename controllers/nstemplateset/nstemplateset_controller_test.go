@@ -372,7 +372,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasResource(spacename+"-space-admin", &rbacv1.RoleBinding{}) // also created
 	})
 
-	t.Run("should add owner label to role when missing", func(t *testing.T) {
+	t.Run("should add space label to role when missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"))
 		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
@@ -382,9 +382,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
 		rb2Code := newRoleBinding(stageNS.Name, "crtadmin-view", spacename)
 		ro := newRole(devNS.Name, "exec-pods", spacename)
-		delete(ro.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		delete(ro.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
 		roCode := newRole(stageNS.Name, "exec-pods", spacename)
-		delete(roCode.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		delete(roCode.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, rb, rb2, ro, roCode, rbCode, rb2Code)
 
 		// when
@@ -399,7 +399,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-			ResourceHasOwnerLabel("exec-pods", &rbacv1.Role{}, spacename)
+			ResourceHasSpaceLabel("exec-pods", &rbacv1.Role{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
@@ -417,22 +417,22 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-			ResourceHasOwnerLabel("exec-pods", &rbacv1.Role{}, spacename)
+			ResourceHasSpaceLabel("exec-pods", &rbacv1.Role{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-			ResourceHasOwnerLabel("exec-pods", &rbacv1.Role{}, spacename)
+			ResourceHasSpaceLabel("exec-pods", &rbacv1.Role{}, spacename)
 	})
 
-	t.Run("should add owner label to rolebinding when missing", func(t *testing.T) {
+	t.Run("should add space label to rolebinding when missing", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "stage"))
 		devNS := newNamespace("basic", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
 		stageNS := newNamespace("basic", spacename, "stage", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
-		delete(rbDev.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
-		delete(rbCode.ObjectMeta.Labels, toolchainv1alpha1.OwnerLabelKey)
+		delete(rbDev.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
+		delete(rbCode.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, rbDev, rbCode)
 
 		// when
@@ -445,7 +445,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Updating())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			ResourceHasOwnerLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
+			ResourceHasSpaceLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 
@@ -459,9 +459,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Updating())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			ResourceHasOwnerLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
+			ResourceHasSpaceLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
-			ResourceHasOwnerLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
+			ResourceHasSpaceLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
 	})
 
 	t.Run("should correct the value of owner in label of rolebinding when incorrect", func(t *testing.T) {
@@ -483,7 +483,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Updating())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			ResourceHasOwnerLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
+			ResourceHasSpaceLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 
@@ -497,9 +497,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Updating())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			ResourceHasOwnerLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
+			ResourceHasSpaceLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
-			ResourceHasOwnerLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
+			ResourceHasSpaceLabel("crtadmin-pods", &rbacv1.RoleBinding{}, spacename)
 	})
 
 	t.Run("should correct the value of owner in label of role when incorrect", func(t *testing.T) {
@@ -527,7 +527,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-			ResourceHasOwnerLabel("exec-pods", &rbacv1.Role{}, spacename)
+			ResourceHasSpaceLabel("exec-pods", &rbacv1.Role{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
@@ -545,11 +545,11 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-			ResourceHasOwnerLabel("exec-pods", &rbacv1.Role{}, spacename)
+			ResourceHasSpaceLabel("exec-pods", &rbacv1.Role{}, spacename)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-			ResourceHasOwnerLabel("exec-pods", &rbacv1.Role{}, spacename)
+			ResourceHasSpaceLabel("exec-pods", &rbacv1.Role{}, spacename)
 	})
 
 	t.Run("no NSTemplateSet available", func(t *testing.T) {
@@ -1676,10 +1676,10 @@ func withConditions(conditions ...toolchainv1alpha1.Condition) nsTmplSetOption {
 	}
 }
 
-func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *corev1.Namespace {
+func newNamespace(tier, spacename, typeName string, options ...objectMetaOption) *corev1.Namespace {
 	labels := map[string]string{
-		toolchainv1alpha1.OwnerLabelKey:    owner,
-		toolchainv1alpha1.SpaceLabelKey:    owner,
+		toolchainv1alpha1.OwnerLabelKey:    spacename,
+		toolchainv1alpha1.SpaceLabelKey:    spacename,
 		toolchainv1alpha1.TypeLabelKey:     typeName,
 		toolchainv1alpha1.ProviderLabelKey: "codeready-toolchain",
 	}
@@ -1689,7 +1689,7 @@ func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *co
 	}
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("%s-%s", owner, typeName),
+			Name:   fmt.Sprintf("%s-%s", spacename, typeName),
 			Labels: labels,
 		},
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
@@ -1700,29 +1700,29 @@ func newNamespace(tier, owner, typeName string, options ...objectMetaOption) *co
 	return ns
 }
 
-func newRoleBinding(namespace, name, owner string) *rbacv1.RoleBinding { //nolint: unparam
+func newRoleBinding(namespace, name, spacename string) *rbacv1.RoleBinding { //nolint: unparam
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-				toolchainv1alpha1.OwnerLabelKey:    owner,
-				toolchainv1alpha1.SpaceLabelKey:    owner,
+				toolchainv1alpha1.OwnerLabelKey:    spacename,
+				toolchainv1alpha1.SpaceLabelKey:    spacename,
 			},
 		},
 	}
 }
 
-func newRole(namespace, name, owner string) *rbacv1.Role { //nolint: unparam
+func newRole(namespace, name, spacename string) *rbacv1.Role { //nolint: unparam
 	return &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      name,
 			Labels: map[string]string{
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-				toolchainv1alpha1.OwnerLabelKey:    owner,
-				toolchainv1alpha1.SpaceLabelKey:    owner,
+				toolchainv1alpha1.OwnerLabelKey:    spacename,
+				toolchainv1alpha1.SpaceLabelKey:    spacename,
 			},
 		},
 	}

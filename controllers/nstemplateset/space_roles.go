@@ -61,6 +61,7 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		var labels = map[string]string{
 			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
+			toolchainv1alpha1.SpaceLabelKey:    nsTmplSet.GetName(),
 		}
 		logger.Info("applying space role objects", "count", len(spaceRoleObjs))
 		// create (or update existing) objects based the tier template
@@ -109,7 +110,6 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ns *corev1.Namespace, spaceRole
 			objs, err := tierTemplate.process(r.Scheme, map[string]string{
 				Namespace: ns.Name,
 				Username:  username,
-				SpaceName: username,
 			})
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)

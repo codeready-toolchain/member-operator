@@ -223,8 +223,9 @@ func newOptionalDeployment(name, owner string) *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
-				"toolchain.dev.openshift.com/provider": "codeready-toolchain",
-				"toolchain.dev.openshift.com/owner":    owner,
+				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
+				toolchainv1alpha1.OwnerLabelKey:    owner,
+				toolchainv1alpha1.SpaceLabelKey:    owner,
 			},
 			Annotations: map[string]string{
 				toolchainv1alpha1.TierTemplateObjectOptionalResourceAnnotation: "true",

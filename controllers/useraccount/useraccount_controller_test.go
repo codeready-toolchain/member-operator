@@ -21,10 +21,10 @@ import (
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
+	"github.com/gofrs/uuid"
 	routev1 "github.com/openshift/api/route/v1"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
-	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/h2non/gock.v1"
@@ -52,7 +52,7 @@ func TestReconcile(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 
 	username := "johnsmith"
-	userID := uuid.NewV4().String()
+	userID := uuid.Must(uuid.NewV4()).String()
 
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestReconcile(t *testing.T) {
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-				UID:  types.UID(uuid.NewV4().String()),
+				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
 					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
@@ -352,7 +352,7 @@ func TestReconcile(t *testing.T) {
 			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-				UID:  types.UID(uuid.NewV4().String()),
+				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey: userAcc.Name,
 				},
@@ -1174,7 +1174,7 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
-	userID := uuid.NewV4().String()
+	userID := uuid.Must(uuid.NewV4()).String()
 	username := "kjones"
 
 	userAcc := newUserAccount(username, userID)
@@ -1240,7 +1240,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
-	userID := uuid.NewV4().String()
+	userID := uuid.Must(uuid.NewV4()).String()
 	username := "hcollins"
 
 	userAcc := newUserAccount(username, userID)
@@ -1314,7 +1314,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 func TestUpdateStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johnsmith"
-	userID := uuid.NewV4().String()
+	userID := uuid.Must(uuid.NewV4()).String()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1408,7 +1408,7 @@ func TestUpdateStatus(t *testing.T) {
 func TestDisabledUserAccount(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	username := "johndoe"
-	userID := uuid.NewV4().String()
+	userID := uuid.Must(uuid.NewV4()).String()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1612,7 +1612,7 @@ func TestDisabledUserAccount(t *testing.T) {
 func TestLookupAndDeleteCheUser(t *testing.T) {
 	// given
 	username := "sugar"
-	userID := uuid.NewV4().String()
+	userID := uuid.Must(uuid.NewV4()).String()
 
 	t.Run("che user deletion is not enabled", func(t *testing.T) {
 		// given
@@ -1888,7 +1888,7 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
 			Namespace: test.MemberOperatorNs,
-			UID:       types.UID(uuid.NewV4().String()),
+			UID:       types.UID(uuid.Must(uuid.NewV4()).String()),
 			Labels: map[string]string{
 				toolchainv1alpha1.TierLabelKey: "basic",
 			},

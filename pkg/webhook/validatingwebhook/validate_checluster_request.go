@@ -37,7 +37,7 @@ func (v CheClusterRequestValidator) HandleValidate(w http.ResponseWriter, r *htt
 		respBody = v.validate(body)
 		w.WriteHeader(http.StatusOK)
 	}
-	if _, err := w.Write(respBody); err != nil {
+	if _, err := io.WriteString(w, string(respBody)); err != nil {
 		log.Error(err, "unable to write response")
 	}
 }

@@ -53,32 +53,26 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			AssertThatRole(t, "oddity-appstudio", "space-admin", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user1-space-admin", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user2-space-admin", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRole(t, "oddity-appstudio", "space-viewer", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user3-space-viewer", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			AssertThatRoleBinding(t, "oddity-appstudio", "user4-space-viewer", memberClient).
 				Exists(). // created
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, nsTmplSet.GetName()).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, nsTmplSet.GetName())
 			// also verify that the `last-applied-space-roles` annotation was set on namespace
 			lastApplied, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)

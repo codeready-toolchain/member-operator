@@ -156,7 +156,6 @@ func (r *namespacesManager) ensureNamespaceResource(logger logr.Logger, nsTmplSe
 	}
 
 	labels := map[string]string{
-		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 		toolchainv1alpha1.SpaceLabelKey:    nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:     tierTemplate.typeName,
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
@@ -208,7 +207,6 @@ func (r *namespacesManager) ensureInnerNamespaceResources(logger logr.Logger, ns
 
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-		toolchainv1alpha1.OwnerLabelKey:    nsTmplSet.GetName(),
 		toolchainv1alpha1.SpaceLabelKey:    nsTmplSet.GetName(),
 	}
 	if _, err = r.ApplyToolchainObjects(logger, newObjs, labels); err != nil {

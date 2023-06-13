@@ -37,7 +37,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		johnyRuntimeObject := clusterResourceKind.object.DeepCopyObject()
 		johnyObject, ok := johnyRuntimeObject.(client.Object)
 		require.True(t, ok)
-		johnyObjectLabels := map[string]string{toolchainv1alpha1.OwnerLabelKey: "johny", toolchainv1alpha1.SpaceLabelKey: "johny"}
+		johnyObjectLabels := map[string]string{toolchainv1alpha1.SpaceLabelKey: "johny"}
 		johnyObject.SetLabels(johnyObjectLabels)
 		johnyObject.SetName("johny-object")
 
@@ -50,7 +50,7 @@ func TestClusterResourceKinds(t *testing.T) {
 		anotherRuntimeObject := clusterResourceKind.object.DeepCopyObject()
 		anotherObject, ok := anotherRuntimeObject.(client.Object)
 		require.True(t, ok)
-		anotherObject.SetLabels(map[string]string{toolchainv1alpha1.OwnerLabelKey: "another", toolchainv1alpha1.SpaceLabelKey: "another"})
+		anotherObject.SetLabels(map[string]string{toolchainv1alpha1.SpaceLabelKey: "another"})
 		anotherObject.SetName("another-object")
 		namespace := newNamespace("basic", "johny", "code")
 
@@ -399,7 +399,6 @@ func TestDeleteClusterResources(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 		crq := newClusterResourceQuota(spacename, "withemptycrq")
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
-		emptyCrq.Labels[toolchainv1alpha1.OwnerLabelKey] = spacename
 		emptyCrq.Labels[toolchainv1alpha1.SpaceLabelKey] = spacename
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq, crb)
 
@@ -435,7 +434,6 @@ func TestDeleteClusterResources(t *testing.T) {
 		deletionTS := metav1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
-		emptyCrq.Labels[toolchainv1alpha1.OwnerLabelKey] = spacename
 		emptyCrq.Labels[toolchainv1alpha1.SpaceLabelKey] = spacename
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
 

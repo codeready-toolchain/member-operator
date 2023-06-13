@@ -176,7 +176,6 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 // but if there was an error then it returns 'false, error'.
 func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, object runtimeclient.Object) (bool, error) {
 	var labels = map[string]string{
-		toolchainv1alpha1.OwnerLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.SpaceLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:        toolchainv1alpha1.ClusterResourcesTemplateType,
 		toolchainv1alpha1.TemplateRefLabelKey: tierTemplate.templateRef,

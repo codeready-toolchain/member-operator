@@ -220,11 +220,11 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *cluster.CachedToolchainCluster, idler *toolchainv1alpha1.Idler) ([]string, error) {
 	var emails []string
 	//get NSTemplateSet from idler
-	if owner, found := idler.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; found {
+	if spacename, found := idler.GetLabels()[toolchainv1alpha1.SpaceLabelKey]; found {
 		nsTemplateSet := &toolchainv1alpha1.NSTemplateSet{}
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: owner, Namespace: r.Namespace}, nsTemplateSet)
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: spacename, Namespace: r.Namespace}, nsTemplateSet)
 		if err != nil {
-			logger.Error(err, "could not get the NSTemplateSet with name", "owner", owner)
+			logger.Error(err, "could not get the NSTemplateSet with name", "spacename", spacename)
 			return emails, err
 		}
 		// iterate on space roles from NSTemplateSet

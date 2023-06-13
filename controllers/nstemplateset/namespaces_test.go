@@ -1377,17 +1377,17 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		require.False(t, isProvisioned)
 	})
 
-	t.Run("namespace doesn't have owner Label", func(t *testing.T) {
+	t.Run("namespace doesn't have space Label", func(t *testing.T) {
 		//given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		delete(devNS.Labels, toolchainv1alpha1.OwnerLabelKey)
+		delete(devNS.Labels, toolchainv1alpha1.SpaceLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
 		//then
-		require.Error(t, err, "namespace doesn't have owner label")
+		require.Error(t, err, "namespace doesn't have space label")
 		require.False(t, isProvisioned)
 
 	})

@@ -187,11 +187,11 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectOptionalDeployme
 	AssertThatRole(t, "john-dev", "edit-john", client).
 		Exists(). // created
 		HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-		HasLabel(toolchainv1alpha1.OwnerLabelKey, "john").
+		HasLabel(toolchainv1alpha1.SpaceLabelKey, "john").
 		HasLabel("foo", "bar")
 	AssertThatNamespace(t, "john-dev", client).
 		HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-		HasLabel(toolchainv1alpha1.OwnerLabelKey, "john").
+		HasLabel(toolchainv1alpha1.SpaceLabelKey, "john").
 		HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 		HasLabel("foo", "bar")
 	sa := &corev1.ServiceAccount{}
@@ -203,8 +203,8 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectOptionalDeployme
 		AssertObject(t, client, "", "john-dev-deployment", optionalDeployment, func() {
 			assert.Contains(t, optionalDeployment.Labels, toolchainv1alpha1.ProviderLabelKey)
 			assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, optionalDeployment.Labels[toolchainv1alpha1.ProviderLabelKey])
-			assert.Contains(t, optionalDeployment.Labels, toolchainv1alpha1.OwnerLabelKey)
-			assert.Equal(t, "john", optionalDeployment.Labels[toolchainv1alpha1.OwnerLabelKey])
+			assert.Contains(t, optionalDeployment.Labels, toolchainv1alpha1.SpaceLabelKey)
+			assert.Equal(t, "john", optionalDeployment.Labels[toolchainv1alpha1.SpaceLabelKey])
 			assert.Contains(t, optionalDeployment.Labels, "foo")
 			assert.Equal(t, "bar", optionalDeployment.Labels["foo"])
 		})

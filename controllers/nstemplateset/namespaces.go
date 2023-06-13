@@ -92,11 +92,7 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 	}
 
 	// create namespace before creating inner resources because creating the namespace may take some time
-	if createOrUpdateNamespace ||
-		// --- start temporary logic
-		// this will trigger an update in order to set the SpaceLabelKey on the namespace object
-		!hasSpaceLabelSet(userNamespace) {
-		// -- end of temporary migration logic
+	if createOrUpdateNamespace {
 		return r.ensureNamespaceResource(logger, nsTmplSet, tierTemplate)
 	}
 	return r.ensureInnerNamespaceResources(logger, nsTmplSet, tierTemplate, userNamespace)
@@ -106,7 +102,7 @@ func (r *namespacesManager) ensureNamespace(logger logr.Logger, nsTmplSet *toolc
 // note: checks only if the namespace has labels that match the provided template, it does not check whether any labels could have been removed
 func (r *namespacesManager) namespaceHasExpectedLabelsFromTemplate(tierTemplate *tierTemplate, userNamespace *corev1.Namespace) (bool, error) {
 	objs, err := tierTemplate.process(r.Scheme, map[string]string{
-		SpaceName: userNamespace.GetLabels()[toolchainv1alpha1.OwnerLabelKey],
+		SpaceName: userNamespace.GetLabels()[toolchainv1alpha1.SpaceLabelKey],
 	}, template.RetainNamespaces)
 	if err != nil {
 		return false, err
@@ -287,7 +283,7 @@ func (r *namespacesManager) getTierTemplatesForAllNamespaces(nsTmplSet *toolchai
 func fetchNamespacesByOwner(cl runtimeclient.Client, spacename string) ([]corev1.Namespace, error) {
 	// fetch all namespace with owner=spacename label
 	userNamespaceList := &corev1.NamespaceList{}
-	if err := cl.List(context.TODO(), userNamespaceList, listByOwnerLabel(spacename)); err != nil {
+	if err := cl.List(context.TODO(), userNamespaceList, listBySpaceLabel(spacename)); err != nil {
 		return nil, err
 	}
 	// sort namespaces by name
@@ -356,19 +352,13 @@ func getNamespaceName(request reconcile.Request) (string, error) {
 // If so, it processes the tier template to get the expected roles and rolebindings and then checks if they are actually present in the namespace.
 func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *corev1.Namespace, tierTemplate *tierTemplate) (bool, error) {
 	logger.Info("checking if namespace is up-to-date and provisioned", "namespace_name", ns.Name, "namespace_labels", ns.Labels, "tier_name", tierTemplate.tierName)
-	// --- start temporary logic
-	// this will trigger an update in order to set the SpaceLabelKey on namespace object
-	if !hasSpaceLabelSet(ns) {
-		return false, nil
-	}
-	// -- end of temporary migration logic
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
 
 		newObjs, err := tierTemplate.process(r.Scheme, map[string]string{
-			Username:  ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey],
-			SpaceName: ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey], // both username and space name are required here, since rolebindings are still created with the USERNAME param.
+			Username:  ns.GetLabels()[toolchainv1alpha1.SpaceLabelKey],
+			SpaceName: ns.GetLabels()[toolchainv1alpha1.SpaceLabelKey], // both username and space name are required here, since rolebindings are still created with the USERNAME param.
 		}, template.RetainAllButNamespaces)
 		if err != nil {
 			return false, err
@@ -384,10 +374,10 @@ func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *cor
 			}
 		}
 
-		// get the owner name from namespace
-		owner, exists := ns.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
+		// get the space name from namespace
+		spacename, exists := ns.GetLabels()[toolchainv1alpha1.SpaceLabelKey]
 		if !exists {
-			return false, fmt.Errorf("namespace doesn't have owner label")
+			return false, fmt.Errorf("namespace doesn't have space label")
 		}
 		roleList := rbac.RoleList{}
 		rolebindingList := rbac.RoleBindingList{}
@@ -400,13 +390,13 @@ func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *cor
 
 		// check the names of the roles and roleBindings as well
 		for _, role := range processedRoles {
-			if found, err := r.containsRole(roleList.Items, role, owner); !found || err != nil {
+			if found, err := r.containsRole(roleList.Items, role, spacename); !found || err != nil {
 				return false, err
 			}
 		}
 
 		for _, rolebinding := range processedRoleBindings {
-			if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, owner); !found || err != nil {
+			if found, err := r.containsRoleBindings(rolebindingList.Items, rolebinding, spacename); !found || err != nil {
 				return false, err
 			}
 		}
@@ -417,14 +407,14 @@ func (r *namespacesManager) isUpToDateAndProvisioned(logger logr.Logger, ns *cor
 	return false, nil
 }
 
-func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object, owner string) (bool, error) {
+func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Object, spacename string) (bool, error) {
 	if obj.GetObjectKind().GroupVersionKind().Kind != "Role" {
 		return false, fmt.Errorf("object is not a role")
 	}
 	for _, val := range list {
 		if val.GetName() == obj.GetName() {
-			// check if owner label exists
-			if ownerValue, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists || ownerValue != owner {
+			// check if space label exists
+			if spaceValue, exists := val.GetLabels()[toolchainv1alpha1.SpaceLabelKey]; !exists || spaceValue != spacename {
 				return false, nil
 			}
 			return true, nil
@@ -433,14 +423,14 @@ func (r *namespacesManager) containsRole(list []rbac.Role, obj runtimeclient.Obj
 	return false, nil
 }
 
-func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object, owner string) (bool, error) {
+func (r *namespacesManager) containsRoleBindings(list []rbac.RoleBinding, obj runtimeclient.Object, spacename string) (bool, error) {
 	if obj.GetObjectKind().GroupVersionKind().Kind != "RoleBinding" {
 		return false, fmt.Errorf("object is not a rolebinding")
 	}
 	for _, val := range list {
 		if val.GetName() == obj.GetName() {
 			// check if owner label exists
-			if ownerValue, exists := val.GetLabels()[toolchainv1alpha1.OwnerLabelKey]; !exists || ownerValue != owner {
+			if spaceValue, exists := val.GetLabels()[toolchainv1alpha1.SpaceLabelKey]; !exists || spaceValue != spacename {
 				return false, nil
 			}
 

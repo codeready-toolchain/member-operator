@@ -61,7 +61,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 		&quotav1.ClusterResourceQuota{},
 		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &quotav1.ClusterResourceQuotaList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(spacename)); err != nil {
+			if err := cl.List(context.TODO(), itemList, listBySpaceLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -76,7 +76,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 		&rbacv1.ClusterRoleBinding{},
 		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &rbacv1.ClusterRoleBindingList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(spacename)); err != nil {
+			if err := cl.List(context.TODO(), itemList, listBySpaceLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -91,7 +91,7 @@ var clusterResourceKinds = []toolchainObjectKind{
 		&toolchainv1alpha1.Idler{},
 		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &toolchainv1alpha1.IdlerList{}
-			if err := cl.List(context.TODO(), itemList, listByOwnerLabel(spacename)); err != nil {
+			if err := cl.List(context.TODO(), itemList, listBySpaceLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -327,33 +327,10 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 
 // isUpToDate returns true if the currentObject uses the corresponding templateRef and tier labels
 func isUpToDate(currentObject, _ runtimeclient.Object, tierTemplate *tierTemplate) bool {
-	// --- start temporary logic
-	// this will trigger an update in order to set the SpaceLabelKey on all the objects with the OwnerLabelKey
-	if !hasSpaceLabelSet(currentObject) {
-		return false
-	}
-	// -- end of temporary migration logic
-
 	return currentObject.GetLabels() != nil &&
 		currentObject.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef &&
 		currentObject.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName
 	// && currentObject.IsSame(newObject)  <-- TODO Uncomment when IsSame is implemented for all ToolchainObjects!
-}
-
-func hasSpaceLabelSet(currentObject runtimeclient.Object) bool {
-	if currentObject.GetLabels() == nil {
-		return false
-	}
-
-	ownerValue, hasOwnerLabelKey := currentObject.GetLabels()[toolchainv1alpha1.OwnerLabelKey]
-	if hasOwnerLabelKey {
-		// check if SpaceLabelKey is set, if not then we need to update the object in order to set it.
-		spaceValue, hasSpaceLabelKey := currentObject.GetLabels()[toolchainv1alpha1.SpaceLabelKey]
-		if !hasSpaceLabelKey || spaceValue != ownerValue {
-			return false
-		}
-	}
-	return true
 }
 
 func retainObjectsOfSameGVK(gvk schema.GroupVersionKind) template.FilterFunc {

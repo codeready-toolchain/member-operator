@@ -56,7 +56,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 		return err
 	}
 
-	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.OwnerLabelKey))
+	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.SpaceLabelKey))
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel).
@@ -244,8 +244,8 @@ Current:
 	return nil
 }
 
-// listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given spacename
-func listByOwnerLabel(spacename string) runtimeclient.ListOption {
-	labels := map[string]string{toolchainv1alpha1.OwnerLabelKey: spacename}
+// listBySpaceLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/space equal to the given spacename
+func listBySpaceLabel(spacename string) runtimeclient.ListOption {
+	labels := map[string]string{toolchainv1alpha1.SpaceLabelKey: spacename}
 	return runtimeclient.MatchingLabels(labels)
 }

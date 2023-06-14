@@ -160,7 +160,6 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 					toolchainv1alpha1.TierLabelKey:        "basic",
 					toolchainv1alpha1.TypeLabelKey:        "other",
 					toolchainv1alpha1.TemplateRefLabelKey: "basic-other-abcde15",
-					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
 					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
@@ -218,7 +217,6 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 					toolchainv1alpha1.TierLabelKey:        "basic",
 					toolchainv1alpha1.TypeLabelKey:        "dev",
 					toolchainv1alpha1.TemplateRefLabelKey: "basic-dev-abcde11",
-					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
 					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
@@ -230,7 +228,6 @@ func createUserNamespacesAndTierTemplates() ([]corev1.Namespace, []*tierTemplate
 					toolchainv1alpha1.TierLabelKey:        "basic",
 					toolchainv1alpha1.TypeLabelKey:        "stage",
 					toolchainv1alpha1.TemplateRefLabelKey: "basic-stage-abcde21",
-					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
 					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
@@ -416,7 +413,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-dev", manager.Client).
 			HasNoOwnerReference().
-			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -445,7 +441,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasNoOwnerReference().
-			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.TypeLabelKey, "stage").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -471,7 +466,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 			HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
@@ -502,7 +496,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasConditions(Provisioning())
 		for _, nsType := range []string{"stage", "dev"} {
 			AssertThatNamespace(t, spacename+"-"+nsType, fakeClient).
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-"+nsType+"-abcde11").
@@ -826,7 +819,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
 				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -857,7 +849,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
 				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -888,7 +879,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11"). // downgraded
@@ -920,7 +910,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				DoesNotExist() // namespace was deleted
 			AssertThatNamespace(t, devNS.Name, cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -940,7 +929,6 @@ func TestPromoteNamespaces(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatNamespace(t, devNS.Name, cl).
 					HasNoOwnerReference().
-					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
@@ -972,7 +960,6 @@ func TestPromoteNamespaces(t *testing.T) {
 					"unable to retrieve the TierTemplate 'fail-dev-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"fail-dev-abcde11\" not found"))
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1000,7 +987,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasConditions(UpdateFailed("mock error: '*v1.Namespace'")) // failed to delete NS
 			AssertThatNamespace(t, spacename+"-stage", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "stage").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1008,7 +994,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1051,7 +1036,6 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
 				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -1082,7 +1066,6 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // upgraded
 				HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -1113,7 +1096,6 @@ func TestUpdateNamespaces(t *testing.T) {
 				DoesNotExist() // namespace was deleted
 			AssertThatNamespace(t, devNS.Name, cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1137,7 +1119,6 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1153,7 +1134,6 @@ func TestUpdateNamespaces(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatNamespace(t, spacename+"-dev", cl).
 					HasNoOwnerReference().
-					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1180,7 +1160,6 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1196,7 +1175,6 @@ func TestUpdateNamespaces(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatNamespace(t, spacename+"-dev", cl).
 					HasNoOwnerReference().
-					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1226,7 +1204,6 @@ func TestUpdateNamespaces(t *testing.T) {
 					"unable to retrieve the TierTemplate 'basic-dev-abcde15' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde15\" not found"))
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1251,7 +1228,6 @@ func TestUpdateNamespaces(t *testing.T) {
 					"unable to retrieve the TierTemplate 'basic-dev-abcde15' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"basic-dev-abcde15\" not found"))
 			AssertThatNamespace(t, spacename+"-dev", cl).
 				HasNoOwnerReference().
-				HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -1298,7 +1274,6 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 					toolchainv1alpha1.TypeLabelKey:        "dev",
 					toolchainv1alpha1.TierLabelKey:        "advanced",
 					toolchainv1alpha1.TemplateRefLabelKey: "advanced-dev-abcde11",
-					toolchainv1alpha1.OwnerLabelKey:       "johnsmith",
 					toolchainv1alpha1.SpaceLabelKey:       "johnsmith",
 				},
 			},
@@ -1377,17 +1352,17 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		require.False(t, isProvisioned)
 	})
 
-	t.Run("namespace doesn't have owner Label", func(t *testing.T) {
+	t.Run("namespace doesn't have space Label", func(t *testing.T) {
 		//given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
-		delete(devNS.Labels, toolchainv1alpha1.OwnerLabelKey)
+		delete(devNS.Labels, toolchainv1alpha1.SpaceLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
 		//then
-		require.Error(t, err, "namespace doesn't have owner label")
+		require.Error(t, err, "namespace doesn't have space label")
 		require.False(t, isProvisioned)
 
 	})

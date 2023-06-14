@@ -127,7 +127,7 @@ func TestEnsureIdling(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
 				Labels: map[string]string{
-					toolchainv1alpha1.OwnerLabelKey: "alex",
+					toolchainv1alpha1.SpaceLabelKey: "alex",
 				},
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
@@ -288,7 +288,7 @@ func TestEnsureIdling(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
 				Labels: map[string]string{
-					toolchainv1alpha1.OwnerLabelKey: "alex",
+					toolchainv1alpha1.SpaceLabelKey: "alex",
 				},
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
@@ -555,7 +555,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "john-dev",
 				Labels: map[string]string{
-					toolchainv1alpha1.OwnerLabelKey: "john",
+					toolchainv1alpha1.SpaceLabelKey: "john",
 				},
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
@@ -589,7 +589,7 @@ func TestCreateNotification(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "alex-stage",
 			Labels: map[string]string{
-				toolchainv1alpha1.OwnerLabelKey: "alex",
+				toolchainv1alpha1.SpaceLabelKey: "alex",
 			},
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
@@ -723,7 +723,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "alex-stage",
 			Labels: map[string]string{
-				toolchainv1alpha1.OwnerLabelKey: "alex",
+				toolchainv1alpha1.SpaceLabelKey: "alex",
 			},
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},

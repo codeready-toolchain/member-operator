@@ -70,7 +70,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 		respBody = mutate(body)
 		w.WriteHeader(http.StatusOK)
 	}
-	if _, err := w.Write(respBody); err != nil {
+	if _, err := io.WriteString(w, string(respBody)); err != nil {
 		log.Error(err, "unable to write response")
 	}
 }

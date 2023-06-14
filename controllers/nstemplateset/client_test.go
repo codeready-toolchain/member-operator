@@ -224,7 +224,6 @@ func newOptionalDeployment(name, owner string) *appsv1.Deployment {
 			Name: name,
 			Labels: map[string]string{
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-				toolchainv1alpha1.OwnerLabelKey:    owner,
 				toolchainv1alpha1.SpaceLabelKey:    owner,
 			},
 			Annotations: map[string]string{

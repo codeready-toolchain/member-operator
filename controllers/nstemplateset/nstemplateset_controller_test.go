@@ -107,14 +107,12 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasSpecNamespaces("dev", "stage").
 			HasConditions(Provisioned())
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
-			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 			HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
 			HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
-			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.TypeLabelKey, "stage").
 			HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-stage-abcde11").
@@ -209,7 +207,6 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasConditions(Provisioning())
 		AssertThatNamespace(t, spacename+"-dev", r.Client).
 			HasNoOwnerReference().
-			HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 			HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
@@ -663,7 +660,6 @@ func TestProvisionTwoUsers(t *testing.T) {
 						HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
 						HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
 					AssertThatNamespace(t, spacename+"-dev", fakeClient).
-						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 						HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey). // no label until all the namespace inner resources have been created
@@ -685,7 +681,6 @@ func TestProvisionTwoUsers(t *testing.T) {
 							HasSpecNamespaces("dev").
 							HasConditions(Provisioning())
 						AssertThatNamespace(t, spacename+"-dev", fakeClient).
-							HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 							HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 							HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 							HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
@@ -779,7 +774,6 @@ func TestProvisionTwoUsers(t *testing.T) {
 											HasSpecNamespaces("dev").
 											HasConditions(Provisioning())
 										AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-											HasLabel(toolchainv1alpha1.OwnerLabelKey, joeUsername).
 											HasLabel(toolchainv1alpha1.SpaceLabelKey, joeUsername).
 											HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 											HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
@@ -804,7 +798,6 @@ func TestProvisionTwoUsers(t *testing.T) {
 												HasSpecNamespaces("dev").
 												HasConditions(Provisioning())
 											AssertThatNamespace(t, joeUsername+"-dev", fakeClient).
-												HasLabel(toolchainv1alpha1.OwnerLabelKey, joeUsername).
 												HasLabel(toolchainv1alpha1.SpaceLabelKey, joeUsername).
 												HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 												HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
@@ -872,7 +865,6 @@ func TestReconcilePromotion(t *testing.T) {
 			for _, nsType := range []string{"stage", "dev"} {
 				AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 					HasNoOwnerReference().
-					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-"+nsType+"-abcde11"). // not upgraded yet
 					HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
@@ -899,7 +891,6 @@ func TestReconcilePromotion(t *testing.T) {
 					AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 						HasNoOwnerReference().
 						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-"+nsType+"-abcde11"). // not upgraded yet
-						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.TierLabelKey, "basic"). // not upgraded yet
 						HasLabel(toolchainv1alpha1.TypeLabelKey, nsType).
@@ -948,7 +939,6 @@ func TestReconcilePromotion(t *testing.T) {
 							DoesNotExist() // namespace was deleted
 						AssertThatNamespace(t, devNS.Name, r.Client).
 							HasNoOwnerReference().
-							HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 							HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 							HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11").
 							HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
@@ -973,7 +963,6 @@ func TestReconcilePromotion(t *testing.T) {
 								DoesNotExist()
 							AssertThatNamespace(t, spacename+"-dev", r.Client).
 								HasNoOwnerReference().
-								HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 								HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 								HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
 								HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -1002,7 +991,6 @@ func TestReconcilePromotion(t *testing.T) {
 								AssertThatNamespace(t, spacename+"-dev", r.Client).
 									HasNoOwnerReference().
 									HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
-									HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 									HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 									HasLabel(toolchainv1alpha1.TierLabelKey, "advanced"). // not updgraded yet
 									HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
@@ -1070,7 +1058,6 @@ func TestReconcileUpdate(t *testing.T) {
 			for _, nsType := range []string{"stage", "dev"} {
 				AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 					HasNoOwnerReference().
-					HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-"+nsType+"-abcde11"). // not upgraded yet
 					HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -1098,7 +1085,6 @@ func TestReconcileUpdate(t *testing.T) {
 				for _, nsType := range []string{"stage", "dev"} {
 					AssertThatNamespace(t, spacename+"-"+nsType, r.Client).
 						HasNoOwnerReference().
-						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-"+nsType+"-abcde11"). // not upgraded yet
 						HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
@@ -1128,7 +1114,6 @@ func TestReconcileUpdate(t *testing.T) {
 						DoesNotExist() // namespace was deleted
 					AssertThatNamespace(t, devNS.Name, r.Client).
 						HasNoOwnerReference().
-						HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11"). // not upgraded yet
 						HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
@@ -1157,7 +1142,6 @@ func TestReconcileUpdate(t *testing.T) {
 							DoesNotExist()
 						AssertThatNamespace(t, devNS.Name, r.Client).
 							HasNoOwnerReference().
-							HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 							HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 							HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
 							HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
@@ -1189,7 +1173,6 @@ func TestReconcileUpdate(t *testing.T) {
 								DoesNotExist()
 							AssertThatNamespace(t, devNS.Name, r.Client).
 								HasNoOwnerReference().
-								HasLabel(toolchainv1alpha1.OwnerLabelKey, spacename).
 								HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
 								HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
 								HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
@@ -1678,7 +1661,6 @@ func withConditions(conditions ...toolchainv1alpha1.Condition) nsTmplSetOption {
 
 func newNamespace(tier, spacename, typeName string, options ...objectMetaOption) *corev1.Namespace {
 	labels := map[string]string{
-		toolchainv1alpha1.OwnerLabelKey:    spacename,
 		toolchainv1alpha1.SpaceLabelKey:    spacename,
 		toolchainv1alpha1.TypeLabelKey:     typeName,
 		toolchainv1alpha1.ProviderLabelKey: "codeready-toolchain",
@@ -1707,7 +1689,6 @@ func newRoleBinding(namespace, name, spacename string) *rbacv1.RoleBinding { //n
 			Name:      name,
 			Labels: map[string]string{
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-				toolchainv1alpha1.OwnerLabelKey:    spacename,
 				toolchainv1alpha1.SpaceLabelKey:    spacename,
 			},
 		},
@@ -1721,7 +1702,6 @@ func newRole(namespace, name, spacename string) *rbacv1.Role { //nolint: unparam
 			Name:      name,
 			Labels: map[string]string{
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-				toolchainv1alpha1.OwnerLabelKey:    spacename,
 				toolchainv1alpha1.SpaceLabelKey:    spacename,
 			},
 		},
@@ -1739,7 +1719,6 @@ func newTektonClusterRoleBinding(spacename, tier string) *rbacv1.ClusterRoleBind
 				toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
 				toolchainv1alpha1.TierLabelKey:        tier,
 				toolchainv1alpha1.TemplateRefLabelKey: NewTierTemplateName(tier, "clusterresources", "abcde11"),
-				toolchainv1alpha1.OwnerLabelKey:       spacename,
 				toolchainv1alpha1.SpaceLabelKey:       spacename,
 				toolchainv1alpha1.TypeLabelKey:        "clusterresources",
 			},
@@ -1770,7 +1749,6 @@ func newClusterResourceQuota(spacename, tier string, options ...objectMetaOption
 				toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
 				toolchainv1alpha1.TierLabelKey:        tier,
 				toolchainv1alpha1.TemplateRefLabelKey: NewTierTemplateName(tier, "clusterresources", "abcde11"),
-				toolchainv1alpha1.OwnerLabelKey:       spacename,
 				toolchainv1alpha1.SpaceLabelKey:       spacename,
 				toolchainv1alpha1.TypeLabelKey:        "clusterresources",
 			},
@@ -1809,7 +1787,6 @@ func newIdler(spacename, name, tierName string) *toolchainv1alpha1.Idler { // no
 				toolchainv1alpha1.ProviderLabelKey:    "codeready-toolchain",
 				toolchainv1alpha1.TierLabelKey:        tierName,
 				toolchainv1alpha1.TemplateRefLabelKey: NewTierTemplateName(tierName, "clusterresources", "abcde11"),
-				toolchainv1alpha1.OwnerLabelKey:       spacename,
 				toolchainv1alpha1.SpaceLabelKey:       spacename,
 				toolchainv1alpha1.TypeLabelKey:        "clusterresources",
 			},

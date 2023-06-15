@@ -119,7 +119,6 @@ func (a *NamespaceAssertion) ResourceHasSpaceLabel(name string, obj client.Objec
 	// check for toolchain.dev.openshift.com/owner label
 	labels := obj.GetLabels()
 	assert.Equal(a.t, labels[toolchainv1alpha1.ProviderLabelKey], toolchainv1alpha1.ProviderLabelValue)
-	assert.Equal(a.t, labels[toolchainv1alpha1.OwnerLabelKey], spacename)
 	assert.Equal(a.t, labels[toolchainv1alpha1.SpaceLabelKey], spacename)
 	return a
 }

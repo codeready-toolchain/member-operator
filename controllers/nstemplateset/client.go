@@ -37,16 +37,22 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		}
 		// Special handling of ServiceAccounts is required because if a ServiceAccount is reapplied when it already exists, it causes Kubernetes controllers to
 		// automatically create new Secrets for the ServiceAccounts. After enough time the number of Secrets created will hit the Secrets quota and then no new
-		// Secrets can be created. To prevent this from happening, we do not reapply ServiceAccount objects if they already exist.
+		// Secrets can be created. To prevent this from happening, we PATCH the SA.
 		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
 			sa := object.DeepCopyObject().(runtimeclient.Object)
 			err := applyClient.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
-			// fixme: if we need to apply this new SpaceLabelKey value to ServiceAccounts as well, then we might need to remove this check temporarily.
+			// patch service accounts
 			if err == nil {
-				logger.Info("the object is a ServiceAccount and already exists - won't be applied")
+				logger.Info("the object is a ServiceAccount and already exists - patching it...")
+				object.SetLabels(newLabels)
+				err = applyClient.Patch(context.TODO(), object, runtimeclient.MergeFrom(sa))
+				if err != nil {
+					return anyApplied, err
+				}
+				anyApplied = true
 				continue
 			}
 		}

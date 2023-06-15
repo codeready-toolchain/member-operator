@@ -120,21 +120,18 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, true)
 	})
 
-	t.Run("don't update SA when it already exists", func(t *testing.T) {
+	t.Run("patch SA when it already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
-			return fmt.Errorf("should not update")
-		}
 
 		// when
 		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)
-		assert.False(t, changed)
+		assert.True(t, changed)
 		assertObjects(t, fakeClient, false)
 	})
 

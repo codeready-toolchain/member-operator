@@ -213,17 +213,11 @@ func TestApplyToolchainObjects(t *testing.T) {
 		})
 	})
 
-	t.Run("update Role and don't update SA when it already exists", func(t *testing.T) {
+	t.Run("update Role", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
-		fakeClient.MockUpdate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.UpdateOption) error {
-			if obj.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
-				return fmt.Errorf("should not update")
-			}
-			return fakeClient.Client.Update(ctx, obj, opts...)
-		}
 
 		// when
 		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, sa), additionalLabel)
@@ -271,7 +265,7 @@ func assertObjects(t *testing.T, client *test.FakeClient, expectOptionalDeployme
 		HasLabel("foo", "bar")
 	sa := &corev1.ServiceAccount{}
 	AssertObject(t, client, "john-dev", "appstudio-user-sa", sa, func() {
-		assert.Equal(t, map[string]string{"foo": "bar"}, sa.Labels)
+		assert.Equal(t, map[string]string{"foo": "bar", "existing_label": "old_value"}, sa.Labels)
 	})
 	optionalDeployment := &appsv1.Deployment{}
 	if expectOptionalDeployment {

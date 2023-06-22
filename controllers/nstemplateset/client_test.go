@@ -41,6 +41,12 @@ func TestApplyToolchainObjects(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "appstudio-user-sa",
 			Namespace: "john-dev",
+			Annotations: map[string]string{
+				"existing": "annotation",
+			},
+			Labels: map[string]string{
+				"existing_label": "old_value",
+			},
 		},
 	}
 
@@ -120,19 +126,91 @@ func TestApplyToolchainObjects(t *testing.T) {
 		assertObjects(t, fakeClient, true)
 	})
 
-	t.Run("patch SA when it already exists", func(t *testing.T) {
+	t.Run("update existing SA labels and annotations", func(t *testing.T) {
 		// given
-		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role, sa), additionalLabel)
-		require.NoError(t, err)
+		// let's set a secret for the existing service account in order to check if it's preserved
+		expectedSecrets := []corev1.ObjectReference{
+			{
+				Name:      "secret",
+				Namespace: sa.Namespace,
+			},
+		}
+		sa.Secrets = expectedSecrets
 
-		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(sa), additionalLabel)
+		t.Run("update SA labels", func(t *testing.T) {
+			// when
+			// we have a new template object to be applied
+			newSaObject := sa.DeepCopy()
+			// we have some new labels we want to apply to the ServiceAccounts
+			newlabels := map[string]string{
+				"update": "me",
+			}
+			// let's set some new labels also on the new object from the template and see if they will be added
+			newSaObject.Labels["updated"] = "template"
+			// let's set some new value to an existing label
+			newSaObject.Labels["existing_label"] = "new_value"
+			// final labels should be merged to the additionalLabels
+			expectedLabels := map[string]string{
+				"update":         "me",        // new label was added
+				"updated":        "template",  // new label from template was added
+				"existing_label": "new_value", // existing label value was updated
+				"foo":            "bar",       // existing label was preserved
+			}
+			apiClient, fakeClient := prepareAPIClient(t)
+			_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(sa), additionalLabel)
+			require.NoError(t, err)
 
-		// then
-		require.NoError(t, err)
-		assert.True(t, changed)
-		assertObjects(t, fakeClient, false)
+			// when
+			changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(newSaObject), newlabels)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, changed)
+			actualSA := &corev1.ServiceAccount{}
+			AssertObject(t, fakeClient, sa.Namespace, sa.Name, actualSA, func() {
+				// check that the Secrets field is still there
+				assert.Equal(t, expectedSecrets, actualSA.Secrets)
+				// check that new labels were applied
+				assert.Equal(t, expectedLabels, actualSA.Labels)
+				// check new annotations were applied
+			})
+
+		})
+
+		t.Run("update SA annotations", func(t *testing.T) {
+			// when
+			// we have a new template object to be applied
+			newSaObject := sa.DeepCopy()
+			// and we have some new annotations we want to apply to the ServiceAccounts
+			newSaObject.Annotations["update"] = "me"
+			// expected annotations map
+			expectedAnnotations := map[string]string{
+				"existing": "annotation", // existing annotation should stay there
+				"update":   "me",         // new annotation should be added
+			}
+			apiClient, fakeClient := prepareAPIClient(t)
+			_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(sa), additionalLabel)
+			require.NoError(t, err)
+			changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(newSaObject), additionalLabel)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, changed)
+			actualSA := &corev1.ServiceAccount{}
+			AssertObject(t, fakeClient, sa.Namespace, sa.Name, actualSA, func() {
+				// check that the Secrets field is still there
+				assert.Equal(t, expectedSecrets, actualSA.Secrets)
+				// check new annotations were applied
+				for expectedKey, expectedValue := range expectedAnnotations {
+					actualValue, found := actualSA.Annotations[expectedKey]
+					assert.True(t, found)
+					assert.Equal(t, expectedValue, actualValue)
+				}
+				// check that `last-applied` annotation is still there
+				_, lastAppliedFound := actualSA.Annotations[client.LastAppliedConfigurationAnnotationKey]
+				assert.True(t, lastAppliedFound)
+			})
+		})
 	})
 
 	t.Run("update Role and don't update SA when it already exists", func(t *testing.T) {

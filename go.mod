@@ -9,7 +9,7 @@ require (
 	github.com/openshift/api v0.0.0-20230213134911-7ba313770556
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf
-	github.com/stretchr/testify v1.8.0
+	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.21.0
 	gopkg.in/h2non/gock.v1 v1.0.14
 	k8s.io/api v0.25.0
@@ -82,12 +82,12 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/crypto v0.6.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/crypto v0.9.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.5.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/term v0.8.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -104,3 +104,5 @@ require (
 )
 
 go 1.19
+
+replace github.com/codeready-toolchain/toolchain-common => github.com/mfrancisc/toolchain-common v0.0.0-20230622150848-6fb5bbf19fb6

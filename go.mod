@@ -9,7 +9,6 @@ require (
 	github.com/openshift/api v0.0.0-20230213134911-7ba313770556
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf
-	github.com/satori/go.uuid v1.2.0
 	github.com/stretchr/testify v1.8.0
 	go.uber.org/zap v1.21.0
 	gopkg.in/h2non/gock.v1 v1.0.14
@@ -22,6 +21,7 @@ require (
 )
 
 require (
+	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/prometheus/client_golang v1.12.2
 	k8s.io/apiextensions-apiserver v0.25.0
 	k8s.io/apimachinery v0.25.0
@@ -53,7 +53,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
-	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect

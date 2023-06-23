@@ -2,7 +2,6 @@ package validatingwebhook
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -31,7 +30,7 @@ func (v CheClusterRequestValidator) HandleValidate(w http.ResponseWriter, r *htt
 	if err != nil {
 		log.Error(err, "unable to read the body of the request")
 		w.WriteHeader(http.StatusInternalServerError)
-		respBody = []byte(fmt.Sprintf("unable to read the body of the request: %s", err))
+		respBody = []byte("unable to read the body of the request")
 	} else {
 		// validate the request
 		respBody = v.validate(body)

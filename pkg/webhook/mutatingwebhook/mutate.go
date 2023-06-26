@@ -64,7 +64,7 @@ func HandleMutate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error(err, "unable to read the body of the request")
 		w.WriteHeader(http.StatusInternalServerError)
-		respBody = []byte(fmt.Sprintf("unable to read the body of the request: %s", err))
+		respBody = []byte("unable to read the body of the request")
 	} else {
 		// mutate the request
 		respBody = mutate(body)

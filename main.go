@@ -20,6 +20,7 @@ import (
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -220,18 +221,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	githubClient, err := commonclient.NewGitHubClient(crtConfig.GitHubSecret().AccessTokenKey())
-	if err != nil {
-		setupLog.Error(err, "unable to create github client")
-		os.Exit(1)
-	}
 	if err = (&memberstatus.Reconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
 		AllNamespacesClient: allNamespacesClient,
 		CheClient:           che.DefaultClient,
-		GithubClient:        githubClient,
+		VersionCheckManager: status.VersionCheckManager{GetGithubClientFunc: commonclient.NewGitHubClient},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberStatus")
 		os.Exit(1)

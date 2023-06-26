@@ -71,6 +71,13 @@ func (a *MemberStatusAssertion) HasMemberOperatorConditions(expected ...toolchai
 	return a
 }
 
+func (a *MemberStatusAssertion) HasMemberOperatorRevisionCheckConditions(expected ...toolchainv1alpha1.Condition) *MemberStatusAssertion {
+	err := a.loadMemberStatus()
+	require.NoError(a.t, err)
+	test.AssertConditionsMatch(a.t, a.memberStatus.Status.MemberOperator.RevisionCheck.Conditions, expected...)
+	return a
+}
+
 func (a *MemberStatusAssertion) HasHostConditionErrorMsg(expected string) *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)

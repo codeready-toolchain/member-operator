@@ -9,10 +9,10 @@ import (
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
+	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
-	"github.com/google/go-github/v52/github"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -47,7 +47,7 @@ const (
 	labelNodeRoleWorker          = "node-role.kubernetes.io/worker"
 	labelNodeRoleInfra           = "node-role.kubernetes.io/infra"
 	memberOperatorRepoName       = "member-operator"
-	memberOperatorRepoBranchName = "master"
+	memberOperatorRepoBranchName = "HEAD"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -64,7 +64,7 @@ type Reconciler struct {
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 	AllNamespacesClient client.Client
 	CheClient           *che.Client
-	GithubClient        *github.Client
+	VersionCheckManager status.VersionCheckManager
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses,verbs=get;list;watch;create;update;patch;delete
@@ -195,22 +195,27 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 	operatorStatus.Conditions = deploymentConditions
 	memberStatus.Status.MemberOperator = operatorStatus
 
-	// if we are running in production we also
-	// check that deployed version matches the latest commit from source code repository
-	if isProdEnvironment(memberConfig) {
-		versionCondition := status.CheckDeployedVersionIsUpToDate(r.GithubClient, memberOperatorRepoName, memberOperatorRepoBranchName, version.Commit)
-		errVersionCheck := status.ValidateComponentConditionReady([]toolchainv1alpha1.Condition{*versionCondition}...)
-		memberStatus.Status.MemberOperator.Conditions = append(memberStatus.Status.MemberOperator.Conditions, *versionCondition)
-		if errVersionCheck != nil {
-			return errVersionCheck // we can return
-		}
+	isProd := isProdEnvironment(memberConfig)
+	githubRepo := commonclient.GitHubRepository{
+		Org:               toolchainv1alpha1.ProviderLabelValue,
+		Name:              memberOperatorRepoName,
+		Branch:            memberOperatorRepoBranchName,
+		DeployedCommitSHA: version.Commit,
+	}
+
+	// verify deployment version
+	versionCondition := r.VersionCheckManager.CheckDeployedVersionIsUpToDate(isProd, memberConfig.GitHubSecret().AccessTokenKey(), memberStatus.Status.MemberOperator.RevisionCheck.Conditions, githubRepo)
+	errVersionCheck := status.ValidateComponentConditionReady(*versionCondition)
+	memberStatus.Status.MemberOperator.RevisionCheck.Conditions = []toolchainv1alpha1.Condition{*versionCondition}
+	if errVersionCheck != nil {
+		return errVersionCheck // we can return
 	}
 
 	return errDeploy
 }
 
 func isProdEnvironment(memberConfig membercfg.Configuration) bool {
-	return memberConfig.Environment() == "prod" && memberConfig.GitHubSecret().AccessTokenKey() != ""
+	return memberConfig.Environment() == "prod"
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status

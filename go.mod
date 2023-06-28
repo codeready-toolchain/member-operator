@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20230601085531-c1f5bdd73897
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20230530174133-baf8f8452b7a
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20230628072808-9f2463955452
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9
 	// using latest commit from 'github.com/openshift/api branch release-4.12'
@@ -22,7 +22,6 @@ require (
 
 require (
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/google/go-github/v52 v52.0.0
 	github.com/prometheus/client_golang v1.12.2
 	k8s.io/apiextensions-apiserver v0.25.0
 	k8s.io/apimachinery v0.25.0
@@ -61,6 +60,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
+	github.com/google/go-github/v52 v52.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -111,6 +111,6 @@ require (
 
 go 1.19
 
-replace github.com/codeready-toolchain/toolchain-common => github.com/mfrancisc/toolchain-common v0.0.0-20230626074537-eeee22595194
+replace github.com/codeready-toolchain/toolchain-common => github.com/mfrancisc/toolchain-common v0.0.0-20230628113310-472dccbad0aa
 
 replace github.com/codeready-toolchain/api => github.com/mfrancisc/api v0.0.0-20230615150733-e9a7da38ff82

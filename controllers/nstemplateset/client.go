@@ -7,6 +7,7 @@ import (
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -37,16 +38,24 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		}
 		// Special handling of ServiceAccounts is required because if a ServiceAccount is reapplied when it already exists, it causes Kubernetes controllers to
 		// automatically create new Secrets for the ServiceAccounts. After enough time the number of Secrets created will hit the Secrets quota and then no new
-		// Secrets can be created. To prevent this from happening, we do not reapply ServiceAccount objects if they already exist.
+		// Secrets can be created. To prevent this from happening, we fetch the already existing SA, update labels and annotations only, and then call update using the same object (keeping the refs to secrets).
 		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
-			sa := object.DeepCopyObject().(runtimeclient.Object)
+			sa := &v1.ServiceAccount{}
 			err := applyClient.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
-			// fixme: if we need to apply this new SpaceLabelKey value to ServiceAccounts as well, then we might need to remove this check temporarily.
+			// update labels and annotations for service account
 			if err == nil {
-				logger.Info("the object is a ServiceAccount and already exists - won't be applied")
+				logger.Info("the object is a ServiceAccount and already exists - updating labels and annotations...")
+				applycl.MergeLabels(sa, newLabels)                    // add new labels to existing one
+				applycl.MergeLabels(sa, object.GetLabels())           // add new labels from template
+				applycl.MergeAnnotations(sa, object.GetAnnotations()) // add new annotations from template
+				err = applyClient.Update(context.TODO(), sa)
+				if err != nil {
+					return anyApplied, err
+				}
+				anyApplied = true
 				continue
 			}
 		}

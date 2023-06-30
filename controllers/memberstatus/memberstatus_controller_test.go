@@ -682,7 +682,6 @@ func TestOverallStatusCondition(t *testing.T) {
 
 	t.Run("member operator deployment revision check", func(t *testing.T) {
 		// given
-		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
 		requestName := defaultMemberStatusName
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
@@ -692,44 +691,6 @@ func TestOverallStatusCondition(t *testing.T) {
 			"accessToken": []byte("abcd1234"),
 		})
 		commitTimeStamp := time.Now().Add(-time.Hour * 1)
-
-		t.Run("member operator deployment version is not up to date", func(t *testing.T) {
-			// given
-			latestCommitSHA := "xxxxaaaaa"  // we set the latest commit to something that differs from the `buildCommitSHA` constant
-			version.Commit = buildCommitSHA // let's set the build version to a constant value
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(latestCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config, githubSecret)...)
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, requeueResult, res)
-			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("memberOperator")).
-				HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
-				HasMemberOperatorRevisionCheckConditions(ConditionNotReady(toolchainv1alpha1.ToolchainStatusDeploymentNotUpToDateReason, "deployment version is not up to date with latest github commit SHA. deployed commit SHA "+version.Commit+" ,github latest SHA "+latestCommitSHA+", expected deployment timestamp: "+commitTimeStamp.Add(status.DeploymentThreshold).Format(time.RFC3339))).
-				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
-		})
-
-		t.Run("member operator deployment version is up to date", func(t *testing.T) {
-			version.Commit = buildCommitSHA                                                                                                                                                                                                                                                                  // let's set the build version to a constant value which matches the latest build github commit
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config, githubSecret)...) // let's pass the build commit
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, requeueResult, res)
-			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsReady()). // all components are ready
-				HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
-				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
-				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
-		})
 
 		t.Run("deployment version check is disabled", func(t *testing.T) {
 			t.Run("when environment is not prod", func(t *testing.T) {
@@ -754,7 +715,8 @@ func TestOverallStatusCondition(t *testing.T) {
 			//
 			t.Run("when environment is prod but github secret is not present", func(t *testing.T) {
 				// given
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, config)...) // we don't pass the github secret object
+				prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, prodConfig)...) // we don't pass the github secret object
 
 				// when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -766,6 +728,48 @@ func TestOverallStatusCondition(t *testing.T) {
 					HasCondition(ComponentsReady()).                                                                     // all components are ready
 					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)). // we have only one condition for the deployment status
 					HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "access token key is not provided")).
+					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			})
+		})
+
+		t.Run("deployment version check is enabled", func(t *testing.T) {
+			// given
+			prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+			t.Run("member operator deployment version is not up to date", func(t *testing.T) {
+				// given
+				latestCommitSHA := "xxxxaaaaa"  // we set the latest commit to something that differs from the `buildCommitSHA` constant
+				version.Commit = buildCommitSHA // let's set the build version to a constant value
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(latestCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, prodConfig, githubSecret)...)
+
+				// when
+				res, err := reconciler.Reconcile(context.TODO(), req)
+
+				// then
+				require.NoError(t, err)
+				assert.Equal(t, requeueResult, res)
+				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+					HasCondition(ComponentsNotReady("memberOperator")).
+					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
+					HasMemberOperatorRevisionCheckConditions(ConditionNotReady(toolchainv1alpha1.ToolchainStatusDeploymentNotUpToDateReason, "deployment version is not up to date with latest github commit SHA. deployed commit SHA "+version.Commit+" ,github latest SHA "+latestCommitSHA+", expected deployment timestamp: "+commitTimeStamp.Add(status.DeploymentThreshold).Format(time.RFC3339))).
+					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			})
+
+			t.Run("member operator deployment version is up to date", func(t *testing.T) {
+				version.Commit = buildCommitSHA                                                                                                                                                                                                                                                                      // let's set the build version to a constant value which matches the latest build github commit
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, prodConfig, githubSecret)...) // let's pass the build commit
+
+				// when
+				res, err := reconciler.Reconcile(context.TODO(), req)
+
+				// then
+				require.NoError(t, err)
+				assert.Equal(t, requeueResult, res)
+				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+					HasCondition(ComponentsReady()). // all components are ready
+					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
+					HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 			})

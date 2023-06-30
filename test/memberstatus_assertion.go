@@ -152,6 +152,15 @@ func ConditionReady(reason string) toolchainv1alpha1.Condition {
 	}
 }
 
+func ConditionReadyWithMessage(reason, message string) toolchainv1alpha1.Condition { // nolint:unparam
+	return toolchainv1alpha1.Condition{
+		Type:    toolchainv1alpha1.ConditionReady,
+		Status:  corev1.ConditionTrue,
+		Reason:  reason,
+		Message: message,
+	}
+}
+
 func ConditionNotReady(reason, message string) toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,

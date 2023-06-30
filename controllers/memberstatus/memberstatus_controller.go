@@ -47,7 +47,7 @@ const (
 	labelNodeRoleWorker          = "node-role.kubernetes.io/worker"
 	labelNodeRoleInfra           = "node-role.kubernetes.io/infra"
 	memberOperatorRepoName       = "member-operator"
-	memberOperatorRepoBranchName = "HEAD"
+	memberOperatorRepoBranchName = "master"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -175,6 +175,7 @@ func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *too
 		Version:        version.Version,
 		Revision:       version.Commit,
 		BuildTimestamp: version.BuildTime,
+		RevisionCheck:  toolchainv1alpha1.RevisionCheck{},
 	}
 
 	// Look up status of member deployment

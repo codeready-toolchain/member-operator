@@ -2,6 +2,7 @@ package validatingwebhook
 
 import (
 	"context"
+	"html"
 	"io"
 	"net/http"
 	"strings"
@@ -45,8 +46,10 @@ func (v CheClusterRequestValidator) validate(body []byte) []byte {
 	log.Info("incoming request", "body", string(body))
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", string(body)))
+		// sanitize the body
+		escapedBody := html.EscapeString(string(body))
+		log.Error(err, "unable to deserialize the admission review object", "body", escapedBody)
+		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
 	}
 	requestingUsername := admReview.Request.UserInfo.Username
 	// allow admission request if the user is a system user

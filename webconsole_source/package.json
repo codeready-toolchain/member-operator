@@ -46,7 +46,7 @@
     "react-router": "5.2.0",
     "react-router-dom": "5.2.0",
     "style-loader": "^3.3.1",
-    "stylelint": "^14.9.1",
+    "stylelint": "^15.10.1",
     "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard": "^26.0.0",
     "ts-loader": "^9.3.1",

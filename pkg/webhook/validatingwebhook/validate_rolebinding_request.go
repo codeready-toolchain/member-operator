@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"strings"
@@ -47,8 +48,10 @@ func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *ht
 func (v RoleBindingRequestValidator) validate(body []byte) []byte {
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		log.Error(err, "unable to deserialize the admission review object", "body", string(body))
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", string(body)))
+		//sanitize the body
+		escapedBody := html.EscapeString(string(body))
+		log.Error(err, "unable to deserialize the admission review object", "body", escapedBody)
+		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
 	}
 	// let's unmarshal the object to be sure that it's a rolebinding
 	rb := rbac.RoleBinding{}

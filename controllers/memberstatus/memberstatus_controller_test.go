@@ -715,7 +715,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			//
 			t.Run("when environment is prod but github secret is not present", func(t *testing.T) {
 				// given
-				prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+				prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"))
 				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, prodConfig)...) // we don't pass the github secret object
 
 				// when
@@ -736,6 +736,42 @@ func TestOverallStatusCondition(t *testing.T) {
 		t.Run("deployment version check is enabled", func(t *testing.T) {
 			// given
 			prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+			t.Run("when environment is prod ,github secret is present but last github api call is not satisfied", func(t *testing.T) {
+				version.Commit = buildCommitSHA // let's set the build version to a constant value which matches the latest build github commit
+				// we have a member status with some revision check conditions already present
+				// so that we check if they are preserved and not lost.
+				memberStatusWithRevisionCheck := newMemberStatus()
+				memberStatusWithRevisionCheck.Status = toolchainv1alpha1.MemberStatusStatus{
+					MemberOperator: &toolchainv1alpha1.MemberOperatorStatus{
+						RevisionCheck: toolchainv1alpha1.RevisionCheck{
+							Conditions: []toolchainv1alpha1.Condition{
+								{
+									Type:   toolchainv1alpha1.ConditionReady,
+									Status: corev1.ConditionTrue,
+									Reason: toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason,
+								},
+							},
+						},
+					},
+				}
+
+				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, time.Now().Add(time.Second*1), // let's set the last time we called github at 1 second ago
+					test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatusWithRevisionCheck, prodConfig, githubSecret)...) // let's pass the build commit
+
+				// when
+				res, err := reconciler.Reconcile(context.TODO(), req)
+
+				// then
+				require.NoError(t, err)
+				assert.Equal(t, requeueResult, res)
+				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
+					HasCondition(ComponentsReady()). // all components are ready
+					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
+					HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
+					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
+					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			})
+
 			t.Run("member operator deployment version is not up to date", func(t *testing.T) {
 				// given
 				latestCommitSHA := "xxxxaaaaa"  // we set the latest commit to something that differs from the `buildCommitSHA` constant

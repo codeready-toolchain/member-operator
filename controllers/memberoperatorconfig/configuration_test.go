@@ -191,6 +191,28 @@ func TestChe(t *testing.T) {
 	})
 }
 
+func TestGitHubSecret(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec}
+
+		assert.Equal(t, "", memberOperatorCfg.GitHubSecret().AccessTokenKey())
+	})
+	t.Run("non-default", func(t *testing.T) {
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberStatus().
+			GitHubSecretRef("github").
+			GitHubSecretAccessTokenKey("accessToken"))
+
+		gitHubSecretValues := make(map[string]string)
+		gitHubSecretValues["accessToken"] = "abc123"
+		secrets := make(map[string]map[string]string)
+		secrets["github"] = gitHubSecretValues
+		memberOperatorCfg := Configuration{cfg: &cfg.Spec, secrets: secrets}
+
+		assert.Equal(t, "abc123", memberOperatorCfg.GitHubSecret().AccessTokenKey())
+	})
+}
+
 func TestConsole(t *testing.T) {
 	t.Run("console namespace", func(t *testing.T) {
 		t.Run("default", func(t *testing.T) {

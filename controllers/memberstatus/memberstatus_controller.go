@@ -9,6 +9,7 @@ import (
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
+	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
@@ -42,9 +43,11 @@ const (
 	routesTag         statusComponentTag = "routes"
 	cheTag            statusComponentTag = "che"
 
-	labelNodeRoleMaster = "node-role.kubernetes.io/master"
-	labelNodeRoleWorker = "node-role.kubernetes.io/worker"
-	labelNodeRoleInfra  = "node-role.kubernetes.io/infra"
+	labelNodeRoleMaster          = "node-role.kubernetes.io/master"
+	labelNodeRoleWorker          = "node-role.kubernetes.io/worker"
+	labelNodeRoleInfra           = "node-role.kubernetes.io/infra"
+	memberOperatorRepoName       = "member-operator"
+	memberOperatorRepoBranchName = "master"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -61,6 +64,7 @@ type Reconciler struct {
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 	AllNamespacesClient client.Client
 	CheClient           *che.Client
+	VersionCheckManager status.VersionCheckManager
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses,verbs=get;list;watch;create;update;patch;delete
@@ -166,33 +170,58 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, _ membercfg.Configuration) error {
+func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
+	// ensure host operator status is set
+	if memberStatus.Status.MemberOperator == nil {
+		memberStatus.Status.MemberOperator = &toolchainv1alpha1.MemberOperatorStatus{}
+	}
+
 	operatorStatus := &toolchainv1alpha1.MemberOperatorStatus{
 		Version:        version.Version,
 		Revision:       version.Commit,
 		BuildTimestamp: version.BuildTime,
+		RevisionCheck:  memberStatus.Status.MemberOperator.RevisionCheck, // let's copy the last revision check object if any
 	}
 
 	// Look up status of member deployment
-	memberOperatorName, err := configuration.GetOperatorName()
-	if err != nil {
-		err = errs.Wrap(err, status.ErrMsgCannotGetDeployment)
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, err.Error())
+	memberOperatorName, errDeploy := configuration.GetOperatorName()
+	if errDeploy != nil {
+		errDeploy = errs.Wrap(errDeploy, status.ErrMsgCannotGetDeployment)
+		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusDeploymentNotFoundReason, errDeploy.Error())
 		operatorStatus.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 		memberStatus.Status.MemberOperator = operatorStatus
-		return err
+		return errDeploy
 	}
 	memberOperatorDeploymentName := fmt.Sprintf("%s-controller-manager", memberOperatorName)
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// Check member operator deployment status
 	deploymentConditions := status.GetDeploymentStatusConditions(r.Client, memberOperatorDeploymentName, memberStatus.Namespace)
-	err = status.ValidateComponentConditionReady(deploymentConditions...)
-
-	// Update memberstatus
+	errDeploy = status.ValidateComponentConditionReady(deploymentConditions...)
 	operatorStatus.Conditions = deploymentConditions
 	memberStatus.Status.MemberOperator = operatorStatus
-	return err
+
+	isProd := isProdEnvironment(memberConfig)
+	githubRepo := commonclient.GitHubRepository{
+		Org:               toolchainv1alpha1.ProviderLabelValue,
+		Name:              memberOperatorRepoName,
+		Branch:            memberOperatorRepoBranchName,
+		DeployedCommitSHA: version.Commit,
+	}
+
+	// verify deployment version
+	versionCondition := r.VersionCheckManager.CheckDeployedVersionIsUpToDate(isProd, memberConfig.GitHubSecret().AccessTokenKey(), memberStatus.Status.MemberOperator.RevisionCheck.Conditions, githubRepo)
+	errVersionCheck := status.ValidateComponentConditionReady(*versionCondition)
+	memberStatus.Status.MemberOperator.RevisionCheck.Conditions = []toolchainv1alpha1.Condition{*versionCondition}
+	if errVersionCheck != nil {
+		return errVersionCheck // we can return
+	}
+
+	return errDeploy
+}
+
+func isProdEnvironment(memberConfig membercfg.Configuration) bool {
+	return memberConfig.Environment() == "prod"
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status

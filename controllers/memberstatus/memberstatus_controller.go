@@ -171,7 +171,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
 func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
-	// ensure host operator status is set
+	// ensure member operator status is set
 	if memberStatus.Status.MemberOperator == nil {
 		memberStatus.Status.MemberOperator = &toolchainv1alpha1.MemberOperatorStatus{}
 	}

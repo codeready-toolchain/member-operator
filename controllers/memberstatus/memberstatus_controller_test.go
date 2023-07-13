@@ -116,11 +116,17 @@ func TestOverallStatusCondition(t *testing.T) {
 
 	t.Run("All components ready", func(t *testing.T) {
 		// given
+		prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+		githubSecret := test.CreateSecret("github", test.MemberOperatorNs, map[string][]byte{
+			"accessToken": []byte("abcd1234"),
+		})
+		commitTimeStamp := time.Now().Add(-time.Hour * 1)
+		version.Commit = buildCommitSHA // let's set the build version to a constant value which matches the latest build github commit
 		requestName := defaultMemberStatusName
 		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
-		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
+		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, prodConfig, githubSecret)...)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -131,7 +137,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsReady()).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "access token key is not provided")).
+			HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 
 		t.Run("when node has multiple roles", func(t *testing.T) {
@@ -149,7 +155,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 20), OfNodeRole("master", 20)).
-				HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "access token key is not provided")).
+				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
@@ -170,7 +176,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
-				HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "access token key is not provided")).
+				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 
@@ -191,7 +197,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
-				HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "access token key is not provided")).
+				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 		})
 	})
@@ -788,24 +794,6 @@ func TestOverallStatusCondition(t *testing.T) {
 					HasCondition(ComponentsNotReady("memberOperator")).
 					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
 					HasMemberOperatorRevisionCheckConditions(ConditionNotReady(toolchainv1alpha1.ToolchainStatusDeploymentNotUpToDateReason, "deployment version is not up to date with latest github commit SHA. deployed commit SHA "+version.Commit+" ,github latest SHA "+latestCommitSHA+", expected deployment timestamp: "+commitTimeStamp.Add(status.DeploymentThreshold).Format(time.RFC3339))).
-					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
-			})
-
-			t.Run("member operator deployment version is up to date", func(t *testing.T) {
-				version.Commit = buildCommitSHA                                                                                                                                                                                                                                                                      // let's set the build version to a constant value which matches the latest build github commit
-				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, test.MockGitHubClientForRepositoryCommits(buildCommitSHA, commitTimeStamp), append(nodeAndMetrics, memberOperatorDeployment, memberStatus, prodConfig, githubSecret)...) // let's pass the build commit
-
-				// when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.NoError(t, err)
-				assert.Equal(t, requeueResult, res)
-				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-					HasCondition(ComponentsReady()). // all components are ready
-					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
-					HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
 			})

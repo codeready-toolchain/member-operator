@@ -71,7 +71,7 @@ func (r *statusManager) updateStatusProvisionedNamespaces(nsTmplSet *toolchainv1
 	sort.Slice(provisionedNamespaces, func(i, j int) bool {
 		return provisionedNamespaces[i].Name < provisionedNamespaces[j].Name
 	})
-	provisionedNamespaces[0].Type = "default"
+	provisionedNamespaces[0].Type = toolchainv1alpha1.NamespaceTypeDefault
 
 	nsTmplSet.Status.ProvisionedNamespaces = provisionedNamespaces
 	return r.Client.Status().Update(context.TODO(), nsTmplSet)

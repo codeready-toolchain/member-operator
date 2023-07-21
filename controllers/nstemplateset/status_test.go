@@ -69,7 +69,7 @@ func TestUpdateStatus(t *testing.T) {
 			HasProvisionedNamespaces([]toolchainv1alpha1.SpaceNamespace{
 				{
 					Name: spacename + "-dev",
-					Type: toolchainv1alpha1.NamespaceTypeDefault, // check that default type is added to first NS in alphabetical order
+					Type: "default", // check that default type is added to first NS in alphabetical order
 				},
 				{
 					Name: spacename + "-stage",

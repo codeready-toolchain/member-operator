@@ -69,5 +69,30 @@ spec:
           requests:
             cpu: 500m
             memory: 500M
+      - name: kube-rbac-proxy
+        image: registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.7.0
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - all
+        args:
+          - "--secure-listen-address=0.0.0.0:8443"
+          - "--upstream=http://127.0.0.1:8080/"
+          - "--logtostderr=true"
+          - "--v=3"
+        ports:
+          - containerPort: 8443
+            name: https
+      - name: manager
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - all
+        args:
+          - "--health-probe-bind-address=:8081"
+          - "--metrics-bind-address=127.0.0.1:8080"
+          - "--leader-elect"
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

@@ -9,7 +9,8 @@ namespace: toolchain-member-operator
 namePrefix: member-operator-
 
 # Labels to add to all resources and selectors.
-#commonLl someValue
+#commonLabels:
+#  someName: someValue
 
 resources:
 - ../crd

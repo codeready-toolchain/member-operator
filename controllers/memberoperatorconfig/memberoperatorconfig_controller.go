@@ -2,8 +2,9 @@ package memberoperatorconfig
 
 import (
 	"context"
-	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"os"
+
+	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -28,8 +29,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.MemberOperatorConfig{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&source.Kind{Type: &corev1.Secret{}},
-			handler.EnqueueRequestsFromMapFunc(MapSecretToMemberOperatorConfig()),
-			builder.WithPredicates(&predicate.GenerationChangedPredicate{})).
+			handler.EnqueueRequestsFromMapFunc(MapSecretToMemberOperatorConfig())).
 		Complete(r)
 }
 

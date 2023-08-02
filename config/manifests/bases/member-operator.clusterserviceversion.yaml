@@ -51,6 +51,11 @@ spec:
       kind: SpaceRequest
       name: spacerequests.toolchain.dev.openshift.com
       version: v1alpha1
+    - description: SpaceBindingRequest allows to request creation of a SpaceBindings
+      displayName: SpaceBindingRequest
+      kind: SpaceBindingRequest
+      name: spacebindingrequests.toolchain.dev.openshift.com
+      version: v1alpha1
     - description: Workspace is only for use by the Proxy Space Lister API. There
         will be no actual Workspace CRs in the host/member clusters. See workspace_types.go
         in the api repo for more details.

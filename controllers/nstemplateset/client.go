@@ -41,7 +41,7 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		// automatically create new Secrets for the ServiceAccounts. After enough time the number of Secrets created will hit the Secrets quota and then no new
 		// Secrets can be created. To prevent this from happening, we fetch the already existing SA, update labels and annotations only, and then call update using the same object (keeping the refs to secrets).
 		if strings.EqualFold(object.GetObjectKind().GroupVersionKind().Kind, "ServiceAccount") {
-			logger.Info("the object is a ServiceAccount so we do the special handling for it...")
+			logger.Info("the object is a ServiceAccount so we do the special handling for it...", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 			sa := &v1.ServiceAccount{}
 			err := applyClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {

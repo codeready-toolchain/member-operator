@@ -8,7 +8,6 @@ import (
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,12 +41,11 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		// Secrets can be created. To prevent this from happening, we fetch the already existing SA, update labels and annotations only, and then call update using the same object (keeping the refs to secrets).
 		if strings.EqualFold(object.GetObjectKind().GroupVersionKind().Kind, "ServiceAccount") {
 			logger.Info("the object is a ServiceAccount so we do the special handling for it...", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
-			sa := &v1.ServiceAccount{}
+			sa := object.DeepCopyObject().(runtimeclient.Object)
 			err := applyClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
-			// update labels and annotations for service account
 			if err != nil {
 				logger.Info("the ServiceAccount does not exists - creating...")
 				applycl.MergeLabels(object, newLabels)

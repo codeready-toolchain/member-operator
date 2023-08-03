@@ -51,7 +51,7 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 			}
 			// update labels and annotations for service account
 			if err == nil {
-				logger.Info("the object is a ServiceAccount and already exists - updating labels and annotations...")
+				logger.Info("the object is a ServiceAccount and already exists - updating labels and annotations...", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 				applycl.MergeLabels(sa, newLabels)                    // add new labels to existing one
 				applycl.MergeLabels(sa, object.GetLabels())           // add new labels from template
 				applycl.MergeAnnotations(sa, object.GetAnnotations()) // add new annotations from template

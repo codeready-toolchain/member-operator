@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -39,15 +40,22 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		// Special handling of ServiceAccounts is required because if a ServiceAccount is reapplied when it already exists, it causes Kubernetes controllers to
 		// automatically create new Secrets for the ServiceAccounts. After enough time the number of Secrets created will hit the Secrets quota and then no new
 		// Secrets can be created. To prevent this from happening, we fetch the already existing SA, update labels and annotations only, and then call update using the same object (keeping the refs to secrets).
-		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
+		if strings.EqualFold(object.GetObjectKind().GroupVersionKind().Kind, "ServiceAccount") {
+			logger.Info("the object is a ServiceAccount so we do the special handling for it...")
 			sa := &v1.ServiceAccount{}
-			err := applyClient.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
+			err := applyClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
 			// update labels and annotations for service account
-			if err == nil {
-				logger.Info("the object is a ServiceAccount and already exists - updating labels and annotations...")
+			if err != nil {
+				logger.Info("the ServiceAccount does not exists - creating...")
+				applycl.MergeLabels(object, newLabels)
+				if err := applyClient.Create(context.TODO(), object); err != nil {
+					return anyApplied, err
+				}
+			} else {
+				logger.Info("the ServiceAccount already exists - updating labels and annotations...")
 				applycl.MergeLabels(sa, newLabels)                    // add new labels to existing one
 				applycl.MergeLabels(sa, object.GetLabels())           // add new labels from template
 				applycl.MergeAnnotations(sa, object.GetAnnotations()) // add new annotations from template
@@ -55,9 +63,9 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 				if err != nil {
 					return anyApplied, err
 				}
-				anyApplied = true
-				continue
 			}
+			anyApplied = true
+			continue
 		}
 		logger.Info("applying object", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 		_, err := applyClient.Apply([]runtimeclient.Object{object}, newLabels)

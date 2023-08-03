@@ -156,9 +156,17 @@ func TestApplyToolchainObjects(t *testing.T) {
 				"existing_label": "new_value", // existing label value was updated
 				"foo":            "bar",       // existing label was preserved
 			}
-			apiClient, fakeClient := prepareAPIClient(t)
-			_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(sa), additionalLabel)
-			require.NoError(t, err)
+			originalSA := sa.DeepCopy()
+			client.MergeLabels(originalSA, additionalLabel)
+			apiClient, fakeClient := prepareAPIClient(t, originalSA)
+			called := false
+			fakeClient.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
+				if key.Name == "appstudio-user-sa" {
+					require.False(t, called, "should be called only once for SA")
+					called = true
+				}
+				return fakeClient.Client.Get(ctx, key, obj, opts...)
+			}
 
 			// when
 			changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(newSaObject), newlabels)
@@ -166,6 +174,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			assert.True(t, changed)
+			fakeClient.MockGet = nil
 			actualSA := &corev1.ServiceAccount{}
 			AssertObject(t, fakeClient, sa.Namespace, sa.Name, actualSA, func() {
 				// check that the Secrets field is still there
@@ -191,11 +200,20 @@ func TestApplyToolchainObjects(t *testing.T) {
 			apiClient, fakeClient := prepareAPIClient(t)
 			_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(sa), additionalLabel)
 			require.NoError(t, err)
+			called := false
+			fakeClient.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
+				if key.Name == "appstudio-user-sa" {
+					require.False(t, called, "should be called only once for SA")
+					called = true
+				}
+				return fakeClient.Client.Get(ctx, key, obj, opts...)
+			}
 			changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(newSaObject), additionalLabel)
 
 			// then
 			require.NoError(t, err)
 			assert.True(t, changed)
+			fakeClient.MockGet = nil
 			actualSA := &corev1.ServiceAccount{}
 			AssertObject(t, fakeClient, sa.Namespace, sa.Name, actualSA, func() {
 				// check that the Secrets field is still there
@@ -233,6 +251,14 @@ func TestApplyToolchainObjects(t *testing.T) {
 		apiClient, fakeClient := prepareAPIClient(t)
 		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role), additionalLabel)
 		require.NoError(t, err)
+		called := false
+		fakeClient.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
+			if key.Name == "appstudio-user-sa" {
+				require.False(t, called, "should be called only once for SA")
+				called = true
+			}
+			return fakeClient.Client.Get(ctx, key, obj, opts...)
+		}
 
 		// when
 		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(sa), additionalLabel)
@@ -240,6 +266,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.True(t, changed)
+		fakeClient.MockGet = nil
 		assertObjects(t, fakeClient, false)
 	})
 }

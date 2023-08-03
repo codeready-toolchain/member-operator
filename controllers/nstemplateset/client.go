@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -39,11 +40,14 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		// Special handling of ServiceAccounts is required because if a ServiceAccount is reapplied when it already exists, it causes Kubernetes controllers to
 		// automatically create new Secrets for the ServiceAccounts. After enough time the number of Secrets created will hit the Secrets quota and then no new
 		// Secrets can be created. To prevent this from happening, we fetch the already existing SA, update labels and annotations only, and then call update using the same object (keeping the refs to secrets).
-		if object.GetObjectKind().GroupVersionKind().Kind == "ServiceAccount" {
+		if strings.EqualFold(object.GetObjectKind().GroupVersionKind().Kind, "ServiceAccount") {
 			sa := &v1.ServiceAccount{}
-			err := applyClient.Client.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
+			err := applyClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
+			}
+			if errors.IsNotFound(err) {
+				logger.Info("the object is a service account but was not found", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 			}
 			// update labels and annotations for service account
 			if err == nil {

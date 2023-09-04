@@ -2,8 +2,9 @@ package deploy
 
 import (
 	"encoding/base64"
+
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/userspodswebhook"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/templates"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
@@ -45,7 +46,7 @@ func Webhook(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string
 }
 
 func getTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {
-	deployment, err := userspodswebhook.Asset("member-operator-webhook.yaml")
+	deployment, err := templates.Asset("member-operator-webhook.yaml")
 	if err != nil {
 		return nil, err
 	}

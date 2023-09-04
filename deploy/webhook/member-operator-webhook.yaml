@@ -28,6 +28,14 @@ objects:
         - get
         - list
         - watch
+    - apiGroups:
+      - "toolchain.dev.openshift.com"
+      resources:
+      - "spacebindingrequests"
+      verbs:
+      - get
+      - list
+      - watch
 - apiVersion: v1
   kind: ServiceAccount
   metadata:
@@ -177,6 +185,30 @@ objects:
           apiGroups: ["org.eclipse.che"]
           apiVersions: ["v2"]
           resources: ["checlusters"]
+          scope: "Namespaced"
+      sideEffects: None
+      timeoutSeconds: 5
+      reinvocationPolicy: Never
+      failurePolicy: Ignore
+      namespaceSelector:
+        matchLabels:
+          toolchain.dev.openshift.com/provider: codeready-toolchain
+    - name: users.spacebindingrequests.webhook.sandbox
+      admissionReviewVersions:
+        - v1
+      clientConfig:
+        caBundle: ${CA_BUNDLE}
+        service:
+          name: member-operator-webhook
+          namespace: ${NAMESPACE}
+          path: "/validate-spacebindingrequests"
+          port: 443
+      matchPolicy: Equivalent
+      rules:
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: ["toolchain.dev.openshift.com"]
+          apiVersions: ["v1alpha1"]
+          resources: ["spacebindingrequests"]
           scope: "Namespaced"
       sideEffects: None
       timeoutSeconds: 5

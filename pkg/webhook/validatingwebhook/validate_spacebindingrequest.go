@@ -71,7 +71,7 @@ func (v SpaceBindingRequestValidator) validate(body []byte) []byte {
 		}
 		// there was an issue while trying to GET SBR
 		log.Error(err, "unable to check if spacebindingrequest already exists", "SpaceBindingRequest.Name", newSBR.GetName(), "SpaceBindingRequest.Namespace", newSBR.GetNamespace())
-		return denyAdmissionRequest(admReview, errs.Wrapf(err, "unable to check if spacebindingrequest already exists. SpaceBindingRequest.Name: %v", newSBR.GetName()))
+		return denyAdmissionRequest(admReview, errs.Wrapf(err, "unable to validate the SpaceBindingRequest. SpaceBindingRequest.Name: %v", newSBR.GetName()))
 	}
 
 	// check that MUR field is unchanged

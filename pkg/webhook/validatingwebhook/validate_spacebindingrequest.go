@@ -71,14 +71,14 @@ func (v SpaceBindingRequestValidator) validate(body []byte) []byte {
 		}
 		// there was an issue while trying to GET SBR
 		log.Error(err, "unable to check if spacebindingrequest already exists", "SpaceBindingRequest.Name", newSBR.GetName(), "SpaceBindingRequest.Namespace", newSBR.GetNamespace())
-		return denyAdmissionRequest(admReview, errs.Wrapf(err, "unable to check if spacebindingrequest already exists. SpaceBindingRequest.Name: %v", newSBR.GetName()))
+		return denyAdmissionRequest(admReview, errs.Wrapf(err, "unable to validate the SpaceBindingRequest. SpaceBindingRequest.Name: %v", newSBR.GetName()))
 	}
 
 	// check that MUR field is unchanged
 	if existingSBR.Spec.MasterUserRecord != newSBR.Spec.MasterUserRecord {
 		// MUR name field is immutable since the SpaceBinding name contains the MUR name,
 		// changing it, then it wouldn't match anymore.
-		return denyAdmissionRequest(admReview, errs.New("SpaceBindingRequest.MasterUserRecord field cannot be updated. Consider deleting and recreating the SpaceBindingRequest resource"))
+		return denyAdmissionRequest(admReview, errs.New("SpaceBindingRequest.MasterUserRecord field cannot be changed. Consider deleting and creating a new SpaceBindingRequest resource"))
 	}
 
 	return allowAdmissionRequest(admReview)

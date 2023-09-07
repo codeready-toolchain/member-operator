@@ -51,7 +51,7 @@ func TestHandleValidateSpaceBindingRequest(t *testing.T) {
 
 			// then
 			// it should not be allowed to update MUR field
-			test.VerifyRequestBlocked(t, response, "SpaceBindingRequest.MasterUserRecord field cannot be updated. Consider deleting and recreating the SpaceBindingRequest resource", requestUID)
+			test.VerifyRequestBlocked(t, response, "SpaceBindingRequest.MasterUserRecord field cannot be changed. Consider deleting and creating a new SpaceBindingRequest resource", requestUID)
 		})
 
 		t.Run("SpaceRole field update is allowed in SpaceBindingRequest", func(t *testing.T) {
@@ -142,7 +142,7 @@ func TestValidateSpaceBindingRequestFailsOnGettingSBR(t *testing.T) {
 	response := v.validate(req)
 
 	// then
-	test.VerifyRequestBlocked(t, response, "unable to check if spacebindingrequest already exists. SpaceBindingRequest.Name: john-sbr: mock error", "xvadsfasdf")
+	test.VerifyRequestBlocked(t, response, "unable to validate the SpaceBindingRequest. SpaceBindingRequest.Name: john-sbr: mock error", "xvadsfasdf")
 }
 
 func newSpaceBindingRequestValidator(cl runtimeClient.Client) *SpaceBindingRequestValidator {

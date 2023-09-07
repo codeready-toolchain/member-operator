@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/templates"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 

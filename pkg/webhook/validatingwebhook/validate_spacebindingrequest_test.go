@@ -156,9 +156,6 @@ func newSBR(name, namespace, mur, spaceRole string) *toolchainv1alpha1.SpaceBind
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
-			Labels: map[string]string{
-				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-			},
 		},
 		Spec: toolchainv1alpha1.SpaceBindingRequestSpec{
 			MasterUserRecord: mur,

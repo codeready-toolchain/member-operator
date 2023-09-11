@@ -8,9 +8,9 @@ import (
 	"text/template"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook/test"
 
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -31,7 +31,7 @@ func TestHandleValidateCheClusterAdmissionRequest(t *testing.T) {
 		response := v.validate(req)
 
 		// then
-		verifyRequestDenied(t, response, "this is a Dev Sandbox enforced restriction. you are trying to create a CheCluster resource, which is not allowed", "f0b30997-3ac0-49f2-baf4-6eafd123564c")
+		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. you are trying to create a CheCluster resource, which is not allowed", "f0b30997-3ac0-49f2-baf4-6eafd123564c")
 	})
 
 	t.Run("crtadmin user trying to create a CheCluster resource is allowed", func(t *testing.T) {
@@ -42,17 +42,9 @@ func TestHandleValidateCheClusterAdmissionRequest(t *testing.T) {
 		response := v.validate(req)
 
 		// then
-		verifyRequestAllowed(t, response, "f0b30997-3ac0-49f2-baf4-6eafd123564c")
+		test.VerifyRequestAllowed(t, response, "f0b30997-3ac0-49f2-baf4-6eafd123564c")
 	})
 
-}
-
-func verifyRequestDenied(t *testing.T, response []byte, msg string, UID string) {
-	reviewResponse := toReviewResponse(t, response)
-	assert.False(t, reviewResponse.Allowed)
-	assert.NotEmpty(t, reviewResponse.Result)
-	assert.Contains(t, reviewResponse.Result.Message, msg)
-	assert.Equal(t, UID, string(reviewResponse.UID))
 }
 
 func newCheClusterValidator(t *testing.T) *CheClusterRequestValidator {

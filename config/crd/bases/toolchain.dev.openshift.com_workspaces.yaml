@@ -45,6 +45,39 @@ spec:
           status:
             description: WorkspaceStatus defines the observed state of a Workspace
             properties:
+              availableRoles:
+                description: AvailableRoles contains the roles for this tier. For
+                  example, "admin|contributor|maintainer".
+                items:
+                  type: string
+                type: array
+              bindings:
+                description: Bindings enumerates the permissions that have been granted
+                  to users within the current workspace, and actions that workspace
+                  admin users can apply to those permissions.
+                items:
+                  properties:
+                    availableActions:
+                      description: 'AvailableActions is a list of actions that can
+                        be performed on the binding. Available values: - "update"
+                        when the role in the current binding can be changed - "delete"
+                        when the current binding can be deleted - "override" when
+                        the current binding can be overwritten by a new binding containing
+                        same MasterUserRecord but different role'
+                      items:
+                        type: string
+                      type: array
+                    masterUserRecord:
+                      description: MasterUserRecord is the name of the user that has
+                        access to the workspace.
+                      type: string
+                    role:
+                      description: Role is the role of the user in the current workspace.
+                        For example "admin" for the user that has all permissions
+                        on the current workspace.
+                      type: string
+                  type: object
+                type: array
               namespaces:
                 description: The list of namespaces belonging to the Workspace.
                 items:

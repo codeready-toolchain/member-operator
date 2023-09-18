@@ -51,10 +51,11 @@ spec:
                 items:
                   type: string
                 type: array
+                x-kubernetes-list-type: atomic
               bindings:
                 description: Bindings enumerates the permissions that have been granted
-                  to users within the current workspace, and actions that workspace
-                  admin users can apply to those permissions.
+                  to users within the current workspace, and actions that can be applied
+                  to those permissions.
                 items:
                   properties:
                     availableActions:
@@ -62,14 +63,18 @@ spec:
                         be performed on the binding. Available values: - "update"
                         when the role in the current binding can be changed - "delete"
                         when the current binding can be deleted - "override" when
-                        the current binding can be overwritten by a new binding containing
-                        same MasterUserRecord but different role'
+                        the current binding is inherited from a parent workspace,
+                        it cannot be updated but it can be overridden by creating
+                        a new binding containing the same MasterUserRecord but different
+                        role in the subworkspace.'
                       items:
                         type: string
                       type: array
+                      x-kubernetes-list-type: atomic
                     masterUserRecord:
                       description: MasterUserRecord is the name of the user that has
-                        access to the workspace.
+                        access to the workspace. This field is immutable via a validating
+                        webhook.
                       type: string
                     role:
                       description: Role is the role of the user in the current workspace.
@@ -78,6 +83,7 @@ spec:
                       type: string
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               namespaces:
                 description: The list of namespaces belonging to the Workspace.
                 items:

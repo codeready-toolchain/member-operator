@@ -8,12 +8,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook"
 
-	userv1 "github.com/openshift/api/user/v1"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	klogv1 "k8s.io/klog"
@@ -77,9 +77,9 @@ func main() {
 		setupLog.Error(err, "getting config failed")
 		os.Exit(1)
 	}
-	err = userv1.Install(runtimeScheme)
+	err = apis.AddToScheme(runtimeScheme)
 	if err != nil {
-		setupLog.Error(err, "adding user to scheme failed")
+		setupLog.Error(err, "adding apis to scheme failed")
 		os.Exit(1)
 	}
 	cl, err := client.New(cfg, client.Options{
@@ -95,11 +95,15 @@ func main() {
 	checlusterValidator := &validatingwebhook.CheClusterRequestValidator{
 		Client: cl,
 	}
+	spacebindingrequestValidator := &validatingwebhook.SpaceBindingRequestValidator{
+		Client: cl,
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutate)
 	mux.HandleFunc("/validate-users-rolebindings", rolebindingValidator.HandleValidate)
 	mux.HandleFunc("/validate-users-checlusters", checlusterValidator.HandleValidate)
+	mux.HandleFunc("/validate-spacebindingrequests", spacebindingrequestValidator.HandleValidate)
 
 	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)
 		Addr:    ":8443",

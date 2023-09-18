@@ -34,9 +34,9 @@ vendor:
 
 .PHONY: generate-assets
 generate-assets: go-bindata
-	@echo "generating users pods mutating webhook template data..."
-	@rm ./pkg/webhook/deploy/userspodswebhook/template_assets.go 2>/dev/null || true
-	@$(GO_BINDATA) -pkg userspodswebhook -o ./pkg/webhook/deploy/userspodswebhook/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
+	@echo "generating webhooks template data..."
+	@rm ./pkg/webhook/deploy/webhooks/template_assets.go 2>/dev/null || true
+	@$(GO_BINDATA) -pkg templates -o ./pkg/webhook/deploy/webhooks/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
 	@echo "generating autoscaler buffer template data..."
 	@rm ./pkg/autoscaler/template_assets.go 2>/dev/null || true
 	@$(GO_BINDATA) -pkg autoscaler -o ./pkg/autoscaler/template_assets.go -nocompress -prefix deploy/autoscaler deploy/autoscaler

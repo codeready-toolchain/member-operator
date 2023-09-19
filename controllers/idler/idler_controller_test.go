@@ -713,7 +713,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
-		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address")
+		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address: mail: missing '@' or angle-addr")
 	})
 }
 

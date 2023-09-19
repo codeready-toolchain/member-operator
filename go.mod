@@ -20,6 +20,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.13.0
 )
 
+replace github.com/codeready-toolchain/toolchain-common => github.com/matousjobanek/toolchain-common v0.0.0-20230919125431-20fdc3343e02
+
 require (
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/prometheus/client_golang v1.12.2

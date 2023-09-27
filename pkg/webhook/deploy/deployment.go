@@ -46,7 +46,7 @@ func Webhook(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string
 }
 
 func getTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {
-	deployment, err := templates.Asset("member-operator-webhook.yaml")
+	deployment, err := webhooks.Asset("member-operator-webhook.yaml")
 	if err != nil {
 		return nil, err
 	}

@@ -13,16 +13,16 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 )
 
-func TestHandleMutateSuccess(t *testing.T) {
+func TestHandleMutateUserPodsSuccess(t *testing.T) {
 	// given
-	ts := httptest.NewServer(http.HandlerFunc(HandleMutate))
+	ts := httptest.NewServer(http.HandlerFunc(HandleMutateUserPods))
 	defer ts.Close()
 
 	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON))
+	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawPodReviewJSON))
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	defer func() {
 		require.NoError(t, resp.Body.Close())
@@ -31,9 +31,9 @@ func TestHandleMutateSuccess(t *testing.T) {
 	verifySuccessfulResponse(t, body)
 }
 
-func TestMutateSuccess(t *testing.T) {
+func TestMutateUserPodsSuccess(t *testing.T) {
 	// when
-	response := mutate(rawJSON)
+	response := podM.mutate(rawPodReviewJSON)
 
 	// then
 	verifySuccessfulResponse(t, response)
@@ -49,18 +49,18 @@ func verifySuccessfulResponse(t *testing.T, response []byte) {
 	assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
 }
 
-func TestMutateFailsOnInvalidJson(t *testing.T) {
+func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
 	// given
 	rawJSON := []byte(`something wrong !`)
 
 	// when
-	response := mutate(rawJSON)
+	response := podM.mutate(rawJSON)
 
 	// then
 	verifyFailedResponse(t, response, "cannot unmarshal string into Go value of type struct")
 }
 
-func TestMutateFailsOnInvalidPod(t *testing.T) {
+func TestMutateUserPodsFailsOnInvalidPod(t *testing.T) {
 	// when
 	rawJSON := []byte(`{
 		"request": {
@@ -69,7 +69,7 @@ func TestMutateFailsOnInvalidPod(t *testing.T) {
 	}`)
 
 	// when
-	response := mutate(rawJSON)
+	response := podM.mutate(rawJSON)
 
 	// then
 	verifyFailedResponse(t, response, "cannot unmarshal number into Go value of type v1.Pod")
@@ -94,7 +94,7 @@ func toReviewResponse(t *testing.T, content []byte) *admissionv1.AdmissionRespon
 	return r.Response
 }
 
-var rawJSON = []byte(`{
+var rawPodReviewJSON = []byte(`{
   "kind": "AdmissionReview",
   "apiVersion": "admission.k8s.io/v1",
   "request": {

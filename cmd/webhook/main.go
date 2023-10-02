@@ -100,7 +100,8 @@ func main() {
 	}
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutate)
+	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutateUserPods)
+	mux.HandleFunc("/mutate-virtual-machines", mutatingwebhook.HandleMutateVirtualMachines)
 	mux.HandleFunc("/validate-users-rolebindings", rolebindingValidator.HandleValidate)
 	mux.HandleFunc("/validate-users-checlusters", checlusterValidator.HandleValidate)
 	mux.HandleFunc("/validate-spacebindingrequests", spacebindingrequestValidator.HandleValidate)

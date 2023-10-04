@@ -19,48 +19,45 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 )
 
-type mutatorCommon struct {
-	log                               logr.Logger
-	createAdmissionReviewResponseFunc func(admReview v1.AdmissionReview) *v1.AdmissionResponse
-}
+type mutateHandler func(admReview v1.AdmissionReview) *v1.AdmissionResponse
 
-func (m *mutatorCommon) handleMutate(w http.ResponseWriter, r *http.Request) {
+func handleMutate(logger logr.Logger, w http.ResponseWriter, r *http.Request, mutator mutateHandler) {
 	var respBody []byte
 	body, err := io.ReadAll(r.Body)
 	defer func() {
 		if err := r.Body.Close(); err != nil {
-			m.log.Error(err, "unable to close the body")
+			logger.Error(err, "unable to close the body")
 		}
 	}()
 	if err != nil {
-		m.log.Error(err, "unable to read the body of the request")
+		logger.Error(err, "unable to read the body of the request")
 		w.WriteHeader(http.StatusInternalServerError)
 		respBody = []byte("unable to read the body of the request")
 	} else {
 		// mutate the request
-		respBody = m.mutate(body)
+		respBody = mutate(logger, body, mutator)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := io.WriteString(w, string(respBody)); err != nil {
-		m.log.Error(err, "unable to write response")
+		logger.Error(err, "unable to write response")
 	}
 }
 
-func (m *mutatorCommon) mutate(body []byte) []byte {
+func mutate(logger logr.Logger, body []byte, mutator mutateHandler) []byte {
 	admReview := v1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
-		m.log.Error(err, "unable to deserialize the admission review object", "body", string(body))
+		logger.Error(err, "unable to deserialize the admission review object", "body", string(body))
 		admReview.Response = responseWithError(err)
 	} else if admReview.Request == nil {
 		err := fmt.Errorf("admission review request is nil")
-		m.log.Error(err, "cannot read the admission review request", "AdmissionReview", admReview)
+		logger.Error(err, "cannot read the admission review request", "AdmissionReview", admReview)
 		admReview.Response = responseWithError(err)
 	} else {
-		admReview.Response = m.createAdmissionReviewResponseFunc(admReview)
+		admReview.Response = mutator(admReview)
 	}
 	responseBody, err := json.Marshal(admReview)
 	if err != nil {
-		m.log.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
+		logger.Error(err, "unable to marshal the admission review with response", "admissionReview", admReview)
 	}
 	return responseBody
 }

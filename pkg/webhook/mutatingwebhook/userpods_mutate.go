@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	podM *podMutator
+	podLogger = logf.Log.WithName("users_pods_mutating_webhook")
 
 	podPatchItems = []map[string]interface{}{
 		{
@@ -26,6 +26,8 @@ var (
 			"value": priority,
 		},
 	}
+
+	patchedContent []byte
 )
 
 const (
@@ -34,27 +36,23 @@ const (
 )
 
 func init() {
-	podM = &podMutator{}
-	podM.createAdmissionReviewResponseFunc = podM.createAdmissionReviewResponse
-
-	podM.patchContent = podM.patchedContent(podPatchItems)
-	podM.log = logf.Log.WithName("users_pods_mutating_webhook")
+	var err error
+	patchedContent, err = json.Marshal(podPatchItems)
+	if err != nil {
+		podLogger.Error(err, "unable to marshal patch items")
+		os.Exit(1)
+	}
 }
 
 func HandleMutateUserPods(w http.ResponseWriter, r *http.Request) {
-	podM.handleMutate(w, r)
+	handleMutate(podLogger, w, r, podMutator)
 }
 
-type podMutator struct {
-	patchContent []byte
-	mutatorCommon
-}
-
-func (m *podMutator) createAdmissionReviewResponse(admReview v1.AdmissionReview) *v1.AdmissionResponse {
+func podMutator(admReview v1.AdmissionReview) *v1.AdmissionResponse {
 	// let's unmarshal the object to be sure that it's a pod
 	var pod *corev1.Pod
 	if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
-		m.log.Error(err, "unable unmarshal pod json object", "AdmissionReview", admReview)
+		podLogger.Error(err, "unable unmarshal pod json object", "AdmissionReview", admReview)
 		return responseWithError(errors.Wrapf(err, "unable unmarshal pod json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 
@@ -69,22 +67,8 @@ func (m *podMutator) createAdmissionReviewResponse(admReview v1.AdmissionReview)
 	}
 
 	// instead of changing the pod object we need to tell K8s how to change the object
-	resp.Patch = m.patchContent
+	resp.Patch = patchedContent
 
-	m.log.Info("the sandbox-users-pods PriorityClass was set to the pod", "pod-name", pod.Name, "namespace", pod.Namespace)
+	podLogger.Info("the sandbox-users-pods PriorityClass was set to the pod", "pod-name", pod.Name, "namespace", pod.Namespace)
 	return resp
-}
-
-func (m *podMutator) patchedContent(patchItems []map[string]interface{}) []byte {
-	if m.patchContent != nil {
-		return m.patchContent
-	}
-
-	patchContent, err := json.Marshal(patchItems)
-	if err != nil {
-		m.log.Error(err, "unable to marshal patch items")
-		os.Exit(1)
-	}
-	m.patchContent = patchContent
-	return m.patchContent
 }

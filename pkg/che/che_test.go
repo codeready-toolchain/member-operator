@@ -1,7 +1,6 @@
 package che
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -523,82 +522,6 @@ func TestCheRequest(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 400, res.StatusCode)
 		})
-	})
-}
-
-func TestDeleteDevSpacesUser(t *testing.T) {
-	// given
-	config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Che().
-		Namespace("crw").
-		RouteName("devspaces").
-		Secret().
-		Ref("test-secret").
-		CheAdminUsernameKey("che.admin.username").
-		CheAdminPasswordKey("che.admin.password"))
-	dbCleanerURL := "http://che-db-cleaner.crw/"
-	testSecret := newTestSecret()
-
-	t.Run("success", func(t *testing.T) {
-		// given
-		cl, _ := prepareClientAndConfig(t, config, testSecret)
-		cheClient := &Client{
-			httpClient: http.DefaultClient,
-			k8sClient:  cl,
-		}
-		encodedAuth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", "test-che-user", "test-che-password")))
-
-		// when
-		defer gock.OffAll()
-		gock.New(dbCleanerURL).
-			Delete("johnsmith456").
-			MatchHeader("Authorization", "Basic "+encodedAuth).
-			Persist().
-			Reply(200)
-		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")
-
-		// then
-		require.NoError(t, err)
-	})
-
-	t.Run("404 response", func(t *testing.T) {
-		// given
-		cl, _ := prepareClientAndConfig(t, config)
-		cheClient := &Client{
-			httpClient: http.DefaultClient,
-			k8sClient:  cl,
-		}
-
-		// when
-		defer gock.OffAll()
-		gock.New(dbCleanerURL).
-			Delete("johnsmith456").
-			Persist().
-			Reply(404)
-		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")
-
-		// then
-		require.NoError(t, err)
-	})
-
-	t.Run("400 response", func(t *testing.T) {
-		// given
-		cl, _ := prepareClientAndConfig(t, config)
-		cheClient := &Client{
-			httpClient: http.DefaultClient,
-			k8sClient:  cl,
-		}
-
-		// when
-		defer gock.OffAll()
-		gock.New(dbCleanerURL).
-			Delete("johnsmith456").
-			Persist().
-			Reply(400).
-			BodyString("400 error")
-		err := cheClient.DevSpacesDBCleanerDelete("johnsmith456")
-
-		// then
-		require.Error(t, err, "unable to delete Dev Spaces user with ID 'johnsmith456', Response status: '400 Bad Request' Body: '400 error'")
 	})
 }
 

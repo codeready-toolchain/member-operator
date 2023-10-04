@@ -673,10 +673,6 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 		return nil
 	}
 
-	if config.Che().IsDevSpacesMode() {
-		return r.deleteDevSpacesUser(logger, userAcc)
-	}
-
 	userExists, err := r.CheClient.UserExists(userAcc.Name)
 	if err != nil {
 		return err
@@ -700,22 +696,6 @@ func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg
 	}
 
 	return nil
-}
-
-func (r *Reconciler) deleteDevSpacesUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
-	logger.Info("Deleting OpenShift Dev Spaces user")
-
-	// look up user resource to get UID
-	userList, err := getUsersByOwnerName(r.Client, userAcc.Name)
-	if err != nil {
-		return err
-	}
-
-	if len(userList) == 0 {
-		return nil
-	}
-
-	return r.CheClient.DevSpacesDBCleanerDelete(string(userList[0].GetObjectMeta().GetUID()))
 }
 
 // listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given owner name

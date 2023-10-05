@@ -16,6 +16,11 @@ import (
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// SpaceBindingRequestValidator webhook validates SpaceBindingRequest CRs,
+// Specifically it makes sure that once an SBR resource is created, the SpaceBindingRequest.Spec.MasterUserRecord field is not changed by the user.
+// The reason for making SpaceBindingRequest.Spec.MasterUserRecord field immutable is that as of now the SpaceBinding resource name is composed as follows: <Space.Name>-checksum(<Space.Name>-<MasterUserRecord.Name>),
+// thus changing it will trigger an updated of the SpaceBinding content but name will still be based on the old MUR name.
+// All the webhook configuration is available at member-operator/deploy/webhook/member-operator-webhook.yaml
 type SpaceBindingRequestValidator struct {
 	Client runtimeClient.Client
 }

@@ -145,7 +145,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					podLogger.Info("Pod deleted")
 				}
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-				if err := r.createNotification(logger, idler); err != nil {
+				if err := r.createNotification(logger, idler, pod.Name); err != nil {
 					logger.Error(err, "failed to create Notification")
 					if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
 						logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
@@ -168,7 +168,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	return r.updateStatusPods(idler, newStatusPods)
 }
 
-func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler, podName string) error {
 	logger.Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
@@ -197,10 +197,14 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 			// no email found, thus no email sent
 			return fmt.Errorf("no email found for the user in MURs")
 		}
-
+		if len(podName) == 0 {
+			podName = ""
+		}
 		keysAndVals := map[string]string{
 			"Namespace": idler.Name,
+			"PodName":   podName,
 		}
+
 		for _, userEmail := range userEmails {
 			_, err := notify.NewNotificationBuilder(hostCluster.Client, hostCluster.OperatorNamespace).
 				WithName(notificationName).

@@ -1699,26 +1699,6 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 	return userAcc
 }
 
-func newUserFromUserAccount(userAcc *toolchainv1alpha1.UserAccount) *userv1.User {
-	userUID := types.UID(userAcc.Name + "user")
-	return &userv1.User{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: userAcc.Name,
-			UID:  userUID,
-			Labels: map[string]string{
-				toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
-				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-			},
-			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
-			},
-		},
-		Identities: []string{
-			ToIdentityName(userAcc.Spec.UserID, "fakeIdentityProvider"),
-		},
-	}
-}
-
 func newReconcileRequest(name string) reconcile.Request {
 	return reconcile.Request{
 		NamespacedName: types.NamespacedName{
@@ -1848,15 +1828,6 @@ func gockTokenSuccess(calls *int) {
 				"session_state":"a2fa1448-687a-414f-af40-3b6b3f5a873a",
 				"scope":"profile email"
 				}`)
-}
-
-func gockTokenFail(calls *int) {
-	gock.New(testKeycloakURL).
-		Post("auth/realms/codeready/protocol/openid-connect/token").
-		SetMatcher(SpyOnGockCalls(calls)).
-		MatchHeader("Content-Type", "application/x-www-form-urlencoded").
-		Persist().
-		Reply(400)
 }
 
 func gockFindUserTimes(name string, times int, calls *int) { //nolint: unparam

@@ -165,7 +165,7 @@ objects:
     sideEffects: None
     timeoutSeconds: 5
     reinvocationPolicy: Never
-    failurePolicy: Ignore
+    failurePolicy: Fail
     namespaceSelector:
       matchLabels:
         toolchain.dev.openshift.com/provider: codeready-toolchain
@@ -221,7 +221,7 @@ objects:
       sideEffects: None
       timeoutSeconds: 5
       reinvocationPolicy: Never
-      failurePolicy: Ignore
+      failurePolicy: Fail
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain

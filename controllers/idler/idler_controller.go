@@ -144,8 +144,23 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
+				var appName string
+				var appType string
+				owners := pod.ObjectMeta.OwnerReferences
+				for _, owner := range owners {
+					if owner.Controller != nil && (owner.Kind == "Deployment" || owner.Kind == "ReplicaSet" ||
+						owner.Kind == "StatefulSet" || owner.Kind == "DeploymentConfig" ||
+						owner.Kind == "ReplicationController") {
+						appName = owner.Name
+						appType = owner.Kind
+						break
+					} else {
+						appName = pod.Name
+						appType = ""
+					}
+				}
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-				if err := r.createNotification(logger, idler, pod.Name); err != nil {
+				if err := r.createNotification(logger, idler, appName, appType); err != nil {
 					logger.Error(err, "failed to create Notification")
 					if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
 						logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
@@ -168,7 +183,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 	return r.updateStatusPods(idler, newStatusPods)
 }
 
-func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler, podName string) error {
+func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1alpha1.Idler, appName string, appType string) error {
 	logger.Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
@@ -197,12 +212,16 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 			// no email found, thus no email sent
 			return fmt.Errorf("no email found for the user in MURs")
 		}
-		if len(podName) == 0 {
-			podName = ""
+		if len(appName) == 0 {
+			appName = ""
+		}
+		if len(appType) == 0 {
+			appType = ""
 		}
 		keysAndVals := map[string]string{
 			"Namespace": idler.Name,
-			"PodName":   podName,
+			"Appname":   appName,
+			"Apptype":   appType,
 		}
 
 		for _, userEmail := range userEmails {

@@ -54,6 +54,10 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	return resp
 }
 
+// ensureLimits ensures resource limits are set on the VirtualMachine if requests are set, this is a workaround for https://issues.redhat.com/browse/CNV-28746 (https://issues.redhat.com/browse/CNV-32069)
+// The issue is that if the namespace has LimitRanges defined and the VirtualMachine resource does not have resource limits defined then it will use the LimitRanges which may be less than requested
+// resources and the VirtualMachine will fail to start.
+// This should be removed once https://issues.redhat.com/browse/CNV-32069 is complete.
 func ensureLimits(vm *types.VirtualMachine, patchItems []map[string]interface{}) []map[string]interface{} {
 	if vm.Spec.Template.Spec.Domain.Resources.Requests == nil {
 		return patchItems
@@ -64,6 +68,7 @@ func ensureLimits(vm *types.VirtualMachine, patchItems []map[string]interface{})
 		limits = corev1.ResourceList{}
 	}
 
+	// if the limit is not defined but the request is then set the limit to the same value as the request
 	anyChanges := false
 	for _, r := range []corev1.ResourceName{"memory", "cpu"} {
 		_, isLimitDefined := limits[r]

@@ -145,6 +145,9 @@ objects:
     namespaceSelector:
       matchLabels:
         toolchain.dev.openshift.com/provider: codeready-toolchain
+  # The users.virtualmachines.webhook.sandbox webhook sets resource limits on VirtualMachines prior to creation as a workaround for https://issues.redhat.com/browse/CNV-28746 (https://issues.redhat.com/browse/CNV-32069)
+  # This webhook should be updated to remove the workaround once https://issues.redhat.com/browse/CNV-32069 is complete.
+  # The webhook code is available at member-operator/pkg/webhook/mutatingwebhook/vm_mutate.go
   - name: users.virtualmachines.webhook.sandbox
     admissionReviewVersions:
       - v1

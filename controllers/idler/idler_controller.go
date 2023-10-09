@@ -132,8 +132,10 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
+				var appName string
+				var appType string
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
+				appType, appName, deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
 				if err != nil {
 					return err
 				}
@@ -144,21 +146,11 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					}
 					podLogger.Info("Pod deleted")
 				}
-				var appName string
-				var appType string
-				owners := pod.ObjectMeta.OwnerReferences
-				for _, owner := range owners {
-					if owner.Controller != nil && (owner.Kind == "Deployment" || owner.Kind == "ReplicaSet" ||
-						owner.Kind == "StatefulSet" || owner.Kind == "DeploymentConfig" ||
-						owner.Kind == "ReplicationController") {
-						appName = owner.Name
-						appType = owner.Kind
-						break
-					} else {
-						appName = pod.Name
-						appType = ""
-					}
+
+				if appName == "" {
+					appName = pod.Name
 				}
+
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
 				if err := r.createNotification(logger, idler, appName, appType); err != nil {
 					logger.Error(err, "failed to create Notification")
@@ -212,16 +204,11 @@ func (r *Reconciler) createNotification(logger logr.Logger, idler *toolchainv1al
 			// no email found, thus no email sent
 			return fmt.Errorf("no email found for the user in MURs")
 		}
-		if len(appName) == 0 {
-			appName = ""
-		}
-		if len(appType) == 0 {
-			appType = ""
-		}
+
 		keysAndVals := map[string]string{
 			"Namespace": idler.Name,
-			"Appname":   appName,
-			"Apptype":   appType,
+			"AppName":   appName,
+			"AppType":   appType,
 		}
 
 		for _, userEmail := range userEmails {
@@ -275,30 +262,37 @@ func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *clus
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
 // Otherwise returns "false".
-func (r *Reconciler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (bool, error) {
+func (r *Reconciler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (string, string, bool, error) {
 	logger.Info("Scaling controller to zero", "name", meta.Name)
 	owners := meta.GetOwnerReferences()
 	for _, owner := range owners {
 		if owner.Controller != nil && *owner.Controller {
 			switch owner.Kind {
 			case "Deployment":
-				return r.scaleDeploymentToZero(logger, meta.Namespace, owner)
+				deletedByController, err := r.scaleDeploymentToZero(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err
 			case "ReplicaSet":
-				return r.scaleReplicaSetToZero(logger, meta.Namespace, owner)
+				deletedByController, err := r.scaleReplicaSetToZero(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err
 			case "DaemonSet":
-				return r.deleteDaemonSet(logger, meta.Namespace, owner) // Nothing to scale down. Delete instead.
+				deletedByController, err := r.deleteDaemonSet(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err // Nothing to scale down. Delete instead.
 			case "StatefulSet":
-				return r.scaleStatefulSetToZero(logger, meta.Namespace, owner)
+				deletedByController, err := r.scaleStatefulSetToZero(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err
 			case "DeploymentConfig":
-				return r.scaleDeploymentConfigToZero(logger, meta.Namespace, owner)
+				deletedByController, err := r.scaleDeploymentConfigToZero(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err
 			case "ReplicationController":
-				return r.scaleReplicationControllerToZero(logger, meta.Namespace, owner)
+				deletedByController, err := r.scaleReplicationControllerToZero(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err
 			case "Job":
-				return r.deleteJob(logger, meta.Namespace, owner) // Nothing to scale down. Delete instead.
+				deletedByController, err := r.deleteJob(logger, meta.Namespace, owner)
+				return owner.Kind, owner.Name, deletedByController, err // Nothing to scale down. Delete instead.
 			}
 		}
 	}
-	return false, nil
+	return "", "", false, nil
 }
 
 func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
@@ -380,7 +374,8 @@ func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string,
 		logger.Error(err, "error deleting rs")
 		return false, err
 	}
-	deletedByController, err := r.scaleControllerToZero(logger, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)
+
+	_, _, deletedByController, err := r.scaleControllerToZero(logger, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)
 	if err != nil {
 		return false, err
 	}
@@ -455,7 +450,7 @@ func (r *Reconciler) scaleReplicationControllerToZero(logger logr.Logger, namesp
 		}
 		return false, err
 	}
-	deletedByController, err := r.scaleControllerToZero(logger, rc.ObjectMeta) // Check if the ReplicationController has another controller which owns it (i.g. DeploymentConfig)
+	_, _, deletedByController, err := r.scaleControllerToZero(logger, rc.ObjectMeta) // Check if the ReplicationController has another controller which owns it (i.g. DeploymentConfig)
 	if err != nil {
 		return false, err
 	}

@@ -738,7 +738,7 @@ func TestReconcile(t *testing.T) {
 		err = r.Client.Update(context.TODO(), userAcc)
 		require.NoError(t, err)
 
-		res, err = r.Reconcile(context.TODO(), req)
+		res, _ = r.Reconcile(context.TODO(), req)
 		assert.Equal(t, reconcile.Result{}, res)
 
 		// Check that the associated identity has not been deleted

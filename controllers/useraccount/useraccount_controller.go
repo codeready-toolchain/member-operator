@@ -106,7 +106,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 			return reconcile.Result{}, err
 		}
 	} else {
-		return reconcile.Result{}, r.ensureUserAccountDeletion(logger, config, userAcc)
+		return reconcile.Result{}, r.ensureUserAccountDeletion(logger, userAcc)
 	}
 
 	if !userAcc.Spec.Disabled {
@@ -174,7 +174,7 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	return false, nil
 }
 
-func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
 		logger.Info("terminating UserAccount")
 		// We need to be sure that the status is updated when the UserAccount is deleted.

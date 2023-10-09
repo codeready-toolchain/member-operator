@@ -412,9 +412,3 @@ func sanitizeURL(url string) string {
 	}
 	return url
 }
-
-// isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
-// Returns false otherwise.
-func (r *Reconciler) isCheAdminUserConfigured(config membercfg.Configuration) bool {
-	return config.Che().AdminUserName() != "" && config.Che().AdminPassword() != ""
-}

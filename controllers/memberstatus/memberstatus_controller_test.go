@@ -3,7 +3,6 @@ package memberstatus
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -11,7 +10,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/che"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/member-operator/version"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -21,7 +19,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	routev1 "github.com/openshift/api/route/v1"
-	"gopkg.in/h2non/gock.v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,12 +44,6 @@ const defaultMemberOperatorDeploymentName = "member-operator-controller-manager"
 const defaultMemberStatusName = membercfg.MemberStatusName
 
 const buildCommitSHA = "64af1be5c6011fae5497a7c35e2a986d633b3421"
-
-// che test constants
-const (
-	testCheURL  = "http://codeready-codeready-workspaces-operator.member-cluster/che/"
-	cheUserPath = "api/user"
-)
 
 var mockLastGitHubAPICall = time.Now().Add(-time.Minute * 2)
 var defaultGitHubClient = test.MockGitHubClientForRepositoryCommits(buildCommitSHA, time.Now().Add(-time.Hour*1))
@@ -112,7 +103,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		forNode("master-123", []string{"master"}, "4000000Ki", withMemoryUsage("2000000Ki")),
 		forNode("master-456", []string{"master"}, "5000000Ki", withMemoryUsage("1000000Ki")))
 
-	allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(true))
+	allNamespacesCl := test.NewFakeClient(t, consoleRoute())
 
 	t.Run("All components ready", func(t *testing.T) {
 		// given
@@ -138,7 +129,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsReady()).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 			HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 
 		t.Run("when node has multiple roles", func(t *testing.T) {
 			// given
@@ -156,7 +147,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 20), OfNodeRole("master", 20)).
 				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 
 		t.Run("ignore infra node", func(t *testing.T) {
@@ -177,7 +168,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
 				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 
 		t.Run("ignore infra node when node is shared", func(t *testing.T) {
@@ -198,7 +189,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("worker", 75), OfNodeRole("master", 50)).
 				HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 	})
 
@@ -220,7 +211,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
 			HasHostConditionErrorMsg("the cluster connection was not found").
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("Host connection not ready", func(t *testing.T) {
@@ -240,7 +231,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("Host connection probe not working", func(t *testing.T) {
@@ -260,7 +251,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(hostConnectionTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not found - deployment env var not set", func(t *testing.T) {
@@ -282,7 +273,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
 			HasMemberOperatorConditionErrorMsg("unable to get the deployment: OPERATOR_NAME must be set").
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not found", func(t *testing.T) {
@@ -301,7 +292,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not ready", func(t *testing.T) {
@@ -321,7 +312,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("Member operator deployment not progressing", func(t *testing.T) {
@@ -341,7 +332,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 			HasCondition(ComponentsNotReady(string(memberOperatorTag))).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("when missing only one NodeMetrics resource then it's fine", func(t *testing.T) {
@@ -363,7 +354,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		AssertThatMemberStatus(t, req.Namespace, defaultMemberStatusName, fakeClient).
 			HasCondition(ComponentsReady()).
 			HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-			HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+			HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 	})
 
 	t.Run("metrics failures", func(t *testing.T) {
@@ -387,7 +378,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 
 		t.Run("when unable to list Nodes", func(t *testing.T) {
@@ -409,7 +400,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 
 		t.Run("when unable to list NodeMetrics", func(t *testing.T) {
@@ -431,7 +422,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 
 		t.Run("when missing NodeMetrics for two Nodes", func(t *testing.T) {
@@ -455,7 +446,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsNotReady(string("resourceUsage"))).
 				HasMemoryUsage().
-				HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 	})
 
@@ -468,7 +459,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 		t.Run("che not using tls with path", func(t *testing.T) {
 			// given
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
@@ -480,16 +471,14 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+				HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 		})
 
 		t.Run("che and console without path", func(t *testing.T) {
 			// given
-			cheRoute := cheRoute(false)
-			cheRoute.Spec.Path = ""
 			consoleRoute := consoleRoute()
 			consoleRoute.Spec.Path = ""
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute, cheRoute)
+			allNamespacesCl := test.NewFakeClient(t, consoleRoute)
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
@@ -501,12 +490,12 @@ func TestOverallStatusCondition(t *testing.T) {
 			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 				HasCondition(ComponentsReady()).
 				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/", "http://codeready-codeready-workspaces-operator.member-cluster/", routesAvailable())
+				HasRoutes("https://console.member-cluster/", "", routesAvailable())
 		})
 
 		t.Run("console route unavailable", func(t *testing.T) {
 			// given
-			allNamespacesCl := test.NewFakeClient(t, cheRoute(false))
+			allNamespacesCl := test.NewFakeClient(t)
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
 
 			// when
@@ -554,135 +543,8 @@ func TestOverallStatusCondition(t *testing.T) {
 				assert.Equal(t, requeueResult, res)
 				AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
 					HasCondition(ComponentsNotReady(string("routes"))).
-					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable("routes.route.openshift.io \"codeready\" not found"))
+					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25))
 			})
-		})
-	})
-
-	t.Run("che integration", func(t *testing.T) {
-		// given
-		requestName := defaultMemberStatusName
-		memberOperatorDeployment := newMemberDeploymentWithConditions(status.DeploymentAvailableCondition(), status.DeploymentProgressingCondition())
-		memberStatus := newMemberStatus()
-		getHostClusterFunc := newGetHostClusterReady
-		memberSecret := newMemberSecret("test-che-user", "test-che-password")
-
-		t.Run("success", func(t *testing.T) {
-			// given
-			config := commonconfig.NewMemberOperatorConfigWithReset(t,
-				testconfig.Che().
-					UserDeletionEnabled(true).
-					Secret().
-					Ref("test-secret").
-					CheAdminUsernameKey("che.admin.username").
-					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
-
-			defer gock.OffAll()
-			gock.New(testCheURL).
-				Get(cheUserPath).
-				MatchHeader("Authorization", "Bearer abc.123.xyz").
-				Persist().
-				Reply(200)
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, requeueResult, res)
-			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsReady()).
-				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheReady())
-		})
-
-		t.Run("che admin user not configured (no member secret)", func(t *testing.T) {
-			// given
-			config := commonconfig.NewMemberOperatorConfigWithReset(t,
-				testconfig.Che().
-					Required(true).
-					UserDeletionEnabled(true).
-					Secret().
-					Ref("test-secret").
-					CheAdminUsernameKey("che.admin.username").
-					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, config, memberOperatorDeployment, memberStatus)...)
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, requeueResult, res)
-			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("che")).
-				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheAdminUserNotConfigured("the Che admin user credentials are not configured but Che user deletion is enabled"))
-		})
-
-		t.Run("no che route", func(t *testing.T) {
-			// given
-			config := commonconfig.NewMemberOperatorConfigWithReset(t,
-				testconfig.Che().
-					Required(true).
-					UserDeletionEnabled(true).
-					Secret().
-					Ref("test-secret").
-					CheAdminUsernameKey("che.admin.username").
-					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, requeueResult, res)
-			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("routes", "che")).
-				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "", cheRouteUnavailable(`routes.route.openshift.io "codeready" not found`)).
-				HasCheConditions(cheRouteUnavailable(`Che dashboard URL unavailable but Che user deletion is enabled: routes.route.openshift.io "codeready" not found`))
-		})
-
-		t.Run("che API check failure", func(t *testing.T) {
-			// given
-			config := commonconfig.NewMemberOperatorConfigWithReset(t,
-				testconfig.Che().
-					Required(true).
-					UserDeletionEnabled(true).
-					Secret().
-					Ref("test-secret").
-					CheAdminUsernameKey("che.admin.username").
-					CheAdminPasswordKey("che.admin.password"))
-			allNamespacesCl := test.NewFakeClient(t, consoleRoute(), cheRoute(false))
-			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, config, memberOperatorDeployment, memberSecret, memberStatus)...)
-			defer gock.OffAll()
-			gock.New(testCheURL).
-				Get(cheUserPath).
-				MatchHeader("Authorization", "Bearer abc.123.xyz").
-				Persist().
-				Reply(400).
-				BodyString(`{"error":"che error"}`)
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.Equal(t, requeueResult, res)
-			AssertThatMemberStatus(t, req.Namespace, requestName, fakeClient).
-				HasCondition(ComponentsNotReady("che")).
-				HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-				HasRoutes("https://console.member-cluster/console/", "http://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable()).
-				HasCheConditions(cheUserAPICheckError(`che user API check failed, Response status: '400 Bad Request' Body: '{"error":"che error"}'`))
 		})
 	})
 
@@ -716,7 +578,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)). // we have only one condition for the deployment status
 					HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "is not running in prod environment")).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+					HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 			})
 			//
 			t.Run("when environment is prod but github secret is not present", func(t *testing.T) {
@@ -735,7 +597,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)). // we have only one condition for the deployment status
 					HasMemberOperatorRevisionCheckConditions(ConditionReadyWithMessage(toolchainv1alpha1.ToolchainStatusDeploymentRevisionCheckDisabledReason, "access token key is not provided")).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+					HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 			})
 		})
 
@@ -775,7 +637,7 @@ func TestOverallStatusCondition(t *testing.T) {
 					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
 					HasMemberOperatorRevisionCheckConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentUpToDateReason)).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+					HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 			})
 
 			t.Run("member operator deployment version is not up to date", func(t *testing.T) {
@@ -795,24 +657,11 @@ func TestOverallStatusCondition(t *testing.T) {
 					HasMemberOperatorConditions(ConditionReady(toolchainv1alpha1.ToolchainStatusDeploymentReadyReason)).
 					HasMemberOperatorRevisionCheckConditions(ConditionNotReady(toolchainv1alpha1.ToolchainStatusDeploymentNotUpToDateReason, "deployment version is not up to date with latest github commit SHA. deployed commit SHA "+version.Commit+" ,github latest SHA "+latestCommitSHA+", expected deployment timestamp: "+commitTimeStamp.Add(status.DeploymentThreshold).Format(time.RFC3339))).
 					HasMemoryUsage(OfNodeRole("master", 33), OfNodeRole("worker", 25)).
-					HasRoutes("https://console.member-cluster/console/", "https://codeready-codeready-workspaces-operator.member-cluster/che/", routesAvailable())
+					HasRoutes("https://console.member-cluster/console/", "", routesAvailable())
 			})
 		})
 	})
 
-}
-
-func newMemberSecret(username, password string) *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-secret",
-			Namespace: test.MemberOperatorNs,
-		},
-		Data: map[string][]byte{
-			"che.admin.username": []byte(username),
-			"che.admin.password": []byte(password),
-		},
-	}
 }
 
 func newMemberStatus() *toolchainv1alpha1.MemberStatus {
@@ -875,7 +724,6 @@ func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              scheme.Scheme,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
-		CheClient:           cheTestClient(allNamespacesClient),
 		VersionCheckManager: status.VersionCheckManager{GetGithubClientFunc: mockedGitHubClient, LastGHCallsPerRepo: map[string]time.Time{
 			"member-operator": lastGitHubAPICall,
 		}},
@@ -945,10 +793,6 @@ func consoleRouteUnavailable(msg string) toolchainv1alpha1.Condition {
 	return *status.NewComponentErrorCondition("ConsoleRouteUnavailable", msg)
 }
 
-func cheRouteUnavailable(msg string) toolchainv1alpha1.Condition {
-	return *status.NewComponentErrorCondition("CheRouteUnavailable", msg)
-}
-
 func routesAvailable() toolchainv1alpha1.Condition {
 	return *status.NewComponentReadyCondition("RoutesAvailable")
 }
@@ -964,50 +808,6 @@ func consoleRoute() *routev1.Route {
 			Path: "console/",
 		},
 	}
-}
-
-func cheRoute(tls bool) *routev1.Route {
-	r := &routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "codeready",
-			Namespace: "codeready-workspaces-operator",
-		},
-		Spec: routev1.RouteSpec{
-			Host: fmt.Sprintf("codeready-codeready-workspaces-operator.%s", test.MemberClusterName),
-			Path: "che/",
-		},
-	}
-	if tls {
-		r.Spec.TLS = &routev1.TLSConfig{
-			Termination: "edge",
-		}
-	}
-	return r
-}
-
-func cheTestClient(cl client.Client) *che.Client {
-	tokenCache := che.NewTokenCacheWithToken(
-		http.DefaultClient,
-		&che.TokenSet{
-			AccessToken:  "abc.123.xyz",
-			Expiration:   time.Now().Add(99 * time.Hour).Unix(),
-			ExpiresIn:    99,
-			RefreshToken: "111.222.333",
-			TokenType:    "bearer",
-		})
-	return che.NewCheClient(http.DefaultClient, cl, tokenCache)
-}
-
-func cheReady() toolchainv1alpha1.Condition {
-	return *status.NewComponentReadyCondition("CheReady")
-}
-
-func cheAdminUserNotConfigured(msg string) toolchainv1alpha1.Condition {
-	return *status.NewComponentErrorCondition("CheAdminUserNotConfigured", msg)
-}
-
-func cheUserAPICheckError(msg string) toolchainv1alpha1.Condition {
-	return *status.NewComponentErrorCondition("CheUserAPICheckFailed", msg)
 }
 
 func TestSanitizeURL(t *testing.T) {

@@ -15,7 +15,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/che"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
@@ -424,14 +423,7 @@ func TestReconcile(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
-			testconfig.Che().
-				UserDeletionEnabled(true).
-				KeycloakRouteName("keycloak").
-				Secret().
-				Ref("test-secret").
-				CheAdminUsernameKey("che.admin.username").
-				CheAdminPasswordKey("che.admin.password"))
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 		mockCallsCounter := new(int)
 		defer gock.OffAll()
@@ -497,7 +489,7 @@ func TestReconcile(t *testing.T) {
 					// when reconciling the useraccount with a deletion timestamp
 					useraccount.AssertThatUserAccount(t, username, r.Client).
 						DoesNotExist()
-					require.Equal(t, 6, *mockCallsCounter)
+					require.Equal(t, 0, *mockCallsCounter)
 				})
 			})
 		})
@@ -719,14 +711,7 @@ func TestReconcile(t *testing.T) {
 		// given
 
 		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t,
-			testconfig.Che().
-				UserDeletionEnabled(true).
-				KeycloakRouteName("keycloak").
-				Secret().
-				Ref("test-secret").
-				CheAdminUsernameKey("che.admin.username").
-				CheAdminPasswordKey("che.admin.password"))
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 		mockCallsCounter := new(int)
 		defer gock.OffAll()
@@ -735,7 +720,7 @@ func TestReconcile(t *testing.T) {
 
 		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID)
-		r, req, fakeClient, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, _, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -755,7 +740,6 @@ func TestReconcile(t *testing.T) {
 
 		res, err = r.Reconcile(context.TODO(), req)
 		assert.Equal(t, reconcile.Result{}, res)
-		require.EqualError(t, err, `failed to delete Che user data: request to find Che user 'johnsmith' failed, Response status: '400 Bad Request' Body: ''`)
 
 		// Check that the associated identity has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
@@ -764,10 +748,7 @@ func TestReconcile(t *testing.T) {
 		// Check that the associated user has not been deleted
 		// when reconciling the useraccount with a deletion timestamp
 		assertUser(t, r, userAcc)
-		require.Equal(t, 2, *mockCallsCounter)
-
-		useraccount.AssertThatUserAccount(t, req.Name, fakeClient).
-			HasConditions(notReady("Terminating", `request to find Che user 'johnsmith' failed, Response status: '400 Bad Request' Body: ''`))
+		require.Equal(t, 0, *mockCallsCounter)
 	})
 
 	// delete identity fails
@@ -1726,13 +1707,9 @@ func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object)
 	config, err := membercfg.GetConfiguration(fakeClient)
 	require.NoError(t, err)
 
-	tc := che.NewTokenCache(http.DefaultClient)
-	cheClient := che.NewCheClient(http.DefaultClient, fakeClient, tc)
-
 	r := &Reconciler{
-		Client:    fakeClient,
-		Scheme:    s,
-		CheClient: cheClient,
+		Client: fakeClient,
+		Scheme: s,
 	}
 	return r, newReconcileRequest(username), fakeClient, config
 }
@@ -1804,10 +1781,7 @@ func newSecretWithCheAdminCreds() *corev1.Secret {
 			Name:      "test-secret",
 			Namespace: test.MemberOperatorNs,
 		},
-		Data: map[string][]byte{
-			"che.admin.username": []byte("test-che-user"),
-			"che.admin.password": []byte("test-che-password"),
-		},
+		Data: map[string][]byte{},
 	}
 }
 

@@ -85,6 +85,9 @@ spec:
                           description: Namespace of the SpaceBindingRequest that generated
                             the SpaceBinding resource.
                           type: string
+                      required:
+                      - name
+                      - namespace
                       type: object
                     masterUserRecord:
                       description: MasterUserRecord is the name of the user that has

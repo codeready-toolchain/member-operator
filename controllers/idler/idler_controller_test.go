@@ -599,14 +599,12 @@ func TestCreateNotification(t *testing.T) {
 		// given
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		testappName := "testPodName"
-		testapptype := "testapptype"
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		//then
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -619,7 +617,7 @@ func TestCreateNotification(t *testing.T) {
 
 		t.Run("Notification not created if already sent", func(t *testing.T) {
 			//when
-			err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+			err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 			//then
 			require.NoError(t, err)
 			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{Name: "alex-stage-idled", Namespace: hostCl.OperatorNamespace}, &notification)
@@ -639,14 +637,12 @@ func TestCreateNotification(t *testing.T) {
 		}
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		testappName := "testPodName"
-		testapptype := "testapptype"
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		//then
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -658,8 +654,6 @@ func TestCreateNotification(t *testing.T) {
 		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		testappName := "testPodName"
-		testapptype := "testapptype"
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
@@ -667,7 +661,7 @@ func TestCreateNotification(t *testing.T) {
 			return errors.New("can't update condition")
 		}
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 
 		//then
 		require.EqualError(t, err, "can't update condition")
@@ -678,7 +672,7 @@ func TestCreateNotification(t *testing.T) {
 
 		// second reconcile will not create the notification again but set the status
 		cl.MockStatusUpdate = nil
-		err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
@@ -687,13 +681,11 @@ func TestCreateNotification(t *testing.T) {
 		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		testappName := "testPodName"
-		testapptype := "testapptype"
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		//then
 		require.EqualError(t, err, "could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found")
 	})
@@ -703,14 +695,12 @@ func TestCreateNotification(t *testing.T) {
 		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		testappName := "testPodName"
-		testapptype := "testapptype"
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "no email found for the user in MURs")
 	})
 
@@ -718,14 +708,12 @@ func TestCreateNotification(t *testing.T) {
 		idler.Status.Conditions = nil
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
-		testappName := "testPodName"
-		testapptype := "testapptype"
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		mur.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey] = "invalid-email-address"
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, testappName, testapptype)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address: mail: missing '@' or angle-addr")
 	})
 }

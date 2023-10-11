@@ -15,12 +15,12 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - name: Install Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4
       with:
         go-version: 1.19.x
     
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     
     - name: Generate Assets
       run: |
@@ -49,7 +49,7 @@ jobs:
         go-version: 1.19.x
         
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     
     - name: Generate Assets
       run: |
@@ -68,10 +68,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     
     - name: Generate SBOM
-      uses: CycloneDX/gh-gomod-generate-sbom@v1
+      uses: CycloneDX/gh-gomod-generate-sbom@v2
       with:
         version: v1
         args: mod -licenses -json -output -

@@ -262,6 +262,7 @@ func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *clus
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
 // Otherwise returns "false".
+// It Also returns Parent Controller Name and type.
 func (r *Reconciler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (string, string, bool, error) {
 	logger.Info("Scaling controller to zero", "name", meta.Name)
 	owners := meta.GetOwnerReferences()
@@ -269,40 +270,33 @@ func (r *Reconciler) scaleControllerToZero(logger logr.Logger, meta metav1.Objec
 		if owner.Controller != nil && *owner.Controller {
 			switch owner.Kind {
 			case "Deployment":
-				deletedByController, err := r.scaleDeploymentToZero(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err
+				return r.scaleDeploymentToZero(logger, meta.Namespace, owner)
 			case "ReplicaSet":
-				deletedByController, err := r.scaleReplicaSetToZero(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err
+				return r.scaleReplicaSetToZero(logger, meta.Namespace, owner)
 			case "DaemonSet":
-				deletedByController, err := r.deleteDaemonSet(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err // Nothing to scale down. Delete instead.
+				return r.deleteDaemonSet(logger, meta.Namespace, owner) // Nothing to scale down. Delete instead.
 			case "StatefulSet":
-				deletedByController, err := r.scaleStatefulSetToZero(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err
+				return r.scaleStatefulSetToZero(logger, meta.Namespace, owner)
 			case "DeploymentConfig":
-				deletedByController, err := r.scaleDeploymentConfigToZero(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err
+				return r.scaleDeploymentConfigToZero(logger, meta.Namespace, owner)
 			case "ReplicationController":
-				deletedByController, err := r.scaleReplicationControllerToZero(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err
+				return r.scaleReplicationControllerToZero(logger, meta.Namespace, owner)
 			case "Job":
-				deletedByController, err := r.deleteJob(logger, meta.Namespace, owner)
-				return owner.Kind, owner.Name, deletedByController, err // Nothing to scale down. Delete instead.
+				return r.deleteJob(logger, meta.Namespace, owner) // Nothing to scale down. Delete instead.
 			}
 		}
 	}
 	return "", "", false, nil
 }
 
-func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	logger.Info("Scaling deployment to zero", "name", owner.Name)
 	d := &appsv1.Deployment{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	zero := int32(0)
 
@@ -315,10 +309,10 @@ func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string,
 
 				if err == nil {
 					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
-					return true, nil
+					return owner.Kind, owner.Name, true, nil
 				}
 
-				return false, err
+				return "", "", false, err
 			} else if errors.IsInternalError(err) { // Internal error indicates that the specReplicasPath is not set on the custom resource - just update the scale resource
 				scale := autoscalingv1.Scale{
 					ObjectMeta: ctrl.ObjectMeta{
@@ -333,22 +327,22 @@ func (r *Reconciler) scaleDeploymentToZero(logger logr.Logger, namespace string,
 
 				if err == nil {
 					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
-					return true, nil
+					return owner.Kind, owner.Name, true, nil
 				}
 
-				return false, err
+				return "", "", false, err
 			} else if !errors.IsNotFound(err) {
-				return false, err
+				return "", "", false, err
 			}
 		}
 	}
 
 	d.Spec.Replicas = &zero
 	if err := r.AllNamespacesClient.Update(context.TODO(), d); err != nil {
-		return false, err
+		return "", "", false, err
 	}
 	logger.Info("Deployment scaled to zero", "name", d.Name)
-	return true, nil
+	return owner.Kind, owner.Name, true, nil
 }
 
 func getSupportedScaleResource(ownerReference metav1.OwnerReference) *schema.GroupVersionResource {
@@ -363,117 +357,121 @@ func getSupportedScaleResource(ownerReference metav1.OwnerReference) *schema.Gro
 	return nil
 }
 
-func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleReplicaSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	logger.Info("Scaling replica set to zero", "name", owner.Name)
 	rs := &appsv1.ReplicaSet{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			logger.Info("replica set is not found; ignoring: it might be already deleted")
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
 		logger.Error(err, "error deleting rs")
-		return false, err
+		return "", "", false, err
 	}
 
-	_, _, deletedByController, err := r.scaleControllerToZero(logger, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)
+	appType, appName, deletedByController, err := r.scaleControllerToZero(logger, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)
 	if err != nil {
-		return false, err
+		return "", "", false, err
 	}
 	if !deletedByController {
 		// There is no controller that owns the ReplicaSet. Scale the ReplicaSet to zero.
 		zero := int32(0)
 		rs.Spec.Replicas = &zero
 		if err := r.AllNamespacesClient.Update(context.TODO(), rs); err != nil {
-			return false, err
+			return "", "", false, err
 		}
 		logger.Info("ReplicaSet scaled to zero", "name", rs.Name)
+		appType = owner.Kind
+		appName = owner.Name
 	}
-	return true, nil
+	return appType, appName, true, nil
 }
 
-func (r *Reconciler) deleteDaemonSet(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) deleteDaemonSet(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	ds := &appsv1.DaemonSet{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	if err := r.AllNamespacesClient.Delete(context.TODO(), ds); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	logger.Info("DaemonSet deleted", "name", ds.Name)
-	return true, nil
+	return owner.Kind, owner.Name, true, nil
 }
 
-func (r *Reconciler) scaleStatefulSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleStatefulSetToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	s := &appsv1.StatefulSet{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, s); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	zero := int32(0)
 	s.Spec.Replicas = &zero
 	if err := r.AllNamespacesClient.Update(context.TODO(), s); err != nil {
-		return false, err
+		return "", "", false, err
 	}
 	logger.Info("StatefulSet scaled to zero", "name", s.Name)
-	return true, nil
+	return owner.Kind, owner.Name, true, nil
 }
 
-func (r *Reconciler) scaleDeploymentConfigToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleDeploymentConfigToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	dc := &openshiftappsv1.DeploymentConfig{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, dc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	dc.Spec.Replicas = 0
 	if err := r.AllNamespacesClient.Update(context.TODO(), dc); err != nil {
-		return false, err
+		return "", "", false, err
 	}
 	logger.Info("DeploymentConfig scaled to zero", "name", dc.Name)
-	return true, nil
+	return owner.Kind, owner.Name, true, nil
 }
 
-func (r *Reconciler) scaleReplicationControllerToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) scaleReplicationControllerToZero(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	rc := &corev1.ReplicationController{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, rc); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
-	_, _, deletedByController, err := r.scaleControllerToZero(logger, rc.ObjectMeta) // Check if the ReplicationController has another controller which owns it (i.g. DeploymentConfig)
+	appType, appName, deletedByController, err := r.scaleControllerToZero(logger, rc.ObjectMeta) // Check if the ReplicationController has another controller which owns it (i.g. DeploymentConfig)
 	if err != nil {
-		return false, err
+		return "", "", false, err
 	}
 	if !deletedByController {
 		// There is no controller who owns the ReplicationController. Scale the ReplicationController to zero.
 		zero := int32(0)
 		rc.Spec.Replicas = &zero
 		if err := r.AllNamespacesClient.Update(context.TODO(), rc); err != nil {
-			return false, err
+			return "", "", false, err
 		}
 		logger.Info("ReplicationController scaled to zero", "name", rc.Name)
+		appType = owner.Kind
+		appName = owner.Name
 	}
-	return true, nil
+	return appType, appName, true, nil
 }
 
-func (r *Reconciler) deleteJob(logger logr.Logger, namespace string, owner metav1.OwnerReference) (bool, error) {
+func (r *Reconciler) deleteJob(logger logr.Logger, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	j := &batchv1.Job{}
 	if err := r.AllNamespacesClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			logger.Info("job not found")
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	// see https://github.com/kubernetes/kubernetes/issues/20902#issuecomment-321484735
 	// also, this may be needed for the e2e tests if the call to `client.Delete` comes too quickly after creating the job,
@@ -484,12 +482,12 @@ func (r *Reconciler) deleteJob(logger logr.Logger, namespace string, owner metav
 		PropagationPolicy: &propagationPolicy,
 	}); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return true, nil
+			return owner.Kind, owner.Name, true, nil
 		}
-		return false, err
+		return "", "", false, err
 	}
 	logger.Info("Job deleted", "name", j.Name)
-	return true, nil
+	return owner.Kind, owner.Name, true, nil
 }
 
 func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {

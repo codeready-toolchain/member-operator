@@ -64,13 +64,31 @@ spec:
                         when the role in the current binding can be changed - "delete"
                         when the current binding can be deleted - "override" when
                         the current binding is inherited from a parent workspace,
-                        it cannot be updated but it can be overridden by creating
+                        it cannot be updated, but it can be overridden by creating
                         a new binding containing the same MasterUserRecord but different
                         role in the subworkspace.'
                       items:
                         type: string
                       type: array
                       x-kubernetes-list-type: atomic
+                    bindingRequest:
+                      description: BindingRequest provides the name and namespace
+                        of the SpaceBindingRequest that generated the SpaceBinding
+                        resource. It's available only if the binding was generated
+                        using the SpaceBindingRequest mechanism.
+                      properties:
+                        name:
+                          description: Name of the SpaceBindingRequest that generated
+                            the SpaceBinding resource.
+                          type: string
+                        namespace:
+                          description: Namespace of the SpaceBindingRequest that generated
+                            the SpaceBinding resource.
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
                     masterUserRecord:
                       description: MasterUserRecord is the name of the user that has
                         access to the workspace. This field is immutable via a validating

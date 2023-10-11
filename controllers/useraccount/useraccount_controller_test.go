@@ -21,7 +21,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
 	"github.com/gofrs/uuid"
-	routev1 "github.com/openshift/api/route/v1"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/assert"
@@ -432,11 +431,9 @@ func TestReconcile(t *testing.T) {
 		gockFindUserNoBody(404, mockCallsCounter)
 		gockDeleteUser(204, mockCallsCounter)
 
-		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity,
-			memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity)
 
 		t.Run("first reconcile deletes identity", func(t *testing.T) {
 			// given
@@ -718,9 +715,8 @@ func TestReconcile(t *testing.T) {
 		gockTokenSuccess(mockCallsCounter)
 		gockFindUserNoBody(400, mockCallsCounter) // respond with 400 error to simulate find user request failure
 
-		memberOperatorSecret := newSecretWithCheAdminCreds()
 		userAcc := newUserAccount(username, userID)
-		r, req, _, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, memberOperatorSecret, cheRoute(true), keycloackRoute(true))
+		r, req, _, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity)
 
 		// when
 		res, err := r.Reconcile(context.TODO(), req)
@@ -1746,33 +1742,6 @@ func terminating(msg string) toolchainv1alpha1.Condition {
 		Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
 		Message: msg,
 	}
-}
-
-func cheRoute(tls bool) *routev1.Route { //nolint: unparam
-	return testRoute("codeready", "codeready-workspaces-operator", "codeready-codeready-workspaces-operator", tls)
-}
-
-func keycloackRoute(tls bool) *routev1.Route { //nolint: unparam
-	return testRoute("keycloak", "codeready-workspaces-operator", "keycloak-codeready-workspaces-operator", tls)
-}
-
-func testRoute(name, namespace, serviceName string, tls bool) *routev1.Route { //nolint: unparam
-	r := &routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: routev1.RouteSpec{
-			Host: fmt.Sprintf("%s.%s", serviceName, test.MemberClusterName),
-			Path: "",
-		},
-	}
-	if tls {
-		r.Spec.TLS = &routev1.TLSConfig{
-			Termination: "edge",
-		}
-	}
-	return r
 }
 
 func newSecretWithCheAdminCreds() *corev1.Secret {

@@ -30,7 +30,7 @@ type expectedFailedResponse struct {
 
 type badReader struct{}
 
-func (b badReader) Read(p []byte) (n int, err error) {
+func (b badReader) Read(_ []byte) (n int, err error) {
 	return 0, errors.New("bad reader")
 }
 
@@ -114,8 +114,3 @@ func fakeMutator() mutateHandler {
 		}
 	}
 }
-
-var emptyRequestReviewJSON = []byte(`{
-	"kind": "AdmissionReview",
-	"apiVersion": "admission.k8s.io/v1",
-  }`)

@@ -164,12 +164,14 @@ func vmAdmissionReview(t *testing.T, requests, limits map[string]interface{}) []
 
 	// set requests
 	if requests != nil {
-		unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
+		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
+		require.NoError(t, err)
 	}
 
 	// set limits
 	if limits != nil {
-		unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
+		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
+		require.NoError(t, err)
 	}
 
 	admReviewJSON, err := unstructuredAdmReview.MarshalJSON()

@@ -125,7 +125,7 @@ func TestMutateVmmFailsOnInvalidVM(t *testing.T) {
 	}`)
 	expectedResp := expectedFailedResponse{
 		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		errMsg:             "cannot unmarshal number into Go value of type types.VirtualMachine",
+		errMsg:             "cannot unmarshal number into Go value of type v1.VirtualMachine",
 	}
 
 	// when

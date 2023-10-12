@@ -228,6 +228,11 @@ objects:
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain
+    # The users.spacebindingrequests.webhook.sandbox webhook validates SpaceBindingRequest CRs,
+    # Specifically it makes sure that once a SBR resource is created, the SpaceBindingRequest.Spec.MasterUserRecord field is not changed by the user.
+    # The reason for making SpaceBindingRequest.Spec.MasterUserRecord field immutable is that as of now the SpaceBinding resource name is composed as follows: <Space.Name>-checksum(<Space.Name>-<MasterUserRecord.Name>),
+    # thus changing it will trigger an updated of the SpaceBinding content but the name will still be based on the old MUR name.
+    # The webhook code is available at member-operator/pkg/webhook/validatingwebhook/validate_spacebindingrequest.go
     - name: users.spacebindingrequests.webhook.sandbox
       admissionReviewVersions:
         - v1
@@ -248,7 +253,7 @@ objects:
       sideEffects: None
       timeoutSeconds: 5
       reinvocationPolicy: Never
-      failurePolicy: Ignore
+      failurePolicy: Fail
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain

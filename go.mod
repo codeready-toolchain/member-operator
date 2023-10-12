@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20230918195153-739e8fb09a33
+	github.com/codeready-toolchain/api v0.0.0-20231010090546-098b27b43b3a
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20230920120310-0f59f17bca92
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9

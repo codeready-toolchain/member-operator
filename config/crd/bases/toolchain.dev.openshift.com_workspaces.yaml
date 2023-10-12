@@ -57,6 +57,8 @@ spec:
                   to users within the current workspace, and actions that can be applied
                   to those permissions.
                 items:
+                  description: Binding defines a user role in a given workspace, and
+                    available actions that can be performed on the role
                   properties:
                     availableActions:
                       description: 'AvailableActions is a list of actions that can

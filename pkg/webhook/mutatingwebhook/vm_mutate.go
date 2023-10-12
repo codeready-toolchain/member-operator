@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook/types"
+	vmapiv1 "github.com/codeready-toolchain/toolchain-common/pkg/virtualmachine/api/v1"
 
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -21,7 +21,7 @@ func HandleMutateVirtualMachines(w http.ResponseWriter, r *http.Request) {
 func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 
 	// unmarshal the object to be sure that it's a VirtualMachine
-	vm := &types.VirtualMachine{}
+	vm := &vmapiv1.VirtualMachine{}
 	if err := json.Unmarshal(admReview.Request.Object.Raw, vm); err != nil {
 		vmLogger.Error(err, "unable unmarshal VirtualMachine json object", "AdmissionReview", admReview)
 		return responseWithError(errors.Wrapf(err, "unable unmarshal VirtualMachine json object - raw request object: %v", admReview.Request.Object.Raw))
@@ -58,7 +58,7 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 // The issue is that if the namespace has LimitRanges defined and the VirtualMachine resource does not have resource limits defined then it will use the LimitRanges which may be less than requested
 // resources and the VirtualMachine will fail to start.
 // This should be removed once https://issues.redhat.com/browse/CNV-32069 is complete.
-func ensureLimits(vm *types.VirtualMachine, patchItems []map[string]interface{}) []map[string]interface{} {
+func ensureLimits(vm *vmapiv1.VirtualMachine, patchItems []map[string]interface{}) []map[string]interface{} {
 	if vm.Spec.Template.Spec.Domain.Resources.Requests == nil {
 		return patchItems
 	}

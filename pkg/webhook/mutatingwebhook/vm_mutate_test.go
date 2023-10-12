@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook/types"
+	vmapi "github.com/codeready-toolchain/toolchain-common/pkg/virtualmachine/api"
+	vmapiv1 "github.com/codeready-toolchain/toolchain-common/pkg/virtualmachine/api/v1"
 	"github.com/stretchr/testify/require"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -30,7 +31,7 @@ func TestMutateVMSuccess(t *testing.T) {
 	t.Run("only memory request is set", func(t *testing.T) {
 		// given
 		req := ResourceList("1Gi", "")
-		vmAdmReview := vmAdmissionReview(t, withRequests(req))
+		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
@@ -44,7 +45,7 @@ func TestMutateVMSuccess(t *testing.T) {
 	t.Run("memory and cpu requests are set", func(t *testing.T) {
 		// given
 		req := ResourceList("1Gi", "1")
-		vmAdmReview := vmAdmissionReview(t, withRequests(req))
+		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
@@ -59,7 +60,7 @@ func TestMutateVMSuccess(t *testing.T) {
 		// given
 		req := ResourceList("1Gi", "1")
 		lim := ResourceList("2Gi", "2")
-		vmAdmReview := vmAdmissionReview(t, withRequests(req), withLimits(lim))
+		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req), vmapi.WithLimits(lim))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
@@ -73,7 +74,7 @@ func TestMutateVMSuccess(t *testing.T) {
 		// given
 		req := ResourceList("1Gi", "1")
 		lim := ResourceList("2Gi", "")
-		vmAdmReview := vmAdmissionReview(t, withRequests(req), withLimits(lim))
+		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req), vmapi.WithLimits(lim))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
@@ -88,7 +89,7 @@ func TestMutateVMSuccess(t *testing.T) {
 		// given
 		req := ResourceList("1Gi", "1")
 		lim := ResourceList("", "2")
-		vmAdmReview := vmAdmissionReview(t, withRequests(req), withLimits(lim))
+		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req), vmapi.WithLimits(lim))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
@@ -171,12 +172,12 @@ func vmSuccessResponse(options ...vmSuccessResponseOption) expectedSuccessRespon
 	return *resp
 }
 
-func vmAdmissionReview(t *testing.T, vmOptions ...vmOption) []byte {
+func vmAdmissionReview(t *testing.T, vmOptions ...vmapi.VMOption) []byte {
 	admReview := &admissionv1.AdmissionReview{}
 	err := json.Unmarshal([]byte(vmRawAdmissionReviewJSONTemplate), admReview)
 	require.NoError(t, err)
 
-	vm := &types.VirtualMachine{}
+	vm := &vmapiv1.VirtualMachine{}
 	err = json.Unmarshal(admReview.Request.Object.Raw, vm)
 	require.NoError(t, err)
 
@@ -192,20 +193,6 @@ func vmAdmissionReview(t *testing.T, vmOptions ...vmOption) []byte {
 	require.NoError(t, err)
 
 	return admReviewJSON
-}
-
-type vmOption func(*types.VirtualMachine)
-
-func withRequests(requests corev1.ResourceList) vmOption {
-	return func(vm *types.VirtualMachine) {
-		vm.Spec.Template.Spec.Domain.Resources.Requests = requests
-	}
-}
-
-func withLimits(limits corev1.ResourceList) vmOption {
-	return func(vm *types.VirtualMachine) {
-		vm.Spec.Template.Spec.Domain.Resources.Limits = limits
-	}
 }
 
 var vmRawAdmissionReviewJSONTemplate = `{

@@ -1744,16 +1744,6 @@ func terminating(msg string) toolchainv1alpha1.Condition {
 	}
 }
 
-func newSecretWithCheAdminCreds() *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-secret",
-			Namespace: test.MemberOperatorNs,
-		},
-		Data: map[string][]byte{},
-	}
-}
-
 func gockTokenSuccess(calls *int) {
 	gock.New(testKeycloakURL).
 		Post("auth/realms/codeready/protocol/openid-connect/token").

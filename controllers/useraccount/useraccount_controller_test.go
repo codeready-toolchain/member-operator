@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -25,7 +24,6 @@ import (
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/h2non/gock.v1"
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,11 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-)
-
-const (
-	testCheURL      = "https://codeready-codeready-workspaces-operator.member-cluster"
-	testKeycloakURL = "https://keycloak-codeready-workspaces-operator.member-cluster"
 )
 
 func TestReconcile(t *testing.T) {
@@ -421,16 +414,10 @@ func TestReconcile(t *testing.T) {
 
 		// given
 
-		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
+		// when
 		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 		mockCallsCounter := new(int)
-		defer gock.OffAll()
-		gockTokenSuccess(mockCallsCounter)
-		gockFindUserTimes(username, 2, mockCallsCounter)
-		gockFindUserNoBody(404, mockCallsCounter)
-		gockDeleteUser(204, mockCallsCounter)
-
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
 		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity)
@@ -701,50 +688,6 @@ func TestReconcile(t *testing.T) {
 				})
 			})
 		})
-	})
-
-	// delete Che user fails
-	t.Run("delete che user fails because find che user request failed", func(t *testing.T) {
-		// given
-
-		// when the member operator secret exists and has a che admin user configured then che user deletion is enabled
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
-
-		mockCallsCounter := new(int)
-		defer gock.OffAll()
-		gockTokenSuccess(mockCallsCounter)
-		gockFindUserNoBody(400, mockCallsCounter) // respond with 400 error to simulate find user request failure
-
-		userAcc := newUserAccount(username, userID)
-		r, req, _, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity)
-
-		// when
-		res, err := r.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
-
-		// then
-		userAcc = useraccount.AssertThatUserAccount(t, username, r.Client).
-			HasFinalizer(toolchainv1alpha1.FinalizerName).
-			Get()
-
-		// Set the deletionTimestamp
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
-		require.NoError(t, err)
-
-		res, _ = r.Reconcile(context.TODO(), req)
-		assert.Equal(t, reconcile.Result{}, res)
-
-		// Check that the associated identity has not been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		assertIdentity(t, r, userAcc, config.Auth().Idp())
-
-		// Check that the associated user has not been deleted
-		// when reconciling the useraccount with a deletion timestamp
-		assertUser(t, r, userAcc)
-		require.Equal(t, 0, *mockCallsCounter)
 	})
 
 	// delete identity fails
@@ -1742,60 +1685,4 @@ func terminating(msg string) toolchainv1alpha1.Condition {
 		Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
 		Message: msg,
 	}
-}
-
-func gockTokenSuccess(calls *int) {
-	gock.New(testKeycloakURL).
-		Post("auth/realms/codeready/protocol/openid-connect/token").
-		SetMatcher(SpyOnGockCalls(calls)).
-		MatchHeader("Content-Type", "application/x-www-form-urlencoded").
-		Persist().
-		Reply(200).
-		BodyString(`{
-				"access_token":"abc.123.xyz",
-				"expires_in":300,
-				"refresh_expires_in":1800,
-				"refresh_token":"111.222.333",
-				"token_type":"bearer",
-				"not-before-policy":0,
-				"session_state":"a2fa1448-687a-414f-af40-3b6b3f5a873a",
-				"scope":"profile email"
-				}`)
-}
-
-func gockFindUserTimes(name string, times int, calls *int) { //nolint: unparam
-	gock.New(testCheURL).
-		Get("api/user/find").
-		SetMatcher(SpyOnGockCalls(calls)).
-		MatchHeader("Authorization", "Bearer abc.123.xyz").
-		Times(times).
-		Reply(200).
-		BodyString(fmt.Sprintf(`{"name":"%s","id":"abc1234"}`, name))
-}
-
-func gockFindUserNoBody(code int, calls *int) { //nolint: unparam
-	gock.New(testCheURL).
-		Get("api/user/find").
-		SetMatcher(SpyOnGockCalls(calls)).
-		MatchHeader("Authorization", "Bearer abc.123.xyz").
-		Persist().
-		Reply(code)
-}
-
-func gockDeleteUser(code int, calls *int) {
-	gock.New(testCheURL).
-		Delete("api/user").
-		SetMatcher(SpyOnGockCalls(calls)).
-		MatchHeader("Authorization", "Bearer abc.123.xyz").
-		Persist().
-		Reply(code)
-}
-
-func SpyOnGockCalls(counter *int) gock.Matcher {
-	matcher := gock.NewBasicMatcher()
-	matcher.Add(func(_ *http.Request, _ *gock.Request) (bool, error) {
-		*counter++
-		return true, nil
-	})
-	return matcher
 }

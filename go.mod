@@ -11,7 +11,7 @@ require (
 	github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf
 	github.com/stretchr/testify v1.8.4
 	go.uber.org/zap v1.21.0
-	gopkg.in/h2non/gock.v1 v1.0.14
+	gopkg.in/h2non/gock.v1 v1.0.14 // indirect
 	k8s.io/api v0.25.0
 	k8s.io/client-go v0.25.0
 	k8s.io/klog v1.0.0

@@ -149,6 +149,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 
 				if appName == "" {
 					appName = pod.Name
+					appType = "Pod"
 				}
 
 				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
@@ -262,7 +263,7 @@ func (r *Reconciler) getUserEmailsFromMURs(logger logr.Logger, hostCluster *clus
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
 // Otherwise returns "false".
-// It Also returns Parent Controller Name and type.
+// It also returns the parent controller type and name or empty strings if there is no parent controller.
 func (r *Reconciler) scaleControllerToZero(logger logr.Logger, meta metav1.ObjectMeta) (string, string, bool, error) {
 	logger.Info("Scaling controller to zero", "name", meta.Name)
 	owners := meta.GetOwnerReferences()

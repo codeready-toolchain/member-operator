@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	vmapiv1 "github.com/codeready-toolchain/toolchain-common/pkg/virtualmachine/api/v1"
-
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -20,9 +18,8 @@ func HandleMutateVirtualMachines(w http.ResponseWriter, r *http.Request) {
 
 func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 
-	// unmarshal the object to be sure that it's a VirtualMachine
-	vm := &vmapiv1.VirtualMachine{}
-	if err := json.Unmarshal(admReview.Request.Object.Raw, vm); err != nil {
+	unstructuredObj := &unstructured.Unstructured{}
+	if err := unstructuredObj.UnmarshalJSON(admReview.Request.Object.Raw); err != nil {
 		vmLogger.Error(err, "unable unmarshal VirtualMachine json object", "AdmissionReview", admReview)
 		return responseWithError(errors.Wrapf(err, "unable unmarshal VirtualMachine json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
@@ -41,7 +38,7 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	vmPatchItems := []map[string]interface{}{}
 
 	// ensure limits are set
-	vmPatchItems = ensureLimits(vm, vmPatchItems)
+	vmPatchItems = ensureLimits(unstructuredObj, vmPatchItems)
 
 	patchContent, err := json.Marshal(vmPatchItems)
 	if err != nil {
@@ -50,7 +47,7 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	}
 	resp.Patch = patchContent
 
-	vmLogger.Info("the resource limits were set on the VirtualMachine", "vm-name", vm.Name, "namespace", vm.Namespace)
+	vmLogger.Info("the resource limits were set on the VirtualMachine", "vm-name", unstructuredObj.GetName(), "namespace", unstructuredObj.GetNamespace())
 	return resp
 }
 
@@ -58,19 +55,31 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 // The issue is that if the namespace has LimitRanges defined and the VirtualMachine resource does not have resource limits defined then it will use the LimitRanges which may be less than requested
 // resources and the VirtualMachine will fail to start.
 // This should be removed once https://issues.redhat.com/browse/CNV-32069 is complete.
-func ensureLimits(vm *vmapiv1.VirtualMachine, patchItems []map[string]interface{}) []map[string]interface{} {
-	if vm.Spec.Template.Spec.Domain.Resources.Requests == nil {
+func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
+
+	requests, reqFound, err := unstructured.NestedStringMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources", "requests")
+	if err != nil {
+		vmLogger.Error(err, "unable to get requests from VirtualMachine", "VirtualMachine", unstructuredObj)
 		return patchItems
 	}
-	requests := vm.Spec.Template.Spec.Domain.Resources.Requests
-	limits := vm.Spec.Template.Spec.Domain.Resources.Limits
-	if limits == nil {
-		limits = corev1.ResourceList{}
+
+	if !reqFound {
+		return patchItems
+	}
+
+	limits, limFound, err := unstructured.NestedStringMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources", "limits")
+	if err != nil {
+		vmLogger.Error(err, "unable to get limits from VirtualMachine", "VirtualMachine", unstructuredObj)
+		return patchItems
+	}
+
+	if limits == nil || !limFound {
+		limits = map[string]string{}
 	}
 
 	// if the limit is not defined but the request is then set the limit to the same value as the request
 	anyChanges := false
-	for _, r := range []corev1.ResourceName{"memory", "cpu"} {
+	for _, r := range []string{"memory", "cpu"} {
 		_, isLimitDefined := limits[r]
 		_, isRequestDefined := requests[r]
 		if !isLimitDefined && isRequestDefined {
@@ -86,7 +95,7 @@ func ensureLimits(vm *vmapiv1.VirtualMachine, patchItems []map[string]interface{
 				"path":  "/spec/template/spec/domain/resources/limits",
 				"value": limits,
 			})
-		vmLogger.Info("setting resource limits on the virtual machine", "vm-name", vm.Name, "namespace", vm.Namespace, "limits", limits)
+		vmLogger.Info("setting resource limits on the virtual machine", "vm-name", unstructuredObj.GetName(), "namespace", unstructuredObj.GetNamespace(), "limits", limits)
 	}
 	return patchItems
 }

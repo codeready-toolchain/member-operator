@@ -5,98 +5,94 @@ import (
 	"fmt"
 	"testing"
 
-	vmapi "github.com/codeready-toolchain/toolchain-common/pkg/virtualmachine/api"
-	vmapiv1 "github.com/codeready-toolchain/toolchain-common/pkg/virtualmachine/api/v1"
 	"github.com/stretchr/testify/require"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestMutateVMSuccess(t *testing.T) {
 
 	t.Run("no requests set", func(t *testing.T) {
 		// given
-		vmAdmReview := vmAdmissionReview(t)
+		vmAdmReview := vmAdmissionReview(t, nil, nil)
+		expectedResp := vmSuccessResponse()
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
 
 		// then
-		expectedResp := vmSuccessResponse()
 		verifySuccessfulResponse(t, response, expectedResp)
 	})
 
 	t.Run("only memory request is set", func(t *testing.T) {
 		// given
-		req := ResourceList("1Gi", "")
-		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req))
+		req := resourceList("1Gi", "")
+		vmAdmReview := vmAdmissionReview(t, req, nil)
+		expectedLimits := resourceList("1Gi", "")
+		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
 
 		// then
-		expectedLimits := ResourceList("1Gi", "")
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 		verifySuccessfulResponse(t, response, expectedResp)
 	})
 
 	t.Run("memory and cpu requests are set", func(t *testing.T) {
 		// given
-		req := ResourceList("1Gi", "1")
-		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req))
+		req := resourceList("1Gi", "1")
+		vmAdmReview := vmAdmissionReview(t, req, nil)
+		expectedLimits := resourceList("1Gi", "1")
+		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
 
 		// then
-		expectedLimits := ResourceList("1Gi", "1")
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 		verifySuccessfulResponse(t, response, expectedResp)
 	})
 
 	t.Run("memory and cpu requests are set but both limits are already set", func(t *testing.T) {
 		// given
-		req := ResourceList("1Gi", "1")
-		lim := ResourceList("2Gi", "2")
-		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req), vmapi.WithLimits(lim))
+		req := resourceList("1Gi", "1")
+		lim := resourceList("2Gi", "2")
+		vmAdmReview := vmAdmissionReview(t, req, lim)
+		expectedResp := vmSuccessResponse() // no patch expected because limits are already set
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
 
 		// then
-		expectedResp := vmSuccessResponse() // no patch expected because limits are already set
 		verifySuccessfulResponse(t, response, expectedResp)
 	})
 
 	t.Run("memory and cpu requests are set but memory limit is already set", func(t *testing.T) {
 		// given
-		req := ResourceList("1Gi", "1")
-		lim := ResourceList("2Gi", "")
-		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req), vmapi.WithLimits(lim))
+		req := resourceList("1Gi", "1")
+		lim := resourceList("2Gi", "")
+		vmAdmReview := vmAdmissionReview(t, req, lim)
+		expectedLimits := resourceList("2Gi", "1") // expect cpu limit to be set to the value of the cpu request
+		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
 
 		// then
-		expectedLimits := ResourceList("2Gi", "1") // expect cpu limit to be set to the value of the cpu request
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 		verifySuccessfulResponse(t, response, expectedResp)
 	})
 
 	t.Run("memory and cpu requests are set but cpu limit is already set", func(t *testing.T) {
 		// given
-		req := ResourceList("1Gi", "1")
-		lim := ResourceList("", "2")
-		vmAdmReview := vmAdmissionReview(t, vmapi.WithRequests(req), vmapi.WithLimits(lim))
+		req := resourceList("1Gi", "1")
+		lim := resourceList("", "2")
+		vmAdmReview := vmAdmissionReview(t, req, lim)
+		expectedLimits := resourceList("1Gi", "2") // expect memory limit to be set to the value of the memory request
+		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 
 		// when
 		response := mutate(podLogger, vmAdmReview, vmMutator)
 
 		// then
-		expectedLimits := ResourceList("1Gi", "2") // expect memory limit to be set to the value of the memory request
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
 		verifySuccessfulResponse(t, response, expectedResp)
 	})
 }
@@ -125,7 +121,7 @@ func TestMutateVmmFailsOnInvalidVM(t *testing.T) {
 	}`)
 	expectedResp := expectedFailedResponse{
 		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		errMsg:             "cannot unmarshal number into Go value of type v1.VirtualMachine",
+		errMsg:             "cannot unmarshal number into Go value of type map[string]interface {}",
 	}
 
 	// when
@@ -135,20 +131,9 @@ func TestMutateVmmFailsOnInvalidVM(t *testing.T) {
 	verifyFailedResponse(t, response, expectedResp)
 }
 
-func ResourceList(mem, cpu string) corev1.ResourceList {
-	req := corev1.ResourceList{}
-	if mem != "" {
-		req["memory"] = resource.MustParse(mem)
-	}
-	if cpu != "" {
-		req["cpu"] = resource.MustParse(cpu)
-	}
-	return req
-}
-
 type vmSuccessResponseOption func(*expectedSuccessResponse)
 
-func withPatch(t *testing.T, expectedLimits corev1.ResourceList) vmSuccessResponseOption {
+func withPatch(t *testing.T, expectedLimits map[string]interface{}) vmSuccessResponseOption {
 	return func(resp *expectedSuccessResponse) {
 		expectedLimitsJSONBytes, err := json.Marshal(expectedLimits)
 		require.NoError(t, err)
@@ -172,27 +157,36 @@ func vmSuccessResponse(options ...vmSuccessResponseOption) expectedSuccessRespon
 	return *resp
 }
 
-func vmAdmissionReview(t *testing.T, vmOptions ...vmapi.VMOption) []byte {
-	admReview := &admissionv1.AdmissionReview{}
-	err := json.Unmarshal([]byte(vmRawAdmissionReviewJSONTemplate), admReview)
+func vmAdmissionReview(t *testing.T, requests, limits map[string]interface{}) []byte {
+	unstructuredAdmReview := &unstructured.Unstructured{}
+	err := unstructuredAdmReview.UnmarshalJSON([]byte(vmRawAdmissionReviewJSONTemplate))
 	require.NoError(t, err)
 
-	vm := &vmapiv1.VirtualMachine{}
-	err = json.Unmarshal(admReview.Request.Object.Raw, vm)
-	require.NoError(t, err)
-
-	for _, opt := range vmOptions {
-		opt(vm)
+	// set requests
+	if requests != nil {
+		unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
 	}
 
-	vmJSON, err := json.Marshal(vm)
-	require.NoError(t, err)
-	admReview.Request.Object.Raw = vmJSON
+	// set limits
+	if limits != nil {
+		unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
+	}
 
-	admReviewJSON, err := json.Marshal(admReview)
+	admReviewJSON, err := unstructuredAdmReview.MarshalJSON()
 	require.NoError(t, err)
 
 	return admReviewJSON
+}
+
+func resourceList(mem, cpu string) map[string]interface{} {
+	req := map[string]interface{}{}
+	if mem != "" {
+		req["memory"] = mem
+	}
+	if cpu != "" {
+		req["cpu"] = cpu
+	}
+	return req
 }
 
 var vmRawAdmissionReviewJSONTemplate = `{

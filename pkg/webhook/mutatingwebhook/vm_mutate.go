@@ -77,7 +77,7 @@ func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[s
 		limits = map[string]string{}
 	}
 
-	// if the limit is not defined but the request is then set the limit to the same value as the request
+	// if the limit is not defined but the request is, then set the limit to the same value as the request
 	anyChanges := false
 	for _, r := range []string{"memory", "cpu"} {
 		_, isLimitDefined := limits[r]

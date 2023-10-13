@@ -7,7 +7,6 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
-	"github.com/codeready-toolchain/member-operator/pkg/che"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -50,9 +49,8 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 
 // Reconciler reconciles a UserAccount object
 type Reconciler struct {
-	Client    client.Client
-	Scheme    *runtime.Scheme
-	CheClient *che.Client
+	Client client.Client
+	Scheme *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=useraccounts,verbs=get;list;watch;create;update;patch;delete
@@ -108,7 +106,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 			return reconcile.Result{}, err
 		}
 	} else {
-		return reconcile.Result{}, r.ensureUserAccountDeletion(logger, config, userAcc)
+		return reconcile.Result{}, r.ensureUserAccountDeletion(logger, userAcc)
 	}
 
 	if !userAcc.Spec.Disabled {
@@ -176,18 +174,13 @@ func (r *Reconciler) ensureUserAndIdentity(logger logr.Logger, userAcc *toolchai
 	return false, nil
 }
 
-func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
+func (r *Reconciler) ensureUserAccountDeletion(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
 	if util.HasFinalizer(userAcc, toolchainv1alpha1.FinalizerName) {
 		logger.Info("terminating UserAccount")
 		// We need to be sure that the status is updated when the UserAccount is deleted.
 		// In this case the UserAccountStatus controller updates the MUR on the host cluster
 		// In turn, the MUR controller may decide to recreate the UserAccount resource on the
 		// member cluster.
-
-		// Clean up Che resources by deleting the Che user (required for GDPR and reactivation of users)
-		if err := r.lookupAndDeleteCheUser(logger, config, userAcc); err != nil {
-			return r.wrapErrorWithStatusUpdate(logger, userAcc, r.setStatusTerminating, err, "failed to delete Che user data")
-		}
 
 		deleted, err := r.deleteIdentityAndUser(logger, userAcc)
 		if err != nil {
@@ -662,60 +655,6 @@ func newIdentity(user *userv1.User) *userv1.Identity {
 // ToIdentityName converts the given `userID` into an identity
 func ToIdentityName(userID string, identityProvider string) string {
 	return fmt.Sprintf("%s:%s", identityProvider, userID)
-}
-
-func (r *Reconciler) lookupAndDeleteCheUser(logger logr.Logger, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount) error {
-
-	// If Che user deletion is not required then just return, this is a way to disable this Che user deletion logic since
-	// it's meant to be a temporary measure until Che is updated to handle user deletion on its own
-	if !config.Che().IsUserDeletionEnabled() {
-		logger.Info("Che user deletion is not enabled, skipping it")
-		return nil
-	}
-
-	if config.Che().IsDevSpacesMode() {
-		return r.deleteDevSpacesUser(logger, userAcc)
-	}
-
-	userExists, err := r.CheClient.UserExists(userAcc.Name)
-	if err != nil {
-		return err
-	}
-
-	// If the user doesn't exist then there's nothing left to do.
-	if !userExists {
-		logger.Info("Che user no longer exists")
-		return nil
-	}
-
-	// Get the Che user ID to use in the Delete API
-	cheUserID, err := r.CheClient.GetUserIDByUsername(userAcc.Name)
-	if err != nil {
-		return err
-	}
-
-	// Delete the Che user. It is common for this call to return an error multiple times before succeeding
-	if err := r.CheClient.DeleteUser(cheUserID); err != nil {
-		return errs.Wrapf(err, "this error is expected if deletion is still in progress")
-	}
-
-	return nil
-}
-
-func (r *Reconciler) deleteDevSpacesUser(logger logr.Logger, userAcc *toolchainv1alpha1.UserAccount) error {
-	logger.Info("Deleting OpenShift Dev Spaces user")
-
-	// look up user resource to get UID
-	userList, err := getUsersByOwnerName(r.Client, userAcc.Name)
-	if err != nil {
-		return err
-	}
-
-	if len(userList) == 0 {
-		return nil
-	}
-
-	return r.CheClient.DevSpacesDBCleanerDelete(string(userList[0].GetObjectMeta().GetUID()))
 }
 
 // listByOwnerLabel returns runtimeclient.ListOption that filters by label toolchain.dev.openshift.com/owner equal to the given owner name

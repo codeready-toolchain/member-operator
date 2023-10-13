@@ -12,7 +12,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
-	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/metrics"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -197,9 +196,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// initialize che client
-	che.InitDefaultCheClient(allNamespacesClient)
-
 	// Setup all Controllers
 	if err = toolchaincluster.NewReconciler(
 		mgr,
@@ -226,7 +222,6 @@ func main() {
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
 		AllNamespacesClient: allNamespacesClient,
-		CheClient:           che.DefaultClient,
 		VersionCheckManager: status.VersionCheckManager{GetGithubClientFunc: commonclient.NewGitHubClient},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberStatus")
@@ -242,9 +237,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&useraccount.Reconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		CheClient: che.DefaultClient,
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccount")
 		os.Exit(1)

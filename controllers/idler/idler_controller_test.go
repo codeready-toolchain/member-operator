@@ -594,165 +594,137 @@ func TestAppNameType(t *testing.T) {
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 	}
-	t.Run("Test AppName/AppType for 'Deployment' ", func(t *testing.T) {
-		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "Deployment",
-				Name:       "TestDeploymentName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "Deployment", appType)
-		require.Equal(t, "TestDeploymentName", appName)
+	namespaces := []string{"dev", "stage"}
+	usernames := []string{"alex"}
+	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+	mur := newMUR("alex")
+	reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+	payloads := preparePayloads(t, reconciler, idler.Name, "", time.Now())
 
-	})
 	t.Run("Test AppName/AppType for 'ReplicaSet' ", func(t *testing.T) {
 		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "ReplicaSet",
-				Name:       "TestReplicaSetName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.controlledPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "ReplicaSet" && owner.Name == payloads.replicaSet.Name {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
 		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
 		//then
 		require.NoError(t, err)
 		require.Equal(t, true, deletedByController)
 		require.Equal(t, "ReplicaSet", appType)
-		require.Equal(t, "TestReplicaSetName", appName)
+		require.Equal(t, payloads.replicaSet.Name, appName)
 
 	})
 	t.Run("Test AppName/AppType for 'DaemonSet' ", func(t *testing.T) {
 		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "DaemonSet",
-				Name:       "TestDaemonSetName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.controlledPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "DaemonSet" && owner.Name == payloads.daemonSet.Name {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
 		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
 		//then
 		require.NoError(t, err)
 		require.Equal(t, true, deletedByController)
 		require.Equal(t, "DaemonSet", appType)
-		require.Equal(t, "TestDaemonSetName", appName)
+		require.Equal(t, payloads.daemonSet.Name, appName)
 
 	})
 	t.Run("Test AppName/AppType for 'StatefulSet' ", func(t *testing.T) {
 		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "StatefulSet",
-				Name:       "TestStatefulSetName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.allPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "StatefulSet" && owner.Name == payloads.statefulSet.Name {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
 		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
 		//then
 		require.NoError(t, err)
 		require.Equal(t, true, deletedByController)
 		require.Equal(t, "StatefulSet", appType)
-		require.Equal(t, "TestStatefulSetName", appName)
-
-	})
-	t.Run("Test AppName/AppType for 'DeploymentConfig' ", func(t *testing.T) {
-		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "DeploymentConfig",
-				Name:       "TestDeploymentConfigName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "DeploymentConfig", appType)
-		require.Equal(t, "TestDeploymentConfigName", appName)
+		require.Equal(t, payloads.statefulSet.Name, appName)
 
 	})
 	t.Run("Test AppName/AppType for 'ReplicationController' ", func(t *testing.T) {
 		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "ReplicationController",
-				Name:       "TestReplicationControllerName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.allPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "ReplicationController" && owner.Name == payloads.replicationController.Name {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
 		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
 		//then
 		require.NoError(t, err)
 		require.Equal(t, true, deletedByController)
 		require.Equal(t, "ReplicationController", appType)
-		require.Equal(t, "TestReplicationControllerName", appName)
+		require.Equal(t, payloads.replicationController.Name, appName)
 
 	})
 	t.Run("Test AppName/AppType for 'Job' ", func(t *testing.T) {
 		//given
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		idler.ObjectMeta.OwnerReferences = []metav1.OwnerReference{
-			{
-				Kind:       "Job",
-				Name:       "TestJobName",
-				Controller: &[]bool{true}[0],
-			},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.allPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "Job" && owner.Name == payloads.job.Name {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
 		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), idler.ObjectMeta)
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
 		//then
 		require.NoError(t, err)
 		require.Equal(t, true, deletedByController)
 		require.Equal(t, "Job", appType)
-		require.Equal(t, "TestJobName", appName)
+		require.Equal(t, payloads.job.Name, appName)
+
+	})
+	t.Run("Test AppName/AppType for 'Individual Pods' ", func(t *testing.T) {
+		//given
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.allPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "Idler" {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
+		//when
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
+		//then
+		require.NoError(t, err)
+		require.Equal(t, false, deletedByController)
+		require.Equal(t, "", appType)
+		require.Equal(t, "", appName)
 
 	})
 }

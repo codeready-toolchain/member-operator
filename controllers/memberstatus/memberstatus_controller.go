@@ -7,7 +7,6 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
-	"github.com/codeready-toolchain/member-operator/pkg/che"
 	"github.com/codeready-toolchain/member-operator/version"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -63,7 +62,6 @@ type Reconciler struct {
 	Scheme              *runtime.Scheme
 	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
 	AllNamespacesClient client.Client
-	CheClient           *che.Client
 	VersionCheckManager status.VersionCheckManager
 }
 
@@ -125,7 +123,6 @@ func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatu
 		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
 		{name: resourceUsageTag, handleStatus: r.loadCurrentResourceUsage},
 		{name: routesTag, handleStatus: r.routesHandleStatus},
-		{name: cheTag, handleStatus: r.cheHandleStatus},
 	}
 
 	// Track components that are not ready
@@ -306,50 +303,6 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 	return nil
 }
 
-// cheHandleStatus checks all necessary aspects related integration between the member operator and Che
-// Returns an error if any problems are discovered.
-func (r *Reconciler) cheHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
-	if memberStatus.Status.Che == nil {
-		memberStatus.Status.Che = &toolchainv1alpha1.CheStatus{}
-	}
-
-	// Is che user deletion enabled
-	if !config.Che().IsUserDeletionEnabled() {
-		// Che user deletion is not enabled, set condition to Ready. No further checks required
-		readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserDeletionNotEnabledReason)
-		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
-		return nil
-	}
-
-	if !r.isCheAdminUserConfigured(config) {
-		err := fmt.Errorf("the Che admin user credentials are not configured but Che user deletion is enabled")
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheAdminUserNotConfiguredReason, err.Error())
-		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-		return err
-	}
-
-	// Ensure it's possible to construct the che URL for using the Che user API
-	if _, err := r.cheDashboardURL(config); err != nil {
-		wrappedErr := errs.Wrapf(err, "Che dashboard URL unavailable but Che user deletion is enabled")
-		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, wrappedErr.Error())
-		memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-		return err
-	}
-
-	// User API check (not applicable after migration from Che to Dev Spaces)
-	if !config.Che().IsDevSpacesMode() {
-		if err := r.CheClient.UserAPICheck(); err != nil {
-			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheUserAPICheckFailedReason, err.Error())
-			memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-			return err
-		}
-	}
-
-	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheReadyReason)
-	memberStatus.Status.Che.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
-	return nil
-}
-
 func (r *Reconciler) getAllocatableValues(reqLogger logr.Logger) (map[string]nodeInfo, error) {
 	nodes := &corev1.NodeList{}
 	err := r.Client.List(context.TODO(), nodes)
@@ -458,10 +411,4 @@ func sanitizeURL(url string) string {
 		return sanitizeURL(strings.TrimSuffix(url, "/")) // remove the extra `/`
 	}
 	return url
-}
-
-// isCheAdminUserConfigured returns true if the Che admin username and password are both set and not empty.
-// Returns false otherwise.
-func (r *Reconciler) isCheAdminUserConfigured(config membercfg.Configuration) bool {
-	return config.Che().AdminUserName() != "" && config.Che().AdminPassword() != ""
 }

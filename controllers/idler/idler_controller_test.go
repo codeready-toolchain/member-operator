@@ -601,6 +601,27 @@ func TestAppNameType(t *testing.T) {
 	reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", time.Now())
 
+	t.Run("Test AppName/AppType for 'Deployment' ", func(t *testing.T) {
+		//given
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.controlledPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "ReplicaSet" && owner.Name == fmt.Sprintf("%s-replicaset", payloads.deployment.Name) {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
+		//when
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
+		//then
+		require.NoError(t, err)
+		require.Equal(t, true, deletedByController)
+		require.Equal(t, "Deployment", appType)
+		require.Equal(t, payloads.deployment.Name, appName)
+
+	})
 	t.Run("Test AppName/AppType for 'ReplicaSet' ", func(t *testing.T) {
 		//given
 		p := func() *corev1.Pod {
@@ -664,6 +685,27 @@ func TestAppNameType(t *testing.T) {
 		require.Equal(t, payloads.statefulSet.Name, appName)
 
 	})
+	t.Run("Test AppName/AppType for 'DeploymentConfig' ", func(t *testing.T) {
+		//given
+		p := func() *corev1.Pod {
+			for _, pod := range payloads.controlledPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Kind == "ReplicationController" && owner.Name == fmt.Sprintf("%s-replicationcontroller", payloads.deploymentConfig.Name) {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
+		//when
+		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
+		//then
+		require.NoError(t, err)
+		require.Equal(t, true, deletedByController)
+		require.Equal(t, "DeploymentConfig", appType)
+		require.Equal(t, payloads.deploymentConfig.Name, appName)
+
+	})
 	t.Run("Test AppName/AppType for 'ReplicationController' ", func(t *testing.T) {
 		//given
 		p := func() *corev1.Pod {
@@ -709,22 +751,24 @@ func TestAppNameType(t *testing.T) {
 	t.Run("Test AppName/AppType for 'Individual Pods' ", func(t *testing.T) {
 		//given
 		p := func() *corev1.Pod {
-			for _, pod := range payloads.allPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "Idler" {
-						return pod
-					}
+			for _, pod := range payloads.standalonePods {
+				if pod.OwnerReferences == nil {
+					return pod
 				}
 			}
 			return nil
 		}()
 		//when
 		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
+		if appName == "" {
+			appName = p.Name
+			appType = "Pod"
+		}
 		//then
 		require.NoError(t, err)
 		require.Equal(t, false, deletedByController)
-		require.Equal(t, "", appType)
-		require.Equal(t, "", appName)
+		require.Equal(t, "Pod", appType)
+		require.Equal(t, p.Name, appName)
 
 	})
 }

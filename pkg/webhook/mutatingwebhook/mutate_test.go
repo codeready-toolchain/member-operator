@@ -3,7 +3,7 @@ package mutatingwebhook
 import (
 	"bytes"
 	"encoding/json"
-	"io"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,80 +11,90 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func TestHandleMutateSuccess(t *testing.T) {
-	// given
-	ts := httptest.NewServer(http.HandlerFunc(HandleMutate))
-	defer ts.Close()
+var testLogger = logf.Log.WithName("test_mutate")
 
-	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(rawJSON))
-
-	// then
-	assert.NoError(t, err)
-	body, err := io.ReadAll(resp.Body)
-	defer func() {
-		require.NoError(t, resp.Body.Close())
-	}()
-	assert.NoError(t, err)
-	verifySuccessfulResponse(t, body)
+type expectedSuccessResponse struct {
+	patch              string
+	auditAnnotationKey string
+	auditAnnotationVal string
+	uid                string
 }
 
-func TestMutateSuccess(t *testing.T) {
-	// when
-	response := mutate(rawJSON)
-
-	// then
-	verifySuccessfulResponse(t, response)
+type expectedFailedResponse struct {
+	auditAnnotationKey string
+	errMsg             string
 }
 
-func verifySuccessfulResponse(t *testing.T, response []byte) {
+type badReader struct{}
+
+func (b badReader) Read(_ []byte) (n int, err error) {
+	return 0, errors.New("bad reader")
+}
+
+// Test handleMutate function
+func TestHandleMutate(t *testing.T) {
+
+	t.Run("success", func(t *testing.T) {
+		// given
+		req, err := http.NewRequest("GET", "/mutate-whatever", bytes.NewBuffer(userPodsRawAdmissionReviewJSON))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		expectedRespSuccess := expectedSuccessResponse{
+			auditAnnotationKey: "users_pods_mutating_webhook",
+			auditAnnotationVal: "the sandbox-users-pods PriorityClass was set",
+			uid:                "a68769e5-d817-4617-bec5-90efa2bad6f6",
+		}
+
+		// when
+		handleMutate(testLogger, rr, req, fakeMutator())
+
+		// then
+		assert.Equal(t, http.StatusOK, rr.Code)
+		verifySuccessfulResponse(t, rr.Body.Bytes(), expectedRespSuccess)
+	})
+
+	t.Run("fail to write response", func(t *testing.T) {
+		// given
+		req, err := http.NewRequest("GET", "/mutate-whatever", badReader{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+
+		// when
+		handleMutate(testLogger, rr, req, fakeMutator())
+
+		// then
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+		assert.Equal(t, "unable to read the body of the request", rr.Body.String())
+	})
+}
+
+func verifySuccessfulResponse(t *testing.T, response []byte, expectedResp expectedSuccessResponse) {
 	reviewResponse := toReviewResponse(t, response)
-	assert.Equal(t, `[{"op":"replace","path":"/spec/priorityClassName","value":"sandbox-users-pods"},{"op":"replace","path":"/spec/priority","value":-3}]`, string(reviewResponse.Patch))
-	assert.Contains(t, "the sandbox-users-pods PriorityClass was set", reviewResponse.AuditAnnotations["users_pods_mutating_webhook"])
+	assert.Equal(t, expectedResp.patch, string(reviewResponse.Patch))
+	assert.Contains(t, expectedResp.auditAnnotationVal, reviewResponse.AuditAnnotations[expectedResp.auditAnnotationKey])
 	assert.True(t, reviewResponse.Allowed)
 	assert.Equal(t, admissionv1.PatchTypeJSONPatch, *reviewResponse.PatchType)
 	assert.Empty(t, reviewResponse.Result)
-	assert.Equal(t, "a68769e5-d817-4617-bec5-90efa2bad6f6", string(reviewResponse.UID))
+	assert.Equal(t, expectedResp.uid, string(reviewResponse.UID))
 }
 
-func TestMutateFailsOnInvalidJson(t *testing.T) {
-	// given
-	rawJSON := []byte(`something wrong !`)
-
-	// when
-	response := mutate(rawJSON)
-
-	// then
-	verifyFailedResponse(t, response, "cannot unmarshal string into Go value of type struct")
-}
-
-func TestMutateFailsOnInvalidPod(t *testing.T) {
-	// when
-	rawJSON := []byte(`{
-		"request": {
-			"object": 111
-		}
-	}`)
-
-	// when
-	response := mutate(rawJSON)
-
-	// then
-	verifyFailedResponse(t, response, "cannot unmarshal number into Go value of type v1.Pod")
-}
-
-func verifyFailedResponse(t *testing.T, response []byte, errMsg string) {
+func verifyFailedResponse(t *testing.T, response []byte, expectedResp expectedFailedResponse) {
 	reviewResponse := toReviewResponse(t, response)
 	assert.Empty(t, string(reviewResponse.Patch))
-	assert.Empty(t, reviewResponse.AuditAnnotations["users_pods_mutating_webhook"])
+	assert.Empty(t, reviewResponse.AuditAnnotations[expectedResp.auditAnnotationKey])
 	assert.False(t, reviewResponse.Allowed)
 	assert.Nil(t, reviewResponse.PatchType)
 	assert.Empty(t, string(reviewResponse.UID))
 
 	require.NotEmpty(t, reviewResponse.Result)
-	assert.Contains(t, reviewResponse.Result.Message, errMsg)
+	assert.Contains(t, reviewResponse.Result.Message, expectedResp.errMsg)
 }
 
 func toReviewResponse(t *testing.T, content []byte) *admissionv1.AdmissionResponse {
@@ -94,149 +104,13 @@ func toReviewResponse(t *testing.T, content []byte) *admissionv1.AdmissionRespon
 	return r.Response
 }
 
-var rawJSON = []byte(`{
-  "kind": "AdmissionReview",
-  "apiVersion": "admission.k8s.io/v1",
-  "request": {
-    "uid": "a68769e5-d817-4617-bec5-90efa2bad6f6",
-    "kind": {
-      "group": "",
-      "version": "v1",
-      "kind": "Pod"
-    },
-    "resource": {
-      "group": "",
-      "version": "v1",
-      "resource": "pods"
-    },
-    "requestKind": {
-      "group": "",
-      "version": "v1",
-      "kind": "Pod"
-    },
-    "requestResource": {
-      "group": "",
-      "version": "v1",
-      "resource": "pods"
-    },
-    "name": "busybox1",
-    "namespace": "johnsmith-dev",
-    "operation": "CREATE",
-    "userInfo": {
-      "username": "kube:admin",
-      "groups": [
-        "system:cluster-admins",
-        "system:authenticated"
-      ],
-      "extra": {
-        "scopes.authorization.openshift.io": [
-          "user:full"
-        ]
-      }
-    },
-    "object": {
-      "kind": "Pod",
-      "apiVersion": "v1",
-      "metadata": {
-        "name": "busybox1",
-        "namespace": "johnsmith-dev",
-        "creationTimestamp": null,
-        "labels": {
-          "app": "busybox1"
-        },
-        "managedFields": []
-      },
-      "spec": {
-        "volumes": [
-          {
-            "name": "default-token-8x9r5",
-            "secret": {
-              "secretName": "default-token-8x9r5"
-            }
-          }
-        ],
-        "containers": [
-          {
-            "name": "busybox",
-            "image": "busybox",
-            "command": [
-              "sleep",
-              "3600"
-            ],
-            "resources": {
-              "limits": {
-                "cpu": "150m",
-                "memory": "750Mi"
-              },
-              "requests": {
-                "cpu": "10m",
-                "memory": "64Mi"
-              }
-            },
-            "volumeMounts": [
-              {
-                "name": "default-token-8x9r5",
-                "readOnly": true,
-                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount"
-              }
-            ],
-            "terminationMessagePath": "/dev/termination-log",
-            "terminationMessagePolicy": "File",
-            "imagePullPolicy": "IfNotPresent",
-            "securityContext": {
-              "capabilities": {
-                "drop": [
-                  "MKNOD"
-                ]
-              }
-            }
-          }
-        ],
-        "restartPolicy": "Always",
-        "terminationGracePeriodSeconds": 30,
-        "dnsPolicy": "ClusterFirst",
-        "serviceAccountName": "default",
-        "serviceAccount": "default",
-        "securityContext": {
-          "seLinuxOptions": {
-            "level": "s0:c30,c0"
-          }
-        },
-        "imagePullSecrets": [
-          {
-            "name": "default-dockercfg-k6xlc"
-          }
-        ],
-        "schedulerName": "default-scheduler",
-        "tolerations": [
-          {
-            "key": "node.kubernetes.io/not-ready",
-            "operator": "Exists",
-            "effect": "NoExecute",
-            "tolerationSeconds": 300
-          },
-          {
-            "key": "node.kubernetes.io/unreachable",
-            "operator": "Exists",
-            "effect": "NoExecute",
-            "tolerationSeconds": 300
-          },
-          {
-            "key": "node.kubernetes.io/memory-pressure",
-            "operator": "Exists",
-            "effect": "NoSchedule"
-          }
-        ],
-        "priority": 0,
-        "enableServiceLinks": true
-      },
-      "status": {}
-    },
-    "oldObject": null,
-    "dryRun": false,
-    "options": {
-      "kind": "CreateOptions",
-      "apiVersion": "meta.k8s.io/v1"
-    }
-  }
-}`)
+func fakeMutator() mutateHandler {
+	return func(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
+		patchType := admissionv1.PatchTypeJSONPatch
+		return &admissionv1.AdmissionResponse{
+			Allowed:   true,
+			UID:       admReview.Request.UID,
+			PatchType: &patchType,
+		}
+	}
+}

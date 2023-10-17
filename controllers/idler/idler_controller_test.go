@@ -583,7 +583,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		require.EqualError(t, err, "failed to ensure idling 'john-dev': cannot set status to fail")
 	})
 }
-func TestAppNameType(t *testing.T) {
+func TestAppNameTypeForControllers(t *testing.T) {
 
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -599,179 +599,88 @@ func TestAppNameType(t *testing.T) {
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("alex")
 	reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-	payloads := preparePayloads(t, reconciler, idler.Name, "", time.Now())
+	plds := preparePayloads(t, reconciler, idler.Name, "", time.Now())
 
-	t.Run("Test AppName/AppType for 'Deployment' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.controlledPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "ReplicaSet" && owner.Name == fmt.Sprintf("%s-replicaset", payloads.deployment.Name) {
-						return pod
+	tests := map[string]struct {
+		ownerKind       string
+		ownerName       string
+		expectedAppType string
+		expectedAppName string
+	}{
+		"Deployment": {
+			// We are testing the case with a nested controllers (Deployment -> ReplicaSet -> Pod) here,
+			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
+			ownerKind:       "ReplicaSet",
+			ownerName:       fmt.Sprintf("%s-replicaset", plds.deployment.Name),
+			expectedAppType: "Deployment",
+			expectedAppName: plds.deployment.Name,
+		},
+		"ReplicaSet": {
+			ownerKind:       "ReplicaSet",
+			ownerName:       plds.replicaSet.Name,
+			expectedAppType: "ReplicaSet",
+			expectedAppName: plds.replicaSet.Name,
+		},
+		"DaemonSet": {
+			ownerKind:       "DaemonSet",
+			ownerName:       plds.daemonSet.Name,
+			expectedAppType: "DaemonSet",
+			expectedAppName: plds.daemonSet.Name,
+		},
+		"StatefulSet": {
+			ownerKind:       "StatefulSet",
+			ownerName:       plds.statefulSet.Name,
+			expectedAppType: "StatefulSet",
+			expectedAppName: plds.statefulSet.Name,
+		},
+		"DeploymentConfig": {
+			// We are testing the case with a nested controllers (DeploymentConfig -> ReplicationController -> Pod) here,
+			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
+			ownerKind:       "ReplicationController",
+			ownerName:       fmt.Sprintf("%s-replicationcontroller", plds.deploymentConfig.Name),
+			expectedAppType: "DeploymentConfig",
+			expectedAppName: plds.deploymentConfig.Name,
+		},
+		"ReplicationController": {
+			ownerKind:       "ReplicationController",
+			ownerName:       plds.replicationController.Name,
+			expectedAppType: "ReplicationController",
+			expectedAppName: plds.replicationController.Name,
+		},
+		"Job": {
+			ownerKind:       "Job",
+			ownerName:       plds.job.Name,
+			expectedAppType: "Job",
+			expectedAppName: plds.job.Name,
+		},
+	}
+
+	for k, tc := range tests {
+		t.Run(k, func(t *testing.T) {
+			//given
+			p := func() *corev1.Pod {
+				for _, pod := range plds.controlledPods {
+					for _, owner := range pod.OwnerReferences {
+						if owner.Kind == tc.ownerKind && owner.Name == tc.ownerName {
+							return pod
+						}
 					}
 				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "Deployment", appType)
-		require.Equal(t, payloads.deployment.Name, appName)
+				return nil
+			}()
 
-	})
-	t.Run("Test AppName/AppType for 'ReplicaSet' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.controlledPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "ReplicaSet" && owner.Name == payloads.replicaSet.Name {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "ReplicaSet", appType)
-		require.Equal(t, payloads.replicaSet.Name, appName)
+			//when
+			appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
 
-	})
-	t.Run("Test AppName/AppType for 'DaemonSet' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.controlledPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "DaemonSet" && owner.Name == payloads.daemonSet.Name {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "DaemonSet", appType)
-		require.Equal(t, payloads.daemonSet.Name, appName)
-
-	})
-	t.Run("Test AppName/AppType for 'StatefulSet' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.allPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "StatefulSet" && owner.Name == payloads.statefulSet.Name {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "StatefulSet", appType)
-		require.Equal(t, payloads.statefulSet.Name, appName)
-
-	})
-	t.Run("Test AppName/AppType for 'DeploymentConfig' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.controlledPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "ReplicationController" && owner.Name == fmt.Sprintf("%s-replicationcontroller", payloads.deploymentConfig.Name) {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "DeploymentConfig", appType)
-		require.Equal(t, payloads.deploymentConfig.Name, appName)
-
-	})
-	t.Run("Test AppName/AppType for 'ReplicationController' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.allPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "ReplicationController" && owner.Name == payloads.replicationController.Name {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "ReplicationController", appType)
-		require.Equal(t, payloads.replicationController.Name, appName)
-
-	})
-	t.Run("Test AppName/AppType for 'Job' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.allPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Kind == "Job" && owner.Name == payloads.job.Name {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		//then
-		require.NoError(t, err)
-		require.Equal(t, true, deletedByController)
-		require.Equal(t, "Job", appType)
-		require.Equal(t, payloads.job.Name, appName)
-
-	})
-	t.Run("Test AppName/AppType for 'Individual Pods' ", func(t *testing.T) {
-		//given
-		p := func() *corev1.Pod {
-			for _, pod := range payloads.standalonePods {
-				if pod.OwnerReferences == nil {
-					return pod
-				}
-			}
-			return nil
-		}()
-		//when
-		appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
-		if appName == "" {
-			appName = p.Name
-			appType = "Pod"
-		}
-		//then
-		require.NoError(t, err)
-		require.Equal(t, false, deletedByController)
-		require.Equal(t, "Pod", appType)
-		require.Equal(t, p.Name, appName)
-
-	})
+			//then
+			require.NoError(t, err)
+			require.Equal(t, true, deletedByController)
+			require.Equal(t, tc.expectedAppType, appType)
+			require.Equal(t, tc.expectedAppName, appName)
+		})
+	}
 }
+
 func TestCreateNotification(t *testing.T) {
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{

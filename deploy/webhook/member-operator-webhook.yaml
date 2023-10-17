@@ -36,6 +36,14 @@ objects:
       - get
       - list
       - watch
+    - apiGroups:
+      - "kubevirt.io"
+      resources:
+      - "virtualmachines"
+      verbs:
+      - get
+      - list
+      - watch
 - apiVersion: v1
   kind: ServiceAccount
   metadata:
@@ -137,6 +145,33 @@ objects:
     namespaceSelector:
       matchLabels:
         toolchain.dev.openshift.com/provider: codeready-toolchain
+  # The users.virtualmachines.webhook.sandbox webhook sets resource limits on VirtualMachines prior to creation as a workaround for https://issues.redhat.com/browse/CNV-28746 (https://issues.redhat.com/browse/CNV-32069)
+  # This webhook should be updated to remove the workaround once https://issues.redhat.com/browse/CNV-32069 is complete.
+  # The webhook code is available at member-operator/pkg/webhook/mutatingwebhook/vm_mutate.go
+  - name: users.virtualmachines.webhook.sandbox
+    admissionReviewVersions:
+      - v1
+    clientConfig:
+      caBundle: ${CA_BUNDLE}
+      service:
+        name: member-operator-webhook
+        namespace: ${NAMESPACE}
+        path: "/mutate-virtual-machines"
+        port: 443
+    matchPolicy: Equivalent
+    rules:
+    - operations: ["CREATE"]
+      apiGroups: ["kubevirt.io"]
+      apiVersions: ["v1"]
+      resources: ["virtualmachines"]
+      scope: "Namespaced"
+    sideEffects: None
+    timeoutSeconds: 5
+    reinvocationPolicy: Never
+    failurePolicy: Fail
+    namespaceSelector:
+      matchLabels:
+        toolchain.dev.openshift.com/provider: codeready-toolchain
 - apiVersion: admissionregistration.k8s.io/v1
   kind: ValidatingWebhookConfiguration
   metadata:
@@ -189,7 +224,7 @@ objects:
       sideEffects: None
       timeoutSeconds: 5
       reinvocationPolicy: Never
-      failurePolicy: Ignore
+      failurePolicy: Fail
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain

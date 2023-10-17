@@ -584,6 +584,151 @@ func TestEnsureIdlingFailed(t *testing.T) {
 	})
 }
 
+func TestAppNameTypeForControllers(t *testing.T) {
+
+	idler := &toolchainv1alpha1.Idler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "alex-stage",
+			Labels: map[string]string{
+				toolchainv1alpha1.SpaceLabelKey: "alex",
+			},
+		},
+		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+	}
+	namespaces := []string{"dev", "stage"}
+	usernames := []string{"alex"}
+	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+	mur := newMUR("alex")
+	reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+	plds := preparePayloads(t, reconciler, idler.Name, "", time.Now())
+
+	tests := map[string]struct {
+		ownerKind       string
+		ownerName       string
+		expectedAppType string
+		expectedAppName string
+	}{
+		"Deployment": {
+			// We are testing the case with a nested controllers (Deployment -> ReplicaSet -> Pod) here,
+			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
+			ownerKind:       "ReplicaSet",
+			ownerName:       fmt.Sprintf("%s-replicaset", plds.deployment.Name),
+			expectedAppType: "Deployment",
+			expectedAppName: plds.deployment.Name,
+		},
+		"ReplicaSet": {
+			ownerKind:       "ReplicaSet",
+			ownerName:       plds.replicaSet.Name,
+			expectedAppType: "ReplicaSet",
+			expectedAppName: plds.replicaSet.Name,
+		},
+		"DaemonSet": {
+			ownerKind:       "DaemonSet",
+			ownerName:       plds.daemonSet.Name,
+			expectedAppType: "DaemonSet",
+			expectedAppName: plds.daemonSet.Name,
+		},
+		"StatefulSet": {
+			ownerKind:       "StatefulSet",
+			ownerName:       plds.statefulSet.Name,
+			expectedAppType: "StatefulSet",
+			expectedAppName: plds.statefulSet.Name,
+		},
+		"DeploymentConfig": {
+			// We are testing the case with a nested controllers (DeploymentConfig -> ReplicationController -> Pod) here,
+			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
+			ownerKind:       "ReplicationController",
+			ownerName:       fmt.Sprintf("%s-replicationcontroller", plds.deploymentConfig.Name),
+			expectedAppType: "DeploymentConfig",
+			expectedAppName: plds.deploymentConfig.Name,
+		},
+		"ReplicationController": {
+			ownerKind:       "ReplicationController",
+			ownerName:       plds.replicationController.Name,
+			expectedAppType: "ReplicationController",
+			expectedAppName: plds.replicationController.Name,
+		},
+		"Job": {
+			ownerKind:       "Job",
+			ownerName:       plds.job.Name,
+			expectedAppType: "Job",
+			expectedAppName: plds.job.Name,
+		},
+	}
+
+	for k, tc := range tests {
+		t.Run(k, func(t *testing.T) {
+			//given
+			p := func() *corev1.Pod {
+				for _, pod := range plds.controlledPods {
+					for _, owner := range pod.OwnerReferences {
+						if owner.Kind == tc.ownerKind && owner.Name == tc.ownerName {
+							return pod
+						}
+					}
+				}
+				return nil
+			}()
+
+			//when
+			appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
+
+			//then
+			require.NoError(t, err)
+			require.Equal(t, true, deletedByController)
+			require.Equal(t, tc.expectedAppType, appType)
+			require.Equal(t, tc.expectedAppName, appName)
+		})
+	}
+}
+
+func TestAppNameTypeForInidividualPods(t *testing.T) {
+	//given
+	idler := &toolchainv1alpha1.Idler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "alex-stage",
+			Labels: map[string]string{
+				toolchainv1alpha1.SpaceLabelKey: "alex",
+			},
+		},
+		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+	}
+
+	t.Run("Test AppName/Type in notification", func(t *testing.T) {
+		namespaces := []string{"dev", "stage"}
+		usernames := []string{"alex"}
+		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
+		mur := newMUR("alex")
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo).standalonePods[0]
+		// first reconcile to track pods
+		res, err := reconciler.Reconcile(context.TODO(), req)
+		assert.NoError(t, err)
+		assert.True(t, res.Requeue)
+
+		// second reconcile should delete pods and create notification
+		res, err = reconciler.Reconcile(context.TODO(), req)
+		//then
+		assert.NoError(t, err)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+		//check the notification is actually created
+		hostCl, _ := reconciler.GetHostCluster()
+		notification := &toolchainv1alpha1.Notification{}
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: test.HostOperatorNs,
+			Name:      "alex-stage-idled",
+		}, notification)
+		require.NoError(t, err)
+		require.Equal(t, "alex@test.com", notification.Spec.Recipient)
+		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
+		require.Equal(t, "Pod", notification.Spec.Context["AppType"])
+		require.Equal(t, p.Name, notification.Spec.Context["AppName"])
+
+	})
+
+}
 func TestCreateNotification(t *testing.T) {
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -594,6 +739,7 @@ func TestCreateNotification(t *testing.T) {
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 	}
+
 	t.Run("Creates a notification the first time", func(t *testing.T) {
 		// given
 		namespaces := []string{"dev", "stage"}
@@ -603,7 +749,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		//then
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -616,7 +762,7 @@ func TestCreateNotification(t *testing.T) {
 
 		t.Run("Notification not created if already sent", func(t *testing.T) {
 			//when
-			err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+			err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 			//then
 			require.NoError(t, err)
 			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{Name: "alex-stage-idled", Namespace: hostCl.OperatorNamespace}, &notification)
@@ -641,7 +787,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		//then
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -660,7 +806,7 @@ func TestCreateNotification(t *testing.T) {
 			return errors.New("can't update condition")
 		}
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 
 		//then
 		require.EqualError(t, err, "can't update condition")
@@ -671,7 +817,7 @@ func TestCreateNotification(t *testing.T) {
 
 		// second reconcile will not create the notification again but set the status
 		cl.MockStatusUpdate = nil
-		err = reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
@@ -684,7 +830,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		//then
 		require.EqualError(t, err, "could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found")
 	})
@@ -699,7 +845,7 @@ func TestCreateNotification(t *testing.T) {
 		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "no email found for the user in MURs")
 	})
 
@@ -712,7 +858,7 @@ func TestCreateNotification(t *testing.T) {
 		mur.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey] = "invalid-email-address"
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler)
+		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address: mail: missing '@' or angle-addr")
 	})
 }
@@ -986,6 +1132,25 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		deploymentConfig:      dc,
 		replicationController: standaloneRC,
 		job:                   job,
+	}
+}
+
+func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time) payloads {
+	sTime := metav1.NewTime(startTime)
+
+	// Pods with no owner.
+	standalonePods := make([]*corev1.Pod, 0, 1)
+	for i := 0; i < 1; i++ {
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-pod-%d", namePrefix, namespace, i), Namespace: namespace},
+			Status:     corev1.PodStatus{StartTime: &sTime},
+		}
+		standalonePods = append(standalonePods, pod)
+		err := r.AllNamespacesClient.Create(context.TODO(), pod)
+		require.NoError(t, err)
+	}
+	return payloads{
+		standalonePods: standalonePods,
 	}
 }
 

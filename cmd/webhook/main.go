@@ -111,6 +111,7 @@ func main() {
 		Addr:    ":8443",
 		Handler: mux,
 		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
 			NextProtos: []string{"http/1.1"}, // disable HTTP/2 for now
 		},
 	}

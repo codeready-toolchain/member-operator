@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"net/http"
 	"os"
@@ -109,6 +110,9 @@ func main() {
 	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)
 		Addr:    ":8443",
 		Handler: mux,
+		TLSConfig: &tls.Config{
+			NextProtos: []string{"http/1.1"}, // disable HTTP/2 for now
+		},
 	}
 
 	setupLog.Info("Webhook server configured.")

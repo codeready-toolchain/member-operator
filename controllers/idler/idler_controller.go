@@ -135,9 +135,11 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 				var podreason string
 				podcondition := pod.Status.Conditions
 				if podcondition != nil {
-					podreason = podcondition[0].Reason
-				} else {
-					podreason = ""
+					for _, podtype := range podcondition {
+						if podtype.Type == "Ready" {
+							podreason = podtype.Reason
+						}
+					}
 				}
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				appType, appName, deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)

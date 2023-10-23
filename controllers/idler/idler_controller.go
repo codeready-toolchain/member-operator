@@ -134,11 +134,9 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
 				var podreason string
 				podcondition := pod.Status.Conditions
-				if podcondition != nil {
-					for _, podtype := range podcondition {
-						if podtype.Type == "Ready" {
-							podreason = podtype.Reason
-						}
+				for _, podtype := range podcondition {
+					if podtype.Type == "Ready" {
+						podreason = podtype.Reason
 					}
 				}
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.

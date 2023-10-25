@@ -73,8 +73,8 @@ spec:
             memory: 500M
       - name: kube-rbac-proxy
         image: registry.redhat.io/openshift4/ose-kube-rbac-proxy:v4.13.0
-         imagePullPolicy: Always
-         securityContext:
+        imagePullPolicy: Always
+        securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:

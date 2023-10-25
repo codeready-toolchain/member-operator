@@ -682,7 +682,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 	}
 }
 
-func TestAppNameTypeForInidividualPods(t *testing.T) {
+func TestNotificationAppNameTypeForPods(t *testing.T) {
 	//given
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
@@ -698,10 +698,11 @@ func TestAppNameTypeForInidividualPods(t *testing.T) {
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "feny", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("feny")
 
-	t.Run("Test AppName/Type in notification", func(t *testing.T) {
+	t.Run("Test AppName/Type in notification for individual pod in non-completed status", func(t *testing.T) {
 		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo).standalonePods[0]
+		pcond := corev1.PodCondition{Type: "Ready", Reason: ""}
+		p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond).standalonePods[0]
 
 		// first reconcile to track pods
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -754,6 +755,66 @@ func TestAppNameTypeForInidividualPods(t *testing.T) {
 		}, notification)
 		require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
 
+	})
+
+	t.Run("Test AppName/Type in notification for controlled pod in non-completed status", func(t *testing.T) {
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		pcond := corev1.PodCondition{Type: "Ready", Reason: ""}
+		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond)
+
+		// first reconcile to track pods
+		res, err := reconciler.Reconcile(context.TODO(), req)
+		assert.NoError(t, err)
+		assert.True(t, res.Requeue)
+
+		// second reconcile should delete pods and create notification
+		res, err = reconciler.Reconcile(context.TODO(), req)
+		//then
+		assert.NoError(t, err)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+		//check the notification is actually created
+		hostCl, _ := reconciler.GetHostCluster()
+		notification := &toolchainv1alpha1.Notification{}
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: test.HostOperatorNs,
+			Name:      "feny-stage-idled",
+		}, notification)
+		require.NoError(t, err)
+		require.Equal(t, "feny@test.com", notification.Spec.Recipient)
+		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
+		require.Equal(t, "Deployment", notification.Spec.Context["AppType"])
+	})
+
+	t.Run("Test AppName/Type in notification for controlled pod in completed status", func(t *testing.T) {
+		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+		pcond := corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"}
+		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond)
+
+		// first reconcile to track pods
+		res, err := reconciler.Reconcile(context.TODO(), req)
+		assert.NoError(t, err)
+		assert.True(t, res.Requeue)
+
+		// second reconcile should delete pods and create notification
+		res, err = reconciler.Reconcile(context.TODO(), req)
+		//then
+		assert.NoError(t, err)
+		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+		//check the notification is actually created
+		hostCl, _ := reconciler.GetHostCluster()
+		notification := &toolchainv1alpha1.Notification{}
+		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+			Namespace: test.HostOperatorNs,
+			Name:      "feny-stage-idled",
+		}, notification)
+		require.NoError(t, err)
+		require.Equal(t, "feny@test.com", notification.Spec.Recipient)
+		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
+		require.Equal(t, "Deployment", notification.Spec.Context["AppType"])
 	})
 
 }
@@ -988,7 +1049,7 @@ type payloads struct {
 	job                   *batchv1.Job
 }
 
-func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time) payloads {
+func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
 	sTime := metav1.NewTime(startTime)
 	replicas := int32(3)
 
@@ -1007,7 +1068,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.AllNamespacesClient.Create(context.TODO(), rs)
 	require.NoError(t, err)
-	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
+	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3), conditions...)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	integration := &appsv1.Deployment{
@@ -1182,11 +1243,11 @@ func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix
 	}
 }
 
-func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
+func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod, conditions ...corev1.PodCondition) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
-			Status:     corev1.PodStatus{StartTime: &startTime},
+			Status:     corev1.PodStatus{StartTime: &startTime, Conditions: conditions},
 		}
 		err := controllerutil.SetControllerReference(owner, pod, r.Scheme)
 		require.NoError(t, err)

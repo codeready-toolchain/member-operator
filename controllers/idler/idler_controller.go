@@ -139,6 +139,7 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 						podreason = podtype.Reason
 					}
 				}
+
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				appType, appName, deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
 				if err != nil {
@@ -156,8 +157,9 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					appName = pod.Name
 					appType = "Pod"
 				}
-				// Do not send notification if Pod Not managed by a controller and is in completed state
-				if podreason != "PodCompleted" && !deletedByController {
+				// Send notification if the deleted pod was managed by a controller or was a standalone pod that was not completed
+				// eg. If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
+				if podreason != "PodCompleted" || deletedByController {
 					// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
 					if err := r.createNotification(logger, idler, appName, appType); err != nil {
 						logger.Error(err, "failed to create Notification")

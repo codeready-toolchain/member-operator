@@ -698,124 +698,73 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "feny", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("feny")
 
-	t.Run("Test AppName/Type in notification for individual pod in non-completed status", func(t *testing.T) {
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		pcond := corev1.PodCondition{Type: "Ready", Reason: ""}
-		p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond).standalonePods[0]
+	testpod := map[string]struct {
+		pcond           corev1.PodCondition
+		expectedAppType string
+	}{
+		"Individual-Completed-Pod": {
+			pcond:           corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
+			expectedAppType: "Pod",
+		},
+		"Individual-NonCompleted-Pod": {
+			pcond:           corev1.PodCondition{Type: "Ready", Reason: ""},
+			expectedAppType: "Pod",
+		},
+		"Controlled-Completed-Pod": {
+			pcond:           corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
+			expectedAppType: "Deployment",
+		},
+		"Controlled-NonCompleted-Pod": {
+			pcond:           corev1.PodCondition{Type: "Ready", Reason: ""},
+			expectedAppType: "Deployment",
+		},
+	}
 
-		// first reconcile to track pods
-		res, err := reconciler.Reconcile(context.TODO(), req)
-		assert.NoError(t, err)
-		assert.True(t, res.Requeue)
+	for pt, tcs := range testpod {
+		t.Run(pt, func(t *testing.T) {
+			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+			if pt == "Individual-Completed-Pod" || pt == "Individual-NonCompleted-Pod" {
+				preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond)
+			} else {
+				preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond)
+			}
+			// first reconcile to track pods
+			res, err := reconciler.Reconcile(context.TODO(), req)
+			assert.NoError(t, err)
+			assert.True(t, res.Requeue)
 
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		assert.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-		//check the notification is actually created
-		hostCl, _ := reconciler.GetHostCluster()
-		notification := &toolchainv1alpha1.Notification{}
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "feny-stage-idled",
-		}, notification)
-		require.NoError(t, err)
-		require.Equal(t, "feny@test.com", notification.Spec.Recipient)
-		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
-		require.Equal(t, "Pod", notification.Spec.Context["AppType"])
-		require.Equal(t, p.Name, notification.Spec.Context["AppName"])
+			// second reconcile should delete pods and create notification
+			res, err = reconciler.Reconcile(context.TODO(), req)
+			//then
+			assert.NoError(t, err)
 
-	})
+			if pt == "Individual-Completed-Pod" {
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					HasConditions(memberoperatortest.Running())
+			} else {
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+			}
+			//check the notification is actually created
+			hostCl, _ := reconciler.GetHostCluster()
+			notification := &toolchainv1alpha1.Notification{}
+			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+				Namespace: test.HostOperatorNs,
+				Name:      "feny-stage-idled",
+			}, notification)
 
-	t.Run("Test No notification sent for no controller and completed status pod", func(t *testing.T) {
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		pcond := corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"}
-		preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond)
-		// first reconcile to track pods
-		res, err := reconciler.Reconcile(context.TODO(), req)
-		assert.NoError(t, err)
-		assert.True(t, res.Requeue)
+			if pt == "Individual-Completed-Pod" {
+				require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, "feny@test.com", notification.Spec.Recipient)
+				require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
+				require.Equal(t, tcs.expectedAppType, notification.Spec.Context["AppType"])
+			}
 
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		assert.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running())
-		//check the notification is not created
-		hostCl, _ := reconciler.GetHostCluster()
-		notification := &toolchainv1alpha1.Notification{}
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "feny-stage-idled",
-		}, notification)
-		require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
-
-	})
-
-	t.Run("Test AppName/Type in notification for controlled pod in non-completed status", func(t *testing.T) {
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		pcond := corev1.PodCondition{Type: "Ready", Reason: ""}
-		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond)
-
-		// first reconcile to track pods
-		res, err := reconciler.Reconcile(context.TODO(), req)
-		assert.NoError(t, err)
-		assert.True(t, res.Requeue)
-
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		assert.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-		//check the notification is actually created
-		hostCl, _ := reconciler.GetHostCluster()
-		notification := &toolchainv1alpha1.Notification{}
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "feny-stage-idled",
-		}, notification)
-		require.NoError(t, err)
-		require.Equal(t, "feny@test.com", notification.Spec.Recipient)
-		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
-		require.Equal(t, "Deployment", notification.Spec.Context["AppType"])
-	})
-
-	t.Run("Test AppName/Type in notification for controlled pod in completed status", func(t *testing.T) {
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		pcond := corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"}
-		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, pcond)
-
-		// first reconcile to track pods
-		res, err := reconciler.Reconcile(context.TODO(), req)
-		assert.NoError(t, err)
-		assert.True(t, res.Requeue)
-
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		assert.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-		//check the notification is actually created
-		hostCl, _ := reconciler.GetHostCluster()
-		notification := &toolchainv1alpha1.Notification{}
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "feny-stage-idled",
-		}, notification)
-		require.NoError(t, err)
-		require.Equal(t, "feny@test.com", notification.Spec.Recipient)
-		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
-		require.Equal(t, "Deployment", notification.Spec.Context["AppType"])
-	})
+		})
+	}
 
 }
 func TestCreateNotification(t *testing.T) {

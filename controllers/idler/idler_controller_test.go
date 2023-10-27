@@ -697,26 +697,47 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 	usernames := []string{"feny"}
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "feny", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("feny")
-
+	var pname string
 	testpod := map[string]struct {
-		pcond           corev1.PodCondition
-		expectedAppType string
+		pcond                       corev1.PodCondition
+		expectedAppType             string
+		expectedNotificationCreated bool
+		controllerOwned             bool
 	}{
 		"Individual-Completed-Pod": {
-			pcond:           corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
-			expectedAppType: "Pod",
+			pcond:                       corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
+			expectedAppType:             "Pod",
+			expectedNotificationCreated: false,
+			controllerOwned:             false,
 		},
 		"Individual-NonCompleted-Pod": {
-			pcond:           corev1.PodCondition{Type: "Ready", Reason: ""},
-			expectedAppType: "Pod",
+			pcond:                       corev1.PodCondition{Type: "Ready", Reason: ""},
+			expectedAppType:             "Pod",
+			expectedNotificationCreated: true,
+			controllerOwned:             false,
 		},
 		"Controlled-Completed-Pod": {
-			pcond:           corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
-			expectedAppType: "Deployment",
+			pcond:                       corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
 		},
 		"Controlled-NonCompleted-Pod": {
-			pcond:           corev1.PodCondition{Type: "Ready", Reason: ""},
-			expectedAppType: "Deployment",
+			pcond:                       corev1.PodCondition{Type: "Ready", Reason: ""},
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
+		},
+		"Controlled-Pod-nocondition": {
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
+		},
+		"Controlled-Pod-multiplecondition": {
+			pcond:                       corev1.PodCondition{Type: "Ready", Reason: "initiated"},
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
 		},
 	}
 
@@ -724,11 +745,14 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 		t.Run(pt, func(t *testing.T) {
 			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-			if pt == "Individual-Completed-Pod" || pt == "Individual-NonCompleted-Pod" {
-				preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond)
-			} else {
+
+			if tcs.controllerOwned {
 				preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond)
+			} else {
+				p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond).standalonePods[0]
+				pname = p.Name
 			}
+
 			// first reconcile to track pods
 			res, err := reconciler.Reconcile(context.TODO(), req)
 			assert.NoError(t, err)
@@ -739,12 +763,12 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 			//then
 			assert.NoError(t, err)
 
-			if pt == "Individual-Completed-Pod" {
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					HasConditions(memberoperatortest.Running())
-			} else {
+			if tcs.expectedNotificationCreated {
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+			} else {
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					HasConditions(memberoperatortest.Running())
 			}
 			//check the notification is actually created
 			hostCl, _ := reconciler.GetHostCluster()
@@ -753,16 +777,17 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 				Namespace: test.HostOperatorNs,
 				Name:      "feny-stage-idled",
 			}, notification)
-
-			if pt == "Individual-Completed-Pod" {
-				require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
-			} else {
+			if tcs.expectedNotificationCreated {
 				require.NoError(t, err)
 				require.Equal(t, "feny@test.com", notification.Spec.Recipient)
 				require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
 				require.Equal(t, tcs.expectedAppType, notification.Spec.Context["AppType"])
+				if !tcs.controllerOwned {
+					require.Equal(t, pname, notification.Spec.Context["AppName"])
+				}
+			} else {
+				require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
 			}
-
 		})
 	}
 

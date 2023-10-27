@@ -682,51 +682,116 @@ func TestAppNameTypeForControllers(t *testing.T) {
 	}
 }
 
-func TestAppNameTypeForInidividualPods(t *testing.T) {
+func TestNotificationAppNameTypeForPods(t *testing.T) {
 	//given
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "alex-stage",
+			Name: "feny-stage",
 			Labels: map[string]string{
-				toolchainv1alpha1.SpaceLabelKey: "alex",
+				toolchainv1alpha1.SpaceLabelKey: "feny",
 			},
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 	}
+	namespaces := []string{"dev", "stage"}
+	usernames := []string{"feny"}
+	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "feny", "advanced", "abcde11", namespaces, usernames)
+	mur := newMUR("feny")
+	var pname string
+	testpod := map[string]struct {
+		pcond                       []corev1.PodCondition
+		expectedAppType             string
+		expectedNotificationCreated bool
+		controllerOwned             bool
+	}{
+		"Individual-Completed-Pod": {
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}},
+			expectedAppType:             "Pod",
+			expectedNotificationCreated: false,
+			controllerOwned:             false,
+		},
+		"Individual-NonCompleted-Pod": {
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: ""}},
+			expectedAppType:             "Pod",
+			expectedNotificationCreated: true,
+			controllerOwned:             false,
+		},
+		"Controlled-Completed-Pod": {
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}},
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
+		},
+		"Controlled-NonCompleted-Pod": {
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: ""}},
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
+		},
+		"Controlled-Pod-nocondition": {
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
+		},
+		"Controlled-Pod-multiplecondition": {
+			pcond: []corev1.PodCondition{{Type: "Ready", Reason: ""},
+				{Type: "Initiated"},
+				{Type: "ContainersReady"}},
+			expectedAppType:             "Deployment",
+			expectedNotificationCreated: true,
+			controllerOwned:             true,
+		},
+	}
 
-	t.Run("Test AppName/Type in notification", func(t *testing.T) {
-		namespaces := []string{"dev", "stage"}
-		usernames := []string{"alex"}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		mur := newMUR("alex")
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo).standalonePods[0]
-		// first reconcile to track pods
-		res, err := reconciler.Reconcile(context.TODO(), req)
-		assert.NoError(t, err)
-		assert.True(t, res.Requeue)
+	for pt, tcs := range testpod {
+		t.Run(pt, func(t *testing.T) {
+			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		assert.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-		//check the notification is actually created
-		hostCl, _ := reconciler.GetHostCluster()
-		notification := &toolchainv1alpha1.Notification{}
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "alex-stage-idled",
-		}, notification)
-		require.NoError(t, err)
-		require.Equal(t, "alex@test.com", notification.Spec.Recipient)
-		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
-		require.Equal(t, "Pod", notification.Spec.Context["AppType"])
-		require.Equal(t, p.Name, notification.Spec.Context["AppName"])
+			if tcs.controllerOwned {
+				preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...)
+			} else {
+				p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...).standalonePods[0]
+				pname = p.Name
+			}
 
-	})
+			// first reconcile to track pods
+			res, err := reconciler.Reconcile(context.TODO(), req)
+			assert.NoError(t, err)
+			assert.True(t, res.Requeue)
+
+			// second reconcile should delete pods and create notification
+			res, err = reconciler.Reconcile(context.TODO(), req)
+			//then
+			assert.NoError(t, err)
+
+			if tcs.expectedNotificationCreated {
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+			} else {
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					HasConditions(memberoperatortest.Running())
+			}
+			//check the notification is actually created
+			hostCl, _ := reconciler.GetHostCluster()
+			notification := &toolchainv1alpha1.Notification{}
+			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+				Namespace: test.HostOperatorNs,
+				Name:      "feny-stage-idled",
+			}, notification)
+			if tcs.expectedNotificationCreated {
+				require.NoError(t, err)
+				require.Equal(t, "feny@test.com", notification.Spec.Recipient)
+				require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
+				require.Equal(t, tcs.expectedAppType, notification.Spec.Context["AppType"])
+				if !tcs.controllerOwned {
+					require.Equal(t, pname, notification.Spec.Context["AppName"])
+				}
+			} else {
+				require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
+			}
+		})
+	}
 
 }
 func TestCreateNotification(t *testing.T) {
@@ -960,7 +1025,7 @@ type payloads struct {
 	job                   *batchv1.Job
 }
 
-func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time) payloads {
+func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
 	sTime := metav1.NewTime(startTime)
 	replicas := int32(3)
 
@@ -979,7 +1044,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.AllNamespacesClient.Create(context.TODO(), rs)
 	require.NoError(t, err)
-	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3))
+	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3), conditions...)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	integration := &appsv1.Deployment{
@@ -1135,7 +1200,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 }
 
-func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time) payloads {
+func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
 	sTime := metav1.NewTime(startTime)
 
 	// Pods with no owner.
@@ -1143,7 +1208,7 @@ func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix
 	for i := 0; i < 1; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-pod-%d", namePrefix, namespace, i), Namespace: namespace},
-			Status:     corev1.PodStatus{StartTime: &sTime},
+			Status:     corev1.PodStatus{StartTime: &sTime, Conditions: conditions},
 		}
 		standalonePods = append(standalonePods, pod)
 		err := r.AllNamespacesClient.Create(context.TODO(), pod)
@@ -1154,11 +1219,11 @@ func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix
 	}
 }
 
-func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod) []*corev1.Pod {
+func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod, conditions ...corev1.PodCondition) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
-			Status:     corev1.PodStatus{StartTime: &startTime},
+			Status:     corev1.PodStatus{StartTime: &startTime, Conditions: conditions},
 		}
 		err := controllerutil.SetControllerReference(owner, pod, r.Scheme)
 		require.NoError(t, err)

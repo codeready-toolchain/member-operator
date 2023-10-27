@@ -699,31 +699,31 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 	mur := newMUR("feny")
 	var pname string
 	testpod := map[string]struct {
-		pcond                       corev1.PodCondition
+		pcond                       []corev1.PodCondition
 		expectedAppType             string
 		expectedNotificationCreated bool
 		controllerOwned             bool
 	}{
 		"Individual-Completed-Pod": {
-			pcond:                       corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}},
 			expectedAppType:             "Pod",
 			expectedNotificationCreated: false,
 			controllerOwned:             false,
 		},
 		"Individual-NonCompleted-Pod": {
-			pcond:                       corev1.PodCondition{Type: "Ready", Reason: ""},
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: ""}},
 			expectedAppType:             "Pod",
 			expectedNotificationCreated: true,
 			controllerOwned:             false,
 		},
 		"Controlled-Completed-Pod": {
-			pcond:                       corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"},
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}},
 			expectedAppType:             "Deployment",
 			expectedNotificationCreated: true,
 			controllerOwned:             true,
 		},
 		"Controlled-NonCompleted-Pod": {
-			pcond:                       corev1.PodCondition{Type: "Ready", Reason: ""},
+			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: ""}},
 			expectedAppType:             "Deployment",
 			expectedNotificationCreated: true,
 			controllerOwned:             true,
@@ -734,7 +734,9 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 			controllerOwned:             true,
 		},
 		"Controlled-Pod-multiplecondition": {
-			pcond:                       corev1.PodCondition{Type: "Ready", Reason: "initiated"},
+			pcond: []corev1.PodCondition{{Type: "Ready", Reason: ""},
+				{Type: "Initiated"},
+				{Type: "ContainersReady"}},
 			expectedAppType:             "Deployment",
 			expectedNotificationCreated: true,
 			controllerOwned:             true,
@@ -747,9 +749,9 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 
 			if tcs.controllerOwned {
-				preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond)
+				preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...)
 			} else {
-				p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond).standalonePods[0]
+				p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...).standalonePods[0]
 				pname = p.Name
 			}
 

@@ -53,7 +53,7 @@ func podMutator(admReview v1.AdmissionReview) *v1.AdmissionResponse {
 	var pod *corev1.Pod
 	if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
 		podLogger.Error(err, "unable unmarshal pod json object", "AdmissionReview", admReview)
-		return responseWithError(errors.Wrapf(err, "unable unmarshal pod json object - raw request object: %v", admReview.Request.Object.Raw))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable unmarshal pod json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 
 	patchType := v1.PatchTypeJSONPatch
@@ -66,7 +66,7 @@ func podMutator(admReview v1.AdmissionReview) *v1.AdmissionResponse {
 		"users_pods_mutating_webhook": "the sandbox-users-pods PriorityClass was set",
 	}
 
-	// instead of changing the pod object we need to tell K8s how to change the object
+	// instead of changing the pod object we need to tell K8s how to change the object via patch
 	resp.Patch = patchedContent
 
 	podLogger.Info("the sandbox-users-pods PriorityClass was set to the pod", "pod-name", pod.Name, "namespace", pod.Namespace)

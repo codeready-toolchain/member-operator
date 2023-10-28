@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	cloudConfigHeader = "#cloud-config"
+	cloudConfigHeader = "#cloud-config\n"
 )
 
 var vmLogger = logf.Log.WithName("virtual_machines_mutating_webhook")
@@ -24,11 +24,10 @@ func HandleMutateVirtualMachines(w http.ResponseWriter, r *http.Request) {
 }
 
 func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
-
-	unstructuredObj := &unstructured.Unstructured{}
-	if err := unstructuredObj.UnmarshalJSON(admReview.Request.Object.Raw); err != nil {
+	unstructuredRequestObj := &unstructured.Unstructured{}
+	if err := unstructuredRequestObj.UnmarshalJSON(admReview.Request.Object.Raw); err != nil {
 		vmLogger.Error(err, "unable unmarshal VirtualMachine json object", "AdmissionReview", admReview)
-		return responseWithError(errors.Wrapf(err, "unable unmarshal VirtualMachine json object - raw request object: %v", admReview.Request.Object.Raw))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable unmarshal VirtualMachine json object - raw request object: %v", admReview.Request.Object.Raw))
 	}
 
 	patchType := admissionv1.PatchTypeJSONPatch
@@ -38,147 +37,131 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 		PatchType: &patchType,
 	}
 	resp.AuditAnnotations = map[string]string{
-		"virtual_machines_mutating_webhook": "the resource limits were set",
+		"virtual_machines_mutating_webhook": "the resource limits and ssh key were set",
 	}
 
-	// instead of changing the object we need to tell K8s how to change the object
+	// instead of changing the object we need to tell K8s how to change the object via patch
 	vmPatchItems := []map[string]interface{}{}
 
-	// ensure limits are set
-	vmPatchItems = ensureLimits(unstructuredObj, vmPatchItems)
+	// ensure limits are set in a best effort approach, if the limits are not set for any reason the request will still be allowed
+	vmPatchItems = ensureLimits(unstructuredRequestObj, vmPatchItems)
 
-	// ensure cloud-init config is set
-	vmPatchItems = ensureCloudInitConfig(unstructuredObj, vmPatchItems)
+	// ensure cloud-init config is set, if the cloud-init config cannot be set for any reason the request will be blocked
+	var cloudInitConfigErr error
+	vmPatchItems, cloudInitConfigErr = ensureVolumeConfig(unstructuredRequestObj, vmPatchItems)
+	if cloudInitConfigErr != nil {
+		vmLogger.Error(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
+		return responseWithError(admReview.Request.UID, errors.Wrapf(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
+	}
 
 	patchContent, err := json.Marshal(vmPatchItems)
 	if err != nil {
-		vmLogger.Error(err, "unable to marshal patch items for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(errors.Wrapf(err, "unable to marshal patch items for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
+		vmLogger.Error(err, "failed to marshal patch items for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
+		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable to marshal patch items for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	resp.Patch = patchContent
 
 	return resp
 }
 
-// ensureCloudInitConfig ensures the cloud-init config is set on the VirtualMachine
-func ensureCloudInitConfig(unstructuredObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
-	volumes, volumesFound, err := unstructured.NestedSlice(unstructuredObj.Object, "spec", "template", "spec", "volumes")
+// ensureVolumeConfig ensures the cloud-init config is set on the VirtualMachine
+func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patchItems []map[string]interface{}) ([]map[string]interface{}, error) {
+	volumes, volumesFound, err := unstructured.NestedSlice(unstructuredRequestObj.Object, "spec", "template", "spec", "volumes")
 	if err != nil {
-		vmLogger.Error(err, "unable to get volumes from VirtualMachine", "VirtualMachine", unstructuredObj)
-		return patchItems
+		vmLogger.Error(err, "failed to decode VirtualMachine resource", "VirtualMachine", unstructuredRequestObj)
+		return patchItems, errors.Wrapf(err, "failed to decode VirtualMachine")
 	}
 
 	if !volumesFound {
-		return patchItems
+		return patchItems, fmt.Errorf("no volumes found")
 	}
 
-	sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UglUkqdferPWtEC47PcHUNFXhysGvTnvORVbR70EVZAtJTJEzSpHesNRwWu0ZBA+OKDHl3nI2o+F1xGAQN+8oGWcj8zbQxn6JDQW3uJBphSknJ7gbXNjg8OWepIjHXLDPxk/Y9rB5vRPzgbFnE1XNPWzVnjxMjHUU/15LWUgm7GWR+2ZRcsyu6Is2RS8ez+5y+NRoh8+9Uh4h80bvTuDFTesjh/5Gp8SlbuFuT103GVjQAe65hFJPHfqoiqByFvaOQpQc/Fsuq+N1T3xj/6Q2O/Jyt/6rfz+xZZuipGJJqq4Si8Vy+7U+e04KJCj0u9eZIBjQ0ucHOp6GDtYGHriAMxeYD6hqE01b5nBvl42I0d0wBnMJOOEJYuInOoiOCZ66LX96wXUm++8uGndqtBnsobN5pvjBHcHiSmCVSu52VeuMJA+AibCoqaZxd7ZZPLGGq7ZVoI7QhjAFtHO4rpIl9qleik= rajiv@rsenthil-mac"
+	// TODO get the ssh key from the secret
+	sshKey := "ssh-rsa tmpkey human@machine"
 
 	// iterate through volumes to find cloudinitdisk
-	vmLogger.Info("volumes found", "count", len(volumes))
 	cloudinitdiskVolumeFound := false
 	for i, volume := range volumes {
 		volumeDef := volume.(map[string]interface{})
 		if volumeDef["name"] == "cloudinitdisk" {
-			vmLogger.Info("cloudinitdisk found")
 			cloudinitdiskVolumeFound = true
-			// look for cloudInitNoCloud case
-			// cloudInitNoCloud, cloudInitNoCloudFound, err := unstructured.NestedMap(volumeMap, "cloudInitNoCloud")
-			// if err != nil {
-			// 	vmLogger.Error(err, "unable to get cloudInitNoCloud from VirtualMachine")
-			// 	return patchItems
-			// }
-			cloudInitNoCloud, cloudInitNoCloudFound := volumeDef["cloudInitNoCloud"].(map[string]interface{})
-			if cloudInitNoCloudFound {
-				vmLogger.Info("cloudInitNoCloud found")
-				userData, ok := cloudInitNoCloud["userData"]
-				if !ok {
-					cloudInitNoCloud["userData"] = defaultUserData(sshKey)
-					vmLogger.Info("set default userData in cloudInitNoCloud")
-				} else {
-					updatedUserData, err := addSSHKeyToUserData(userData.(string), sshKey)
-					if err != nil {
-						vmLogger.Error(err, "unable to add SSH key to cloudInitNoCloud user data")
-					}
-					cloudInitNoCloud["userData"] = updatedUserData
-					volumeDef["cloudInitNoCloud"] = cloudInitNoCloud
 
-					vmLogger.Info("updated userData in cloudInitNoCloud")
+			supportedCloudInitConfigTypes := []string{"cloudInitNoCloud", "cloudInitConfigDrive"}
 
-					volumes[i] = volumeDef // update the volume definition
-					patchItems = append(patchItems,
-						map[string]interface{}{
-							"op":    "replace",
-							"path":  "/spec/template/spec/volumes",
-							"value": volumes,
-						})
+			// check if one of the supported volume types is already defined
+			for _, supportedCloudInitConfigType := range supportedCloudInitConfigTypes {
+				cloudInitConfig, cloudInitConfigTypeFound := volumeDef[supportedCloudInitConfigType].(map[string]interface{})
+				if !cloudInitConfigTypeFound {
+					continue
 				}
 
-				return patchItems
-			}
-
-			// look for cloudInitConfigDrive case
-			cloudInitConfigDrive, cloudInitConfigDriveFound, err := unstructured.NestedMap(volumeDef, "cloudInitConfigDrive")
-			if err != nil {
-				vmLogger.Error(err, "unable to get cloudInitConfigDrive from VirtualMachine")
-				return patchItems
-			}
-			if cloudInitConfigDriveFound {
-				vmLogger.Info("cloudInitConfigDrive found")
-				userData, ok := cloudInitConfigDrive["userData"]
-				if !ok {
-					cloudInitConfigDrive["userData"] = defaultUserData(sshKey)
-					vmLogger.Info("set default userData in cloudInitConfigDrive")
-				} else {
+				vmLogger.Info("Found cloud init config", "type", supportedCloudInitConfigType)
+				userData, ok := cloudInitConfig["userData"]
+				if ok {
+					// userData is defined, append the ssh key
 					updatedUserData, err := addSSHKeyToUserData(userData.(string), sshKey)
 					if err != nil {
-						vmLogger.Error(err, "unable to add SSH key to cloudInitConfigDrive user data")
+						return patchItems, errors.Wrapf(err, "failed to add ssh key to userData")
 					}
-					cloudInitConfigDrive["userData"] = updatedUserData
-					vmLogger.Info("updated userData in cloudInitConfigDrive")
+					cloudInitConfig["userData"] = updatedUserData
+				} else {
+					// no userData defined, set the default
+					cloudInitConfig["userData"] = defaultUserData(sshKey)
+					vmLogger.Info("setting default userData")
 				}
-				return patchItems
+
+				volumeDef[supportedCloudInitConfigType] = cloudInitConfig
+				volumes[i] = volumeDef // update the volume definition
+
+				patchItems = append(patchItems,
+					map[string]interface{}{
+						"op":    "replace",
+						"path":  "/spec/template/spec/volumes",
+						"value": volumes,
+					})
+
+				vmLogger.Info("Added ssh key patch for userData")
+				return patchItems, nil
 			}
-			return patchItems
 		}
 	}
 
 	if !cloudinitdiskVolumeFound {
-		// TODO add cloudInitNoCloud volume
+		return patchItems, fmt.Errorf("no cloudInit volume found")
 	}
-	return patchItems
+	return patchItems, nil
 }
 
+// addSSHKeyToUserData parses the userData YAML and adds the provided ssh key to it or returns an error otherwise
 func addSSHKeyToUserData(userDataString string, sshKey string) (string, error) {
-	jsonBytes, err := yaml.YAMLToJSON([]byte(userDataString))
-	if err != nil {
-		return "", err
-	}
-
 	userData := map[string]interface{}{}
-	if err := json.Unmarshal(jsonBytes, &userData); err != nil {
+
+	if err := yaml.Unmarshal([]byte(userDataString), &userData); err != nil {
 		return "", err
 	}
 
 	authorizedKeys, authorizedKeysFound := userData["ssh_authorized_keys"].([]string)
+	sshValue := sshKey
+	// ensure the ssh key has a newline at the end so that it is properly unmarshalled later
+	if !strings.HasSuffix(sshKey, "\n") {
+		sshValue = sshKey + "\n"
+	}
+
 	if authorizedKeysFound {
 		// append the key to the existing list
-		userData["ssh_authorized_keys"] = append(authorizedKeys, sshKey)
+		userData["ssh_authorized_keys"] = append(authorizedKeys, sshValue)
 	} else {
 		// create a new list with the key
-		userData["ssh_authorized_keys"] = []string{sshKey}
+		userData["ssh_authorized_keys"] = []string{sshValue}
 	}
 
-	updatedJSON, err := json.Marshal(userData)
+	updatedYaml, err := yaml.Marshal(userData)
 	if err != nil {
 		return "", err
 	}
 
-	updatedYaml, err := yaml.JSONToYAML(updatedJSON)
-	if err != nil {
-		return "", err
-	}
-	return string(updatedYaml), nil
+	// the cloud config header '#cloud-config' is lost during unmarshalling (all yaml comments are lost) so it needs to be prepended before returning
+	return cloudConfigHeader + string(updatedYaml), nil
 }
 
 // ensureLimits ensures resource limits are set on the VirtualMachine if requests are set, this is a workaround for https://issues.redhat.com/browse/CNV-28746 (https://issues.redhat.com/browse/CNV-32069)

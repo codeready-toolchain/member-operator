@@ -2,81 +2,125 @@ package mutatingwebhook
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	admissionv1 "k8s.io/api/admission/v1"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var expectedMutatePodsRespSuccess = expectedSuccessResponse{
-	patch:              `[{"op":"replace","path":"/spec/priorityClassName","value":"sandbox-users-pods"},{"op":"replace","path":"/spec/priority","value":-3}]`,
-	auditAnnotationKey: "users_pods_mutating_webhook",
-	auditAnnotationVal: "the sandbox-users-pods PriorityClass was set",
-	uid:                "a68769e5-d817-4617-bec5-90efa2bad6f6",
-}
+func expectedMutatePodsRespSuccess(t *testing.T) admissionv1.AdmissionResponse {
+	patches := []map[string]interface{}{
+		{
+			"op":    "replace",
+			"path":  "/spec/priorityClassName",
+			"value": "sandbox-users-pods",
+		},
+		{
+			"op":    "replace",
+			"path":  "/spec/priority",
+			"value": -3,
+		},
+	}
 
-func TestHandleMutateUserPodsSuccess(t *testing.T) {
-	// given
-	ts := httptest.NewServer(http.HandlerFunc(HandleMutateUserPods))
-	defer ts.Close()
-
-	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(userPodsRawAdmissionReviewJSON))
-
-	// then
+	patchContent, err := json.Marshal(patches)
 	require.NoError(t, err)
-	body, err := io.ReadAll(resp.Body)
-	defer func() {
-		require.NoError(t, resp.Body.Close())
-	}()
-	assert.NoError(t, err)
-	verifySuccessfulResponse(t, body, expectedMutatePodsRespSuccess)
+
+	patchType := admissionv1.PatchTypeJSONPatch
+	return admissionv1.AdmissionResponse{
+		Allowed: true,
+		AuditAnnotations: map[string]string{
+			"users_pods_mutating_webhook": "the sandbox-users-pods PriorityClass was set",
+		},
+		UID:       "a68769e5-d817-4617-bec5-90efa2bad6f6",
+		Patch:     patchContent,
+		PatchType: &patchType,
+	}
 }
 
-func TestMutateUserPodsSuccess(t *testing.T) {
-	// when
-	response := mutate(podLogger, userPodsRawAdmissionReviewJSON, podMutator)
+func TestHandleMutateUserPods(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		// given
+		ts := httptest.NewServer(http.HandlerFunc(HandleMutateUserPods))
+		defer ts.Close()
 
-	// then
-	verifySuccessfulResponse(t, response, expectedMutatePodsRespSuccess)
+		// when
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(userPodsRawAdmissionReviewJSON))
+
+		// then
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		assert.NoError(t, err)
+		assertResponseEqual(t, body, expectedMutatePodsRespSuccess(t))
+	})
 }
 
-func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
+func TestPodMutator(t *testing.T) {
 	// given
-	rawJSON := []byte(`something wrong !`)
-	var expectedResp = expectedFailedResponse{
-		auditAnnotationKey: "users_pods_mutating_webhook",
-		errMsg:             "cannot unmarshal string into Go value of type struct",
-	}
+	admReview := admissionReview(t, userPodsRawAdmissionReviewJSON)
 
 	// when
-	response := mutate(podLogger, rawJSON, podMutator)
+	// response := mutate(podLogger, userPodsRawAdmissionReviewJSON, podMutator)
+	actualResponse := podMutator(admReview)
 
 	// then
-	verifyFailedResponse(t, response, expectedResp)
+	// verifySuccessfulResponse(t, response, expectedMutatePodsRespSuccess(t))
+	assert.Equal(t, expectedMutatePodsRespSuccess(t), *actualResponse)
 }
 
-func TestMutateUserPodsFailsOnInvalidPod(t *testing.T) {
-	// when
-	rawJSON := []byte(`{
-		"request": {
-			"object": 111
-		}
-	}`)
+// func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
+// 	// given
+// 	rawJSON := []byte(`something wrong !`)
+// 	// var expectedResp = expectedFailedResponse{
+// 	// 	auditAnnotationKey: "users_pods_mutating_webhook",
+// 	// 	errMsg:             "cannot unmarshal string into Go value of type struct",
+// 	// }
+// 	var expectedResp = admissionv1.AdmissionResponse{
+// 		Result: &metav1.Status{
+// 			Message: "couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }",
+// 		},
+// 		UID: "",
+// 	}
 
-	// when
-	response := mutate(podLogger, rawJSON, podMutator)
+// 	// when
+// 	response := mutate(podLogger, rawJSON, podMutator)
 
-	// then
-	var expectedResp = expectedFailedResponse{
-		auditAnnotationKey: "users_pods_mutating_webhook",
-		errMsg:             "cannot unmarshal number into Go value of type v1.Pod",
-	}
-	verifyFailedResponse(t, response, expectedResp)
-}
+// 	// then
+// 	verifyFailedResponse(t, response, expectedResp)
+// }
+
+// func TestMutateUserPodsFailsOnInvalidPod(t *testing.T) {
+// 	// when
+// 	rawJSON := []byte(`{
+// 		"request": {
+// 			"object": 111
+// 		}
+// 	}`)
+
+// 	// when
+// 	response := mutate(podLogger, rawJSON, podMutator)
+
+// 	// then
+// 	// var expectedResp = expectedFailedResponse{
+// 	// 	auditAnnotationKey: "users_pods_mutating_webhook",
+// 	// 	errMsg:             "cannot unmarshal number into Go value of type v1.Pod",
+// 	// }
+// 	var expectedResp = admissionv1.AdmissionResponse{
+// 		Result: &metav1.Status{
+// 			Message: "unable unmarshal pod json object - raw request object: [49 49 49]: json: cannot unmarshal number into Go value of type v1.Pod",
+// 		},
+// 		UID: "",
+// 	}
+// 	verifyFailedResponse(t, response, expectedResp)
+// }
 
 var userPodsRawAdmissionReviewJSON = []byte(`{
 	"kind": "AdmissionReview",

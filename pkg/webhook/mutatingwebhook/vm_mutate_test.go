@@ -3,181 +3,190 @@ package mutatingwebhook
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestMutateVMSuccess(t *testing.T) {
+func TestEnsureLimits(t *testing.T) {
 
 	t.Run("no requests set", func(t *testing.T) {
 		// given
-		vmAdmReview := vmAdmissionReview(t, nil, nil)
-		expectedResp := vmSuccessResponse()
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t)
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assert.Empty(t, actualPatchItems) // no limits patch expected because no requests were set
 	})
 
 	t.Run("only memory request is set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "")
-		vmAdmReview := vmAdmissionReview(t, req, nil)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req))
+
 		expectedLimits := resourceList("1Gi", "")
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := combinePatches(limitsPatch(expectedLimits)) // only memory limits patch expected
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
 	t.Run("memory and cpu requests are set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
-		vmAdmReview := vmAdmissionReview(t, req, nil)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req))
 		expectedLimits := resourceList("1Gi", "1")
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := combinePatches(limitsPatch(expectedLimits)) // limits patch with memory and cpu expected
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
 	t.Run("memory and cpu requests are set but both limits are already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "2")
-		vmAdmReview := vmAdmissionReview(t, req, lim)
-		expectedResp := vmSuccessResponse() // no patch expected because limits are already set
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assert.Empty(t, actualPatchItems) // no limits patch expected because limits are already set
 	})
 
 	t.Run("memory and cpu requests are set but memory limit is already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "")
-		vmAdmReview := vmAdmissionReview(t, req, lim)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("2Gi", "1") // expect cpu limit to be set to the value of the cpu request
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := combinePatches(limitsPatch(expectedLimits))
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
 	t.Run("memory and cpu requests are set but cpu limit is already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("", "2")
-		vmAdmReview := vmAdmissionReview(t, req, lim)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("1Gi", "2") // expect memory limit to be set to the value of the memory request
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := combinePatches(limitsPatch(expectedLimits))
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+	})
+
+	// t.Run("does not replace existing patches", func(t *testing.T) {
+
+	// })
+}
+
+// func TestEnsureVolumeConfig(t *testing.T) {
+
+// }
+
+func TestAddSSHKeyToUserData(t *testing.T) {
+	t.Run("no existing keys", func(t *testing.T) {
+		// given
+		sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"
+
+		// when
+		userDataStr, err := addSSHKeyToUserData(userDataSample, sshKey)
+
+		// then
+		require.NoError(t, err)
+		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
+	})
+
+	t.Run("", func(t *testing.T) {
+
+	})
+	t.Run("", func(t *testing.T) {
+
 	})
 }
 
-func TestMutateVMsFailsOnInvalidJson(t *testing.T) {
-	// given
-	rawJSON := []byte(`something wrong !`)
-	expectedResp := expectedFailedResponse{
-		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		errMsg:             "cannot unmarshal string into Go value of type struct",
-	}
+func addPatchToResponse(t *testing.T, resp *admissionv1.AdmissionResponse, expectedPatch map[string]interface{}) {
+	respPatches := []map[string]interface{}{}
 
-	// when
-	response := mutate(vmLogger, rawJSON, vmMutator)
-
-	// then
-	verifyFailedResponse(t, response, expectedResp)
-}
-
-func TestMutateVmmFailsOnInvalidVM(t *testing.T) {
-	// when
-	rawJSON := []byte(`{
-		"request": {
-			"object": 111
-		}
-	}`)
-	expectedResp := expectedFailedResponse{
-		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		errMsg:             "cannot unmarshal number into Go value of type map[string]interface {}",
-	}
-
-	// when
-	response := mutate(vmLogger, rawJSON, vmMutator)
-
-	// then
-	verifyFailedResponse(t, response, expectedResp)
-}
-
-type vmSuccessResponseOption func(*expectedSuccessResponse)
-
-func withPatch(t *testing.T, expectedLimits map[string]interface{}) vmSuccessResponseOption {
-	return func(resp *expectedSuccessResponse) {
-		expectedLimitsJSONBytes, err := json.Marshal(expectedLimits)
+	if string(resp.Patch) != "" {
+		err := json.Unmarshal(resp.Patch, &respPatches)
 		require.NoError(t, err)
-		expectedLimitsJSON := string(expectedLimitsJSONBytes)
-		resp.patch = fmt.Sprintf(`[{"op":"add","path":"/spec/template/spec/domain/resources/limits","value":%s}]`, expectedLimitsJSON)
-	}
-}
-
-func vmSuccessResponse(options ...vmSuccessResponseOption) expectedSuccessResponse {
-	resp := &expectedSuccessResponse{
-		patch:              "[]",
-		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		auditAnnotationVal: "the resource limits were set",
-		uid:                "d68b4f8c-c62d-4e83-bd73-de991ab8a56a",
 	}
 
-	for _, opt := range options {
-		opt(resp)
-	}
+	respPatches = append(respPatches, expectedPatch)
 
-	return *resp
-}
-
-func vmAdmissionReview(t *testing.T, requests, limits map[string]interface{}) []byte {
-	unstructuredAdmReview := &unstructured.Unstructured{}
-	err := unstructuredAdmReview.UnmarshalJSON([]byte(vmRawAdmissionReviewJSONTemplate))
+	updatedPatchContent, err := json.Marshal(respPatches)
 	require.NoError(t, err)
 
-	// set requests
-	if requests != nil {
+	resp.Patch = updatedPatchContent
+}
+
+type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
+
+func setRequests(t *testing.T, requests map[string]interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
 		require.NoError(t, err)
 	}
+}
 
-	// set limits
-	if limits != nil {
+func setLimits(t *testing.T, limits map[string]interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
 		require.NoError(t, err)
 	}
+}
 
-	admReviewJSON, err := unstructuredAdmReview.MarshalJSON()
-	require.NoError(t, err)
+func limitsPatch(expectedLimits map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/template/spec/domain/resources/limits",
+		"value": expectedLimits,
+	}
+}
 
-	return admReviewJSON
+func volumesPatch(expectedCloudInitDiskVolume map[string]interface{}) map[string]interface{} {
+	volumes := []interface{}{
+		rootDisk(),
+		expectedCloudInitDiskVolume,
+	}
+	// volumes = append(volumes, )
+
+	return map[string]interface{}{
+		"op":    "replace",
+		"path":  "/spec/template/spec/volumes",
+		"value": volumes,
+	}
 }
 
 func resourceList(mem, cpu string) map[string]interface{} {
@@ -191,7 +200,31 @@ func resourceList(mem, cpu string) map[string]interface{} {
 	return req
 }
 
-var vmRawAdmissionReviewJSONTemplate = `{
+func rootDisk() map[string]interface{} {
+	return map[string]interface{}{
+		"dataVolume": map[string]interface{}{
+			"name": "rhel9-test",
+		},
+		"name": "rootdisk",
+	}
+}
+
+func expectedCloudInitVolumeWithSSH() map[string]interface{} {
+	return map[string]interface{}{
+		"cloudInitNoCloud": map[string]interface{}{
+			"userData": fmt.Sprintf("#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\nuser: cloud-user\n"),
+		},
+		"name": "cloudinitdisk",
+	}
+}
+
+func vmAdmReviewRequestObject(t *testing.T, options ...admissionReviewOption) *unstructured.Unstructured {
+	return admReviewRequestObject(t, vmRawAdmissionReviewJSONTemplate, options...)
+}
+
+const userDataSample = "#cloud-config\nuser: cloud-user\npassword: 5as2-8nbk-7a4c\nchpasswd: { expire: False }"
+
+var vmRawAdmissionReviewJSONTemplate = []byte(`{
     "kind": "AdmissionReview",
     "apiVersion": "admission.k8s.io/v1",
     "request": {
@@ -364,4 +397,4 @@ var vmRawAdmissionReviewJSONTemplate = `{
             "fieldValidation": "Ignore"
         }
     }
-}`
+}`)

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,59 +69,34 @@ func TestPodMutator(t *testing.T) {
 	admReview := admissionReview(t, userPodsRawAdmissionReviewJSON)
 
 	// when
-	// response := mutate(podLogger, userPodsRawAdmissionReviewJSON, podMutator)
 	actualResponse := podMutator(admReview)
 
 	// then
-	// verifySuccessfulResponse(t, response, expectedMutatePodsRespSuccess(t))
 	assert.Equal(t, expectedMutatePodsRespSuccess(t), *actualResponse)
 }
 
-// func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
-// 	// given
-// 	rawJSON := []byte(`something wrong !`)
-// 	// var expectedResp = expectedFailedResponse{
-// 	// 	auditAnnotationKey: "users_pods_mutating_webhook",
-// 	// 	errMsg:             "cannot unmarshal string into Go value of type struct",
-// 	// }
-// 	var expectedResp = admissionv1.AdmissionResponse{
-// 		Result: &metav1.Status{
-// 			Message: "couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }",
-// 		},
-// 		UID: "",
-// 	}
+func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
+	// given
+	badObj := map[string]interface{}{
+		"spec": "bad data",
+	}
+	badJSON, err := json.Marshal(badObj)
+	require.NoError(t, err)
+	admReview := admissionv1.AdmissionReview{
+		Request: &admissionv1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: badJSON,
+			},
+		},
+	}
 
-// 	// when
-// 	response := mutate(podLogger, rawJSON, podMutator)
+	// when
+	actualResponse := podMutator(admReview)
 
-// 	// then
-// 	verifyFailedResponse(t, response, expectedResp)
-// }
-
-// func TestMutateUserPodsFailsOnInvalidPod(t *testing.T) {
-// 	// when
-// 	rawJSON := []byte(`{
-// 		"request": {
-// 			"object": 111
-// 		}
-// 	}`)
-
-// 	// when
-// 	response := mutate(podLogger, rawJSON, podMutator)
-
-// 	// then
-// 	// var expectedResp = expectedFailedResponse{
-// 	// 	auditAnnotationKey: "users_pods_mutating_webhook",
-// 	// 	errMsg:             "cannot unmarshal number into Go value of type v1.Pod",
-// 	// }
-// 	var expectedResp = admissionv1.AdmissionResponse{
-// 		Result: &metav1.Status{
-// 			Message: "unable unmarshal pod json object - raw request object: [49 49 49]: json: cannot unmarshal number into Go value of type v1.Pod",
-// 		},
-// 		UID: "",
-// 	}
-// 	verifyFailedResponse(t, response, expectedResp)
-// }
+	// then
+	assert.Empty(t, actualResponse.UID)
+	assert.Contains(t, actualResponse.Result.Message, "unable unmarshal pod json object")
+}
 
 var userPodsRawAdmissionReviewJSON = []byte(`{
 	"kind": "AdmissionReview",

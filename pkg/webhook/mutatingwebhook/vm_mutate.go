@@ -140,7 +140,8 @@ func addSSHKeyToUserData(userDataString string, sshKey string) (string, error) {
 		return "", err
 	}
 
-	authorizedKeys, authorizedKeysFound := userData["ssh_authorized_keys"].([]string)
+	authorizedKeysInfc, authorizedKeysFound := userData["ssh_authorized_keys"]
+
 	sshValue := sshKey
 	// ensure the ssh key has a newline at the end so that it is properly unmarshalled later
 	if !strings.HasSuffix(sshKey, "\n") {
@@ -148,8 +149,9 @@ func addSSHKeyToUserData(userDataString string, sshKey string) (string, error) {
 	}
 
 	if authorizedKeysFound {
+		authKeys := authorizedKeysInfc.([]interface{})
 		// append the key to the existing list
-		userData["ssh_authorized_keys"] = append(authorizedKeys, sshValue)
+		userData["ssh_authorized_keys"] = append(authKeys, sshValue)
 	} else {
 		// create a new list with the key
 		userData["ssh_authorized_keys"] = []string{sshValue}

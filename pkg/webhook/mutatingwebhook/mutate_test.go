@@ -180,14 +180,6 @@ func fakeMutator(t *testing.T, success bool) mutateHandler {
 	}
 }
 
-func combinePatches(patches ...map[string]interface{}) []map[string]interface{} {
-	patchItems := []map[string]interface{}{}
-	for _, patch := range patches {
-		patchItems = append(patchItems, patch)
-	}
-	return patchItems
-}
-
 func assertPatchesEqual(t *testing.T, expected, actual []map[string]interface{}) {
 	assert.Equal(t, len(expected), len(actual))
 	expectedPatchContent, err := json.Marshal(expected)

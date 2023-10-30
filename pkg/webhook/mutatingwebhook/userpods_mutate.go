@@ -52,8 +52,8 @@ func podMutator(admReview v1.AdmissionReview) *v1.AdmissionResponse {
 	// let's unmarshal the object to be sure that it's a pod
 	var pod *corev1.Pod
 	if err := json.Unmarshal(admReview.Request.Object.Raw, &pod); err != nil {
-		podLogger.Error(err, "unable unmarshal pod json object", "AdmissionReview", admReview)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable unmarshal pod json object - raw request object: %v", admReview.Request.Object.Raw))
+		podLogger.Error(err, "failed to unmarshal pod json object", "AdmissionReview", admReview)
+		return responseWithError(admReview.Request.UID, errors.Wrap(err, "failed to unmarshal pod json object"))
 	}
 
 	patchType := v1.PatchTypeJSONPatch

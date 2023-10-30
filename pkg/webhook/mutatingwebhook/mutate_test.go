@@ -35,7 +35,7 @@ func TestHandleMutate(t *testing.T) {
 		rr := httptest.NewRecorder()
 
 		// when
-		handleMutate(testLogger, rr, req, fakeMutator())
+		handleMutate(testLogger, rr, req, fakeMutator)
 
 		// then
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -50,7 +50,7 @@ func TestHandleMutate(t *testing.T) {
 		rr := httptest.NewRecorder()
 
 		// when
-		handleMutate(testLogger, rr, req, fakeMutator())
+		handleMutate(testLogger, rr, req, fakeMutator)
 
 		// then
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
@@ -105,10 +105,8 @@ func toReviewResponse(t *testing.T, admReviewContent []byte) admissionv1.Admissi
 }
 
 // fakeMutator is a mutator that returns a blank AdmissionResponse
-func fakeMutator() mutateHandler {
-	return func(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
-		return &admissionv1.AdmissionResponse{}
-	}
+func fakeMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{}
 }
 
 func assertPatchesEqual(t *testing.T, expected, actual []map[string]interface{}) {

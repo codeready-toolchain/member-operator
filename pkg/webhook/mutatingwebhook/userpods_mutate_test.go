@@ -95,7 +95,7 @@ func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
 
 	// then
 	assert.Empty(t, actualResponse.UID)
-	assert.Contains(t, actualResponse.Result.Message, "unable unmarshal pod json object")
+	assert.Contains(t, actualResponse.Result.Message, "failed to unmarshal pod json object")
 }
 
 var userPodsRawAdmissionReviewJSON = []byte(`{

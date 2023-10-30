@@ -26,8 +26,8 @@ func HandleMutateVirtualMachines(w http.ResponseWriter, r *http.Request) {
 func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	unstructuredRequestObj := &unstructured.Unstructured{}
 	if err := unstructuredRequestObj.UnmarshalJSON(admReview.Request.Object.Raw); err != nil {
-		vmLogger.Error(err, "unable unmarshal VirtualMachine json object", "AdmissionReview", admReview)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable unmarshal VirtualMachine json object - raw request object: %v", admReview.Request.Object.Raw))
+		vmLogger.Error(err, "failed to unmarshal VirtualMachine json object", "AdmissionReview", admReview)
+		return responseWithError(admReview.Request.UID, errors.Wrap(err, "failed to unmarshal VirtualMachine json object"))
 	}
 
 	patchType := admissionv1.PatchTypeJSONPatch
@@ -57,7 +57,7 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	patchContent, err := json.Marshal(vmPatchItems)
 	if err != nil {
 		vmLogger.Error(err, "failed to marshal patch items for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "unable to marshal patch items for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "failed to marshal patch items for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	resp.Patch = patchContent
 

@@ -35,7 +35,7 @@ func TestHandleMutate(t *testing.T) {
 		rr := httptest.NewRecorder()
 
 		// when
-		handleMutate(testLogger, rr, req, fakeMutator(t, true))
+		handleMutate(testLogger, rr, req, fakeMutator())
 
 		// then
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -50,7 +50,7 @@ func TestHandleMutate(t *testing.T) {
 		rr := httptest.NewRecorder()
 
 		// when
-		handleMutate(testLogger, rr, req, fakeMutator(t, false))
+		handleMutate(testLogger, rr, req, fakeMutator())
 
 		// then
 		assert.Equal(t, http.StatusInternalServerError, rr.Code)
@@ -89,80 +89,11 @@ func admReviewRequestObject(t *testing.T, admissionReviewJSONTemplate []byte, op
 	return unstructuredRequestObj
 }
 
-// func TestMutate(t *testing.T) {
-// 	t.Run("success", func(t *testing.T) {
-// 		// given
-// 		vmAdmReview := vmAdmissionReview(t)
-// 		// expectedResp := vmSuccessResponse(withVolumesPatch(t, cloudInitVolume()))
-
-// 		patchType := admissionv1.PatchTypeJSONPatch
-// 		expectedResp := admissionv1.AdmissionResponse{
-// 			Allowed: true,
-// 			AuditAnnotations: map[string]string{
-// 				"virtual_machines_mutating_webhook": "the resource limits and ssh key were set",
-// 			},
-// 			UID:       "d68b4f8c-c62d-4e83-bd73-de991ab8a56a",
-// 			Patch:     []byte{},
-// 			PatchType: &patchType,
-// 		}
-// 		addPatchToResponse(t, &expectedResp, volumesPatch(t, expectedCloudInitVolumeWithSSH()))
-
-// 		// when
-// 		response := mutate(podLogger, vmAdmReview, vmMutator)
-
-// 		// then
-// 		verifySuccessfulResponse(t, response, expectedResp)
-// 	})
-
-// 	t.Run("fails with invalid JSON", func(t *testing.T) {
-// 		// given
-// 		rawJSON := []byte(`something wrong !`)
-// 		var expectedResp = admissionv1.AdmissionResponse{
-// 			Result: &metav1.Status{
-// 				Message: "couldn't get version/kind; json parse error: json: cannot unmarshal string into Go value of type struct { APIVersion string \"json:\\\"apiVersion,omitempty\\\"\"; Kind string \"json:\\\"kind,omitempty\\\"\" }",
-// 			},
-// 			UID: "",
-// 		}
-
-// 		// when
-// 		response := mutate(vmLogger, rawJSON, vmMutator)
-
-// 		// then
-// 		verifyFailedResponse(t, response, expectedResp)
-// 	})
-
-// 	t.Run("fails with invalid VM", func(t *testing.T) {
-// 		// when
-// 		rawJSON := []byte(`{
-//             "request": {
-//                 "object": 111
-//             }
-//         }`)
-// 		var expectedResp = admissionv1.AdmissionResponse{
-// 			Result: &metav1.Status{
-// 				Message: "unable unmarshal VirtualMachine json object - raw request object: [49 49 49]: json: cannot unmarshal number into Go value of type map[string]interface {}",
-// 			},
-// 			UID: "",
-// 		}
-
-// 		// when
-// 		response := mutate(vmLogger, rawJSON, vmMutator)
-
-// 		// then
-// 		verifyFailedResponse(t, response, expectedResp)
-// 	})
-// }
-
 func assertResponseEqual(t *testing.T, mutateHandlerResponse []byte, expectedResp admissionv1.AdmissionResponse) {
 	actualReviewResponse := toReviewResponse(t, mutateHandlerResponse)
 
 	t.Log("actualReviewResponse " + string(actualReviewResponse.Patch))
 	t.Log("expectedReviewResponse " + string(expectedResp.Patch))
-	assert.Equal(t, expectedResp, actualReviewResponse)
-}
-
-func verifyFailedResponse(t *testing.T, response []byte, expectedResp admissionv1.AdmissionResponse) {
-	actualReviewResponse := toReviewResponse(t, response)
 	assert.Equal(t, expectedResp, actualReviewResponse)
 }
 
@@ -174,7 +105,7 @@ func toReviewResponse(t *testing.T, admReviewContent []byte) admissionv1.Admissi
 }
 
 // fakeMutator is a mutator that returns a blank AdmissionResponse
-func fakeMutator(t *testing.T, success bool) mutateHandler {
+func fakeMutator() mutateHandler {
 	return func(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 		return &admissionv1.AdmissionResponse{}
 	}

@@ -20,7 +20,7 @@ var cloudInitConfigDrive cloudInitConfigType = "cloudInitConfigDrive"
 func TestVMMutator(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		// given
-		admReview := admissionReview(t, vmRawAdmissionReviewJSONTemplate, setVolumes(t, rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey)))
+		admReview := admissionReview(t, vmRawAdmissionReviewJSONTemplate, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey)))
 		expectedVolumes := cloudInitVolume(cloudInitNoCloud, userDataWithSSHKey) // expect SSH key will be added to userData
 		expectedVolumesPatch := []map[string]interface{}{volumesPatch(expectedVolumes)}
 
@@ -63,7 +63,7 @@ func TestEnsureLimits(t *testing.T) {
 	t.Run("only memory request is set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req))
 
 		expectedLimits := resourceList("1Gi", "")
 		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)} // only memory limits patch expected
@@ -79,7 +79,7 @@ func TestEnsureLimits(t *testing.T) {
 	t.Run("memory and cpu requests are set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req))
 		expectedLimits := resourceList("1Gi", "1")
 		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)} // limits patch with memory and cpu expected
 		actualPatchItems := []map[string]interface{}{}
@@ -95,7 +95,7 @@ func TestEnsureLimits(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "2")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
 		actualPatchItems := []map[string]interface{}{}
 
 		// when
@@ -109,7 +109,7 @@ func TestEnsureLimits(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
 		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("2Gi", "1") // expect cpu limit to be set to the value of the cpu request
 		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)}
@@ -125,7 +125,7 @@ func TestEnsureLimits(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("", "2")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
 		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("1Gi", "2") // expect memory limit to be set to the value of the memory request
 		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)}
@@ -141,7 +141,7 @@ func TestEnsureLimits(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("", "2")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(t, req), setLimits(t, lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
 		existingPatch := map[string]interface{}{
 			"op":    "add",
 			"path":  "/spec/template/spec/test",
@@ -166,7 +166,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 		t.Run("cloudinitdisk with cloudInitNoCloud config found", func(t *testing.T) {
 			t.Run("userData found", func(t *testing.T) {
 				// given
-				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(t, rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey))) // userData without SSH key
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey))) // userData without SSH key
 				actualPatchItems := []map[string]interface{}{}
 				expectedVolumes := cloudInitVolume(cloudInitNoCloud, userDataWithSSHKey) // expect SSH key will be added to userData
 				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
@@ -181,7 +181,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 
 			t.Run("userData not found", func(t *testing.T) {
 				// given
-				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(t, rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, ""))) // no userData
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, ""))) // no userData
 				actualPatchItems := []map[string]interface{}{}
 				expectedVolumes := cloudInitVolume(cloudInitNoCloud, defaultUserData("ssh-rsa tmpkey human@machine")) // expect default userData will be set
 				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
@@ -199,7 +199,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 		t.Run("cloudinitdisk with cloudInitConfigDrive config found", func(t *testing.T) {
 			t.Run("userData found", func(t *testing.T) {
 				// given
-				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(t, rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, userDataWithoutSSHKey))) // userData without SSH key
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, userDataWithoutSSHKey))) // userData without SSH key
 				actualPatchItems := []map[string]interface{}{}
 				expectedVolumes := cloudInitVolume(cloudInitConfigDrive, userDataWithSSHKey) // expect SSH key will be added to userData
 				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
@@ -214,7 +214,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 
 			t.Run("userData not found", func(t *testing.T) {
 				// given
-				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(t, rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, ""))) // no userData
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, ""))) // no userData
 				actualPatchItems := []map[string]interface{}{}
 				expectedVolumes := cloudInitVolume(cloudInitConfigDrive, defaultUserData("ssh-rsa tmpkey human@machine")) // expect default userData will be set
 				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
@@ -264,7 +264,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 
 		t.Run("cloudinitdisk volume not found", func(t *testing.T) {
 			// given
-			vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(t, rootDiskVolume())) // missing cloudinitdisk volume
+			vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume())) // missing cloudinitdisk volume
 			actualPatchItems := []map[string]interface{}{}
 
 			// when
@@ -310,39 +310,23 @@ func TestAddSSHKeyToUserData(t *testing.T) {
 	})
 }
 
-func addPatchToResponse(t *testing.T, resp *admissionv1.AdmissionResponse, expectedPatch map[string]interface{}) {
-	respPatches := []map[string]interface{}{}
-
-	if string(resp.Patch) != "" {
-		err := json.Unmarshal(resp.Patch, &respPatches)
-		require.NoError(t, err)
-	}
-
-	respPatches = append(respPatches, expectedPatch)
-
-	updatedPatchContent, err := json.Marshal(respPatches)
-	require.NoError(t, err)
-
-	resp.Patch = updatedPatchContent
-}
-
 type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
 
-func setRequests(t *testing.T, requests map[string]interface{}) admissionReviewOption {
+func setRequests(requests map[string]interface{}) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
 		require.NoError(t, err)
 	}
 }
 
-func setLimits(t *testing.T, limits map[string]interface{}) admissionReviewOption {
+func setLimits(limits map[string]interface{}) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
 		require.NoError(t, err)
 	}
 }
 
-func setVolumes(t *testing.T, volumes ...interface{}) admissionReviewOption {
+func setVolumes(volumes ...interface{}) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedSlice(unstructuredAdmReview.Object, volumes, "request", "object", "spec", "template", "spec", "volumes")
 		require.NoError(t, err)

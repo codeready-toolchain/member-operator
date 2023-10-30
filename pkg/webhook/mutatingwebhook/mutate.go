@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-logr/logr"
 	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -21,8 +20,10 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 )
 
-type mutateHandler func(admReview v1.AdmissionReview) *v1.AdmissionResponse
+type mutateHandler func(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse
 
+// handleMutate is a common function that decodes an admission review request before handing it off to the
+// mutator for processing and then writes the response
 func handleMutate(logger logr.Logger, w http.ResponseWriter, r *http.Request, mutator mutateHandler) {
 	admReviewBody, err := io.ReadAll(r.Body)
 	defer func() {

@@ -105,7 +105,7 @@ func toReviewResponse(t *testing.T, admReviewContent []byte) admissionv1.Admissi
 }
 
 // fakeMutator is a mutator that returns a blank AdmissionResponse
-func fakeMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
+func fakeMutator(_ admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	return &admissionv1.AdmissionResponse{}
 }
 

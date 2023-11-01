@@ -42,17 +42,15 @@ func handleMutate(logger logr.Logger, w http.ResponseWriter, r *http.Request, mu
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(admReviewBody, nil, &admReview); err != nil {
 		logger.Error(err, "unable to deserialize the admission review object", "body", string(admReviewBody))
-		writeResponse(logger, http.StatusBadRequest, w, []byte("unable to read the body of the request"))
-		return
+		admReview.Response = responseWithError("", err)
 	} else if admReview.Request == nil {
 		err = fmt.Errorf("admission review request is nil")
 		logger.Error(err, "invalid admission review request", "AdmissionReview", admReview)
-		writeResponse(logger, http.StatusBadRequest, w, []byte("unable to read the body of the request"))
-		return
+		admReview.Response = responseWithError("", err)
+	} else {
+		// mutate the request
+		admReview.Response = mutator(admReview)
 	}
-
-	// mutate the request
-	admReview.Response = mutator(admReview)
 
 	respBody, err := json.Marshal(admReview)
 	if err != nil {

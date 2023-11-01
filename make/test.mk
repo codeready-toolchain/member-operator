@@ -112,12 +112,10 @@ ifeq ($(E2E_REPO_PATH),"")
 		if [[ -n "${REMOTE_E2E_BRANCH}" ]]; then \
 			git config --global user.email "devtools@redhat.com"; \
 			git config --global user.name "Devtools"; \
-			# retrieve the branch name \
-			BRANCH_NAME=`echo ${BRANCH_REF} | awk -F'/' '{print $$3}'`; \
 			# add the user's fork as remote repo \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} remote add external ${AUTHOR_LINK}/toolchain-e2e.git; \
 			# fetch the branch \
-			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch external ${BRANCH_REF}; \
+			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch external ${REMOTE_E2E_BRANCH}; \
 			# merge the branch with master \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge --allow-unrelated-histories --no-commit FETCH_HEAD; \
 		fi;

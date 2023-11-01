@@ -120,7 +120,6 @@ ifeq ($(E2E_REPO_PATH),"")
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} fetch external ${BRANCH_REF}; \
 			# merge the branch with master \
 			git --git-dir=${E2E_REPO_PATH}/.git --work-tree=${E2E_REPO_PATH} merge --allow-unrelated-histories --no-commit FETCH_HEAD; \
-			cat ${E2E_REPO_PATH}/test/e2e/parallel/vm_webhook_test.go; \
 		fi;
     endif
 endif

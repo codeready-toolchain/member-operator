@@ -2,182 +2,356 @@ package mutatingwebhook
 
 import (
 	"encoding/json"
-	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestMutateVMSuccess(t *testing.T) {
+type cloudInitConfigType string
+
+var cloudInitNoCloud cloudInitConfigType = "cloudInitNoCloud"
+var cloudInitConfigDrive cloudInitConfigType = "cloudInitConfigDrive"
+
+func TestVMMutator(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		// given
+		admReview := admissionReview(t, vmRawAdmissionReviewJSONTemplate, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey)))
+		expectedVolumes := cloudInitVolume(cloudInitNoCloud, userDataWithSSHKey) // expect SSH key will be added to userData
+		expectedVolumesPatch := []map[string]interface{}{volumesPatch(expectedVolumes)}
+
+		// when
+		actualResponse := vmMutator(admReview)
+
+		// then
+		assert.Equal(t, expectedVMMutateRespSuccess(t, expectedVolumesPatch...), *actualResponse)
+	})
+
+	t.Run("fail", func(t *testing.T) {
+		// given
+		admReview := admissionReview(t, vmRawAdmissionReviewJSONTemplate) // no volumes so expect it to fail
+
+		// when
+		actualResponse := vmMutator(admReview)
+
+		// then
+		assert.Nil(t, actualResponse.Patch)
+		assert.Contains(t, actualResponse.Result.Message, "failed to update volume configuration for VirtualMachine")
+		assert.Equal(t, "d68b4f8c-c62d-4e83-bd73-de991ab8a56a", string(actualResponse.UID))
+		assert.False(t, actualResponse.Allowed)
+	})
+}
+
+func TestEnsureLimits(t *testing.T) {
 
 	t.Run("no requests set", func(t *testing.T) {
 		// given
-		vmAdmReview := vmAdmissionReview(t, nil, nil)
-		expectedResp := vmSuccessResponse()
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t)
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assert.Empty(t, actualPatchItems) // no limits patch expected because no requests were set
 	})
 
 	t.Run("only memory request is set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "")
-		vmAdmReview := vmAdmissionReview(t, req, nil)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req))
+
 		expectedLimits := resourceList("1Gi", "")
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)} // only memory limits patch expected
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
 	t.Run("memory and cpu requests are set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
-		vmAdmReview := vmAdmissionReview(t, req, nil)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req))
 		expectedLimits := resourceList("1Gi", "1")
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)} // limits patch with memory and cpu expected
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
 	t.Run("memory and cpu requests are set but both limits are already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "2")
-		vmAdmReview := vmAdmissionReview(t, req, lim)
-		expectedResp := vmSuccessResponse() // no patch expected because limits are already set
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		actualPatchItems := []map[string]interface{}{}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assert.Empty(t, actualPatchItems) // no limits patch expected because limits are already set
 	})
 
 	t.Run("memory and cpu requests are set but memory limit is already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "")
-		vmAdmReview := vmAdmissionReview(t, req, lim)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("2Gi", "1") // expect cpu limit to be set to the value of the cpu request
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
 	t.Run("memory and cpu requests are set but cpu limit is already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("", "2")
-		vmAdmReview := vmAdmissionReview(t, req, lim)
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("1Gi", "2") // expect memory limit to be set to the value of the memory request
-		expectedResp := vmSuccessResponse(withPatch(t, expectedLimits))
+		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)}
 
 		// when
-		response := mutate(podLogger, vmAdmReview, vmMutator)
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
 
 		// then
-		verifySuccessfulResponse(t, response, expectedResp)
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+	})
+
+	t.Run("does not replace existing patches", func(t *testing.T) {
+		// given
+		req := resourceList("1Gi", "1")
+		lim := resourceList("", "2")
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		existingPatch := map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/template/spec/test",
+			"value": "testval",
+		}
+		actualPatchItems := []map[string]interface{}{existingPatch}
+		expectedLimits := resourceList("1Gi", "2")
+		expectedPatchItems := []map[string]interface{}{existingPatch, limitsPatch(expectedLimits)} // expect both patches to be present
+
+		// when
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
+
+		// then
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 }
 
-func TestMutateVMsFailsOnInvalidJson(t *testing.T) {
-	// given
-	rawJSON := []byte(`something wrong !`)
-	expectedResp := expectedFailedResponse{
-		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		errMsg:             "cannot unmarshal string into Go value of type struct",
-	}
+func TestEnsureVolumeConfig(t *testing.T) {
 
-	// when
-	response := mutate(vmLogger, rawJSON, vmMutator)
+	t.Run("success", func(t *testing.T) {
+		// cloudinitdisk with cloudInitNoCloud config found
+		t.Run("cloudinitdisk with cloudInitNoCloud config found", func(t *testing.T) {
+			t.Run("userData found", func(t *testing.T) {
+				// given
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey))) // userData without SSH key
+				actualPatchItems := []map[string]interface{}{}
+				expectedVolumes := cloudInitVolume(cloudInitNoCloud, userDataWithSSHKey) // expect SSH key will be added to userData
+				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
 
-	// then
-	verifyFailedResponse(t, response, expectedResp)
+				// when
+				actualPatchItems, err := ensureVolumeConfig(vmAdmReviewRequest, actualPatchItems)
+
+				// then
+				require.NoError(t, err)
+				assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+			})
+
+			t.Run("userData not found", func(t *testing.T) {
+				// given
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, ""))) // no userData
+				actualPatchItems := []map[string]interface{}{}
+				expectedVolumes := cloudInitVolume(cloudInitNoCloud, defaultUserData("ssh-rsa tmpkey human@machine")) // expect default userData will be set
+				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
+
+				// when
+				actualPatchItems, err := ensureVolumeConfig(vmAdmReviewRequest, actualPatchItems)
+
+				// then
+				require.NoError(t, err)
+				assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+			})
+		})
+
+		// cloudinitdisk with cloudInitConfigDrive config found
+		t.Run("cloudinitdisk with cloudInitConfigDrive config found", func(t *testing.T) {
+			t.Run("userData found", func(t *testing.T) {
+				// given
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, userDataWithoutSSHKey))) // userData without SSH key
+				actualPatchItems := []map[string]interface{}{}
+				expectedVolumes := cloudInitVolume(cloudInitConfigDrive, userDataWithSSHKey) // expect SSH key will be added to userData
+				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
+
+				// when
+				actualPatchItems, err := ensureVolumeConfig(vmAdmReviewRequest, actualPatchItems)
+
+				// then
+				require.NoError(t, err)
+				assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+			})
+
+			t.Run("userData not found", func(t *testing.T) {
+				// given
+				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, ""))) // no userData
+				actualPatchItems := []map[string]interface{}{}
+				expectedVolumes := cloudInitVolume(cloudInitConfigDrive, defaultUserData("ssh-rsa tmpkey human@machine")) // expect default userData will be set
+				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
+
+				// when
+				actualPatchItems, err := ensureVolumeConfig(vmAdmReviewRequest, actualPatchItems)
+
+				// then
+				require.NoError(t, err)
+				assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+			})
+		})
+	})
+
+	t.Run("fail", func(t *testing.T) {
+
+		t.Run("decode failure", func(t *testing.T) {
+			// given
+			unstructuredRequestObj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"spec": "bad data",
+				},
+			}
+			badObject := unstructuredRequestObj // object that cannot be decoded correctly
+			actualPatchItems := []map[string]interface{}{}
+
+			// when
+			actualPatchItems, err := ensureVolumeConfig(badObject, actualPatchItems)
+
+			// then
+			require.EqualError(t, err, "failed to decode VirtualMachine: .spec.template accessor error: bad data is of the type string, expected map[string]interface{}")
+			assert.Empty(t, actualPatchItems)
+		})
+
+		t.Run("volumes slice not found", func(t *testing.T) {
+			// given
+			vmAdmReviewRequest := vmAdmReviewRequestObject(t) // no volumes
+			actualPatchItems := []map[string]interface{}{}
+
+			// when
+			actualPatchItems, err := ensureVolumeConfig(vmAdmReviewRequest, actualPatchItems)
+
+			// then
+			require.EqualError(t, err, "no volumes found")
+			assert.Empty(t, actualPatchItems)
+		})
+
+		t.Run("cloudinitdisk volume not found", func(t *testing.T) {
+			// given
+			vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume())) // missing cloudinitdisk volume
+			actualPatchItems := []map[string]interface{}{}
+
+			// when
+			actualPatchItems, err := ensureVolumeConfig(vmAdmReviewRequest, actualPatchItems)
+
+			// then
+			require.EqualError(t, err, "no cloudInit volume found")
+			assert.Empty(t, actualPatchItems)
+		})
+	})
 }
 
-func TestMutateVmmFailsOnInvalidVM(t *testing.T) {
-	// when
-	rawJSON := []byte(`{
-		"request": {
-			"object": 111
-		}
-	}`)
-	expectedResp := expectedFailedResponse{
-		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		errMsg:             "cannot unmarshal number into Go value of type map[string]interface {}",
-	}
+func TestAddSSHKeyToUserData(t *testing.T) {
+	t.Run("no existing keys", func(t *testing.T) {
+		// given
+		sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"
 
-	// when
-	response := mutate(vmLogger, rawJSON, vmMutator)
+		// when
+		userDataStr, err := addSSHKeyToUserData(userDataWithoutSSHKey, sshKey)
 
-	// then
-	verifyFailedResponse(t, response, expectedResp)
-}
-
-type vmSuccessResponseOption func(*expectedSuccessResponse)
-
-func withPatch(t *testing.T, expectedLimits map[string]interface{}) vmSuccessResponseOption {
-	return func(resp *expectedSuccessResponse) {
-		expectedLimitsJSONBytes, err := json.Marshal(expectedLimits)
+		// then
 		require.NoError(t, err)
-		expectedLimitsJSON := string(expectedLimitsJSONBytes)
-		resp.patch = fmt.Sprintf(`[{"op":"add","path":"/spec/template/spec/domain/resources/limits","value":%s}]`, expectedLimitsJSON)
-	}
+		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
+	})
+
+	t.Run("pre-existing key", func(t *testing.T) {
+		// given
+		sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"
+
+		// when
+		userDataStr, err := addSSHKeyToUserData(userDataWithSSHKey, sshKey)
+
+		// then
+		require.NoError(t, err)
+		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+		// both keys should exist
+		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
+	})
+
+	t.Run("", func(t *testing.T) {
+
+	})
 }
 
-func vmSuccessResponse(options ...vmSuccessResponseOption) expectedSuccessResponse {
-	resp := &expectedSuccessResponse{
-		patch:              "[]",
-		auditAnnotationKey: "virtual_machines_mutating_webhook",
-		auditAnnotationVal: "the resource limits were set",
-		uid:                "d68b4f8c-c62d-4e83-bd73-de991ab8a56a",
-	}
+type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
 
-	for _, opt := range options {
-		opt(resp)
-	}
-
-	return *resp
-}
-
-func vmAdmissionReview(t *testing.T, requests, limits map[string]interface{}) []byte {
-	unstructuredAdmReview := &unstructured.Unstructured{}
-	err := unstructuredAdmReview.UnmarshalJSON([]byte(vmRawAdmissionReviewJSONTemplate))
-	require.NoError(t, err)
-
-	// set requests
-	if requests != nil {
+func setRequests(requests map[string]interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
 		require.NoError(t, err)
 	}
+}
 
-	// set limits
-	if limits != nil {
+func setLimits(limits map[string]interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
 		require.NoError(t, err)
 	}
+}
 
-	admReviewJSON, err := unstructuredAdmReview.MarshalJSON()
-	require.NoError(t, err)
+func setVolumes(volumes ...interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
+		err := unstructured.SetNestedSlice(unstructuredAdmReview.Object, volumes, "request", "object", "spec", "template", "spec", "volumes")
+		require.NoError(t, err)
+	}
+}
 
-	return admReviewJSON
+func limitsPatch(expectedLimits map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/template/spec/domain/resources/limits",
+		"value": expectedLimits,
+	}
+}
+
+func volumesPatch(expectedCloudInitDiskVolume map[string]interface{}) map[string]interface{} {
+	volumes := []interface{}{
+		rootDiskVolume(),
+		expectedCloudInitDiskVolume,
+	}
+
+	return map[string]interface{}{
+		"op":    "replace",
+		"path":  "/spec/template/spec/volumes",
+		"value": volumes,
+	}
 }
 
 func resourceList(mem, cpu string) map[string]interface{} {
@@ -191,7 +365,52 @@ func resourceList(mem, cpu string) map[string]interface{} {
 	return req
 }
 
-var vmRawAdmissionReviewJSONTemplate = `{
+func rootDiskVolume() map[string]interface{} {
+	return map[string]interface{}{
+		"dataVolume": map[string]interface{}{
+			"name": "rhel9-test",
+		},
+		"name": "rootdisk",
+	}
+}
+
+func cloudInitVolume(cicType cloudInitConfigType, userData string) map[string]interface{} {
+	configType := string(cicType)
+	volume := map[string]interface{}{
+		configType: map[string]interface{}{},
+		"name":     "cloudinitdisk",
+	}
+	if userData != "" {
+		volume[configType].(map[string]interface{})["userData"] = userData
+	}
+
+	return volume
+}
+
+func vmAdmReviewRequestObject(t *testing.T, options ...admissionReviewOption) *unstructured.Unstructured {
+	return admReviewRequestObject(t, vmRawAdmissionReviewJSONTemplate, options...)
+}
+
+func expectedVMMutateRespSuccess(t *testing.T, expectedPatches ...map[string]interface{}) admissionv1.AdmissionResponse {
+	patchContent, err := json.Marshal(expectedPatches)
+	require.NoError(t, err)
+
+	patchType := admissionv1.PatchTypeJSONPatch
+	return admissionv1.AdmissionResponse{
+		Allowed: true,
+		AuditAnnotations: map[string]string{
+			"virtual_machines_mutating_webhook": "the resource limits and ssh key were set",
+		},
+		UID:       "d68b4f8c-c62d-4e83-bd73-de991ab8a56a",
+		Patch:     patchContent,
+		PatchType: &patchType,
+	}
+}
+
+const userDataWithoutSSHKey = "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nuser: cloud-user\n"
+const userDataWithSSHKey = "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\nuser: cloud-user\n"
+
+var vmRawAdmissionReviewJSONTemplate = []byte(`{
     "kind": "AdmissionReview",
     "apiVersion": "admission.k8s.io/v1",
     "request": {
@@ -336,21 +555,7 @@ var vmRawAdmissionReviewJSONTemplate = `{
                                 "pod": {}
                             }
                         ],
-                        "terminationGracePeriodSeconds": 180,
-                        "volumes": [
-                            {
-                                "dataVolume": {
-                                    "name": "rhel9-test"
-                                },
-                                "name": "rootdisk"
-                            },
-                            {
-                                "cloudInitNoCloud": {
-                                    "userData": "#cloud-config\nuser: cloud-user\npassword: 5as2-8nbk-7a4c\nchpasswd: { expire: False }"
-                                },
-                                "name": "cloudinitdisk"
-                            }
-                        ]
+                        "terminationGracePeriodSeconds": 180
                     }
                 }
             }
@@ -364,4 +569,4 @@ var vmRawAdmissionReviewJSONTemplate = `{
             "fieldValidation": "Ignore"
         }
     }
-}`
+}`)

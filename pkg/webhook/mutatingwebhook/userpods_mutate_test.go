@@ -2,80 +2,100 @@ package mutatingwebhook
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var expectedMutatePodsRespSuccess = expectedSuccessResponse{
-	patch:              `[{"op":"replace","path":"/spec/priorityClassName","value":"sandbox-users-pods"},{"op":"replace","path":"/spec/priority","value":-3}]`,
-	auditAnnotationKey: "users_pods_mutating_webhook",
-	auditAnnotationVal: "the sandbox-users-pods PriorityClass was set",
-	uid:                "a68769e5-d817-4617-bec5-90efa2bad6f6",
-}
+func expectedMutatePodsRespSuccess(t *testing.T) admissionv1.AdmissionResponse {
+	patches := []map[string]interface{}{
+		{
+			"op":    "replace",
+			"path":  "/spec/priorityClassName",
+			"value": "sandbox-users-pods",
+		},
+		{
+			"op":    "replace",
+			"path":  "/spec/priority",
+			"value": -3,
+		},
+	}
 
-func TestHandleMutateUserPodsSuccess(t *testing.T) {
-	// given
-	ts := httptest.NewServer(http.HandlerFunc(HandleMutateUserPods))
-	defer ts.Close()
-
-	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(userPodsRawAdmissionReviewJSON))
-
-	// then
+	patchContent, err := json.Marshal(patches)
 	require.NoError(t, err)
-	body, err := io.ReadAll(resp.Body)
-	defer func() {
-		require.NoError(t, resp.Body.Close())
-	}()
-	assert.NoError(t, err)
-	verifySuccessfulResponse(t, body, expectedMutatePodsRespSuccess)
+
+	patchType := admissionv1.PatchTypeJSONPatch
+	return admissionv1.AdmissionResponse{
+		Allowed: true,
+		AuditAnnotations: map[string]string{
+			"users_pods_mutating_webhook": "the sandbox-users-pods PriorityClass was set",
+		},
+		UID:       "a68769e5-d817-4617-bec5-90efa2bad6f6",
+		Patch:     patchContent,
+		PatchType: &patchType,
+	}
 }
 
-func TestMutateUserPodsSuccess(t *testing.T) {
+func TestHandleMutateUserPods(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		// given
+		ts := httptest.NewServer(http.HandlerFunc(HandleMutateUserPods))
+		defer ts.Close()
+
+		// when
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(userPodsRawAdmissionReviewJSON))
+
+		// then
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		assert.NoError(t, err)
+		assertResponseEqual(t, body, expectedMutatePodsRespSuccess(t))
+	})
+}
+
+func TestPodMutator(t *testing.T) {
+	// given
+	admReview := admissionReview(t, userPodsRawAdmissionReviewJSON)
+
 	// when
-	response := mutate(podLogger, userPodsRawAdmissionReviewJSON, podMutator)
+	actualResponse := podMutator(admReview)
 
 	// then
-	verifySuccessfulResponse(t, response, expectedMutatePodsRespSuccess)
+	assert.Equal(t, expectedMutatePodsRespSuccess(t), *actualResponse)
 }
 
 func TestMutateUserPodsFailsOnInvalidJson(t *testing.T) {
 	// given
-	rawJSON := []byte(`something wrong !`)
-	var expectedResp = expectedFailedResponse{
-		auditAnnotationKey: "users_pods_mutating_webhook",
-		errMsg:             "cannot unmarshal string into Go value of type struct",
+	badObj := map[string]interface{}{
+		"spec": "bad data",
+	}
+	badJSON, err := json.Marshal(badObj)
+	require.NoError(t, err)
+	admReview := admissionv1.AdmissionReview{
+		Request: &admissionv1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: badJSON,
+			},
+		},
 	}
 
 	// when
-	response := mutate(podLogger, rawJSON, podMutator)
+	actualResponse := podMutator(admReview)
 
 	// then
-	verifyFailedResponse(t, response, expectedResp)
-}
-
-func TestMutateUserPodsFailsOnInvalidPod(t *testing.T) {
-	// when
-	rawJSON := []byte(`{
-		"request": {
-			"object": 111
-		}
-	}`)
-
-	// when
-	response := mutate(podLogger, rawJSON, podMutator)
-
-	// then
-	var expectedResp = expectedFailedResponse{
-		auditAnnotationKey: "users_pods_mutating_webhook",
-		errMsg:             "cannot unmarshal number into Go value of type v1.Pod",
-	}
-	verifyFailedResponse(t, response, expectedResp)
+	assert.Empty(t, actualResponse.UID)
+	assert.Contains(t, actualResponse.Result.Message, "failed to unmarshal pod json object")
 }
 
 var userPodsRawAdmissionReviewJSON = []byte(`{

@@ -132,6 +132,13 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
+				var podreason string
+				podcondition := pod.Status.Conditions
+				for _, podtype := range podcondition {
+					if podtype.Type == "Ready" {
+						podreason = podtype.Reason
+					}
+				}
 
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				appType, appName, deletedByController, err := r.scaleControllerToZero(podLogger, pod.ObjectMeta)
@@ -150,13 +157,16 @@ func (r *Reconciler) ensureIdling(logger logr.Logger, idler *toolchainv1alpha1.I
 					appName = pod.Name
 					appType = "Pod"
 				}
-
-				// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-				if err := r.createNotification(logger, idler, appName, appType); err != nil {
-					logger.Error(err, "failed to create Notification")
-					if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
-						logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-					} // not returning error to continue tracking remaining pods
+				// Send notification if the deleted pod was managed by a controller or was a standalone pod that was not completed
+				// eg. If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
+				if podreason != "PodCompleted" || deletedByController {
+					// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
+					if err := r.createNotification(logger, idler, appName, appType); err != nil {
+						logger.Error(err, "failed to create Notification")
+						if err = r.setStatusIdlerNotificationCreationFailed(idler, err.Error()); err != nil {
+							logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
+						} // not returning error to continue tracking remaining pods
+					}
 				}
 
 			} else {

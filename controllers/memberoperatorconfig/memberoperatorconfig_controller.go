@@ -61,7 +61,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err := r.handleUserPodsWebhookDeploy(reqLogger, crtConfig, request.Namespace); err != nil {
+	if err := r.handleWebhookDeploy(reqLogger, crtConfig, request.Namespace); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -93,7 +93,7 @@ func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuratio
 	return nil
 }
 
-func (r *Reconciler) handleUserPodsWebhookDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+func (r *Reconciler) handleWebhookDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
 	// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
 	// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
 	if cfg.Webhook().Deploy() {

@@ -214,7 +214,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 	})
 }
 
-func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
+func TestHandleWebhookDeploy(t *testing.T) {
 	t.Run("deployment not created when webhook deploy is false", func(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
@@ -224,7 +224,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestHandleUsersPodsWebhookDeploy(t *testing.T) {
 		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
-		err = controller.handleUserPodsWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.EqualError(t, err, "cannot deploy webhook template: client error")

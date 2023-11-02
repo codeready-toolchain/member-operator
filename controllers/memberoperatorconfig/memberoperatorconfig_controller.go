@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 
+	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -12,8 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,7 +53,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling MemberOperatorConfig")
 
-	crtConfig, err := ForceLoadConfiguration(r.Client)
+	crtConfig, err := membercfg.ForceLoadConfiguration(r.Client)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -72,7 +73,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return reconcile.Result{}, nil
 }
 
-func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg membercfg.Configuration, namespace string) error {
 	if cfg.Autoscaler().Deploy() {
 		logger.Info("(Re)Deploying autoscaling buffer")
 		if err := autoscaler.Deploy(r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
@@ -93,7 +94,7 @@ func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuratio
 	return nil
 }
 
-func (r *Reconciler) handleWebhookDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+func (r *Reconciler) handleWebhookDeploy(logger logr.Logger, cfg membercfg.Configuration, namespace string) error {
 	// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
 	// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
 	if cfg.Webhook().Deploy() {
@@ -109,7 +110,7 @@ func (r *Reconciler) handleWebhookDeploy(logger logr.Logger, cfg Configuration, 
 	return nil
 }
 
-func (r *Reconciler) handleWebConsolePluginDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+func (r *Reconciler) handleWebConsolePluginDeploy(logger logr.Logger, cfg membercfg.Configuration, namespace string) error {
 	if cfg.WebConsolePlugin().Deploy() {
 		webconsolepluginImage := os.Getenv("MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE")
 		logger.Info("(Re)Deploying web console plugin")

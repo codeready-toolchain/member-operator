@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/version"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -36,6 +36,8 @@ import (
 type statusComponentTag string
 
 const (
+	MemberStatusName = "toolchain-member-status"
+
 	memberOperatorTag statusComponentTag = "memberOperator"
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"

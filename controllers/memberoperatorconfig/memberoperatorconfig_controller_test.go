@@ -11,6 +11,7 @@ import (
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
@@ -37,7 +38,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfiguration(test.NewFakeClient(t))
+	actual, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	assert.Equal(t, 10*time.Second, actual.MemberStatus().RefreshPeriod())
 
@@ -53,7 +54,7 @@ func TestReconcileWhenMemberOperatorConfigIsAvailable(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		actual, err := GetConfiguration(test.NewFakeClient(t))
+		actual, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 		require.NoError(t, err)
 		assert.Equal(t, 8*time.Second, actual.MemberStatus().RefreshPeriod())
 	})
@@ -75,7 +76,7 @@ func TestReconcileWhenGetConfigurationReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "get error")
-	actual, err := GetConfiguration(test.NewFakeClient(t))
+	actual, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -97,7 +98,7 @@ func TestReconcileWhenListSecretsReturnsError(t *testing.T) {
 
 	// then
 	require.EqualError(t, err, "list error")
-	actual, err := GetConfiguration(test.NewFakeClient(t))
+	actual, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -111,7 +112,7 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 
 	// then
 	require.NoError(t, err)
-	actual, err := GetConfiguration(test.NewFakeClient(t))
+	actual, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 	matchesDefaultConfig(t, actual)
 }
@@ -122,7 +123,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -141,7 +142,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -157,7 +158,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 			modifiedConfig := commonconfig.UpdateMemberOperatorConfigWithReset(t, cl, testconfig.Autoscaler().Deploy(false))
 			err = cl.Update(context.TODO(), modifiedConfig)
 			require.NoError(t, err)
-			updatedConfig, err := ForceLoadConfiguration(cl)
+			updatedConfig, err := membercfg.ForceLoadConfiguration(cl)
 			require.NoError(t, err)
 			require.False(t, updatedConfig.Autoscaler().Deploy())
 
@@ -177,7 +178,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -200,7 +201,7 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 			},
 		}
 		controller, cl := prepareReconcile(t, config, actualPrioClass)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -220,7 +221,7 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -238,7 +239,7 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -255,7 +256,7 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -275,7 +276,7 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
 
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -293,7 +294,7 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -310,7 +311,7 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := GetConfiguration(cl)
+		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
 
 		// when
@@ -346,6 +347,6 @@ func newRequest() reconcile.Request {
 	}
 }
 
-func matchesDefaultConfig(t *testing.T, actual Configuration) {
+func matchesDefaultConfig(t *testing.T, actual membercfg.Configuration) {
 	assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
 }

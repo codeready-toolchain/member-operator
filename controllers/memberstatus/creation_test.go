@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	. "github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/stretchr/testify/require"
 
+	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -26,7 +25,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		cl := NewFakeClient(t)
 
 		// when
-		err = CreateOrUpdateResources(cl, MemberOperatorNs, membercfg.MemberStatusName)
+		err = CreateOrUpdateResources(cl, MemberOperatorNs, MemberStatusName)
 
 		// then
 		require.NoError(t, err)
@@ -43,7 +42,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		}
 
 		// when
-		err = CreateOrUpdateResources(cl, MemberOperatorNs, membercfg.MemberStatusName)
+		err = CreateOrUpdateResources(cl, MemberOperatorNs, MemberStatusName)
 
 		// then
 		require.Error(t, err)

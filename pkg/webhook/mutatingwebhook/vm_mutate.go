@@ -53,13 +53,13 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	vmPatchItems, cloudInitConfigErr = ensureVolumeConfig(unstructuredRequestObj, vmPatchItems)
 	if cloudInitConfigErr != nil {
 		vmLogger.Error(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine"))
 	}
 
 	patchContent, err := json.Marshal(vmPatchItems)
 	if err != nil {
 		vmLogger.Error(err, "failed to marshal patch items for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "failed to marshal patch items for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "failed to marshal patch items for VirtualMachine"))
 	}
 	resp.Patch = patchContent
 
@@ -80,6 +80,9 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 
 	memberConfig := membercfg.GetCachedConfiguration()
 	sshKeys := strings.Split(memberConfig.Webhook().VMSSHKey(), ",")
+	if len(sshKeys) == 0 || (len(sshKeys) == 1 && sshKeys[0] == "") {
+		return patchItems, fmt.Errorf("invalid VM webhook configuration")
+	}
 
 	// iterate through volumes to find cloudinitdisk
 	cloudinitdiskVolumeFound := false

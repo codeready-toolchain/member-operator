@@ -1253,7 +1253,7 @@ func TestUpdateStatus(t *testing.T) {
 		}
 
 		// when
-		err := reconciler.updateStatusConditions(userAcc, condition)
+		err := reconciler.updateStatusConditions(context.TODO(), userAcc, condition)
 
 		// then
 		require.NoError(t, err)
@@ -1278,7 +1278,7 @@ func TestUpdateStatus(t *testing.T) {
 		userAcc.Status.Conditions = conditions
 
 		// when
-		err := reconciler.updateStatusConditions(userAcc, conditions...)
+		err := reconciler.updateStatusConditions(context.TODO(), userAcc, conditions...)
 
 		// then
 		require.NoError(t, err)
@@ -1295,15 +1295,17 @@ func TestUpdateStatus(t *testing.T) {
 			Scheme: s,
 		}
 		log := logf.Log.WithName("test")
+		ctx := context.TODO()
+		logf.IntoContext(ctx, log)
 
 		t.Run("status updated", func(t *testing.T) {
-			statusUpdater := func(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+			statusUpdater := func(_ context.Context, userAcc *toolchainv1alpha1.UserAccount, message string) error {
 				assert.Equal(t, "oopsy woopsy", message)
 				return nil
 			}
 
 			// when
-			err := reconciler.wrapErrorWithStatusUpdate(log, userAcc, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
+			err := reconciler.wrapErrorWithStatusUpdate(ctx, userAcc, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
 
 			// then
 			require.Error(t, err)
@@ -1311,12 +1313,12 @@ func TestUpdateStatus(t *testing.T) {
 		})
 
 		t.Run("status update failed", func(t *testing.T) {
-			statusUpdater := func(userAcc *toolchainv1alpha1.UserAccount, message string) error {
+			statusUpdater := func(_ context.Context, userAcc *toolchainv1alpha1.UserAccount, message string) error {
 				return errors.New("unable to update status")
 			}
 
 			// when
-			err := reconciler.wrapErrorWithStatusUpdate(log, userAcc, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
+			err := reconciler.wrapErrorWithStatusUpdate(ctx, userAcc, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create %s", "user bob")
 
 			// then
 			require.Error(t, err)

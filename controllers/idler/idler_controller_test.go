@@ -671,7 +671,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			}()
 
 			//when
-			appType, appName, deletedByController, err := reconciler.scaleControllerToZero(logf.FromContext(context.TODO()), p.ObjectMeta)
+			appType, appName, deletedByController, err := reconciler.scaleControllerToZero(context.TODO(), p.ObjectMeta)
 
 			//then
 			require.NoError(t, err)
@@ -814,7 +814,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		//then
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -827,7 +827,7 @@ func TestCreateNotification(t *testing.T) {
 
 		t.Run("Notification not created if already sent", func(t *testing.T) {
 			//when
-			err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+			err = reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 			//then
 			require.NoError(t, err)
 			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{Name: "alex-stage-idled", Namespace: hostCl.OperatorNamespace}, &notification)
@@ -852,7 +852,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		//then
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -871,7 +871,7 @@ func TestCreateNotification(t *testing.T) {
 			return errors.New("can't update condition")
 		}
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 
 		//then
 		require.EqualError(t, err, "can't update condition")
@@ -882,7 +882,7 @@ func TestCreateNotification(t *testing.T) {
 
 		// second reconcile will not create the notification again but set the status
 		cl.MockStatusUpdate = nil
-		err = reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err = reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 	})
@@ -895,7 +895,7 @@ func TestCreateNotification(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		//then
 		require.EqualError(t, err, "could not get the MUR: masteruserrecords.toolchain.dev.openshift.com \"alex\" not found")
 	})
@@ -910,7 +910,7 @@ func TestCreateNotification(t *testing.T) {
 		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "no email found for the user in MURs")
 	})
 
@@ -923,7 +923,7 @@ func TestCreateNotification(t *testing.T) {
 		mur.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey] = "invalid-email-address"
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
-		err := reconciler.createNotification(logf.FromContext(context.TODO()), idler, "testPodName", "testapptype")
+		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address: mail: missing '@' or angle-addr")
 	})
 }
@@ -949,7 +949,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
 		require.NoError(t, err)
 		require.NotEmpty(t, emails)
@@ -968,7 +968,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
 		require.NoError(t, err)
 		require.NotEmpty(t, emails)
@@ -983,7 +983,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
 		require.EqualError(t, err, "nstemplatesets.toolchain.dev.openshift.com \"alex\" not found")
 		require.Len(t, emails, 0)
@@ -997,7 +997,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
-		emails, err := reconciler.getUserEmailsFromMURs(logf.FromContext(context.TODO()), hostCluster, idler)
+		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
 		require.Error(t, err)
 		require.Len(t, emails, 0)

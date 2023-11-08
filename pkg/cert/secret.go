@@ -28,9 +28,9 @@ const (
 	Expiration = 365 * 24 * time.Hour
 )
 
-func EnsureSecret(cl client.Client, namespace, certSecretName, serviceName string, expiration time.Duration) ([]byte, error) {
+func EnsureSecret(ctx context.Context, cl client.Client, namespace, certSecretName, serviceName string, expiration time.Duration) ([]byte, error) {
 	certSecret := &corev1.Secret{}
-	if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: certSecretName}, certSecret); err != nil && !errors.IsNotFound(err) {
+	if err := cl.Get(ctx, types.NamespacedName{Namespace: namespace, Name: certSecretName}, certSecret); err != nil && !errors.IsNotFound(err) {
 		return nil, err
 	} else if err != nil {
 		// does not exist, so let's create it
@@ -38,7 +38,7 @@ func EnsureSecret(cl client.Client, namespace, certSecretName, serviceName strin
 		if err != nil {
 			return nil, err
 		}
-		if err := cl.Create(context.TODO(), certSecret); err != nil {
+		if err := cl.Create(ctx, certSecret); err != nil {
 			return nil, err
 		}
 		return certSecret.Data[CACert], nil
@@ -64,7 +64,7 @@ func EnsureSecret(cl client.Client, namespace, certSecretName, serviceName strin
 		return nil, err
 	}
 	newSecret.SetResourceVersion(certSecret.GetResourceVersion())
-	if err := cl.Update(context.TODO(), newSecret); err != nil {
+	if err := cl.Update(ctx, newSecret); err != nil {
 		return nil, err
 	}
 	return newSecret.Data[CACert], nil

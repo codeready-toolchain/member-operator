@@ -46,7 +46,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
+		caCert, err := EnsureSecret(context.TODO(), fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
 
 		// then
 		require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		fakeClient := test.NewFakeClient(t, secret)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
+		caCert, err := EnsureSecret(context.TODO(), fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
 
 		// then
 		require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		time.Sleep(shortExpiration / 2)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, certSecretName, serviceName, shortExpiration)
+		caCert, err := EnsureSecret(context.TODO(), fakeClient, test.MemberOperatorNs, certSecretName, serviceName, shortExpiration)
 
 		// then
 		require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		fakeClient := test.NewFakeClient(t, secret)
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
+		caCert, err := EnsureSecret(context.TODO(), fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
 
 		// then
 		require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		}
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
+		caCert, err := EnsureSecret(context.TODO(), fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
 		fmt.Println()
 
 		// then
@@ -164,7 +164,7 @@ func TestEnsureCertSecret(t *testing.T) {
 		}
 
 		// when
-		caCert, err := EnsureSecret(fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
+		caCert, err := EnsureSecret(context.TODO(), fakeClient, test.MemberOperatorNs, certSecretName, serviceName, Expiration)
 
 		// then
 		require.Error(t, err)

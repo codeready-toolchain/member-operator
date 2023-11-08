@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
@@ -23,8 +24,8 @@ const (
 	serviceName = "member-operator-webhook"
 )
 
-func Webhook(cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
-	caBundle, err := cert.EnsureSecret(cl, namespace, certSecretName, serviceName, cert.Expiration)
+func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
+	caBundle, err := cert.EnsureSecret(ctx, cl, namespace, certSecretName, serviceName, cert.Expiration)
 	if err != nil {
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}

@@ -99,7 +99,7 @@ func TestDelete(t *testing.T) {
 		AssertThatNamespace(t, test.MemberOperatorNs, fakeClient).HasResource(dm.Name, &appsv1.Deployment{})
 
 		// when
-		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+		deleted, err := Delete(context.TODO(), fakeClient, s, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -113,7 +113,7 @@ func TestDelete(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+		deleted, err := Delete(context.TODO(), fakeClient, s, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestDelete(t *testing.T) {
 		}
 
 		// when
-		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+		deleted, err := Delete(context.TODO(), fakeClient, s, test.MemberOperatorNs)
 
 		// then
 		assert.EqualError(t, err, "cannot get autoscaling buffer object: some error")
@@ -143,7 +143,7 @@ func TestDelete(t *testing.T) {
 		}
 
 		// when
-		deleted, err := Delete(fakeClient, s, test.MemberOperatorNs)
+		deleted, err := Delete(context.TODO(), fakeClient, s, test.MemberOperatorNs)
 
 		// then
 		assert.EqualError(t, err, "cannot delete autoscaling buffer object: some error")

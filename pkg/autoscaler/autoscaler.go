@@ -36,7 +36,7 @@ func Deploy(cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemor
 
 // Delete deletes the autoscaling buffer app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
-func Delete(cl client.Client, s *runtime.Scheme, namespace string) (bool, error) {
+func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace string) (bool, error) {
 	objs, err := getTemplateObjects(s, namespace, "0", 0)
 	if err != nil {
 		return false, err
@@ -46,12 +46,12 @@ func Delete(cl client.Client, s *runtime.Scheme, namespace string) (bool, error)
 	for _, obj := range objs {
 		unst := &unstructured.Unstructured{}
 		unst.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
-		if err := cl.Get(context.TODO(), types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}, unst); err != nil {
+		if err := cl.Get(ctx, types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}, unst); err != nil {
 			if !errors.IsNotFound(err) { // Ignore not found
 				return false, errs.Wrap(err, "cannot get autoscaling buffer object")
 			}
 		} else {
-			if err := cl.Delete(context.TODO(), unst); err != nil {
+			if err := cl.Delete(ctx, unst); err != nil {
 				return false, errs.Wrap(err, "cannot delete autoscaling buffer object")
 			}
 			deleted = true

@@ -57,11 +57,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err := r.handleAutoscalerDeploy(reqLogger, crtConfig, request.Namespace); err != nil {
+	if err := r.handleAutoscalerDeploy(ctx, crtConfig, request.Namespace); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err := r.handleWebhookDeploy(reqLogger, crtConfig, request.Namespace); err != nil {
+	if err := r.handleWebhookDeploy(ctx, crtConfig, request.Namespace); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -72,7 +72,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return reconcile.Result{}, nil
 }
 
-func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+func (r *Reconciler) handleAutoscalerDeploy(ctx context.Context, cfg Configuration, namespace string) error {
+	logger := log.FromContext(ctx)
 	if cfg.Autoscaler().Deploy() {
 		logger.Info("(Re)Deploying autoscaling buffer")
 		if err := autoscaler.Deploy(r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
@@ -80,7 +81,7 @@ func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuratio
 		}
 		logger.Info("(Re)Deployed autoscaling buffer")
 	} else {
-		deleted, err := autoscaler.Delete(r.Client, r.Client.Scheme(), namespace)
+		deleted, err := autoscaler.Delete(ctx, r.Client, r.Client.Scheme(), namespace)
 		if err != nil {
 			return err
 		}
@@ -93,13 +94,14 @@ func (r *Reconciler) handleAutoscalerDeploy(logger logr.Logger, cfg Configuratio
 	return nil
 }
 
-func (r *Reconciler) handleWebhookDeploy(logger logr.Logger, cfg Configuration, namespace string) error {
+func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg Configuration, namespace string) error {
+	logger := log.FromContext(ctx)
 	// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
 	// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
 	if cfg.Webhook().Deploy() {
 		webhookImage := os.Getenv("MEMBER_OPERATOR_WEBHOOK_IMAGE")
 		logger.Info("(Re)Deploying users' pods webhook")
-		if err := deploy.Webhook(r.Client, r.Client.Scheme(), namespace, webhookImage); err != nil {
+		if err := deploy.Webhook(ctx, r.Client, r.Client.Scheme(), namespace, webhookImage); err != nil {
 			return err
 		}
 		logger.Info("(Re)Deployed users' pods webhook")

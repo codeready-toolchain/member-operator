@@ -1,6 +1,7 @@
 package route
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestGetRouteURL(t *testing.T) {
 		cl := test.NewFakeClient(t, route)
 
 		// when
-		routeURL, err := GetRouteURL(cl, ns, name)
+		routeURL, err := GetRouteURL(context.TODO(), cl, ns, name)
 
 		// then
 		require.NoError(t, err)
@@ -51,7 +52,7 @@ func TestGetRouteURL(t *testing.T) {
 		cl := test.NewFakeClient(t, r)
 
 		// when
-		routeURL, err := GetRouteURL(cl, ns, name)
+		routeURL, err := GetRouteURL(context.TODO(), cl, ns, name)
 
 		// then
 		require.NoError(t, err)
@@ -66,7 +67,7 @@ func TestGetRouteURL(t *testing.T) {
 		cl := test.NewFakeClient(t, r)
 
 		// when
-		routeURL, err := GetRouteURL(cl, ns, name)
+		routeURL, err := GetRouteURL(context.TODO(), cl, ns, name)
 
 		// then
 		require.NoError(t, err)
@@ -81,7 +82,7 @@ func TestGetRouteURL(t *testing.T) {
 		cl := test.NewFakeClient(t, r)
 
 		// when
-		routeURL, err := GetRouteURL(cl, ns, name)
+		routeURL, err := GetRouteURL(context.TODO(), cl, ns, name)
 
 		// then
 		require.NoError(t, err)

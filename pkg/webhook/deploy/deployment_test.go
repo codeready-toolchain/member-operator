@@ -59,7 +59,7 @@ func TestDeployWebhook(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		err := Webhook(fakeClient, s, test.MemberOperatorNs, imgLoc)
+		err := Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
 		require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestDeployWebhook(t *testing.T) {
 		fakeClient := test.NewFakeClient(t, prioClass, serviceObj, deploymentObj, mutWbhConf)
 
 		// when
-		err := Webhook(fakeClient, s, test.MemberOperatorNs, imgLoc)
+		err := Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
 		require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestDeployWebhook(t *testing.T) {
 		}
 
 		// when
-		err := Webhook(fakeClient, s, test.MemberOperatorNs, imgLoc)
+		err := Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
 		require.Error(t, err)

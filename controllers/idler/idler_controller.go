@@ -141,12 +141,8 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				}
 
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				appType, appName, deletedByController, err := func() (string, string, bool, error) {
-					lctx, lcancel := context.WithCancel(ctx)
-					defer lcancel()
-					log.IntoContext(lctx, podLogger)
-					return r.scaleControllerToZero(lctx, pod.ObjectMeta)
-				}()
+				lctx := log.IntoContext(ctx, podLogger)
+				appType, appName, deletedByController, err := r.scaleControllerToZero(lctx, pod.ObjectMeta)
 				if err != nil {
 					return err
 				}

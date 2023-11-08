@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -124,9 +125,10 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		controller, cl := prepareReconcile(t, config)
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
-		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleAutoscalerDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -140,12 +142,12 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(true))
 		controller, cl := prepareReconcile(t, config)
-
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
-		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleAutoscalerDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -160,9 +162,10 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 			updatedConfig, err := ForceLoadConfiguration(cl)
 			require.NoError(t, err)
 			require.False(t, updatedConfig.Autoscaler().Deploy())
+			ctx := log.IntoContext(context.TODO(), controller.Log)
 
 			// when
-			err = controller.handleAutoscalerDeploy(controller.Log, updatedConfig, test.MemberOperatorNs)
+			err = controller.handleAutoscalerDeploy(ctx, updatedConfig, test.MemberOperatorNs)
 
 			// then
 			require.NoError(t, err)
@@ -179,12 +182,13 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		controller, cl := prepareReconcile(t, config)
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
 		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
-		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleAutoscalerDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NotNil(t, err)
@@ -202,12 +206,13 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		controller, cl := prepareReconcile(t, config, actualPrioClass)
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
 		cl.(*test.FakeClient).MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("client error")
 		}
-		err = controller.handleAutoscalerDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleAutoscalerDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.EqualError(t, err, "cannot delete autoscaling buffer object: client error")
@@ -219,12 +224,12 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
 		controller, cl := prepareReconcile(t, config)
-
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
-		err = controller.handleWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -240,9 +245,10 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		controller, cl := prepareReconcile(t, config)
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
-		err = controller.handleWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -257,12 +263,13 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		controller, cl := prepareReconcile(t, config)
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
 		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
-		err = controller.handleWebhookDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.EqualError(t, err, "cannot deploy webhook template: client error")

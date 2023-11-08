@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -70,6 +71,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "stage"))
 	manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 
@@ -80,7 +82,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		delete(userNamespaces[1].Labels, toolchainv1alpha1.TemplateRefLabelKey)
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -95,7 +97,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "basic-stage-123"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -110,7 +112,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[0].Labels[toolchainv1alpha1.TierLabelKey] = "advanced"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -125,7 +127,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "outdated"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -142,7 +144,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "basic-stage-abcde21"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -167,7 +169,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		})
 
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.NoError(t, err)
@@ -184,7 +186,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		assert.Error(t, err, "mock List error")
@@ -201,7 +203,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(logger, tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
 		require.Error(t, err, "mock List error")
@@ -393,6 +395,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -402,7 +405,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -430,7 +433,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, rb)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -456,7 +459,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -485,7 +488,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS, rb)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -510,6 +513,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -525,7 +529,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		}
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -546,7 +550,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		}
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -568,7 +572,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		}
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -591,7 +595,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		}
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -607,7 +611,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -625,7 +629,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, failNS)
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -648,7 +652,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 		//then
 		require.Error(t, err)
 		assert.False(t, createdOrUpdated)
@@ -660,6 +664,7 @@ func TestDeleteNamespace(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 	// given an NSTemplateSet resource and 2 active user namespaces ("dev" and "stage")
@@ -672,7 +677,7 @@ func TestDeleteNamespace(t *testing.T) {
 		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 		// when
-		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -690,7 +695,7 @@ func TestDeleteNamespace(t *testing.T) {
 			return fmt.Errorf("client.Delete() failed")
 		}
 		// when
-		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 		require.Error(t, err)
 		require.False(t, allDeleted)
 	})
@@ -701,7 +706,7 @@ func TestDeleteNamespace(t *testing.T) {
 
 		t.Run("delete the first namespace", func(t *testing.T) {
 			// when
-			allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+			allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -712,7 +717,7 @@ func TestDeleteNamespace(t *testing.T) {
 
 			t.Run("delete the second namespace", func(t *testing.T) {
 				// when
-				allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+				allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -723,7 +728,7 @@ func TestDeleteNamespace(t *testing.T) {
 			})
 
 			t.Run("ensure all namespaces are deleted", func(t *testing.T) {
-				allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+				allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -738,7 +743,7 @@ func TestDeleteNamespace(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 		// when
-		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -752,12 +757,12 @@ func TestDeleteNamespace(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, deletedNS)
 
 		// then namespace should not be deleted
-		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 		require.NoError(t, err)
 		require.False(t, allDeleted)
 
 		// allDeleted is still false
-		allDeleted, err = manager.ensureDeleted(logger, nsTmplSet)
+		allDeleted, err = manager.ensureDeleted(ctx, nsTmplSet)
 		require.NoError(t, err)
 		require.False(t, allDeleted)
 	})
@@ -774,7 +779,7 @@ func TestDeleteNamespace(t *testing.T) {
 		}
 
 		// when
-		allDeleted, err := manager.ensureDeleted(logger, nsTmplSet)
+		allDeleted, err := manager.ensureDeleted(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -791,6 +796,7 @@ func TestPromoteNamespaces(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -809,7 +815,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -839,7 +845,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -869,7 +875,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, rb2, ro)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -898,7 +904,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 
 			// when - should delete the stage namespace
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -919,7 +925,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			t.Run("uprade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
 
 				// when - should upgrade the -dev namespace
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -950,7 +956,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -978,7 +984,7 @@ func TestPromoteNamespaces(t *testing.T) {
 			}
 
 			// when - should delete the stage namespace
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -1008,6 +1014,7 @@ func TestUpdateNamespaces(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
@@ -1026,7 +1033,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rbacRb)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -1056,7 +1063,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, ro)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -1084,7 +1091,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, codeNS) // current user has also a 'stage' NS
 
 			// when - should delete the stage namespace
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -1110,7 +1117,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -1126,7 +1133,7 @@ func TestUpdateNamespaces(t *testing.T) {
 
 			t.Run("next reconcile sets templateref and tier labels", func(t *testing.T) {
 				// when
-				_, err := manager.ensure(logger, nsTmplSet)
+				_, err := manager.ensure(ctx, nsTmplSet)
 				// then
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
@@ -1151,7 +1158,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -1167,7 +1174,7 @@ func TestUpdateNamespaces(t *testing.T) {
 
 			t.Run("next reconcile sets templateref and tier labels", func(t *testing.T) {
 				// when
-				_, err := manager.ensure(logger, nsTmplSet)
+				_, err := manager.ensure(ctx, nsTmplSet)
 				// then
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
@@ -1194,7 +1201,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -1218,7 +1225,7 @@ func TestUpdateNamespaces(t *testing.T) {
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS)
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -1241,6 +1248,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -1256,10 +1264,10 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		}
 
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		// when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, &devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1282,10 +1290,10 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, &devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1297,10 +1305,10 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		role := newRole(devNS.Name, "exec-pods", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1321,10 +1329,10 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1343,10 +1351,10 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1357,10 +1365,10 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		delete(devNS.Labels, toolchainv1alpha1.SpaceLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
-		tierTmpl, err := getTierTemplate(manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(logger, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
 		//then
 		require.Error(t, err, "namespace doesn't have space label")
 		require.False(t, isProvisioned)

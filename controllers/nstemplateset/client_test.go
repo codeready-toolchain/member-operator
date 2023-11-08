@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -26,6 +27,7 @@ import (
 func TestApplyToolchainObjects(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
+	ctx := log.IntoContext(context.TODO(), logger)
 	logf.SetLogger(logger)
 	role := newRole("john-dev", "edit-john", "john")
 	devNs := newNamespace("advanced", "john", "dev")
@@ -55,7 +57,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		apiClient, fakeClient := prepareAPIClient(t)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs, sa), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(role, devNs, sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -70,7 +72,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, devNs, sa), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(role, devNs, sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -85,7 +87,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(optionalDeployment), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(optionalDeployment), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -102,7 +104,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(optionalDeployment), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(optionalDeployment), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -118,7 +120,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(optionalDeployment), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(optionalDeployment), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -169,7 +171,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 			}
 
 			// when
-			changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(newSaObject), newlabels)
+			changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(newSaObject), newlabels)
 
 			// then
 			require.NoError(t, err)
@@ -208,7 +210,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 				}
 				return fakeClient.Client.Get(ctx, key, obj, opts...)
 			}
-			changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(newSaObject), additionalLabel)
+			changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(newSaObject), additionalLabel)
 
 			// then
 			require.NoError(t, err)
@@ -238,7 +240,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(role, sa), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(role, sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)
@@ -261,7 +263,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		}
 
 		// when
-		changed, err := apiClient.ApplyToolchainObjects(logger, copyObjects(sa), additionalLabel)
+		changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(sa), additionalLabel)
 
 		// then
 		require.NoError(t, err)

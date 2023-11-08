@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -25,6 +26,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 
 	t.Run("success", func(t *testing.T) {
 
@@ -41,7 +43,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 
 			// when
-			createdOrUpdated, err := mgr.ensure(logger, nsTmplSet)
+			createdOrUpdated, err := mgr.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -89,7 +91,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					},
 				}
 				// when
-				createdOrUpdated, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
+				createdOrUpdated, err := mgr.ensure(ctx, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 
 				// then
 				require.NoError(t, err)
@@ -121,13 +123,13 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
-				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
+				_, err := mgr.ensure(ctx, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
 				// add `user3` in admin space roles
 				nsTmplSet.Spec.SpaceRoles[0].Usernames = append(nsTmplSet.Spec.SpaceRoles[0].Usernames, "user3")
 
 				// when
-				createdOrUpdated, err := mgr.ensure(logger, nsTmplSet)
+				createdOrUpdated, err := mgr.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -152,14 +154,14 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withTemplateRefUsingRevision("abcde10"), // starting with an older revision
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
-				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
+				_, err := mgr.ensure(ctx, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
 
 				// remove `user1` from admin space roles
 				nsTmplSet.Spec.SpaceRoles[0].Usernames = []string{"user2"}
 
 				// when
-				changed, err := mgr.ensure(logger, nsTmplSet)
+				changed, err := mgr.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -183,11 +185,11 @@ func TestEnsureSpaceRoles(t *testing.T) {
 					withTemplateRefUsingRevision("abcde11"),
 				)
 				mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
-				_, err := mgr.ensure(logger, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
+				_, err := mgr.ensure(ctx, nsTmplSet) // precreate the resources for the initial set of SpaceRoles
 				require.NoError(t, err)
 
 				// when calling without any change in the NSTemplateSet vs existing resources
-				createdOrUpdated, err := mgr.ensure(logger, nsTmplSet)
+				createdOrUpdated, err := mgr.ensure(ctx, nsTmplSet)
 				require.NoError(t, err)
 
 				// at this point, the NSTemplateSet is still in `updating` state
@@ -217,7 +219,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			}
 
 			// when
-			_, err := mgr.ensure(logger, nsTmplSet)
+			_, err := mgr.ensure(ctx, nsTmplSet)
 
 			// then
 			assert.EqualError(t, err, "failed to list namespaces for workspace 'oddity': mock error")
@@ -237,7 +239,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			ns := newNamespace(nsTmplSet.Spec.TierName, "oddity", "unknown")
 			mgr, memberClient := prepareSpaceRolesManager(t, nsTmplSet, ns)
 			// when
-			_, err := mgr.ensure(logger, nsTmplSet)
+			_, err := mgr.ensure(ctx, nsTmplSet)
 
 			// then
 			assert.EqualError(t, err, "failed to retrieve space roles to apply: unable to retrieve the TierTemplate 'admin-unknown-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"admin-unknown-abcde11\" not found")

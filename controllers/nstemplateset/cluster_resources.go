@@ -8,7 +8,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/go-logr/logr"
 	quotav1 "github.com/openshift/api/quota/v1"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -18,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type clusterResourcesManager struct {
@@ -25,10 +25,10 @@ type clusterResourcesManager struct {
 }
 
 // listExistingResourcesIfAvailable returns a list of comparable Objects representing existing resources in the cluster
-type listExistingResources func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error)
+type listExistingResources func(ctx context.Context, cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error)
 
 // listExistingResourcesIfAvailable checks if the API group is available in the cluster and returns a list of comparable Objects representing existing resources in the cluster
-type listExistingResourcesIfAvailable func(cl runtimeclient.Client, spacename string, availableAPIGroups []metav1.APIGroup) ([]runtimeclient.Object, error)
+type listExistingResourcesIfAvailable func(ctx context.Context, cl runtimeclient.Client, spacename string, availableAPIGroups []metav1.APIGroup) ([]runtimeclient.Object, error)
 
 // toolchainObjectKind represents a resource kind that should be present in templates containing cluster resources.
 // Such a kind should be watched by NSTempalateSet controller which means that every change of the
@@ -45,11 +45,11 @@ func newToolchainObjectKind(gvk schema.GroupVersionKind, emptyObject runtimeclie
 	return toolchainObjectKind{
 		gvk:    gvk,
 		object: emptyObject,
-		listExistingResourcesIfAvailable: func(cl runtimeclient.Client, spacename string, availableAPIGroups []metav1.APIGroup) (objects []runtimeclient.Object, e error) {
+		listExistingResourcesIfAvailable: func(ctx context.Context, cl runtimeclient.Client, spacename string, availableAPIGroups []metav1.APIGroup) (objects []runtimeclient.Object, e error) {
 			if !apiGroupIsPresent(availableAPIGroups, gvk) {
 				return []runtimeclient.Object{}, nil
 			}
-			return listExistingResources(cl, spacename)
+			return listExistingResources(ctx, cl, spacename)
 		},
 	}
 }
@@ -59,9 +59,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		quotav1.GroupVersion.WithKind("ClusterResourceQuota"),
 		&quotav1.ClusterResourceQuota{},
-		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
+		func(ctx context.Context, cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &quotav1.ClusterResourceQuotaList{}
-			if err := cl.List(context.TODO(), itemList, listBySpaceLabel(spacename)); err != nil {
+			if err := cl.List(ctx, itemList, listBySpaceLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -74,9 +74,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		rbacv1.SchemeGroupVersion.WithKind("ClusterRoleBinding"),
 		&rbacv1.ClusterRoleBinding{},
-		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
+		func(ctx context.Context, cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &rbacv1.ClusterRoleBindingList{}
-			if err := cl.List(context.TODO(), itemList, listBySpaceLabel(spacename)); err != nil {
+			if err := cl.List(ctx, itemList, listBySpaceLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -89,9 +89,9 @@ var clusterResourceKinds = []toolchainObjectKind{
 	newToolchainObjectKind(
 		toolchainv1alpha1.GroupVersion.WithKind("Idler"),
 		&toolchainv1alpha1.Idler{},
-		func(cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
+		func(ctx context.Context, cl runtimeclient.Client, spacename string) ([]runtimeclient.Object, error) {
 			itemList := &toolchainv1alpha1.IdlerList{}
-			if err := cl.List(context.TODO(), itemList, listBySpaceLabel(spacename)); err != nil {
+			if err := cl.List(ctx, itemList, listBySpaceLabel(spacename)); err != nil {
 				return nil, err
 			}
 			list := make([]runtimeclient.Object, len(itemList.Items))
@@ -104,22 +104,26 @@ var clusterResourceKinds = []toolchainObjectKind{
 
 // ensure ensures that the cluster resources exist.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
-func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+	logger := log.FromContext(ctx)
 	userTierLogger := logger.WithValues("spacename", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
+	uctx := log.IntoContext(ctx, userTierLogger)
+
 	userTierLogger.Info("ensuring cluster resources")
 	spacename := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		tierTemplate, err = getTierTemplate(r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
+		tierTemplate, err = getTierTemplate(ctx, r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierLogger, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(uctx, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
 	// go though all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {
-		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
+		gvkLogger := logger.WithValues("gvk", clusterResourceKind.gvk)
+		gctx := log.IntoContext(ctx, gvkLogger)
 		gvkLogger.Info("ensuring cluster resources")
 		newObjs := make([]runtimeclient.Object, 0)
 
@@ -129,23 +133,23 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 				SpaceName: spacename,
 			}, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
+				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gctx, nsTmplSet, err,
 					"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 			}
 		}
 
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(r.Client, spacename, r.AvailableAPIGroups)
+		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, r.Client, spacename, r.AvailableAPIGroups)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkLogger, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gctx, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 		}
 
 		// if there are more than one existing, then check if there is any that should be updated or deleted
 		if len(currentObjects) > 0 {
-			updatedOrDeleted, err := r.updateOrDeleteRedundant(gvkLogger, currentObjects, newObjs, tierTemplate, nsTmplSet)
+			updatedOrDeleted, err := r.updateOrDeleteRedundant(gctx, currentObjects, newObjs, tierTemplate, nsTmplSet)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(gvkLogger, nsTmplSet, r.setStatusUpdateFailed,
+				return false, r.wrapErrorWithStatusUpdate(gctx, nsTmplSet, r.setStatusUpdateFailed,
 					err, "failed to update/delete existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 			}
 			if updatedOrDeleted {
@@ -155,9 +159,9 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 		// if none was found to be either updated or deleted or if there is no existing object available,
 		// then check if there is any object to be created
 		if len(newObjs) > 0 {
-			anyCreated, err := r.createMissing(gvkLogger, currentObjects, newObjs, tierTemplate, nsTmplSet)
+			anyCreated, err := r.createMissing(gctx, currentObjects, newObjs, tierTemplate, nsTmplSet)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(gvkLogger, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
+				return false, r.wrapErrorWithStatusUpdate(gctx, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
 					err, "failed to create missing cluster resource of GVK '%v'", clusterResourceKind.gvk)
 			}
 			if anyCreated {
@@ -174,7 +178,7 @@ func (r *clusterResourcesManager) ensure(logger logr.Logger, nsTmplSet *toolchai
 
 // apply creates or updates the given object with the set of toolchain labels. If the apply operation was successful, then it returns 'true, nil',
 // but if there was an error then it returns 'false, error'.
-func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, object runtimeclient.Object) (bool, error) {
+func (r *clusterResourcesManager) apply(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet, tierTemplate *tierTemplate, object runtimeclient.Object) (bool, error) {
 	var labels = map[string]string{
 		toolchainv1alpha1.SpaceLabelKey:       nsTmplSet.GetName(),
 		toolchainv1alpha1.TypeLabelKey:        toolchainv1alpha1.ClusterResourcesTemplateType,
@@ -187,8 +191,8 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 	// As a consequence, when the NSTemplateSet is deleted, we explicitly delete the associated cluster-wide resources that belong to the same user.
 	// see https://issues.redhat.com/browse/CRT-429
 
-	logger.Info("applying cluster resource", "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
-	createdOrModified, err := r.ApplyToolchainObjects(logger, []runtimeclient.Object{object}, labels)
+	log.FromContext(ctx).Info("applying cluster resource", "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
+	createdOrModified, err := r.ApplyToolchainObjects(ctx, []runtimeclient.Object{object}, labels)
 	if err != nil {
 		return false, errs.Wrapf(err, "failed to apply cluster resource of type '%v'", object.GetObjectKind().GroupVersionKind())
 	}
@@ -203,15 +207,16 @@ func (r *clusterResourcesManager) apply(logger logr.Logger, nsTmplSet *toolchain
 // then it updates the resource and returns 'true, nil'
 //
 // If no resource to be updated or deleted was found then it returns 'false, nil'. In case of any errors 'false, error'
-func (r *clusterResourcesManager) updateOrDeleteRedundant(logger logr.Logger, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+func (r *clusterResourcesManager) updateOrDeleteRedundant(ctx context.Context, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
+	logger := log.FromContext(ctx)
 	logger.Info("updating or deleting cluster resources")
 CurrentObjects:
 	for _, currentObject := range currentObjs {
 
 		// if the template is not specified, then delete all cluster resources one by one
 		if nsTmplSet.Spec.ClusterResources == nil || tierTemplate == nil {
-			return r.deleteClusterResource(logger, nsTmplSet, currentObject)
+			return r.deleteClusterResource(ctx, nsTmplSet, currentObject)
 		}
 
 		// check if the object should still exist and should be updated
@@ -221,27 +226,27 @@ CurrentObjects:
 				if !isUpToDate(currentObject, newObject, tierTemplate) {
 					logger.Info("updating cluster resource")
 					// let's update it
-					if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
+					if err := r.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet); err != nil {
 						return false, err
 					}
-					return r.apply(logger, nsTmplSet, tierTemplate, newObject)
+					return r.apply(ctx, nsTmplSet, tierTemplate, newObject)
 				}
 				continue CurrentObjects
 			}
 		}
 		// is not found then let's delete it
-		return r.deleteClusterResource(logger, nsTmplSet, currentObject)
+		return r.deleteClusterResource(ctx, nsTmplSet, currentObject)
 	}
 	return false, nil
 }
 
 // deleteClusterResource sets status to updating, deletes the given resource and returns 'true, nil'. In case of any errors 'false, error'.
-func (r *clusterResourcesManager) deleteClusterResource(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete runtimeclient.Object) (bool, error) {
-	logger.Info("deleting cluster resource")
-	if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
+func (r *clusterResourcesManager) deleteClusterResource(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet, toDelete runtimeclient.Object) (bool, error) {
+	log.FromContext(ctx).Info("deleting cluster resource")
+	if err := r.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet); err != nil {
 		return false, err
 	}
-	if err := r.Client.Delete(context.TODO(), toDelete); err != nil {
+	if err := r.Client.Delete(ctx, toDelete); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
 			toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 	}
@@ -251,7 +256,7 @@ func (r *clusterResourcesManager) deleteClusterResource(logger logr.Logger, nsTm
 // createMissing takes the given currentObjs and newObjs and compares them if there is any that should be created.
 // If such a object is found, then it creates it and returns 'true, nil'. If no missing resource was found then returns 'false, nil'.
 // In case of any error 'false, error'
-func (r *clusterResourcesManager) createMissing(logger logr.Logger, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+func (r *clusterResourcesManager) createMissing(ctx context.Context, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	// go though all new (expected) objects to check if all of them already exist or not
 NewObjects:
 	for _, newObject := range newObjs {
@@ -264,44 +269,44 @@ NewObjects:
 			}
 		}
 		// if there was no existing object found that would match with the new one, then set the status appropriately
-		namespaces, err := fetchNamespacesByOwner(r.Client, nsTmplSet.Name)
+		namespaces, err := fetchNamespacesByOwner(ctx, r.Client, nsTmplSet.Name)
 		if err != nil {
 			return false, errs.Wrapf(err, "unable to fetch user's namespaces")
 		}
 		// if there is any existing namespace, then set the status to updating
 		if len(namespaces) == 0 {
-			if err := r.setStatusProvisioningIfNotUpdating(nsTmplSet); err != nil {
+			if err := r.setStatusProvisioningIfNotUpdating(ctx, nsTmplSet); err != nil {
 				return false, err
 			}
 		} else {
 			// otherwise, to provisioning
-			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
+			if err := r.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet); err != nil {
 				return false, err
 			}
 		}
 		// and create the object
-		return r.apply(logger, nsTmplSet, tierTemplate, newObject)
+		return r.apply(ctx, nsTmplSet, tierTemplate, newObject)
 	}
 	return false, nil
 }
 
 // delete deletes one cluster scoped resource owned by the user and returns 'true, nil'. If no cluster-scoped resource owned
 // by the user is found, then it returns 'false, nil'. In case of any errors 'false, error'
-func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	if nsTmplSet.Spec.ClusterResources == nil {
 		return false, nil
 	}
 	for _, clusterResourceKind := range clusterResourceKinds {
 		// list all existing objects of the cluster resource kind
-		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(r.Client, nsTmplSet.Name, r.AvailableAPIGroups)
+		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, r.Client, nsTmplSet.Name, r.AvailableAPIGroups)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(logger, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(ctx, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 		}
 
 		for _, toDelete := range currentObjects {
-			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err,
+			if err := r.Client.Get(ctx, types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
+				return false, r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusTerminatingFailed, err,
 					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 			}
 			// ignore cluster resource that are already flagged for deletion
@@ -309,13 +314,13 @@ func (r *clusterResourcesManager) delete(logger logr.Logger, nsTmplSet *toolchai
 				continue
 			}
 
-			logger.Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
-			if err := r.Client.Delete(context.TODO(), toDelete); err != nil && errors.IsNotFound(err) {
+			log.FromContext(ctx).Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
+			if err := r.Client.Delete(ctx, toDelete); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue
 			} else if err != nil {
 				// report an error only if the resource could not be deleted (but ignore if the resource did not exist anymore)
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete cluster resource '%s'", toDelete.GetName())
+				return false, r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to delete cluster resource '%s'", toDelete.GetName())
 			}
 			// stop there for now. Will reconcile again for the next cluster resource (if any exists)
 			return true, nil

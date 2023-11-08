@@ -23,14 +23,14 @@ var tierTemplatesCache = newTierTemplateCache()
 // getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
-func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
+func getTierTemplate(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
 	}
 	if tierTmpl, ok := tierTemplatesCache.get(templateRef); ok && tierTmpl != nil {
 		return tierTmpl, nil
 	}
-	tmpl, err := getToolchainTierTemplate(hostClusterFunc, templateRef)
+	tmpl, err := getToolchainTierTemplate(ctx, hostClusterFunc, templateRef)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func getTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef str
 }
 
 // getToolchainTierTemplate gets the TierTemplate resource from the host cluster.
-func getToolchainTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplate, error) {
+func getToolchainTierTemplate(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplate, error) {
 	// retrieve the ToolchainCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {
@@ -57,7 +57,7 @@ func getToolchainTierTemplate(hostClusterFunc cluster.GetHostClusterFunc, templa
 	}
 
 	tierTemplate := &toolchainv1alpha1.TierTemplate{}
-	err := host.Client.Get(context.TODO(), types.NamespacedName{
+	err := host.Client.Get(ctx, types.NamespacedName{
 		Namespace: host.OperatorNamespace,
 		Name:      templateRef,
 	}, tierTemplate)

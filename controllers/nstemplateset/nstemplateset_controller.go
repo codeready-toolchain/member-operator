@@ -11,7 +11,6 @@ import (
 	commonpredicates "github.com/codeready-toolchain/toolchain-common/pkg/predicate"
 	"k8s.io/client-go/discovery"
 
-	"github.com/go-logr/logr"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
@@ -111,7 +110,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 
 	// Fetch the NSTemplateSet instance
 	nsTmplSet := &toolchainv1alpha1.NSTemplateSet{}
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: request.Name}, nsTmplSet)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("NSTemplateSet not found")
@@ -121,24 +120,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 	if util.IsBeingDeleted(nsTmplSet) {
-		return r.deleteNSTemplateSet(logger, nsTmplSet)
+		return r.deleteNSTemplateSet(ctx, nsTmplSet)
 	}
 	// make sure there's a finalizer
-	if err := r.addFinalizer(nsTmplSet); err != nil {
+	if err := r.addFinalizer(ctx, nsTmplSet); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// we proceed with the cluster-scoped resources template, then all namespaces and finally space roles
 	// as we want ot be sure that cluster scoped resources such as quotas are set
 	// even before the namespaces exist
-	if createdOrUpdated, err := r.clusterResources.ensure(logger, nsTmplSet); err != nil {
+	if createdOrUpdated, err := r.clusterResources.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
 		return reconcile.Result{}, nil // wait for cluster resources to be created
 	}
 
-	if createdOrUpdated, err := r.namespaces.ensure(logger, nsTmplSet); err != nil {
+	if createdOrUpdated, err := r.namespaces.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update user namespaces")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
@@ -146,34 +145,35 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	// update provisioned namespace list
-	if err := r.namespaces.setProvisionedNamespaceList(logger, nsTmplSet); err != nil {
+	if err := r.namespaces.setProvisionedNamespaceList(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to set provisioned namespaces list")
 		return reconcile.Result{}, err
 	}
 
-	if createdOrUpdated, err := r.spaceRoles.ensure(logger, nsTmplSet); err != nil {
+	if createdOrUpdated, err := r.spaceRoles.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update roles in space")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
 		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
 	}
 
-	return reconcile.Result{}, r.status.setStatusReady(nsTmplSet)
+	return reconcile.Result{}, r.status.setStatusReady(ctx, nsTmplSet)
 }
 
 // addFinalizer sets the finalizers for NSTemplateSet
-func (r *Reconciler) addFinalizer(nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+func (r *Reconciler) addFinalizer(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	// Add the finalizer if it is not present
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		util.AddFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
-		if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
+		if err := r.Client.Update(ctx, nsTmplSet); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
+func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (reconcile.Result, error) {
+	logger := log.FromContext(ctx)
 	// if the NSTemplateSet has no finalizer, then we don't have anything to do
 	if !util.HasFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName) {
 		logger.Info("NSTemplateSet resource is terminated")
@@ -181,17 +181,17 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	}
 	logger.Info("NSTemplateSet resource is being deleted")
 	// since the NSTmplSet resource is being deleted, we must set its status to `ready=false/reason=terminating`
-	if err := r.status.setStatusTerminating(nsTmplSet); err != nil {
-		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err,
+	if err := r.status.setStatusTerminating(ctx, nsTmplSet); err != nil {
+		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.status.setStatusTerminatingFailed, err,
 			"failed to set status to 'ready=false/reason=terminating' on NSTemplateSet")
 	}
 	spacename := nsTmplSet.GetName()
 
 	// delete all namespace one by one
-	allDeleted, err := r.namespaces.ensureDeleted(logger, nsTmplSet)
+	allDeleted, err := r.namespaces.ensureDeleted(ctx, nsTmplSet)
 	// when err, status Update will not trigger reconcile, sending returning error.
 	if err != nil {
-		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err, "failed to ensure namespace deletion")
+		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.status.setStatusTerminatingFailed, err, "failed to ensure namespace deletion")
 	}
 	if !allDeleted {
 		if time.Since(nsTmplSet.DeletionTimestamp.Time) > 60*time.Second {
@@ -205,7 +205,7 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	}
 
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user
-	deletedAny, err := r.clusterResources.delete(logger, nsTmplSet)
+	deletedAny, err := r.clusterResources.delete(ctx, nsTmplSet)
 	if err != nil || deletedAny {
 		return reconcile.Result{}, err
 	}
@@ -213,8 +213,8 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 	// if nothing was to be deleted, then we can remove the finalizer and we're done
 	logger.Info("NSTemplateSet resource is ready to be terminated: all related user namespaces have been marked for deletion")
 	util.RemoveFinalizer(nsTmplSet, toolchainv1alpha1.FinalizerName)
-	if err := r.Client.Update(context.TODO(), nsTmplSet); err != nil {
-		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.status.setStatusTerminatingFailed, err,
+	if err := r.Client.Update(ctx, nsTmplSet); err != nil {
+		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.status.setStatusTerminatingFailed, err,
 			"failed to remove finalizer on NSTemplateSet '%s'", spacename)
 	}
 	return reconcile.Result{}, nil
@@ -223,7 +223,8 @@ func (r *Reconciler) deleteNSTemplateSet(logger logr.Logger, nsTmplSet *toolchai
 // deleteObsoleteObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
 // compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
 // return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteObsoleteObjects(logger logr.Logger, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) error {
+func deleteObsoleteObjects(ctx context.Context, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) error {
+	logger := log.FromContext(ctx)
 	logger.Info("looking for obsolete objects", "count", len(currentObjs))
 Current:
 	for _, currentObj := range currentObjs {
@@ -234,7 +235,7 @@ Current:
 				continue Current
 			}
 		}
-		if err := client.Delete(context.TODO(), currentObj); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
+		if err := client.Delete(ctx, currentObj); err != nil && !errors.IsNotFound(err) { // ignore if the object was already deleted
 			return errs.Wrapf(err, "failed to delete obsolete object '%s' of kind '%s' in namespace '%s'", currentObj.GetName(), currentObj.GetObjectKind().GroupVersionKind().Kind, currentObj.GetNamespace())
 		} else if errors.IsNotFound(err) {
 			continue // continue to the next object since this one was already deleted

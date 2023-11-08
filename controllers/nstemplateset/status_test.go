@@ -18,12 +18,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestUpdateStatus(t *testing.T) {
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
+
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -41,7 +45,7 @@ func TestUpdateStatus(t *testing.T) {
 		}
 
 		// when
-		err := statusManager.updateStatusConditions(nsTmplSet, condition)
+		err := statusManager.updateStatusConditions(ctx, nsTmplSet, condition)
 
 		// then
 		require.NoError(t, err)
@@ -60,7 +64,7 @@ func TestUpdateStatus(t *testing.T) {
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
-		err := statusManager.updateStatusProvisionedNamespaces(nsTmplSet, namespaces)
+		err := statusManager.updateStatusProvisionedNamespaces(ctx, nsTmplSet, namespaces)
 
 		// then
 		require.NoError(t, err)
@@ -89,7 +93,7 @@ func TestUpdateStatus(t *testing.T) {
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
-		err := statusManager.updateStatusProvisionedNamespaces(nsTmplSet, namespaces)
+		err := statusManager.updateStatusProvisionedNamespaces(ctx, nsTmplSet, namespaces)
 
 		// then
 		require.NoError(t, err)
@@ -108,7 +112,7 @@ func TestUpdateStatus(t *testing.T) {
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
-		err := statusManager.updateStatusConditions(nsTmplSet, conditions...)
+		err := statusManager.updateStatusConditions(ctx, nsTmplSet, conditions...)
 
 		// then
 		require.NoError(t, err)
@@ -121,17 +125,17 @@ func TestUpdateStatus(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"))
 		statusManager, _ := prepareStatusManager(t, nsTmplSet)
-		log := logf.Log.WithName("test")
+		lctx := log.IntoContext(ctx, logf.Log.WithName("test"))
 
 		t.Run("status_updated", func(t *testing.T) {
 			// given
-			statusUpdater := func(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+			statusUpdater := func(_ context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 				assert.Equal(t, "oopsy woopsy", message)
 				return nil
 			}
 
 			// when
-			err := statusManager.wrapErrorWithStatusUpdate(log, nsTmplSet, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create namespace")
+			err := statusManager.wrapErrorWithStatusUpdate(lctx, nsTmplSet, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create namespace")
 
 			// then
 			require.Error(t, err)
@@ -140,12 +144,12 @@ func TestUpdateStatus(t *testing.T) {
 
 		t.Run("status update failed", func(t *testing.T) {
 			// given
-			statusUpdater := func(nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
+			statusUpdater := func(_ context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet, message string) error {
 				return errors.New("unable to update status")
 			}
 
 			// when
-			err := statusManager.wrapErrorWithStatusUpdate(log, nsTmplSet, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create namespace")
+			err := statusManager.wrapErrorWithStatusUpdate(lctx, nsTmplSet, statusUpdater, apierros.NewBadRequest("oopsy woopsy"), "failed to create namespace")
 
 			// then
 			require.Error(t, err)
@@ -185,7 +189,7 @@ func TestUpdateStatus(t *testing.T) {
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
-		err := statusManager.setStatusProvisioningIfNotUpdating(nsTmplSet)
+		err := statusManager.setStatusProvisioningIfNotUpdating(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -205,7 +209,7 @@ func TestUpdateStatus(t *testing.T) {
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
-		err := statusManager.setStatusUpdatingIfNotProvisioning(nsTmplSet)
+		err := statusManager.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -215,7 +219,9 @@ func TestUpdateStatus(t *testing.T) {
 	})
 }
 func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
-	logf.SetLogger(zap.New(zap.UseDevMode(true)))
+	logger := zap.New(zap.UseDevMode(true))
+	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -236,7 +242,7 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 		statusManager, fakeClient := prepareStatusManager(t, nsTmplSet)
 
 		// when
-		err := statusManager.setStatusReady(nsTmplSet)
+		err := statusManager.setStatusReady(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)

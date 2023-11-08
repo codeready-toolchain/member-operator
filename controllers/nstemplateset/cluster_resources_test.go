@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -32,6 +33,7 @@ func TestClusterResourceKinds(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
+	ctx := context.TODO()
 
 	for _, clusterResourceKind := range clusterResourceKinds {
 		johnyRuntimeObject := clusterResourceKind.object.DeepCopyObject()
@@ -61,7 +63,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(fakeClient, "johny", apiGroups)
+			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, fakeClient, "johny", apiGroups)
 
 			// then
 			require.NoError(t, err)
@@ -74,7 +76,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(fakeClient, "johny", apiGroups)
+			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, fakeClient, "johny", apiGroups)
 
 			// then
 			require.NoError(t, err)
@@ -88,7 +90,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(fakeClient, "johny", apiGroups)
+			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, fakeClient, "johny", apiGroups)
 
 			// then
 			require.NoError(t, err)
@@ -103,7 +105,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			}
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(fakeClient, "johny", apiGroups)
+			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, fakeClient, "johny", apiGroups)
 
 			// then
 			require.Error(t, err)
@@ -115,7 +117,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(fakeClient, "johny",
+			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, fakeClient, "johny",
 				newAPIGroups(newAPIGroup("apps", "v1"), newAPIGroup("", "v1")))
 
 			// then
@@ -128,7 +130,7 @@ func TestClusterResourceKinds(t *testing.T) {
 			fakeClient := test.NewFakeClient(t, anotherObject, johnyObject, johnyObject2, namespace)
 
 			// when
-			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(fakeClient, "johny",
+			existingResources, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, fakeClient, "johny",
 				newAPIGroups(newAPIGroup("apps", "v1"), newAPIGroup("", "v1"), newAPIGroup(clusterResourceKind.gvk.Group, "old")))
 
 			// then
@@ -169,6 +171,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -181,7 +184,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -200,7 +203,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -217,7 +220,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -232,7 +235,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 		t.Run("should create the second CRQ when the first one is already created but still not ClusterRoleBinding", func(t *testing.T) {
 			// when
-			createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+			createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -247,7 +250,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 			t.Run("should create ClusterRoleBinding when both CRQs are created", func(t *testing.T) {
 				// when
-				createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+				createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -273,7 +276,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
 
 		// when
-		createdOrUpdated, err := manager.ensure(logger, nsTmplSet)
+		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -294,6 +297,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith-space"
 	namespaceName := "toolchain-member"
 	nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -309,7 +313,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		}
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -325,7 +329,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -344,7 +348,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		}
 
 		// when
-		_, err := manager.ensure(logger, nsTmplSet)
+		_, err := manager.ensure(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -361,6 +365,7 @@ func TestDeleteClusterResources(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 	crq := newClusterResourceQuota(spacename, "advanced")
@@ -372,7 +377,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		deleted, err := manager.delete(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -383,7 +388,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 		t.Run("delete ClusterRoleBinding since CRQ is already deleted", func(t *testing.T) {
 			// when
-			deleted, err := manager.delete(logger, nsTmplSet)
+			deleted, err := manager.delete(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -403,7 +408,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq, crb)
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		deleted, err := manager.delete(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -415,7 +420,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 		t.Run("delete the for-empty CRQ since it's the last one to be deleted", func(t *testing.T) {
 			// when
-			deleted, err := manager.delete(logger, nsTmplSet)
+			deleted, err := manager.delete(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -438,7 +443,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		deleted, err := manager.delete(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -453,7 +458,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		deleted, err := manager.delete(ctx, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -470,7 +475,7 @@ func TestDeleteClusterResources(t *testing.T) {
 		}
 
 		// when
-		deleted, err := manager.delete(logger, nsTmplSet)
+		deleted, err := manager.delete(ctx, nsTmplSet)
 
 		// then
 		require.Error(t, err)
@@ -490,6 +495,7 @@ func TestPromoteClusterResources(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 	crb := newTektonClusterRoleBinding(spacename, "advanced")
@@ -505,7 +511,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -523,7 +529,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("upgrade from advanced to team tier by changing only the CRB since CRQ is already changed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -550,7 +556,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -576,7 +582,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -595,7 +601,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("promote from withemptycrq to advanced tier by changing only the CRQ since redundant CRQ is already removed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -623,7 +629,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -637,7 +643,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("downgrade from advanced to basic tier by removing CRB since CRQ is already removed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -658,7 +664,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -678,7 +684,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -695,7 +701,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("upgrade from basic to advanced by creating CRB since CRQ is already created", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -730,7 +736,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerStage, anotherIdlerDev, anotherIdlerStage)
 
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -757,7 +763,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				// when - let remove everything
 				var err error
 				updated := true
-				for ; updated; updated, err = manager.ensure(logger, nsTmplSet) {
+				for ; updated; updated, err = manager.ensure(ctx, nsTmplSet) {
 					require.NoError(t, err)
 				}
 
@@ -785,7 +791,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, advancedCRQ, anotherCRQ, crb)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -802,7 +808,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("it should delete the second for-empty CRQ since it's the last one", func(t *testing.T) {
 				// when - should delete the second ClusterResourceQuota
-				updated, err = manager.ensure(logger, nsTmplSet)
+				updated, err = manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -815,7 +821,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 				t.Run("it should delete the CRB since both CRQs are already removed", func(t *testing.T) {
 					// when - should delete the second ClusterResourceQuota
-					updated, err = manager.ensure(logger, nsTmplSet)
+					updated, err = manager.ensure(ctx, nsTmplSet)
 
 					// then
 					require.NoError(t, err)
@@ -845,7 +851,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			}
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -871,7 +877,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			}
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -899,6 +905,7 @@ func TestUpdateClusterResources(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	logf.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 	crb := newTektonClusterRoleBinding(spacename, "advanced")
@@ -913,7 +920,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -927,7 +934,7 @@ func TestUpdateClusterResources(t *testing.T) {
 
 			t.Run("update from abcde11 revision to abcde12 revision by deleting CRB since CRQ is already changed", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -947,7 +954,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.NoError(t, err)
@@ -960,7 +967,7 @@ func TestUpdateClusterResources(t *testing.T) {
 
 			t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by creating CRB", func(t *testing.T) {
 				// when
-				updated, err := manager.ensure(logger, nsTmplSet)
+				updated, err := manager.ensure(ctx, nsTmplSet)
 
 				// then
 				require.NoError(t, err)
@@ -986,7 +993,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			}
 
 			// when
-			_, err := manager.ensure(logger, nsTmplSet)
+			_, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)
@@ -1005,7 +1012,7 @@ func TestUpdateClusterResources(t *testing.T) {
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb)
 
 			// when
-			updated, err := manager.ensure(logger, nsTmplSet)
+			updated, err := manager.ensure(ctx, nsTmplSet)
 
 			// then
 			require.Error(t, err)

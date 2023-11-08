@@ -20,7 +20,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.13.0
 )
 
-replace github.com/codeready-toolchain/toolchain-common => github.com/rajivnathan/toolchain-common v0.0.0-20231107221232-96f5a5f166db
+replace github.com/codeready-toolchain/toolchain-common => github.com/rajivnathan/toolchain-common v0.0.0-20231108174939-cbcfd308969b
 
 require (
 	github.com/gofrs/uuid v4.4.0+incompatible

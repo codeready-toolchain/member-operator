@@ -290,28 +290,48 @@ func TestEnsureVolumeConfig(t *testing.T) {
 
 func TestAddSSHKeyToUserData(t *testing.T) {
 	// given
-	sshKey := []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"}
+	for tcName, tc := range map[string]struct {
+		sshKeys                  []string
+		expectedWhenFresh        string
+		expectedWhenExistingKeys string
+	}{
+		// "single ssh key": {
+		// 	sshKeys:                  []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"},
+		// 	expectedWhenFresh:        "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n",
+		// 	expectedWhenExistingKeys: "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n",
+		// },
+		"multiple ssh keys": {
+			sshKeys: []string{
+				"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine",
+				"ssh-ed25519 QCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF beaver@dam",
+			},
+			expectedWhenFresh:        "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\n- |\n  ssh-ed25519 QCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF beaver@dam\nuser: cloud-user\n",
+			expectedWhenExistingKeys: "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\n- |\n  ssh-ed25519 QCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF beaver@dam\nuser: cloud-user\n",
+		},
+	} {
+		t.Run(tcName, func(t *testing.T) {
+			t.Run("no existing keys", func(t *testing.T) {
+				// when
+				userDataStr, err := addSSHKeysToUserData(userDataWithoutSSHKey, tc.sshKeys)
 
-	t.Run("no existing keys", func(t *testing.T) {
-		// when
-		userDataStr, err := addSSHKeysToUserData(userDataWithoutSSHKey, sshKey)
+				// then
+				require.NoError(t, err)
+				require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+				require.Equal(t, tc.expectedWhenFresh, userDataStr)
+			})
 
-		// then
-		require.NoError(t, err)
-		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
-		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
-	})
+			t.Run("pre-existing key", func(t *testing.T) {
+				// when
+				userDataStr, err := addSSHKeysToUserData(userDataWithSSHKey, tc.sshKeys)
 
-	t.Run("pre-existing key", func(t *testing.T) {
-		// when
-		userDataStr, err := addSSHKeysToUserData(userDataWithSSHKey, sshKey)
-
-		// then
-		require.NoError(t, err)
-		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
-		// both keys should exist
-		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
-	})
+				// then
+				require.NoError(t, err)
+				require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+				// both keys should exist
+				require.Equal(t, tc.expectedWhenExistingKeys, userDataStr)
+			})
+		})
+	}
 }
 
 type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)

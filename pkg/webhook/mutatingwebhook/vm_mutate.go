@@ -78,6 +78,7 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 		return patchItems, fmt.Errorf("no volumes found")
 	}
 
+	// get SSH keys from configuration
 	memberConfig := membercfg.GetCachedConfiguration()
 	sshKeys := strings.Split(memberConfig.Webhook().VMSSHKey(), ",")
 	if len(sshKeys) == 0 || (len(sshKeys) == 1 && sshKeys[0] == "") {
@@ -145,9 +146,8 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 		return "", err
 	}
 
-	authorizedKeysInfc, authorizedKeysFound := userData["ssh_authorized_keys"]
-
 	for _, sshKey := range sshKeys {
+		_, authorizedKeysFound := userData["ssh_authorized_keys"]
 		sshValue := sshKey
 		// ensure the ssh key has a newline at the end so that it is properly unmarshalled later
 		if !strings.HasSuffix(sshKey, "\n") {
@@ -155,12 +155,12 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 		}
 
 		if authorizedKeysFound {
-			authKeys := authorizedKeysInfc.([]interface{})
+			authKeys := userData["ssh_authorized_keys"].([]interface{})
 			// append the key to the existing list
 			userData["ssh_authorized_keys"] = append(authKeys, sshValue)
 		} else {
 			// create a new list with the key
-			userData["ssh_authorized_keys"] = []string{sshValue}
+			userData["ssh_authorized_keys"] = []interface{}{sshValue}
 		}
 	}
 

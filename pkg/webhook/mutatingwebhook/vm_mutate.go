@@ -104,7 +104,7 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 				userData, ok := cloudInitConfig["userData"]
 				if ok {
 					// userData is defined, append the ssh key
-					updatedUserData, err := addSSHKeyToUserData(userData.(string), sshKeys)
+					updatedUserData, err := addSSHKeysToUserData(userData.(string), sshKeys)
 					if err != nil {
 						return patchItems, errors.Wrapf(err, "failed to add ssh key to userData")
 					}
@@ -137,8 +137,8 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 	return patchItems, nil
 }
 
-// addSSHKeyToUserData parses the userData YAML and adds the provided ssh key to it or returns an error otherwise
-func addSSHKeyToUserData(userDataString string, sshKeys []string) (string, error) {
+// addSSHKeysToUserData parses the userData YAML and adds the provided ssh key to it or returns an error otherwise
+func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, error) {
 	userData := map[string]interface{}{}
 
 	if err := yaml.Unmarshal([]byte(userDataString), &userData); err != nil {

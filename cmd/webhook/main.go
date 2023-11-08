@@ -107,9 +107,6 @@ func main() {
 	spacebindingrequestValidator := &validatingwebhook.SpaceBindingRequestValidator{
 		Client: cl,
 	}
-	// vmMutator := &mutatingwebhook.VMMutator{
-	// 	MemberConfig: memberCfg,
-	// }
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutateUserPods)

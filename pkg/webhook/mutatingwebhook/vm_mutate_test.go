@@ -294,7 +294,7 @@ func TestAddSSHKeyToUserData(t *testing.T) {
 
 	t.Run("no existing keys", func(t *testing.T) {
 		// when
-		userDataStr, err := addSSHKeyToUserData(userDataWithoutSSHKey, sshKey)
+		userDataStr, err := addSSHKeysToUserData(userDataWithoutSSHKey, sshKey)
 
 		// then
 		require.NoError(t, err)
@@ -304,7 +304,7 @@ func TestAddSSHKeyToUserData(t *testing.T) {
 
 	t.Run("pre-existing key", func(t *testing.T) {
 		// when
-		userDataStr, err := addSSHKeyToUserData(userDataWithSSHKey, sshKey)
+		userDataStr, err := addSSHKeysToUserData(userDataWithSSHKey, sshKey)
 
 		// then
 		require.NoError(t, err)

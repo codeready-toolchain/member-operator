@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -90,7 +89,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 
 	// Fetch the MemberStatus
 	memberStatus := &toolchainv1alpha1.MemberStatus{}
-	err = r.Client.Get(context.TODO(), request.NamespacedName, memberStatus)
+	err = r.Client.Get(ctx, request.NamespacedName, memberStatus)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -101,7 +100,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	err = r.aggregateAndUpdateStatus(reqLogger, memberStatus, config)
+	err = r.aggregateAndUpdateStatus(ctx, memberStatus, config)
 	if err != nil {
 		reqLogger.Error(err, "Failed to update status")
 		return reconcile.Result{RequeueAfter: requeuePeriod}, err
@@ -113,13 +112,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 
 type statusHandler struct {
 	name         statusComponentTag
-	handleStatus func(logger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error
+	handleStatus func(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error
 }
 
 // aggregateAndUpdateStatus runs each of the status handlers. Each status handler reports readiness for a toolchain component. If any
 // component status is not ready then it will set the condition of the top-level status of the MemberStatus resource to not ready.
-func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
-
+func (r *Reconciler) aggregateAndUpdateStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	statusHandlers := []statusHandler{
 		{name: memberOperatorTag, handleStatus: r.memberOperatorHandleStatus},
 		{name: hostConnectionTag, handleStatus: r.hostConnectionHandleStatus},
@@ -132,24 +130,24 @@ func (r *Reconciler) aggregateAndUpdateStatus(reqLogger logr.Logger, memberStatu
 
 	// Retrieve component statuses eg. toolchainCluster, member deployment
 	for _, statusHandler := range statusHandlers {
-		err := statusHandler.handleStatus(reqLogger, memberStatus, config)
+		err := statusHandler.handleStatus(ctx, memberStatus, config)
 		if err != nil {
-			reqLogger.Error(err, "status update problem")
+			log.FromContext(ctx).Error(err, "status update problem")
 			unreadyComponents = append(unreadyComponents, string(statusHandler.name))
 		}
 	}
 
 	// If any components were not ready then set the overall status to not ready
 	if len(unreadyComponents) > 0 {
-		return r.setStatusNotReady(memberStatus, fmt.Sprintf("components not ready: %v", unreadyComponents))
+		return r.setStatusNotReady(ctx, memberStatus, fmt.Sprintf("components not ready: %v", unreadyComponents))
 	}
-	return r.setStatusReady(memberStatus)
+	return r.setStatusReady(ctx, memberStatus)
 }
 
 // hostConnectionHandleStatus retrieves the host cluster object that represents the connection between this member cluster and the host cluster.
 // It then takes the status from the cluster object and adds it to MemberStatus. Finally, it checks its status and will return an error if
 // its status is not ready
-func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
+func (r *Reconciler) hostConnectionHandleStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 
 	attributes := status.ToolchainClusterAttributes{
 		GetClusterFunc: r.GetHostCluster,
@@ -158,6 +156,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 	}
 
 	// look up host connection status
+	reqLogger := log.FromContext(ctx)
 	connectionConditions := status.GetToolchainClusterConditions(reqLogger, attributes)
 	err := status.ValidateComponentConditionReady(connectionConditions...)
 	memberStatus.Status.Host = &toolchainv1alpha1.HostStatus{
@@ -169,7 +168,7 @@ func (r *Reconciler) hostConnectionHandleStatus(reqLogger logr.Logger, memberSta
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(_ logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
+func (r *Reconciler) memberOperatorHandleStatus(_ context.Context, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
 	// ensure member operator status is set
 	if memberStatus.Status.MemberOperator == nil {
 		memberStatus.Status.MemberOperator = &toolchainv1alpha1.MemberOperatorStatus{}
@@ -224,14 +223,14 @@ func isProdEnvironment(memberConfig membercfg.Configuration) bool {
 }
 
 // loadCurrentResourceUsage loads the current usage of the cluster and stores it into the member status
-func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, _ membercfg.Configuration) error {
+func (r *Reconciler) loadCurrentResourceUsage(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, _ membercfg.Configuration) error {
 	memberStatus.Status.ResourceUsage.MemoryUsagePerNodeRole = map[string]int{}
-	allocatableValues, err := r.getAllocatableValues(reqLogger)
+	allocatableValues, err := r.getAllocatableValues(ctx)
 	if err != nil {
 		return err
 	}
 	nodeMetricsList := &metrics.NodeMetricsList{}
-	if err := r.Client.List(context.TODO(), nodeMetricsList); err != nil {
+	if err := r.Client.List(ctx, nodeMetricsList); err != nil {
 		return err
 	}
 
@@ -276,11 +275,11 @@ func (r *Reconciler) loadCurrentResourceUsage(reqLogger logr.Logger, memberStatu
 
 // routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
 // Returns an error if at least one of the required routes are not available.
-func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
+func (r *Reconciler) routesHandleStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	if memberStatus.Status.Routes == nil {
 		memberStatus.Status.Routes = &toolchainv1alpha1.Routes{}
 	}
-	consoleURL, err := r.consoleURL(config)
+	consoleURL, err := r.consoleURL(ctx, config)
 	if err != nil {
 		errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusConsoleRouteUnavailableReason, err.Error())
 		memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
@@ -288,14 +287,14 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 	}
 	memberStatus.Status.Routes.ConsoleURL = consoleURL
 
-	cheURL, err := r.cheDashboardURL(config)
+	cheURL, err := r.cheDashboardURL(ctx, config)
 	if err != nil {
 		if config.Che().IsRequired() {
 			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
 			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
 			return err
 		}
-		reqLogger.Info("Che route is not available but not required. Ignoring.", "err", err.Error())
+		log.FromContext(ctx).Info("Che route is not available but not required. Ignoring.", "err", err.Error())
 	}
 	memberStatus.Status.Routes.CheDashboardURL = cheURL
 
@@ -305,9 +304,9 @@ func (r *Reconciler) routesHandleStatus(reqLogger logr.Logger, memberStatus *too
 	return nil
 }
 
-func (r *Reconciler) getAllocatableValues(reqLogger logr.Logger) (map[string]nodeInfo, error) {
+func (r *Reconciler) getAllocatableValues(ctx context.Context) (map[string]nodeInfo, error) {
 	nodes := &corev1.NodeList{}
-	err := r.Client.List(context.TODO(), nodes)
+	err := r.Client.List(ctx, nodes)
 	if err != nil {
 		return nil, errs.Wrapf(err, "unable to list Nodes")
 	}
@@ -315,7 +314,7 @@ func (r *Reconciler) getAllocatableValues(reqLogger logr.Logger) (map[string]nod
 	for _, node := range nodes.Items {
 		roles := getNodeRoles(node)
 		if len(roles) == 0 {
-			reqLogger.Info("The node doesn't have role worker nor master - is ignored in resource consumption computing", "nodeName", node.Name)
+			log.FromContext(ctx).Info("The node doesn't have role worker nor master - is ignored in resource consumption computing", "nodeName", node.Name)
 			continue
 		}
 		if memoryCapacity, found := node.Status.Allocatable["memory"]; found {
@@ -351,7 +350,7 @@ func getNodeRoles(node corev1.Node) (roles []string) {
 }
 
 // updateStatusConditions updates Member status conditions with the new conditions
-func (r *Reconciler) updateStatusConditions(memberStatus *toolchainv1alpha1.MemberStatus, newConditions ...toolchainv1alpha1.Condition) error {
+func (r *Reconciler) updateStatusConditions(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, newConditions ...toolchainv1alpha1.Condition) error {
 	// the controller should always update at least the last updated timestamp of the status so the status should be updated regardless of whether
 	// any specific fields were updated. This way a problem with the controller can be indicated if the last updated timestamp was not updated.
 	var conditionsWithTimestamps []toolchainv1alpha1.Condition
@@ -361,11 +360,12 @@ func (r *Reconciler) updateStatusConditions(memberStatus *toolchainv1alpha1.Memb
 		conditionsWithTimestamps = append(conditionsWithTimestamps, condition)
 	}
 	memberStatus.Status.Conditions = conditionsWithTimestamps
-	return r.Client.Status().Update(context.TODO(), memberStatus)
+	return r.Client.Status().Update(ctx, memberStatus)
 }
 
-func (r *Reconciler) setStatusReady(memberStatus *toolchainv1alpha1.MemberStatus) error {
+func (r *Reconciler) setStatusReady(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus) error {
 	return r.updateStatusConditions(
+		ctx,
 		memberStatus,
 		toolchainv1alpha1.Condition{
 			Type:   toolchainv1alpha1.ConditionReady,
@@ -374,8 +374,9 @@ func (r *Reconciler) setStatusReady(memberStatus *toolchainv1alpha1.MemberStatus
 		})
 }
 
-func (r *Reconciler) setStatusNotReady(memberStatus *toolchainv1alpha1.MemberStatus, message string) error {
+func (r *Reconciler) setStatusNotReady(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, message string) error {
 	return r.updateStatusConditions(
+		ctx,
 		memberStatus,
 		toolchainv1alpha1.Condition{
 			Type:    toolchainv1alpha1.ConditionReady,
@@ -385,19 +386,19 @@ func (r *Reconciler) setStatusNotReady(memberStatus *toolchainv1alpha1.MemberSta
 		})
 }
 
-func (r *Reconciler) consoleURL(config membercfg.Configuration) (string, error) {
+func (r *Reconciler) consoleURL(ctx context.Context, config membercfg.Configuration) (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: config.Console().Namespace(), Name: config.Console().RouteName()}
-	if err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route); err != nil {
+	if err := r.AllNamespacesClient.Get(ctx, namespacedName, route); err != nil {
 		return "", err
 	}
 	return sanitizeURL(fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path)), nil
 }
 
-func (r *Reconciler) cheDashboardURL(config membercfg.Configuration) (string, error) {
+func (r *Reconciler) cheDashboardURL(ctx context.Context, config membercfg.Configuration) (string, error) {
 	route := &routev1.Route{}
 	namespacedName := types.NamespacedName{Namespace: config.Che().Namespace(), Name: config.Che().RouteName()}
-	err := r.AllNamespacesClient.Get(context.TODO(), namespacedName, route)
+	err := r.AllNamespacesClient.Get(ctx, namespacedName, route)
 	if err != nil {
 		return "", err
 	}

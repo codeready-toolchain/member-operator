@@ -285,8 +285,10 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
+		ctx := log.IntoContext(context.TODO(), controller.Log)
+
 		// when
-		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebConsolePluginDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -303,8 +305,10 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
+		ctx := log.IntoContext(context.TODO(), controller.Log)
+
 		// when
-		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebConsolePluginDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.NoError(t, err)
@@ -320,11 +324,13 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 		actualConfig, err := GetConfiguration(cl)
 		require.NoError(t, err)
 
+		ctx := log.IntoContext(context.TODO(), controller.Log)
+
 		// when
 		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
-		err = controller.handleWebConsolePluginDeploy(controller.Log, actualConfig, test.MemberOperatorNs)
+		err = controller.handleWebConsolePluginDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
 		require.ErrorContains(t, err, "cannot deploy console plugin template")

@@ -48,7 +48,7 @@ func TestDeploy(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		err := ConsolePlugin(fakeClient, s, test.MemberOperatorNs, imgLoc)
+		err := ConsolePlugin(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
 		require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestDeploy(t *testing.T) {
 		fakeClient := test.NewFakeClient(t, serviceObj, deploymentObj)
 
 		// when
-		err := ConsolePlugin(fakeClient, s, test.MemberOperatorNs, imgLoc)
+		err := ConsolePlugin(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
 		require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestDeploy(t *testing.T) {
 		}
 
 		// when
-		err := ConsolePlugin(fakeClient, s, test.MemberOperatorNs, imgLoc)
+		err := ConsolePlugin(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
 		require.Error(t, err)

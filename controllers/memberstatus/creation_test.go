@@ -26,7 +26,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		cl := NewFakeClient(t)
 
 		// when
-		err = CreateOrUpdateResources(cl, MemberOperatorNs, membercfg.MemberStatusName)
+		err = CreateOrUpdateResources(context.TODO(), cl, MemberOperatorNs, membercfg.MemberStatusName)
 
 		// then
 		require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		}
 
 		// when
-		err = CreateOrUpdateResources(cl, MemberOperatorNs, membercfg.MemberStatusName)
+		err = CreateOrUpdateResources(context.TODO(), cl, MemberOperatorNs, membercfg.MemberStatusName)
 
 		// then
 		require.Error(t, err)

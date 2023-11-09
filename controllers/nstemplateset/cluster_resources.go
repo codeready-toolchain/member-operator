@@ -107,23 +107,24 @@ var clusterResourceKinds = []toolchainObjectKind{
 func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
 	logger := log.FromContext(ctx)
 	userTierLogger := logger.WithValues("spacename", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName)
-	uctx := log.IntoContext(ctx, userTierLogger)
-
+	userTierCtx := log.IntoContext(ctx, userTierLogger)
 	userTierLogger.Info("ensuring cluster resources")
+
 	spacename := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
 		tierTemplate, err = getTierTemplate(ctx, r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(uctx, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierCtx, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
 	// go though all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {
-		gvkLogger := logger.WithValues("gvk", clusterResourceKind.gvk)
-		gctx := log.IntoContext(ctx, gvkLogger)
+		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
+		gvkCtx := log.IntoContext(ctx, gvkLogger)
+
 		gvkLogger.Info("ensuring cluster resources")
 		newObjs := make([]runtimeclient.Object, 0)
 
@@ -133,7 +134,7 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 				SpaceName: spacename,
 			}, retainObjectsOfSameGVK(clusterResourceKind.gvk))
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gctx, nsTmplSet, err,
+				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkCtx, nsTmplSet, err,
 					"failed to process template for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 			}
 		}
@@ -141,15 +142,15 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 		// list all existing objects of the cluster resource kind
 		currentObjects, err := clusterResourceKind.listExistingResourcesIfAvailable(ctx, r.Client, spacename, r.AvailableAPIGroups)
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gctx, nsTmplSet, err,
+			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(gvkCtx, nsTmplSet, err,
 				"failed to list existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 		}
 
 		// if there are more than one existing, then check if there is any that should be updated or deleted
 		if len(currentObjects) > 0 {
-			updatedOrDeleted, err := r.updateOrDeleteRedundant(gctx, currentObjects, newObjs, tierTemplate, nsTmplSet)
+			updatedOrDeleted, err := r.updateOrDeleteRedundant(gvkCtx, currentObjects, newObjs, tierTemplate, nsTmplSet)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(gctx, nsTmplSet, r.setStatusUpdateFailed,
+				return false, r.wrapErrorWithStatusUpdate(gvkCtx, nsTmplSet, r.setStatusUpdateFailed,
 					err, "failed to update/delete existing cluster resources of GVK '%v'", clusterResourceKind.gvk)
 			}
 			if updatedOrDeleted {
@@ -159,9 +160,9 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 		// if none was found to be either updated or deleted or if there is no existing object available,
 		// then check if there is any object to be created
 		if len(newObjs) > 0 {
-			anyCreated, err := r.createMissing(gctx, currentObjects, newObjs, tierTemplate, nsTmplSet)
+			anyCreated, err := r.createMissing(gvkCtx, currentObjects, newObjs, tierTemplate, nsTmplSet)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(gctx, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
+				return false, r.wrapErrorWithStatusUpdate(gvkCtx, nsTmplSet, r.setStatusClusterResourcesProvisionFailed,
 					err, "failed to create missing cluster resource of GVK '%v'", clusterResourceKind.gvk)
 			}
 			if anyCreated {
@@ -305,7 +306,7 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 		}
 
 		for _, toDelete := range currentObjects {
-			if err := r.Client.Get(ctx, types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
+			if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
 				return false, r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusTerminatingFailed, err,
 					"failed to get current object '%s' while deleting cluster resource of GVK '%s'", toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 			}

@@ -7,12 +7,12 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type APIClient struct {
@@ -25,10 +25,11 @@ type APIClient struct {
 
 // ApplyToolchainObjects applies the given ToolchainObjects with the given labels.
 // If any object is marked as optional, then it checks if the API group is available - if not, then it skips the object.
-func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []runtimeclient.Object, newLabels map[string]string) (bool, error) {
+func (c APIClient) ApplyToolchainObjects(ctx context.Context, toolchainObjects []runtimeclient.Object, newLabels map[string]string) (bool, error) {
 	applyClient := applycl.NewApplyClient(c.Client)
 	anyApplied := false
 
+	logger := log.FromContext(ctx)
 	for _, object := range toolchainObjects {
 		if _, exists := object.GetAnnotations()[toolchainv1alpha1.TierTemplateObjectOptionalResourceAnnotation]; exists {
 			if !apiGroupIsPresent(c.AvailableAPIGroups, object.GetObjectKind().GroupVersionKind()) {
@@ -42,14 +43,14 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 		if strings.EqualFold(object.GetObjectKind().GroupVersionKind().Kind, "ServiceAccount") {
 			logger.Info("the object is a ServiceAccount so we do the special handling for it...", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
 			sa := object.DeepCopyObject().(runtimeclient.Object)
-			err := applyClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(object), sa)
+			err := applyClient.Get(ctx, runtimeclient.ObjectKeyFromObject(object), sa)
 			if err != nil && !errors.IsNotFound(err) {
 				return anyApplied, err
 			}
 			if err != nil {
 				logger.Info("the ServiceAccount does not exists - creating...")
 				applycl.MergeLabels(object, newLabels)
-				if err := applyClient.Create(context.TODO(), object); err != nil {
+				if err := applyClient.Create(ctx, object); err != nil {
 					return anyApplied, err
 				}
 			} else {
@@ -57,7 +58,7 @@ func (c APIClient) ApplyToolchainObjects(logger logr.Logger, toolchainObjects []
 				applycl.MergeLabels(sa, newLabels)                    // add new labels to existing one
 				applycl.MergeLabels(sa, object.GetLabels())           // add new labels from template
 				applycl.MergeAnnotations(sa, object.GetAnnotations()) // add new annotations from template
-				err = applyClient.Update(context.TODO(), sa)
+				err = applyClient.Update(ctx, sa)
 				if err != nil {
 					return anyApplied, err
 				}

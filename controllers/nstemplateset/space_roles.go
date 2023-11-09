@@ -11,8 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type spaceRolesManager struct {
@@ -21,12 +20,13 @@ type spaceRolesManager struct {
 
 // ensure ensures that the space roles for the users exist.
 // Returns `true, nil` if something was changed, `false, nil` if nothing changed, `false, err` if an error occurred
-func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	logger = logger.WithValues("nstemplateset_name", nsTmplSet.Name)
+func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
+	logger := log.FromContext(ctx).WithValues("nstemplateset_name", nsTmplSet.Name)
+	lctx := log.IntoContext(ctx, logger)
 
-	nss, err := fetchNamespacesByOwner(r.Client, nsTmplSet.Name)
+	nss, err := fetchNamespacesByOwner(lctx, r.Client, nsTmplSet.Name)
 	if err != nil {
-		return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+		return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusProvisionFailed, err,
 			"failed to list namespaces for workspace '%s'", nsTmplSet.Name)
 	}
 	logger.Info("ensuring space roles", "namespace_count", len(nss), "role_count", len(nsTmplSet.Spec.SpaceRoles))
@@ -43,18 +43,18 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		// note: we only set the NSTemplateSet status to `provisioning` if there are resource changes,
 		// but for other cases (such as restoring resources deleted by a user), we don't set the NSTemplateSet status to `provisioning`.
 		if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
-			if err := r.setStatusUpdatingIfNotProvisioning(nsTmplSet); err != nil {
+			if err := r.setStatusUpdatingIfNotProvisioning(lctx, nsTmplSet); err != nil {
 				return false, err
 			}
 		}
-		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(&ns, lastAppliedSpaceRoles) // nolint:gosec
+		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(lctx, &ns, lastAppliedSpaceRoles) // nolint:gosec
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve last applied space roles")
+			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(lctx, nsTmplSet, err, "failed to retrieve last applied space roles")
 		}
 		// space roles to apply now
-		spaceRoleObjs, err := r.getSpaceRolesObjects(&ns, nsTmplSet.Spec.SpaceRoles) // nolint:gosec
+		spaceRoleObjs, err := r.getSpaceRolesObjects(lctx, &ns, nsTmplSet.Spec.SpaceRoles) // nolint:gosec
 		if err != nil {
-			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(logger, nsTmplSet, err, "failed to retrieve space roles to apply")
+			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(lctx, nsTmplSet, err, "failed to retrieve space roles to apply")
 		}
 
 		// labels to apply on all new objects
@@ -64,12 +64,12 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 		}
 		logger.Info("applying space role objects", "count", len(spaceRoleObjs))
 		// create (or update existing) objects based the tier template
-		if _, err = r.ApplyToolchainObjects(logger, spaceRoleObjs, labels); err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
+		if _, err = r.ApplyToolchainObjects(lctx, spaceRoleObjs, labels); err != nil {
+			return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
 
-		if err := deleteObsoleteObjects(logger, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs); err != nil {
-			return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
+		if err := deleteObsoleteObjects(lctx, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs); err != nil {
+			return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
 		}
 
 		if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, lastAppliedSpaceRoles) {
@@ -77,15 +77,15 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 			// diffs when the space roles are changed (users added or removed, etc.)
 			sr, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
 			if err != nil {
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+				return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusProvisionFailed, err,
 					fmt.Sprintf("failed to marshal space roles to update '%s' annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
 			}
 			if ns.Annotations == nil {
 				ns.Annotations = map[string]string{}
 			}
 			ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
-			if err := r.Client.Update(context.TODO(), &ns); err != nil { // nolint:gosec
-				return false, r.wrapErrorWithStatusUpdate(logger, nsTmplSet, r.setStatusProvisionFailed, err,
+			if err := r.Client.Update(ctx, &ns); err != nil { // nolint:gosec
+				return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusProvisionFailed, err,
 					fmt.Sprintf("failed to update namespace with '%s' annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
 			}
 			logger.Info("updated annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(sr))
@@ -97,11 +97,11 @@ func (r *spaceRolesManager) ensure(logger logr.Logger, nsTmplSet *toolchainv1alp
 
 // Get the space role objects from the templates specified in the given `spaceRoles`
 // Returns the objects, or an error if something wrong happened when processing the templates
-func (r *spaceRolesManager) getSpaceRolesObjects(ns *corev1.Namespace, spaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) ([]runtimeclient.Object, error) {
+func (r *spaceRolesManager) getSpaceRolesObjects(ctx context.Context, ns *corev1.Namespace, spaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) ([]runtimeclient.Object, error) {
 	// store by kind and name
 	spaceRoleObjects := []runtimeclient.Object{}
 	for _, spaceRole := range spaceRoles {
-		tierTemplate, err := getTierTemplate(r.GetHostCluster, spaceRole.TemplateRef)
+		tierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, spaceRole.TemplateRef)
 		if err != nil {
 			return nil, err
 		}

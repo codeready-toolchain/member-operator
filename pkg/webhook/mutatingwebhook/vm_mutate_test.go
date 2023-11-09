@@ -431,7 +431,7 @@ func expectedVMMutateRespSuccess(t *testing.T, expectedPatches ...map[string]int
 	}
 }
 
-func initMemberConfig(t *testing.T) membercfg.Configuration {
+func initMemberConfig(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
@@ -441,9 +441,8 @@ func initMemberConfig(t *testing.T) membercfg.Configuration {
 		"vmSSHKeys": []byte("ssh-rsa tmpkey human@machine"),
 	})
 	fakeClient := test.NewFakeClient(t, configObj, webhookSecret)
-	config, err := membercfg.GetConfiguration(fakeClient)
+	_, err = membercfg.GetConfiguration(fakeClient)
 	require.NoError(t, err)
-	return config
 }
 
 const userDataWithoutSSHKey = "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nuser: cloud-user\n"

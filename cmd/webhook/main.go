@@ -14,6 +14,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -90,6 +91,14 @@ func main() {
 		setupLog.Error(err, "creating a new client failed")
 		os.Exit(1)
 	}
+
+	// Calling GetConfiguration here to load the configuration and populate the cache
+	_, err = membercfg.GetConfiguration(cl)
+	if err != nil {
+		setupLog.Error(err, "getting member operator config failed")
+		os.Exit(1)
+	}
+
 	rolebindingValidator := &validatingwebhook.RoleBindingRequestValidator{
 		Client: cl,
 	}

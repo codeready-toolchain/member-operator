@@ -9,9 +9,9 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
@@ -102,7 +102,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	config, err := memberoperatorconfig.GetConfiguration(cl)
+	config, err := membercfg.GetConfiguration(cl)
 	if err != nil {
 		setupLog.Error(err, "Error retrieving Configuration")
 		os.Exit(1)
@@ -113,7 +113,7 @@ func main() {
 	gracefulShutdown(gracefulTimeout, pluginServer)
 }
 
-func startConsolePluginService(config memberoperatorconfig.WebConsolePluginConfig) *consoleplugin.Server {
+func startConsolePluginService(config membercfg.WebConsolePluginConfig) *consoleplugin.Server {
 	consolePluginServer := consoleplugin.NewConsolePluginServer(config, setupLog)
 	consolePluginServer.Start()
 

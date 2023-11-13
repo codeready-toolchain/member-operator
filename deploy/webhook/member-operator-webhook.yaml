@@ -17,7 +17,15 @@ objects:
   metadata:
     creationTimestamp: null
     name: webhook-role
-  rules:
+  rules:    
+    - apiGroups:
+        - ""
+      resources:
+        - secrets
+      verbs:
+        - get
+        - list
+        - watch
     - apiGroups:
         - user.openshift.io
       resources:
@@ -29,17 +37,18 @@ objects:
         - list
         - watch
     - apiGroups:
-      - "toolchain.dev.openshift.com"
+      - toolchain.dev.openshift.com
       resources:
-      - "spacebindingrequests"
+      - memberoperatorconfigs
+      - spacebindingrequests
       verbs:
       - get
       - list
       - watch
     - apiGroups:
-      - "kubevirt.io"
+      - kubevirt.io
       resources:
-      - "virtualmachines"
+      - virtualmachines
       verbs:
       - get
       - list
@@ -101,6 +110,11 @@ objects:
           command:
           - member-operator-webhook
           imagePullPolicy: IfNotPresent
+          env:
+          - name: WATCH_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           resources:
             requests:
               cpu: 75m

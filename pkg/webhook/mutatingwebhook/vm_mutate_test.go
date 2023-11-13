@@ -2,14 +2,22 @@ package mutatingwebhook
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
+	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/kubectl/pkg/scheme"
 )
 
 type cloudInitConfigType string
@@ -18,6 +26,7 @@ var cloudInitNoCloud cloudInitConfigType = "cloudInitNoCloud"
 var cloudInitConfigDrive cloudInitConfigType = "cloudInitConfigDrive"
 
 func TestVMMutator(t *testing.T) {
+	initMemberConfig(t)
 	t.Run("success", func(t *testing.T) {
 		// given
 		admReview := admissionReview(t, vmRawAdmissionReviewJSONTemplate, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey)))
@@ -160,6 +169,8 @@ func TestEnsureLimits(t *testing.T) {
 }
 
 func TestEnsureVolumeConfig(t *testing.T) {
+	initMemberConfig(t)
+	singleSSHKey := []string{"ssh-rsa tmpkey human@machine"}
 
 	t.Run("success", func(t *testing.T) {
 		// cloudinitdisk with cloudInitNoCloud config found
@@ -183,7 +194,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 				// given
 				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, ""))) // no userData
 				actualPatchItems := []map[string]interface{}{}
-				expectedVolumes := cloudInitVolume(cloudInitNoCloud, defaultUserData("ssh-rsa tmpkey human@machine")) // expect default userData will be set
+				expectedVolumes := cloudInitVolume(cloudInitNoCloud, defaultUserData(singleSSHKey)) // expect default userData will be set
 				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
 
 				// when
@@ -216,7 +227,7 @@ func TestEnsureVolumeConfig(t *testing.T) {
 				// given
 				vmAdmReviewRequest := vmAdmReviewRequestObject(t, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitConfigDrive, ""))) // no userData
 				actualPatchItems := []map[string]interface{}{}
-				expectedVolumes := cloudInitVolume(cloudInitConfigDrive, defaultUserData("ssh-rsa tmpkey human@machine")) // expect default userData will be set
+				expectedVolumes := cloudInitVolume(cloudInitConfigDrive, defaultUserData(singleSSHKey)) // expect default userData will be set
 				expectedPatchItems := []map[string]interface{}{volumesPatch(expectedVolumes)}
 
 				// when
@@ -278,36 +289,49 @@ func TestEnsureVolumeConfig(t *testing.T) {
 }
 
 func TestAddSSHKeyToUserData(t *testing.T) {
-	t.Run("no existing keys", func(t *testing.T) {
-		// given
-		sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"
+	// given
+	for tcName, tc := range map[string]struct {
+		sshKeys                  []string
+		expectedWhenFresh        string
+		expectedWhenExistingKeys string
+	}{
+		"single ssh key": {
+			sshKeys:                  []string{"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"},
+			expectedWhenFresh:        "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n",
+			expectedWhenExistingKeys: "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n",
+		},
+		"multiple ssh keys": {
+			sshKeys: []string{
+				"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine",
+				"ssh-ed25519 QCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF beaver@dam",
+			},
+			expectedWhenFresh:        "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\n- |\n  ssh-ed25519 QCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF beaver@dam\nuser: cloud-user\n",
+			expectedWhenExistingKeys: "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\n- |\n  ssh-ed25519 QCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF beaver@dam\nuser: cloud-user\n",
+		},
+	} {
+		t.Run(tcName, func(t *testing.T) {
+			t.Run("no existing keys", func(t *testing.T) {
+				// when
+				userDataStr, err := addSSHKeysToUserData(userDataWithoutSSHKey, tc.sshKeys)
 
-		// when
-		userDataStr, err := addSSHKeyToUserData(userDataWithoutSSHKey, sshKey)
+				// then
+				require.NoError(t, err)
+				require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+				require.Equal(t, tc.expectedWhenFresh, userDataStr)
+			})
 
-		// then
-		require.NoError(t, err)
-		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
-		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
-	})
+			t.Run("pre-existing key", func(t *testing.T) {
+				// when
+				userDataStr, err := addSSHKeysToUserData(userDataWithSSHKey, tc.sshKeys)
 
-	t.Run("pre-existing key", func(t *testing.T) {
-		// given
-		sshKey := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine"
-
-		// when
-		userDataStr, err := addSSHKeyToUserData(userDataWithSSHKey, sshKey)
-
-		// then
-		require.NoError(t, err)
-		require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
-		// both keys should exist
-		require.Equal(t, "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nssh_authorized_keys:\n- |\n  ssh-rsa tmpkey human@machine\n- |\n  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCuyqYxl1up7uGK8KMFrTynx+FhOEm+zxqX3Yq1UgaABgQCuyqYxl1up7uGK8KMF human@machine\nuser: cloud-user\n", userDataStr)
-	})
-
-	t.Run("", func(t *testing.T) {
-
-	})
+				// then
+				require.NoError(t, err)
+				require.True(t, strings.HasPrefix(userDataStr, "#cloud-config\n"))
+				// both keys should exist
+				require.Equal(t, tc.expectedWhenExistingKeys, userDataStr)
+			})
+		})
+	}
 }
 
 type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
@@ -405,6 +429,20 @@ func expectedVMMutateRespSuccess(t *testing.T, expectedPatches ...map[string]int
 		Patch:     patchContent,
 		PatchType: &patchType,
 	}
+}
+
+func initMemberConfig(t *testing.T) {
+	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	configObj := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().WebhookSecretRef("webhook-secret").VMSSHKey("vmSSHKeys"))
+	webhookSecret := test.CreateSecret("webhook-secret", test.MemberOperatorNs, map[string][]byte{
+		"vmSSHKeys": []byte("ssh-rsa tmpkey human@machine"),
+	})
+	fakeClient := test.NewFakeClient(t, configObj, webhookSecret)
+	_, err = membercfg.GetConfiguration(fakeClient)
+	require.NoError(t, err)
 }
 
 const userDataWithoutSSHKey = "#cloud-config\nchpasswd:\n  expire: false\npassword: 5as2-8nbk-7a4c\nuser: cloud-user\n"

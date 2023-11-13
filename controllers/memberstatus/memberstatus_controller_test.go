@@ -8,6 +8,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/member-operator/version"
@@ -40,7 +41,7 @@ var requeueResult = reconcile.Result{RequeueAfter: 5 * time.Second}
 const defaultMemberOperatorName = "member-operator"
 const defaultMemberOperatorDeploymentName = "member-operator-controller-manager"
 
-const defaultMemberStatusName = MemberStatusName
+const defaultMemberStatusName = membercfg.MemberStatusName
 
 const buildCommitSHA = "64af1be5c6011fae5497a7c35e2a986d633b3421"
 

@@ -7,7 +7,7 @@ import (
 	goruntime "runtime"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
-	membercfgctrl "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/controllers/memberstatus"
 	"github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
@@ -19,7 +19,6 @@ import (
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/status"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -244,7 +243,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "UserAccount")
 		os.Exit(1)
 	}
-	if err = (&membercfgctrl.Reconciler{
+	if err = (&membercfg.Reconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("MemberOperatorConfig"),
 	}).SetupWithManager(mgr); err != nil {
@@ -267,7 +266,7 @@ func main() {
 
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")
-		memberStatusName := memberstatus.MemberStatusName
+		memberStatusName := membercfg.MemberStatusName
 		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), namespace, memberStatusName); err != nil {
 			setupLog.Error(err, "cannot create/update MemberStatus resource")
 			os.Exit(1)

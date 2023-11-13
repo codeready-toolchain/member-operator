@@ -2,14 +2,14 @@ package consoleplugin
 
 import (
 	"context"
+	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
+	"k8s.io/utils/strings/slices"
 	"net/http"
 	"os"
 
 	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin/contentserver"
-	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 
 	"github.com/go-logr/logr"
-	"k8s.io/utils/strings/slices"
 )
 
 const (
@@ -25,7 +25,7 @@ type Server struct {
 	options []string
 }
 
-func NewConsolePluginServer(config membercfg.WebConsolePluginConfig, log logr.Logger,
+func NewConsolePluginServer(config memberoperatorconfig.WebConsolePluginConfig, log logr.Logger,
 	options ...ServerOption) *Server {
 	s := &Server{
 		log: log,

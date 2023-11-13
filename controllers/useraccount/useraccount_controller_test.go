@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	identity2 "github.com/codeready-toolchain/toolchain-common/pkg/identity"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
-	identity2 "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
@@ -33,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake" //nolint: staticcheck // not deprecated anymore: see https://github.com/kubernetes-sigs/controller-runtime/pull/1101
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 

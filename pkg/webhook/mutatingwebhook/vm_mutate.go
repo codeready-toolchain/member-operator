@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
-
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -53,13 +51,13 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	vmPatchItems, cloudInitConfigErr = ensureVolumeConfig(unstructuredRequestObj, vmPatchItems)
 	if cloudInitConfigErr != nil {
 		vmLogger.Error(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine"))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
 	}
 
 	patchContent, err := json.Marshal(vmPatchItems)
 	if err != nil {
 		vmLogger.Error(err, "failed to marshal patch items for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "failed to marshal patch items for VirtualMachine"))
+		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "failed to marshal patch items for VirtualMachine - raw request object: %v", admReview.Request.Object.Raw))
 	}
 	resp.Patch = patchContent
 
@@ -78,12 +76,8 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 		return patchItems, fmt.Errorf("no volumes found")
 	}
 
-	// get SSH keys from configuration
-	memberConfig := membercfg.GetCachedConfiguration()
-	sshKeys := strings.Split(memberConfig.Webhook().VMSSHKey(), ",")
-	if len(sshKeys) == 0 || (len(sshKeys) == 1 && sshKeys[0] == "") {
-		return patchItems, fmt.Errorf("invalid VM webhook configuration")
-	}
+	// TODO get the ssh key from the secret
+	sshKey := "ssh-rsa tmpkey human@machine"
 
 	// iterate through volumes to find cloudinitdisk
 	cloudinitdiskVolumeFound := false
@@ -105,14 +99,14 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 				userData, ok := cloudInitConfig["userData"]
 				if ok {
 					// userData is defined, append the ssh key
-					updatedUserData, err := addSSHKeysToUserData(userData.(string), sshKeys)
+					updatedUserData, err := addSSHKeyToUserData(userData.(string), sshKey)
 					if err != nil {
 						return patchItems, errors.Wrapf(err, "failed to add ssh key to userData")
 					}
 					cloudInitConfig["userData"] = updatedUserData
 				} else {
 					// no userData defined, set the default
-					cloudInitConfig["userData"] = defaultUserData(sshKeys)
+					cloudInitConfig["userData"] = defaultUserData(sshKey)
 					vmLogger.Info("setting default userData")
 				}
 
@@ -138,30 +132,29 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 	return patchItems, nil
 }
 
-// addSSHKeysToUserData parses the userData YAML and adds the provided ssh key to it or returns an error otherwise
-func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, error) {
+// addSSHKeyToUserData parses the userData YAML and adds the provided ssh key to it or returns an error otherwise
+func addSSHKeyToUserData(userDataString string, sshKey string) (string, error) {
 	userData := map[string]interface{}{}
 
 	if err := yaml.Unmarshal([]byte(userDataString), &userData); err != nil {
 		return "", err
 	}
 
-	for _, sshKey := range sshKeys {
-		_, authorizedKeysFound := userData["ssh_authorized_keys"]
-		sshValue := sshKey
-		// ensure the ssh key has a newline at the end so that it is properly unmarshalled later
-		if !strings.HasSuffix(sshKey, "\n") {
-			sshValue = sshKey + "\n"
-		}
+	authorizedKeysInfc, authorizedKeysFound := userData["ssh_authorized_keys"]
 
-		if authorizedKeysFound {
-			authKeys := userData["ssh_authorized_keys"].([]interface{})
-			// append the key to the existing list
-			userData["ssh_authorized_keys"] = append(authKeys, sshValue)
-		} else {
-			// create a new list with the key
-			userData["ssh_authorized_keys"] = []interface{}{sshValue}
-		}
+	sshValue := sshKey
+	// ensure the ssh key has a newline at the end so that it is properly unmarshalled later
+	if !strings.HasSuffix(sshKey, "\n") {
+		sshValue = sshKey + "\n"
+	}
+
+	if authorizedKeysFound {
+		authKeys := authorizedKeysInfc.([]interface{})
+		// append the key to the existing list
+		userData["ssh_authorized_keys"] = append(authKeys, sshValue)
+	} else {
+		// create a new list with the key
+		userData["ssh_authorized_keys"] = []string{sshValue}
 	}
 
 	updatedYaml, err := yaml.Marshal(userData)
@@ -222,8 +215,8 @@ func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[s
 	return patchItems
 }
 
-func defaultUserData(sshKeys []string) string {
-	authorizedKeys := fmt.Sprintf("ssh_authorized_keys: [%s]\n", sshKeys)
+func defaultUserData(sshKey string) string {
+	authorizedKeys := fmt.Sprintf("ssh_authorized_keys: [%s]\n", sshKey)
 	return strings.Join(
 		append([]string{cloudConfigHeader}, authorizedKeys), "\n")
 }

@@ -1,8 +1,8 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20231107202930-b028ae440a26
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20231109031831-4700ff0cef46
+	github.com/codeready-toolchain/api v0.0.0-20231012141605-1203c9ad65b0
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20230920120310-0f59f17bca92
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9
 	// using latest commit from 'github.com/openshift/api branch release-4.12'
@@ -25,9 +25,7 @@ require (
 	github.com/prometheus/client_golang v1.12.2
 	k8s.io/apiextensions-apiserver v0.25.0
 	k8s.io/apimachinery v0.25.0
-	k8s.io/kubectl v0.24.0
 	k8s.io/utils v0.0.0-20220728103510-ee6ede2d64ed
-	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -105,8 +103,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/component-base v0.25.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
+	k8s.io/kubectl v0.24.0 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
+	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
 go 1.19

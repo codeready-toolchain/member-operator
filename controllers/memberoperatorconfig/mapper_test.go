@@ -6,8 +6,8 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
 	"github.com/stretchr/testify/require"
+
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -43,14 +43,4 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 		// then
 		require.Len(t, req, 0)
 	})
-}
-
-func newSecret(name string, data map[string][]byte) *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: test.MemberOperatorNs,
-		},
-		Data: data,
-	}
 }

@@ -92,6 +92,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Calling GetConfiguration here to load the configuration and populate the cache
 	_, err = membercfg.GetConfiguration(cl)
 	if err != nil {
 		setupLog.Error(err, "getting member operator config failed")

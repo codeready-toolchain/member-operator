@@ -6,10 +6,10 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	membercfg "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	commonidentity "github.com/codeready-toolchain/toolchain-common/pkg/identity"
 
 	userv1 "github.com/openshift/api/user/v1"

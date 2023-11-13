@@ -1,12 +1,13 @@
 package consoleplugin
 
 import (
-	"github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
+
+	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -22,7 +23,7 @@ func TestConsolePluginServer(t *testing.T) {
 
 	log := ctrl.Log.WithName("test")
 
-	cfg := memberoperatorconfig.WebConsolePluginConfig{}
+	cfg := membercfg.WebConsolePluginConfig{}
 
 	s := NewConsolePluginServer(cfg, log, ConsolePluginServerOptionNoTLS)
 

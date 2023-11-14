@@ -219,7 +219,7 @@ func service(namespace string) string {
 }
 
 func deployment(namespace, sa string, image string) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"member-operator-webhook"}},"template":{"metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook"}},"spec":{"serviceAccountName": "%s","containers":[{"name":"mutator","image":"%s","command":["member-operator-webhook"],"imagePullPolicy":"IfNotPresent","resources":{"requests":{"cpu":"75m","memory":"128Mi"}},"volumeMounts":[{"name":"webhook-certs","mountPath":"/etc/webhook/certs","readOnly":true}]}],"volumes":[{"name":"webhook-certs","secret":{"secretName":"webhook-certs"}}]}}}}`, namespace, sa, image)
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"member-operator-webhook","namespace":"%s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"member-operator-webhook"}},"template":{"metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook"}},"spec":{"serviceAccountName": "%s","containers":[{"name":"mutator","image":"%s","command":["member-operator-webhook"],"imagePullPolicy":"IfNotPresent","env":[{"name":"WATCH_NAMESPACE","valueFrom":{"fieldRef":{"fieldPath":"metadata.namespace"}}}],"resources":{"requests":{"cpu":"75m","memory":"128Mi"}},"volumeMounts":[{"name":"webhook-certs","mountPath":"/etc/webhook/certs","readOnly":true}]}],"volumes":[{"name":"webhook-certs","secret":{"secretName":"webhook-certs"}}]}}}}`, namespace, sa, image)
 }
 
 func mutatingWebhookConfig(namespace, caBundle string) string {
@@ -235,7 +235,7 @@ func serviceAccount(namespace string) string {
 }
 
 func clusterRole() string {
-	return `{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRole","metadata": {"creationTimestamp": null,"name": "webhook-role"}, "rules": [{"apiGroups": ["user.openshift.io"],"resources": ["identities","useridentitymappings","users"],"verbs": ["get","list","watch"]},{"apiGroups": ["toolchain.dev.openshift.com"],"resources": ["spacebindingrequests"],"verbs": ["get","list","watch"]},{"apiGroups": ["kubevirt.io"],"resources": ["virtualmachines"],"verbs": ["get","list","watch"]}]}`
+	return `{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRole","metadata": {"creationTimestamp": null,"name": "webhook-role"}, "rules": [{"apiGroups": [""],"resources": ["secrets"],"verbs": ["get","list","watch"]},{"apiGroups": ["user.openshift.io"],"resources": ["identities","useridentitymappings","users"],"verbs": ["get","list","watch"]},{"apiGroups": ["toolchain.dev.openshift.com"],"resources": ["memberoperatorconfigs","spacebindingrequests"],"verbs": ["get","list","watch"]},{"apiGroups": ["kubevirt.io"],"resources": ["virtualmachines"],"verbs": ["get","list","watch"]}]}`
 }
 
 func clusterRoleBinding(namespace string) string {

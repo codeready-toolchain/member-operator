@@ -168,7 +168,7 @@ func (r *Reconciler) hostConnectionHandleStatus(ctx context.Context, memberStatu
 
 // memberOperatorHandleStatus retrieves the Deployment for the member operator and adds its status to MemberStatus. It returns an error
 // if any of the conditions have a status that is not 'true'
-func (r *Reconciler) memberOperatorHandleStatus(_ context.Context, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
+func (r *Reconciler) memberOperatorHandleStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, memberConfig membercfg.Configuration) error {
 	// ensure member operator status is set
 	if memberStatus.Status.MemberOperator == nil {
 		memberStatus.Status.MemberOperator = &toolchainv1alpha1.MemberOperatorStatus{}
@@ -208,7 +208,7 @@ func (r *Reconciler) memberOperatorHandleStatus(_ context.Context, memberStatus 
 	}
 
 	// verify deployment version
-	versionCondition := r.VersionCheckManager.CheckDeployedVersionIsUpToDate(isProd, memberConfig.GitHubSecret().AccessTokenKey(), memberStatus.Status.MemberOperator.RevisionCheck.Conditions, githubRepo)
+	versionCondition := r.VersionCheckManager.CheckDeployedVersionIsUpToDate(ctx, isProd, memberConfig.GitHubSecret().AccessTokenKey(), memberStatus.Status.MemberOperator.RevisionCheck.Conditions, githubRepo)
 	errVersionCheck := status.ValidateComponentConditionReady(*versionCondition)
 	memberStatus.Status.MemberOperator.RevisionCheck.Conditions = []toolchainv1alpha1.Condition{*versionCondition}
 	if errVersionCheck != nil {

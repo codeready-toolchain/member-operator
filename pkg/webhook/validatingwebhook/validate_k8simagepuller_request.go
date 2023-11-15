@@ -5,7 +5,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 
@@ -16,11 +15,11 @@ import (
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type CheClusterRequestValidator struct {
+type K8sImagePullerRequestValidator struct {
 	Client runtimeClient.Client
 }
 
-func (v CheClusterRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {
+func (v K8sImagePullerRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
 	body, err := io.ReadAll(r.Body)
 	defer func() {
@@ -42,7 +41,7 @@ func (v CheClusterRequestValidator) HandleValidate(w http.ResponseWriter, r *htt
 	}
 }
 
-func (v CheClusterRequestValidator) validate(body []byte) []byte {
+func (v K8sImagePullerRequestValidator) validate(body []byte) []byte {
 	log.Info("incoming request", "body", string(body))
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
@@ -51,11 +50,6 @@ func (v CheClusterRequestValidator) validate(body []byte) []byte {
 		log.Error(err, "unable to deserialize the admission review object", "body", escapedBody)
 		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
 	}
-	requestingUsername := admReview.Request.UserInfo.Username
-	// allow admission request if the user is a system user
-	if strings.HasPrefix(requestingUsername, "system:") {
-		return allowAdmissionRequest(admReview)
-	}
 	//check if the requesting user is a sandbox user
 	requestingUser := &userv1.User{}
 	err := v.Client.Get(context.TODO(), types.NamespacedName{
@@ -63,12 +57,12 @@ func (v CheClusterRequestValidator) validate(body []byte) []byte {
 	}, requestingUser)
 
 	if err != nil {
-		log.Error(err, "unable to find the user requesting creation of the CheCluster resource", "username", admReview.Request.UserInfo.Username)
-		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the  creation of the CheCluster resource"))
+		log.Error(err, "unable to find the user requesting creation of the KubernetesImagePuller resource", "username", admReview.Request.UserInfo.Username)
+		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the  creation of the KubernetesImagePuller resource"))
 	}
 	if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
-		log.Info("sandbox user is trying to create a CheCluster", "AdmissionReview", admReview)
-		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. you are trying to create a CheCluster resource, which is not allowed"))
+		log.Info("sandbox user is trying to create a KubernetesImagePuller", "AdmissionReview", admReview)
+		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. you are trying to create a KubernetesImagePuller resource, which is not allowed"))
 	}
 	// at this point, it is clear the user isn't a sandbox user, allow request
 	return allowAdmissionRequest(admReview)

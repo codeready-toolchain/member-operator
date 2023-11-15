@@ -17,37 +17,37 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestHandleValidateCheClusterAdmissionRequest(t *testing.T) {
+func TestHandleValidateK8sImagePullerAdmissionRequest(t *testing.T) {
 	// given
-	v := newCheClusterValidator(t)
+	v := newK8sImagePullerValidator(t)
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
 	defer ts.Close()
 
-	t.Run("sandbox user trying to create a CheCluster resource is denied", func(t *testing.T) {
+	t.Run("sandbox user trying to create a KubernetesImagePuller resource is denied", func(t *testing.T) {
 		// given
-		req := newCreateCheClusterAdmissionRequest(t, "johnsmith")
+		req := newCreateK8sImagePullerAdmissionRequest(t, "johnsmith")
 
 		// when
 		response := v.validate(req)
 
 		// then
-		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. you are trying to create a CheCluster resource, which is not allowed", "f0b30997-3ac0-49f2-baf4-6eafd123564c")
+		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. you are trying to create a KubernetesImagePuller resource, which is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
-	t.Run("crtadmin user trying to create a CheCluster resource is allowed", func(t *testing.T) {
+	t.Run("crtadmin user trying to create a KubernetesImagePuller resource is allowed", func(t *testing.T) {
 		// given
-		req := newCreateCheClusterAdmissionRequest(t, "johnsmith-crtadmin")
+		req := newCreateK8sImagePullerAdmissionRequest(t, "johnsmith-crtadmin")
 
 		// when
 		response := v.validate(req)
 
 		// then
-		test.VerifyRequestAllowed(t, response, "f0b30997-3ac0-49f2-baf4-6eafd123564c")
+		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
 }
 
-func newCheClusterValidator(t *testing.T) *CheClusterRequestValidator {
+func newK8sImagePullerValidator(t *testing.T) *K8sImagePullerRequestValidator {
 	s := scheme.Scheme
 	err := userv1.Install(s)
 	require.NoError(t, err)
@@ -68,14 +68,14 @@ func newCheClusterValidator(t *testing.T) *CheClusterRequestValidator {
 		},
 	}
 	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(johnsmithUser, johnsmithAdmin).Build()
-	return &CheClusterRequestValidator{
+	return &K8sImagePullerRequestValidator{
 		Client: cl,
 	}
 
 }
 
-func newCreateCheClusterAdmissionRequest(t *testing.T, username string) []byte {
-	tmpl, err := template.New("admission request").Parse(createCheClusterJSONTmpl)
+func newCreateK8sImagePullerAdmissionRequest(t *testing.T, username string) []byte {
+	tmpl, err := template.New("admission request").Parse(createK8sImagePullerJSONTmpl)
 	require.NoError(t, err)
 	req := &bytes.Buffer{}
 	err = tmpl.Execute(req, username)
@@ -83,30 +83,30 @@ func newCreateCheClusterAdmissionRequest(t *testing.T, username string) []byte {
 	return req.Bytes()
 }
 
-var createCheClusterJSONTmpl = `{
+var createK8sImagePullerJSONTmpl = `{
     "kind": "AdmissionReview",
     "apiVersion": "admission.k8s.io/v1",
     "request": {
-        "uid": "f0b30997-3ac0-49f2-baf4-6eafd123564c",
+        "uid": "b6ae2ab4-782b-11ee-b962-0242ac120002",
         "kind": {
-            "group": "org.eclipse.che",
-            "version": "v2",
-            "kind": "CheCluster"
+            "group": "che.eclipse.org",
+            "version": "v1alpha1",
+            "kind": "KubernetesImagePuller"
         },
         "resource": {
-            "group": "org.eclipse.che",
-            "version": "v2",
-            "resource": "checlusters"
+            "group": "che.eclipse.org",
+            "version": "v1alpha1",
+            "resource": "kubernetesimagepullers"
         },
         "requestKind": {
-            "group": "org.eclipse.che",
-            "version": "v2",
-            "kind": "CheCluster"
+            "group": "che.eclipse.org",
+            "version": "v1alpha1",
+            "kind": "KubernetesImagePuller"
         },
         "requestResource": {
-            "group": "org.eclipse.che",
-            "version": "v2",
-            "resource": "checlusters"
+            "group": "che.eclipse.org",
+            "version": "v1alpha1",
+            "resource": "kubernetesimagepullers"
         },
         "name": "test",
         "namespace": "johnsmith-dev",
@@ -118,8 +118,8 @@ var createCheClusterJSONTmpl = `{
             ]
         },
         "object": {
-            "apiVersion": "org.eclipse.che/v2",
-            "kind": "CheCluster",
+            "apiVersion": "che.eclipse.org/v1alpha1",
+            "kind": "KubernetesImagePuller",
             "metadata": {
                 "name": "test",
                 "namespace": "paul-dev"

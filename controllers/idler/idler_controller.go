@@ -518,7 +518,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 	// get the virtualmachineinstance info from the owner reference
 	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(context.TODO(), owner.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-		logger.Info("virtualmachineinstance not found")
+		logger.Info("VirtualMachineInstance not found", "name", owner.Name)
 		return owner.Kind, owner.Name, true, nil
 	}
 	if err != nil {
@@ -536,13 +536,13 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 	}
 
 	if vmiOwnerIndex == -1 {
-		return "", "", false, fmt.Errorf("no VirtualMachine owner found for VirtualMachineInstance %s", vmInstance.GetName())
+		return "", "", false, fmt.Errorf("VirtualMachineInstance '%s' is missing a VirtualMachine owner reference", vmInstance.GetName())
 	}
 
 	// stop the virtualmachine
 	vm, err := r.DynamicClient.Resource(vmGVR).Namespace(namespace).Get(context.TODO(), vmInstanceOwners[vmiOwnerIndex].Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-		logger.Info("virtualmachine not found")
+		logger.Info("VirtualMachine not found")
 		return owner.Kind, owner.Name, true, nil
 	}
 

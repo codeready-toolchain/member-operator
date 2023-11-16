@@ -197,6 +197,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	dynamicClient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create dynamic client")
+		os.Exit(1)
+	}
+
 	// Setup all Controllers
 	if err = toolchaincluster.NewReconciler(
 		mgr,
@@ -211,6 +217,7 @@ func main() {
 		AllNamespacesClient: allNamespacesClient,
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
+		DynamicClient:       dynamicClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr); err != nil {

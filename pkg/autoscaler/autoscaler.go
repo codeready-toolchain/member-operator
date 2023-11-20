@@ -18,7 +18,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func Deploy(cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
+func Deploy(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
 	objs, err := getTemplateObjects(s, namespace, requestsMemory, replicas)
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func Deploy(cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemor
 	applyClient := applycl.NewApplyClient(cl)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, obj := range objs {
-		if _, err := applyClient.ApplyObject(obj); err != nil {
+		if _, err := applyClient.ApplyObject(ctx, obj); err != nil {
 			return errs.Wrap(err, "cannot deploy autoscaling buffer template")
 		}
 	}

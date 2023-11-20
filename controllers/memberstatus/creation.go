@@ -1,6 +1,8 @@
 package memberstatus
 
 import (
+	"context"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 
@@ -9,7 +11,7 @@ import (
 )
 
 // CreateOrUpdateResources creates a memberstatus resource with the given name in the given namespace
-func CreateOrUpdateResources(client client.Client, namespace, memberStatusName string) error {
+func CreateOrUpdateResources(ctx context.Context, client client.Client, namespace, memberStatusName string) error {
 	memberStatus := &toolchainv1alpha1.MemberStatus{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
@@ -18,6 +20,6 @@ func CreateOrUpdateResources(client client.Client, namespace, memberStatusName s
 		Spec: toolchainv1alpha1.MemberStatusSpec{},
 	}
 	cl := commonclient.NewApplyClient(client)
-	_, err := cl.ApplyObject(memberStatus)
+	_, err := cl.ApplyObject(ctx, memberStatus)
 	return err
 }

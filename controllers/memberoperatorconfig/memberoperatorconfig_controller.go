@@ -66,7 +66,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err := r.handleWebConsolePluginDeploy(reqLogger, crtConfig, request.Namespace); err != nil {
+	if err := r.handleWebConsolePluginDeploy(ctx, crtConfig, request.Namespace); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -77,7 +77,7 @@ func (r *Reconciler) handleAutoscalerDeploy(ctx context.Context, cfg membercfg.C
 	logger := log.FromContext(ctx)
 	if cfg.Autoscaler().Deploy() {
 		logger.Info("(Re)Deploying autoscaling buffer")
-		if err := autoscaler.Deploy(r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
+		if err := autoscaler.Deploy(ctx, r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
 			return err
 		}
 		logger.Info("(Re)Deployed autoscaling buffer")
@@ -96,9 +96,9 @@ func (r *Reconciler) handleAutoscalerDeploy(ctx context.Context, cfg membercfg.C
 }
 
 func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Configuration, namespace string) error {
-	logger := log.FromContext(ctx)
 	// By default the users' pods webhook will be deployed, however in some cases (eg. e2e tests) there can be multiple member operators
 	// installed in the same cluster. In those cases only 1 webhook is needed because the MutatingWebhookConfiguration is a cluster-scoped resource and naming can conflict.
+	logger := log.FromContext(ctx)
 	if cfg.Webhook().Deploy() {
 		webhookImage := os.Getenv("MEMBER_OPERATOR_WEBHOOK_IMAGE")
 		logger.Info("(Re)Deploying users' pods webhook")
@@ -112,11 +112,13 @@ func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Conf
 	return nil
 }
 
-func (r *Reconciler) handleWebConsolePluginDeploy(logger logr.Logger, cfg membercfg.Configuration, namespace string) error {
+func (r *Reconciler) handleWebConsolePluginDeploy(ctx context.Context, cfg membercfg.Configuration, namespace string) error {
+	logger := log.FromContext(ctx)
+
 	if cfg.WebConsolePlugin().Deploy() {
 		webconsolepluginImage := os.Getenv("MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE")
 		logger.Info("(Re)Deploying web console plugin")
-		if err := consoledeploy.ConsolePlugin(r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
+		if err := consoledeploy.ConsolePlugin(ctx, r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
 			return err
 		}
 		logger.Info("(Re)Deployed web console plugin")

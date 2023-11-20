@@ -44,7 +44,7 @@ func TestDeploy(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		err := Deploy(fakeClient, s, test.MemberOperatorNs, "500Mi", 10)
+		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "500Mi", 10)
 
 		// then
 		require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestDeploy(t *testing.T) {
 		fakeClient := test.NewFakeClient(t, priorityClass, deployment)
 
 		// when
-		err := Deploy(fakeClient, s, test.MemberOperatorNs, "7Gi", 1)
+		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "7Gi", 1)
 
 		// then
 		require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestDeploy(t *testing.T) {
 		}
 
 		// when
-		err := Deploy(fakeClient, s, test.MemberOperatorNs, "7Gi", 3)
+		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "7Gi", 3)
 
 		// then
 		assert.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")

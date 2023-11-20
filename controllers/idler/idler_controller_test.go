@@ -1237,9 +1237,8 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	vmi.SetName(fmt.Sprintf("%s%s-virtualmachineinstance", namePrefix, namespace))
 	vmi.SetNamespace(namespace)
-	err = controllerutil.SetControllerReference(vm, vmi, r.Scheme) // vm controls by vmi
+	err = controllerutil.SetControllerReference(vm, vmi, r.Scheme) // vm controls vmi
 	require.NoError(t, err)
-	t.Log("creating vmi")
 	_, err = r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Create(context.TODO(), vmi, metav1.CreateOptions{})
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, vmi, sTime, controlledPods) // vmi controls pod

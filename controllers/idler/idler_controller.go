@@ -525,7 +525,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	// get the virtualmachine info from the virtualmachineinstance owner reference
+	// get virtualmachineinstance owner reference (virtualmachine)
 	vmInstanceOwners := vmInstance.GetOwnerReferences()
 	vmiOwnerIndex := -1
 	for i, vmInstanceOwner := range vmInstanceOwners {
@@ -539,7 +539,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, fmt.Errorf("VirtualMachineInstance '%s' is missing a VirtualMachine owner reference", vmInstance.GetName())
 	}
 
-	// stop the virtualmachine
+	// get the virtualmachine resource
 	vm, err := r.DynamicClient.Resource(vmGVR).Namespace(namespace).Get(context.TODO(), vmInstanceOwners[vmiOwnerIndex].Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 		logger.Info("VirtualMachine not found")
@@ -549,7 +549,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	// patch the virtualmachine to set spec.running to false
+	// patch the virtualmachine resource by setting spec.running to false in order to stop the VM
 	patch := []byte(`{"spec":{"running":false}}`)
 	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Patch(context.TODO(), vm.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {

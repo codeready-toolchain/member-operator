@@ -107,7 +107,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
+	// Find the earlier pod to kill and requeue. Otherwise, use the idler timeoutSeconds to requeue.
 	nextTime := nextPodToBeKilledAfter(logger, idler)
 	if nextTime == nil {
 		after := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
@@ -139,10 +139,10 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
 				var podreason string
-				podcondition := pod.Status.Conditions
-				for _, podtype := range podcondition {
-					if podtype.Type == "Ready" {
-						podreason = podtype.Reason
+				podCondition := pod.Status.Conditions
+				for _, podCond := range podCondition {
+					if podCond.Type == "Ready" {
+						podreason = podCond.Reason
 					}
 				}
 
@@ -554,7 +554,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 	}
 
 	logger.Info("VirtualMachine stopped", "name", vm.GetName())
-	return owner.Kind, owner.Name, true, nil
+	return vm.GetKind(), vm.GetName(), true, nil
 }
 
 func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {

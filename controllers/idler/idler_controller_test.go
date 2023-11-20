@@ -27,8 +27,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	fakescale "k8s.io/client-go/scale/fake"
 	clienttest "k8s.io/client-go/testing"
@@ -43,7 +45,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("No Idler resource found", func(t *testing.T) {
 		// given
 		requestName := "not-existing-name"
-		reconciler, req, _, _ := prepareReconcile(t, requestName, getHostCluster)
+		reconciler, req, _, _, _ := prepareReconcile(t, requestName, getHostCluster)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -55,7 +57,7 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("Fail to get Idler resource", func(t *testing.T) {
 		// given
-		reconciler, req, cl, _ := prepareReconcile(t, "cant-get-idler", getHostCluster)
+		reconciler, req, cl, _, _ := prepareReconcile(t, "cant-get-idler", getHostCluster)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			if key.Name == "cant-get-idler" {
 				return errors.New("can't get idler")
@@ -81,7 +83,7 @@ func TestReconcile(t *testing.T) {
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
-		reconciler, req, _, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
+		reconciler, req, _, _, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -105,7 +107,7 @@ func TestEnsureIdling(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
 
 		// when
@@ -136,7 +138,7 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
@@ -150,7 +152,7 @@ func TestEnsureIdling(t *testing.T) {
 			// then
 			require.NoError(t, err)
 			// Idler tracks all pods now but pods have not been deleted yet
-			memberoperatortest.AssertThatInIdleableCluster(t, allCl).
+			memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
 				PodsExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
@@ -180,7 +182,10 @@ func TestEnsureIdling(t *testing.T) {
 				ReplicationControllerScaledUp(noise.replicationController).
 				StatefulSetScaledUp(podsRunningForTooLong.statefulSet).
 				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
-				StatefulSetScaledUp(noise.statefulSet)
+				StatefulSetScaledUp(noise.statefulSet).
+				VMRunning(podsRunningForTooLong.virtualmachine).
+				VMRunning(podsTooEarlyToKill.virtualmachine).
+				VMRunning(noise.virtualmachine)
 
 			// Tracked pods
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
@@ -198,7 +203,7 @@ func TestEnsureIdling(t *testing.T) {
 				require.NoError(t, err)
 				// Too long running pods are gone. All long running controllers are scaled down.
 				// The rest of the pods are still there and controllers are scaled up.
-				memberoperatortest.AssertThatInIdleableCluster(t, allCl).
+				memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
 					PodsDoNotExist(podsRunningForTooLong.standalonePods).
 					PodsExist(podsTooEarlyToKill.standalonePods).
 					PodsExist(noise.standalonePods).
@@ -228,7 +233,10 @@ func TestEnsureIdling(t *testing.T) {
 					ReplicationControllerScaledUp(noise.replicationController).
 					StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
 					StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
-					StatefulSetScaledUp(noise.statefulSet)
+					StatefulSetScaledUp(noise.statefulSet).
+					VMStopped(podsRunningForTooLong.virtualmachine).
+					VMRunning(podsTooEarlyToKill.virtualmachine).
+					VMRunning(noise.virtualmachine)
 
 				// Still tracking all pods. Even deleted ones.
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
@@ -297,7 +305,7 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
 
@@ -353,7 +361,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				TimeoutSeconds: 0,
 			},
 		}
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -374,7 +382,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				TimeoutSeconds: -1,
 			},
 		}
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -394,7 +402,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, cl, allCl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		allCl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			pl := &corev1.PodList{}
 			if reflect.TypeOf(list) == reflect.TypeOf(pl) && len(opts) == 1 {
@@ -423,7 +431,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		t.Run("can't get controllers because of general error", func(t *testing.T) {
 			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
-				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
@@ -450,12 +458,13 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
 			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
+			// TODO dynamicCl
 		})
 
 		t.Run("can't get controllers because not found", func(t *testing.T) {
 			assertCanNotGetObject := func(inaccessible runtime.Object) {
 				// given
-				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
@@ -488,12 +497,13 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.StatefulSet{})
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{})
 			assertCanNotGetObject(&corev1.ReplicationController{})
+			// TODO dynamicCl
 		})
 
 		t.Run("can't update controllers", func(t *testing.T) {
 			assertCanNotUpdateObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
-				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				update := allCl.MockUpdate
 				defer func() { allCl.MockUpdate = update }()
@@ -518,12 +528,13 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
 			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
 			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
+			// TODO dynamicCl
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
 			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
-				reconciler, req, cl, allCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				dlt := allCl.MockDelete
 				defer func() { allCl.MockDelete = dlt }()
@@ -546,6 +557,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
 			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
 			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
+			// TODO dynamicCl
 		})
 	})
 
@@ -563,7 +575,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"john"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "john", "advanced", "abcde11", namespaces, usernames)
-		reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
+		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
 		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
 
@@ -599,7 +611,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 	usernames := []string{"alex"}
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("alex")
-	reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+	reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 	plds := preparePayloads(t, reconciler, idler.Name, "", time.Now())
 
 	tests := map[string]struct {
@@ -653,6 +665,12 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			ownerName:       plds.job.Name,
 			expectedAppType: "Job",
 			expectedAppName: plds.job.Name,
+		},
+		"VirtualMachineInstance": {
+			ownerKind:       "VirtualMachineInstance",
+			ownerName:       plds.virtualmachineinstance.GetName(),
+			expectedAppType: "VirtualMachine",
+			expectedAppName: plds.virtualmachine.GetName(),
 		},
 	}
 
@@ -745,7 +763,7 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 
 	for pt, tcs := range testpod {
 		t.Run(pt, func(t *testing.T) {
-			reconciler, req, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+			reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 
 			if tcs.controllerOwned {
@@ -811,7 +829,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -849,7 +867,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -866,7 +884,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, cl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 			return errors.New("can't update condition")
 		}
@@ -892,7 +910,7 @@ func TestCreateNotification(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -908,7 +926,7 @@ func TestCreateNotification(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "no email found for the user in MURs")
@@ -921,7 +939,7 @@ func TestCreateNotification(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		mur.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey] = "invalid-email-address"
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address: mail: missing '@' or angle-addr")
@@ -946,7 +964,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -965,7 +983,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		mur := newMUR("alex")
 		mur2 := newMUR("brian")
 		mur3 := newMUR("charlie")
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -980,7 +998,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 
 	t.Run("unable to get NSTemplateSet", func(t *testing.T) {
 		//given
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -994,7 +1012,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
+		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -1014,15 +1032,17 @@ type payloads struct {
 	// standalonePods + controlledPods
 	allPods []*corev1.Pod
 
-	deployment            *appsv1.Deployment
-	integration           *appsv1.Deployment
-	kameletBinding        *appsv1.Deployment
-	replicaSet            *appsv1.ReplicaSet
-	daemonSet             *appsv1.DaemonSet
-	statefulSet           *appsv1.StatefulSet
-	deploymentConfig      *openshiftappsv1.DeploymentConfig
-	replicationController *corev1.ReplicationController
-	job                   *batchv1.Job
+	deployment             *appsv1.Deployment
+	integration            *appsv1.Deployment
+	kameletBinding         *appsv1.Deployment
+	replicaSet             *appsv1.ReplicaSet
+	daemonSet              *appsv1.DaemonSet
+	statefulSet            *appsv1.StatefulSet
+	deploymentConfig       *openshiftappsv1.DeploymentConfig
+	replicationController  *corev1.ReplicationController
+	job                    *batchv1.Job
+	virtualmachine         *unstructured.Unstructured
+	virtualmachineinstance *unstructured.Unstructured
 }
 
 func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
@@ -1151,6 +1171,28 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	controlledPods = createPods(t, r, rc, sTime, controlledPods)
 
+	// VirtualMachine
+	vm := &unstructured.Unstructured{}
+	err = vm.UnmarshalJSON(virtualmachineJSON)
+	require.NoError(t, err)
+	vm.SetName(fmt.Sprintf("%s%s-virtualmachine", namePrefix, namespace))
+	vm.SetNamespace(namespace)
+	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// VirtualMachineInstance
+	vmi := &unstructured.Unstructured{}
+	err = vmi.UnmarshalJSON(virtualmachineinstanceJSON)
+	require.NoError(t, err)
+	vmi.SetName(fmt.Sprintf("%s%s-virtualmachineinstance", namePrefix, namespace))
+	vmi.SetNamespace(namespace)
+	err = controllerutil.SetControllerReference(vm, vmi, r.Scheme) // vm controls by vmi
+	require.NoError(t, err)
+	t.Log("creating vmi")
+	_, err = r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Create(context.TODO(), vmi, metav1.CreateOptions{})
+	require.NoError(t, err)
+	controlledPods = createPods(t, r, vmi, sTime, controlledPods) // vmi controls pod
+
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-replicationcontroller", namePrefix, namespace), Namespace: namespace},
@@ -1185,18 +1227,20 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 
 	return payloads{
-		standalonePods:        standalonePods,
-		controlledPods:        controlledPods,
-		allPods:               append(standalonePods, controlledPods...),
-		deployment:            d,
-		integration:           integration,
-		kameletBinding:        binding,
-		replicaSet:            standaloneRs,
-		daemonSet:             ds,
-		statefulSet:           sts,
-		deploymentConfig:      dc,
-		replicationController: standaloneRC,
-		job:                   job,
+		standalonePods:         standalonePods,
+		controlledPods:         controlledPods,
+		allPods:                append(standalonePods, controlledPods...),
+		deployment:             d,
+		integration:            integration,
+		kameletBinding:         binding,
+		replicaSet:             standaloneRs,
+		daemonSet:              ds,
+		statefulSet:            sts,
+		deploymentConfig:       dc,
+		replicationController:  standaloneRC,
+		job:                    job,
+		virtualmachine:         vm,
+		virtualmachineinstance: vmi,
 	}
 }
 
@@ -1234,13 +1278,14 @@ func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime meta
 	return podsToTrack
 }
 
-func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
+func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
+	dynamicClient := fakedynamic.NewSimpleDynamicClient(s)
 
 	scalesClient := fakescale.FakeScaleClient{}
 	scalesClient.AddReactor("update", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
@@ -1300,24 +1345,25 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 	r := &Reconciler{
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
+		DynamicClient:       dynamicClient,
 		ScalesClient:        &scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		Namespace:           test.MemberOperatorNs,
 	}
-	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient
+	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient, dynamicClient
 }
 
 // prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
-func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient) {
-	reconciler, req, cl, allCl := prepareReconcile(t, idler.Name, getHostCluster, &idler)
+func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
+	reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)
 	//start tracking pods, so the Idler status is filled with the tracked pods
 	_, err := reconciler.Reconcile(context.TODO(), req)
 	require.NoError(t, err)
 	memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(payloads.allPods)
-	return reconciler, req, cl, allCl
+	return reconciler, req, cl, allCl, dynamicClient
 }
 
 func getHostCluster(fakeClient client.Client) cluster.GetHostClusterFunc {
@@ -1365,3 +1411,203 @@ func newMUR(name string) *toolchainv1alpha1.MasterUserRecord {
 		},
 	}
 }
+
+var virtualmachineinstanceJSON = []byte(`{
+	"apiVersion": "kubevirt.io/v1",
+	"kind": "VirtualMachineInstance",
+	"metadata": {
+		"annotations": {
+			"kubevirt.io/latest-observed-api-version": "v1",
+			"kubevirt.io/storage-observed-api-version": "v1",
+			"kubevirt.io/vm-generation": "1",
+			"vm.kubevirt.io/flavor": "small",
+			"vm.kubevirt.io/os": "rhel9",
+			"vm.kubevirt.io/workload": "server"
+		},
+		"creationTimestamp": "2023-11-16T18:37:55Z",
+		"finalizers": [
+			"kubevirt.io/virtualMachineControllerFinalize",
+			"foregroundDeleteVirtualMachine"
+		],
+		"generation": 4,
+		"labels": {
+			"kubevirt.io/domain": "rhel9-rajiv",
+			"kubevirt.io/size": "small"
+		},
+		"name": "rhel9-rajiv",
+		"namespace": "another-namespace",
+		"resourceVersion": "229052",
+		"uid": "51e33178-448e-4236-8006-14a21568a569"
+	},
+	"spec": {
+		"architecture": "amd64",
+		"domain": {
+			"resources": {
+				"limits": {
+					"memory": "2Gi"
+				},
+				"requests": {
+					"memory": "2Gi"
+				}
+			}
+		},
+		"evictionStrategy": "LiveMigrate",
+		"networks": [
+			{
+				"name": "default",
+				"pod": {}
+			}
+		],
+		"terminationGracePeriodSeconds": 180,
+		"volumes": [
+			{
+				"dataVolume": {
+					"name": "rhel9-rajiv"
+				},
+				"name": "rootdisk"
+			},
+			{
+				"cloudInitNoCloud": {
+					"userData": "#cloud-config\nuser: cloud-user\npassword: abcd-1234-ef56\nchpasswd:\n  expire: false\n"
+				},
+				"name": "cloudinitdisk"
+			}
+		]
+	}
+}`)
+
+var virtualmachineJSON = []byte(`{
+	"apiVersion": "kubevirt.io/v1",
+	"kind": "VirtualMachine",
+	"metadata": {
+		"annotations": {
+			"kubevirt.io/latest-observed-api-version": "v1",
+			"kubevirt.io/storage-observed-api-version": "v1alpha3",
+			"vm.kubevirt.io/validations": "[\n  {\n    \"name\": \"minimal-required-memory\",\n    \"path\": \"jsonpath::.spec.domain.resources.requests.memory\",\n    \"rule\": \"integer\",\n    \"message\": \"This VM requires more memory.\",\n    \"min\": 1610612736\n  }\n]\n"
+		},
+		"creationTimestamp": "2023-09-12T15:27:31Z",
+		"finalizers": [
+			"kubevirt.io/virtualMachineControllerFinalize"
+		],
+		"generation": 1,
+		"labels": {
+			"app": "rhel9-rajiv",
+			"vm.kubevirt.io/template": "rhel9-server-small",
+			"vm.kubevirt.io/template.namespace": "openshift",
+			"vm.kubevirt.io/template.revision": "1",
+			"vm.kubevirt.io/template.version": "v0.25.0"
+		},
+		"name": "rhel9-rajiv",
+		"namespace": "another-namespace"
+	},
+	"spec": {
+		"dataVolumeTemplates": [
+			{
+				"apiVersion": "cdi.kubevirt.io/v1beta1",
+				"kind": "DataVolume",
+				"metadata": {
+					"creationTimestamp": null,
+					"name": "rhel9-rajiv"
+				},
+				"spec": {
+					"sourceRef": {
+						"kind": "DataSource",
+						"name": "rhel9",
+						"namespace": "openshift-virtualization-os-images"
+					},
+					"storage": {
+						"resources": {
+							"requests": {
+								"storage": "30Gi"
+							}
+						}
+					}
+				}
+			}
+		],
+		"running": true,
+		"template": {
+			"metadata": {
+				"annotations": {
+					"vm.kubevirt.io/flavor": "small",
+					"vm.kubevirt.io/os": "rhel9",
+					"vm.kubevirt.io/workload": "server"
+				},
+				"creationTimestamp": null,
+				"labels": {
+					"kubevirt.io/domain": "rhel9-rajiv",
+					"kubevirt.io/size": "small"
+				}
+			},
+			"spec": {
+				"domain": {
+					"resources": {
+						"requests": {
+							"memory": "2Gi"
+						}
+					}
+				},
+				"evictionStrategy": "LiveMigrate",
+				"networks": [
+					{
+						"name": "default",
+						"pod": {}
+					}
+				],
+				"terminationGracePeriodSeconds": 180,
+				"volumes": [
+					{
+						"dataVolume": {
+							"name": "rhel9-rajiv"
+						},
+						"name": "rootdisk"
+					},
+					{
+						"cloudInitNoCloud": {
+							"userData": "#cloud-config\nuser: cloud-user\npassword: abcd-1234-ef56\nchpasswd: { expire: False }"
+						},
+						"name": "cloudinitdisk"
+					}
+				]
+			}
+		}
+	},
+	"status": {
+		"conditions": [
+			{
+				"lastProbeTime": null,
+				"lastTransitionTime": "2023-09-12T15:32:55Z",
+				"status": "True",
+				"type": "Ready"
+			},
+			{
+				"lastProbeTime": null,
+				"lastTransitionTime": null,
+				"message": "cannot migrate VMI: PVC rhel9-rajiv is not shared, live migration requires that all PVCs must be shared (using ReadWriteMany access mode)",
+				"reason": "DisksNotLiveMigratable",
+				"status": "False",
+				"type": "LiveMigratable"
+			},
+			{
+				"lastProbeTime": "2023-09-12T15:33:14Z",
+				"lastTransitionTime": null,
+				"status": "True",
+				"type": "AgentConnected"
+			}
+		],
+		"created": true,
+		"printableStatus": "Running",
+		"ready": true,
+		"volumeSnapshotStatuses": [
+			{
+				"enabled": true,
+				"name": "rootdisk"
+			},
+			{
+				"enabled": false,
+				"name": "cloudinitdisk",
+				"reason": "Snapshot is not supported for this volumeSource type [cloudinitdisk]"
+			}
+		]
+	}
+}`)

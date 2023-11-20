@@ -68,7 +68,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when creating only one object because the other one already exists", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -83,7 +83,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("when only Deployment is supposed to be applied but the apps group is not present", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -100,7 +100,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		apiClient, fakeClient := prepareAPIClient(t)
 		// the version is different
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("apps", "v1alpha2"))
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -116,7 +116,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
 		apiClient.AvailableAPIGroups = append(apiClient.AvailableAPIGroups, newAPIGroup("apps", "v1"))
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(role, devNs, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(role, devNs, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -200,7 +200,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 				"update":   "me",         // new annotation should be added
 			}
 			apiClient, fakeClient := prepareAPIClient(t)
-			_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(sa), additionalLabel)
+			_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(sa), additionalLabel)
 			require.NoError(t, err)
 			called := false
 			fakeClient.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
@@ -236,7 +236,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("update Role", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role, sa), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(devNs, role, sa), additionalLabel)
 		require.NoError(t, err)
 
 		// when
@@ -251,7 +251,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	t.Run("create SA when it doesn't exist yet", func(t *testing.T) {
 		// given
 		apiClient, fakeClient := prepareAPIClient(t)
-		_, err := client.NewApplyClient(fakeClient).Apply(copyObjects(devNs, role), additionalLabel)
+		_, err := client.NewApplyClient(fakeClient).Apply(context.TODO(), copyObjects(devNs, role), additionalLabel)
 		require.NoError(t, err)
 		called := false
 		fakeClient.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {

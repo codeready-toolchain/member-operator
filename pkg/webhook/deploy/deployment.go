@@ -39,7 +39,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 	// create all objects that are within the template, and update only when the object has changed.
 	// if the object was either created or updated, then return and wait for another reconcile
 	for _, obj := range objs {
-		if _, err := applyClient.ApplyObject(obj); err != nil {
+		if _, err := applyClient.ApplyObject(ctx, obj); err != nil {
 			return errs.Wrap(err, "cannot deploy webhook template")
 		}
 	}

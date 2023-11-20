@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -428,10 +429,18 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
 		}
 
+		vm := &unstructured.Unstructured{}
+		err := vm.UnmarshalJSON(virtualmachineJSON)
+		require.NoError(t, err)
+
+		vmi := &unstructured.Unstructured{}
+		err = vmi.UnmarshalJSON(virtualmachineinstanceJSON)
+		require.NoError(t, err)
+
 		t.Run("can't get controllers because of general error", func(t *testing.T) {
 			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
-				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
@@ -440,6 +449,18 @@ func TestEnsureIdlingFailed(t *testing.T) {
 						return errors.New(errMsg)
 					}
 					return allCl.Client.Get(ctx, key, obj, opts...)
+				}
+
+				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
+				copy(originalReactions, dynamicCl.ReactionChain)
+				defer func() {
+					dynamicCl.Fake.ReactionChain = originalReactions
+				}()
+				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
+					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
+					dynamicCl.PrependReactor("get", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New(errMsg)
+					})
 				}
 
 				//when
@@ -458,13 +479,14 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
 			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
-			// TODO dynamicCl
+			assertCanNotGetObject(vm, "can't get virtualmachine")
+			assertCanNotGetObject(vmi, "can't get virtualmachineinstance")
 		})
 
 		t.Run("can't get controllers because not found", func(t *testing.T) {
 			assertCanNotGetObject := func(inaccessible runtime.Object) {
 				// given
-				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				get := allCl.MockGet
 				defer func() { allCl.MockGet = get }()
@@ -476,6 +498,21 @@ func TestEnsureIdlingFailed(t *testing.T) {
 						}, key.Name)
 					}
 					return allCl.Client.Get(ctx, key, obj, opts...)
+				}
+
+				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
+				copy(originalReactions, dynamicCl.ReactionChain)
+				defer func() {
+					dynamicCl.Fake.ReactionChain = originalReactions
+				}()
+				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
+					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
+					dynamicCl.PrependReactor("get", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, apierrors.NewNotFound(schema.GroupResource{
+							Group:    "",
+							Resource: resource,
+						}, inaccessible.(*unstructured.Unstructured).GetName())
+					})
 				}
 
 				//when
@@ -497,13 +534,14 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotGetObject(&appsv1.StatefulSet{})
 			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{})
 			assertCanNotGetObject(&corev1.ReplicationController{})
-			// TODO dynamicCl
+			assertCanNotGetObject(vm)
+			assertCanNotGetObject(vmi)
 		})
 
 		t.Run("can't update controllers", func(t *testing.T) {
 			assertCanNotUpdateObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
-				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				update := allCl.MockUpdate
 				defer func() { allCl.MockUpdate = update }()
@@ -512,6 +550,19 @@ func TestEnsureIdlingFailed(t *testing.T) {
 						return errors.New(errMsg)
 					}
 					return allCl.Client.Update(ctx, obj, opts...)
+				}
+
+				// dynamic client for vms
+				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
+				copy(originalReactions, dynamicCl.ReactionChain)
+				defer func() {
+					dynamicCl.Fake.ReactionChain = originalReactions
+				}()
+				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
+					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
+					dynamicCl.PrependReactor("patch", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+						return true, nil, errors.New(errMsg)
+					})
 				}
 
 				//when
@@ -528,7 +579,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
 			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
 			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
-			// TODO dynamicCl
+			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
+			assertCanNotUpdateObject(vm, "can't patch virtualmachine")
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
@@ -557,7 +609,6 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
 			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
 			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
-			// TODO dynamicCl
 		})
 	})
 

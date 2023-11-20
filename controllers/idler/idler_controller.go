@@ -545,6 +545,9 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		logger.Info("VirtualMachine not found")
 		return owner.Kind, owner.Name, true, nil
 	}
+	if err != nil {
+		return "", "", false, err
+	}
 
 	// patch the virtualmachine to set spec.running to false
 	patch := []byte(`{"spec":{"running":false}}`)

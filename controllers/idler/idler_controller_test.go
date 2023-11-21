@@ -579,7 +579,6 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
 			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
 			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
-			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
 			assertCanNotUpdateObject(vm, "can't patch virtualmachine")
 		})
 

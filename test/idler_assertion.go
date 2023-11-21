@@ -275,21 +275,19 @@ func (a *IdleablePayloadAssertion) StatefulSetScaledUp(statefulSet *appsv1.State
 }
 
 func (a *IdleablePayloadAssertion) VMRunning(vm *unstructured.Unstructured) *IdleablePayloadAssertion {
-	vm, err := a.dynamicClient.Resource(vmGVR).Namespace(vm.GetNamespace()).Get(context.TODO(), vm.GetName(), metav1.GetOptions{})
-	require.NoError(a.t, err)
-	val, found, err := unstructured.NestedBool(vm.Object, "spec", "running")
-	require.NoError(a.t, err)
-	assert.True(a.t, found)
-	assert.True(a.t, val)
-	return a
+	return a.vmRunning(vm, true)
 }
 
 func (a *IdleablePayloadAssertion) VMStopped(vm *unstructured.Unstructured) *IdleablePayloadAssertion {
+	return a.vmRunning(vm, false)
+}
+
+func (a *IdleablePayloadAssertion) vmRunning(vm *unstructured.Unstructured, running bool) *IdleablePayloadAssertion {
 	vm, err := a.dynamicClient.Resource(vmGVR).Namespace(vm.GetNamespace()).Get(context.TODO(), vm.GetName(), metav1.GetOptions{})
 	require.NoError(a.t, err)
 	val, found, err := unstructured.NestedBool(vm.Object, "spec", "running")
 	require.NoError(a.t, err)
 	assert.True(a.t, found)
-	assert.False(a.t, val)
+	assert.Equal(a.t, running, val)
 	return a
 }

@@ -237,19 +237,17 @@ func (r *Reconciler) ensureUser(ctx context.Context, config membercfg.Configurat
 	}
 
 	// ensure mapping
-	expectedIdentities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
+	expectedIdentities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()).IdentityName()}
 
 	// If the OriginalSub property has been set also, then an additional identity is required to be created
-	if userAcc.Spec.OriginalSub != "" {
-		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
+	if userAcc.Spec.PropagatedClaims.OriginalSub != "" {
+		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
 	// Also if the sso-user-id annotation is set, then another additional identity is required if it is a different value to the Spec.UserID
-	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
-		if val != userAcc.Spec.UserID {
-			expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(
-				userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
-		}
+	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.UserID {
+		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(
+			userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp()).IdentityName())
 	}
 
 	stringSlicesEqual := func(a, b []string) bool {
@@ -290,23 +288,22 @@ func (r *Reconciler) ensureIdentity(ctx context.Context, config membercfg.Config
 	}
 
 	// Check if the OriginalSub property is set, and if it is create additional identity/s as required
-	if userAcc.Spec.OriginalSub != "" {
+	if userAcc.Spec.PropagatedClaims.OriginalSub != "" {
 		// Encoded the OriginalSub as an unpadded Base64 value
-		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(ctx, config, userAcc.Spec.OriginalSub, userAcc, user)
+		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(ctx, config, userAcc.Spec.PropagatedClaims.OriginalSub, userAcc, user)
 		if createdOrUpdated || err != nil {
 			return nil, createdOrUpdated, err
 		}
 	}
 
-	// Check if the sso-user-id annotation is set, and if it is create an additional identity if it is a different value.
-	// So we always have an identity with the name generated out of SSO UserID (stored as sso_userid annotation) in addition to the identity with the name generated out of the SSO Token sub claim (stored as UserAccount.Spec.UserID).
+	// Check if the userID property is set, and if it is create an additional identity if it is a different value.
+	// So we always have an identity with the name generated out of SSO UserID (stored in the userID property) in
+	// addition to the identity with the name generated out of the SSO Token sub claim (stored as UserAccount.Spec.PropagatedClaims.Sub).
 	// This additional Identity is not created if the SSO UserID == SSO Token sub claim.
-	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
-		if val != userAcc.Spec.UserID {
-			_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(ctx, config, val, userAcc, user)
-			if createdOrUpdated || err != nil {
-				return nil, createdOrUpdated, err
-			}
+	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.PropagatedClaims.Sub {
+		_, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(ctx, config, userAcc.Spec.PropagatedClaims.UserID, userAcc, user)
+		if createdOrUpdated || err != nil {
+			return nil, createdOrUpdated, err
 		}
 	}
 
@@ -404,21 +401,16 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 
 		annotations = object.GetAnnotations()
 		set := false
-		userID, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]
-		if ok {
-			accountID, ok := userAcc.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey]
-			// *IF* both userID and accountID properties are set, then set them on the User resource, otherwise clear
-			// the values if they exist
-			if ok {
-				set = true
-				if annotations == nil {
-					annotations = map[string]string{}
-				}
-				annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = userID
-				annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey] = accountID
-				object.SetAnnotations(annotations)
-				changed = true
+		if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.AccountID != "" {
+			set = true
+			if annotations == nil {
+				annotations = map[string]string{}
 			}
+			annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = userAcc.Spec.PropagatedClaims.UserID
+			annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey] = userAcc.Spec.PropagatedClaims.AccountID
+			object.SetAnnotations(annotations)
+			changed = true
+
 		}
 
 		// Delete the UserID and AccountID annotations if they don't exist in the UserAccount
@@ -635,13 +627,11 @@ func (r *Reconciler) updateStatusConditions(ctx context.Context, userAcc *toolch
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
 	identities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
-	if userAcc.Spec.OriginalSub != "" {
-		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.OriginalSub, config.Auth().Idp()).IdentityName())
+	if userAcc.Spec.PropagatedClaims.OriginalSub != "" {
+		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
-	if val, ok := userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]; ok {
-		if val != userAcc.Spec.UserID {
-			identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()).IdentityName())
-		}
+	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.PropagatedClaims.OriginalSub {
+		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp()).IdentityName())
 	}
 
 	user := &userv1.User{

@@ -28,8 +28,8 @@ type APIClient struct {
 func (c APIClient) ApplyToolchainObjects(ctx context.Context, toolchainObjects []runtimeclient.Object, newLabels map[string]string) (bool, error) {
 	applyClient := applycl.NewApplyClient(c.Client)
 	anyApplied := false
-
 	logger := log.FromContext(ctx)
+
 	for _, object := range toolchainObjects {
 		if _, exists := object.GetAnnotations()[toolchainv1alpha1.TierTemplateObjectOptionalResourceAnnotation]; exists {
 			if !apiGroupIsPresent(c.AvailableAPIGroups, object.GetObjectKind().GroupVersionKind()) {
@@ -67,7 +67,7 @@ func (c APIClient) ApplyToolchainObjects(ctx context.Context, toolchainObjects [
 			continue
 		}
 		logger.Info("applying object", "object_namespace", object.GetNamespace(), "object_name", object.GetObjectKind().GroupVersionKind().Kind+"/"+object.GetName())
-		_, err := applyClient.Apply([]runtimeclient.Object{object}, newLabels)
+		_, err := applyClient.Apply(ctx, []runtimeclient.Object{object}, newLabels)
 		if err != nil {
 			return anyApplied, err
 		}

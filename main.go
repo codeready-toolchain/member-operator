@@ -197,6 +197,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	dynamicClient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create dynamic client")
+		os.Exit(1)
+	}
+
 	// Setup all Controllers
 	if err = toolchaincluster.NewReconciler(
 		mgr,
@@ -211,6 +217,7 @@ func main() {
 		AllNamespacesClient: allNamespacesClient,
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
+		DynamicClient:       dynamicClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr); err != nil {
@@ -268,7 +275,7 @@ func main() {
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")
 		memberStatusName := memberstatus.MemberStatusName
-		if err := memberstatus.CreateOrUpdateResources(mgr.GetClient(), namespace, memberStatusName); err != nil {
+		if err := memberstatus.CreateOrUpdateResources(stopChannel, mgr.GetClient(), namespace, memberStatusName); err != nil {
 			setupLog.Error(err, "cannot create/update MemberStatus resource")
 			os.Exit(1)
 		}

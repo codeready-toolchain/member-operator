@@ -16,10 +16,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
 
 type IdlerAssertion struct {
 	idler          *toolchainv1alpha1.Idler
@@ -55,7 +60,7 @@ func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
 		startTimeNoMilSec := pod.Status.StartTime.Truncate(time.Second)
 		expected := toolchainv1alpha1.Pod{
 			Name:      pod.Name,
-			StartTime: v1.NewTime(startTimeNoMilSec),
+			StartTime: metav1.NewTime(startTimeNoMilSec),
 		}
 		assert.Contains(a.t, a.idler.Status.Pods, expected)
 	}
@@ -119,14 +124,16 @@ func IdlerNotificationCreationFailed(message string) toolchainv1alpha1.Condition
 }
 
 type IdleablePayloadAssertion struct {
-	client client.Client
-	t      *testing.T
+	client        client.Client
+	t             *testing.T
+	dynamicClient *fakedynamic.FakeDynamicClient
 }
 
-func AssertThatInIdleableCluster(t *testing.T, client client.Client) *IdleablePayloadAssertion {
+func AssertThatInIdleableCluster(t *testing.T, client client.Client, dynamicClient *fakedynamic.FakeDynamicClient) *IdleablePayloadAssertion {
 	return &IdleablePayloadAssertion{
-		client: client,
-		t:      t,
+		client:        client,
+		t:             t,
+		dynamicClient: dynamicClient,
 	}
 }
 
@@ -264,5 +271,23 @@ func (a *IdleablePayloadAssertion) StatefulSetScaledUp(statefulSet *appsv1.State
 	require.NoError(a.t, err)
 	require.NotNil(a.t, s.Spec.Replicas)
 	assert.Equal(a.t, int32(3), *s.Spec.Replicas)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) VMRunning(vm *unstructured.Unstructured) *IdleablePayloadAssertion {
+	return a.vmRunning(vm, true)
+}
+
+func (a *IdleablePayloadAssertion) VMStopped(vm *unstructured.Unstructured) *IdleablePayloadAssertion {
+	return a.vmRunning(vm, false)
+}
+
+func (a *IdleablePayloadAssertion) vmRunning(vm *unstructured.Unstructured, running bool) *IdleablePayloadAssertion {
+	vm, err := a.dynamicClient.Resource(vmGVR).Namespace(vm.GetNamespace()).Get(context.TODO(), vm.GetName(), metav1.GetOptions{})
+	require.NoError(a.t, err)
+	val, found, err := unstructured.NestedBool(vm.Object, "spec", "running")
+	require.NoError(a.t, err)
+	assert.True(a.t, found)
+	assert.Equal(a.t, running, val)
 	return a
 }

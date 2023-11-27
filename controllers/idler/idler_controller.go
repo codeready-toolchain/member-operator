@@ -12,6 +12,7 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -38,6 +39,9 @@ var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionRes
 	schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
 }
 
+var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
+var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstances"}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -51,6 +55,7 @@ type Reconciler struct {
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
 	ScalesClient        scale.ScalesGetter
+	DynamicClient       dynamic.Interface
 	GetHostCluster      cluster.GetHostClusterFunc
 	Namespace           string
 }
@@ -63,6 +68,7 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments;daemonsets;replicasets;statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
@@ -101,7 +107,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill and requeue. Do not requeue if no pods tracked
+	// Find the earlier pod to kill and requeue. Otherwise, use the idler timeoutSeconds to requeue.
 	nextTime := nextPodToBeKilledAfter(logger, idler)
 	if nextTime == nil {
 		after := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
@@ -133,10 +139,10 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
 				var podreason string
-				podcondition := pod.Status.Conditions
-				for _, podtype := range podcondition {
-					if podtype.Type == "Ready" {
-						podreason = podtype.Reason
+				podCondition := pod.Status.Conditions
+				for _, podCond := range podCondition {
+					if podCond.Type == "Ready" {
+						podreason = podCond.Reason
 					}
 				}
 
@@ -295,6 +301,8 @@ func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.Obje
 				return r.scaleReplicationControllerToZero(ctx, meta.Namespace, owner)
 			case "Job":
 				return r.deleteJob(ctx, meta.Namespace, owner) // Nothing to scale down. Delete instead.
+			case "VirtualMachineInstance":
+				return r.stopVirtualMachine(ctx, meta.Namespace, owner) // Nothing to scale down. Stop instead.
 			}
 		}
 	}
@@ -503,6 +511,53 @@ func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner meta
 	}
 	logger.Info("Job deleted", "name", j.Name)
 	return owner.Kind, owner.Name, true, nil
+}
+
+func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
+	logger := log.FromContext(ctx)
+	// get the virtualmachineinstance info from the owner reference
+	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(context.TODO(), owner.Name, metav1.GetOptions{})
+	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+		logger.Info("VirtualMachineInstance not found", "name", owner.Name)
+		return owner.Kind, owner.Name, true, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+
+	// get virtualmachineinstance owner reference (virtualmachine)
+	vmInstanceOwners := vmInstance.GetOwnerReferences()
+	vmiOwnerIndex := -1
+	for i, vmInstanceOwner := range vmInstanceOwners {
+		if vmInstanceOwner.Controller != nil && *vmInstanceOwner.Controller && vmInstanceOwner.Kind == "VirtualMachine" {
+			vmiOwnerIndex = i
+			break
+		}
+	}
+
+	if vmiOwnerIndex == -1 {
+		return "", "", false, fmt.Errorf("VirtualMachineInstance '%s' is missing a VirtualMachine owner reference", vmInstance.GetName())
+	}
+
+	// get the virtualmachine resource
+	vm, err := r.DynamicClient.Resource(vmGVR).Namespace(namespace).Get(context.TODO(), vmInstanceOwners[vmiOwnerIndex].Name, metav1.GetOptions{})
+	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+		logger.Info("VirtualMachine not found")
+		return owner.Kind, owner.Name, true, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+
+	// patch the virtualmachine resource by setting spec.running to false in order to stop the VM
+	patch := []byte(`{"spec":{"running":false}}`)
+	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Patch(context.TODO(), vm.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return "", "", false, err
+	}
+
+	logger.Info("VirtualMachine stopped", "name", vm.GetName())
+	return vm.GetKind(), vm.GetName(), true, nil
 }
 
 func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {

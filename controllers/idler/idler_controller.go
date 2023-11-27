@@ -516,7 +516,7 @@ func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner meta
 func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	logger := log.FromContext(ctx)
 	// get the virtualmachineinstance info from the owner reference
-	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(context.TODO(), owner.Name, metav1.GetOptions{})
+	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(ctx, owner.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 		logger.Info("VirtualMachineInstance not found", "name", owner.Name)
 		return owner.Kind, owner.Name, true, nil
@@ -540,7 +540,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 	}
 
 	// get the virtualmachine resource
-	vm, err := r.DynamicClient.Resource(vmGVR).Namespace(namespace).Get(context.TODO(), vmInstanceOwners[vmiOwnerIndex].Name, metav1.GetOptions{})
+	vm, err := r.DynamicClient.Resource(vmGVR).Namespace(namespace).Get(ctx, vmInstanceOwners[vmiOwnerIndex].Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 		logger.Info("VirtualMachine not found")
 		return owner.Kind, owner.Name, true, nil
@@ -551,7 +551,7 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 
 	// patch the virtualmachine resource by setting spec.running to false in order to stop the VM
 	patch := []byte(`{"spec":{"running":false}}`)
-	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Patch(context.TODO(), vm.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Patch(ctx, vm.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
 		return "", "", false, err
 	}

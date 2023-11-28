@@ -244,8 +244,8 @@ func (r *Reconciler) ensureUser(ctx context.Context, config membercfg.Configurat
 		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
 
-	// Also if the sso-user-id annotation is set, then another additional identity is required if it is a different value to the Spec.UserID
-	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.UserID {
+	// Also if the UserID property is set, then an additional identity is required if it is a different value to the Sub
+	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.PropagatedClaims.Sub {
 		expectedIdentities = append(expectedIdentities, commonidentity.NewIdentityNamingStandard(
 			userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp()).IdentityName())
 	}
@@ -630,7 +630,7 @@ func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configurat
 	if userAcc.Spec.PropagatedClaims.OriginalSub != "" {
 		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.OriginalSub, config.Auth().Idp()).IdentityName())
 	}
-	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.PropagatedClaims.OriginalSub {
+	if userAcc.Spec.PropagatedClaims.UserID != "" && userAcc.Spec.PropagatedClaims.UserID != userAcc.Spec.PropagatedClaims.Sub {
 		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp()).IdentityName())
 	}
 

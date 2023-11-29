@@ -394,7 +394,7 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 			if annotations == nil {
 				annotations = map[string]string{}
 			}
-			annotations[toolchainv1alpha1.UserEmailAnnotationKey] = userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey]
+			annotations[toolchainv1alpha1.UserEmailAnnotationKey] = userAcc.Spec.PropagatedClaims.Email
 			object.SetAnnotations(annotations)
 			changed = true
 		}

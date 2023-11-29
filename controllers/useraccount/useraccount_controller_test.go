@@ -88,7 +88,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
+				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Spec.PropagatedClaims.Email,
 			},
 		},
 		Identities: []string{
@@ -1176,7 +1176,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey],
+				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Spec.PropagatedClaims.Email,
 			},
 		},
 		Identities: []string{
@@ -1551,7 +1551,7 @@ func assertUser(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAcco
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, user.Labels[toolchainv1alpha1.ProviderLabelKey])
 
 	assert.NotNil(t, user.Annotations)
-	assert.Equal(t, userAcc.Annotations[toolchainv1alpha1.UserEmailAnnotationKey], user.Annotations[toolchainv1alpha1.UserEmailAnnotationKey])
+	assert.Equal(t, userAcc.Spec.PropagatedClaims.Email, user.Annotations[toolchainv1alpha1.UserEmailAnnotationKey])
 
 	assert.Empty(t, user.OwnerReferences) // User has no explicit owner reference.// Check the user identity mapping
 	return user
@@ -1605,9 +1605,6 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 			UID:       types.UID(uuid.Must(uuid.NewV4()).String()),
 			Labels: map[string]string{
 				toolchainv1alpha1.TierLabelKey: "basic",
-			},
-			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userName + "@acme.com",
 			},
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{

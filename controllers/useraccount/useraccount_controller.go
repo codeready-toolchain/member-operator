@@ -282,7 +282,7 @@ func (r *Reconciler) ensureUser(ctx context.Context, config membercfg.Configurat
 }
 
 func (r *Reconciler) ensureIdentity(ctx context.Context, config membercfg.Configuration, userAcc *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-	identity, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(ctx, config, userAcc.Spec.UserID, userAcc, user)
+	identity, createdOrUpdated, err := r.loadIdentityAndEnsureMapping(ctx, config, userAcc.Spec.PropagatedClaims.Sub, userAcc, user)
 	if createdOrUpdated || err != nil {
 		return nil, createdOrUpdated, err
 	}
@@ -626,7 +626,7 @@ func (r *Reconciler) updateStatusConditions(ctx context.Context, userAcc *toolch
 }
 
 func newUser(userAcc *toolchainv1alpha1.UserAccount, config membercfg.Configuration) *userv1.User {
-	identities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.UserID, config.Auth().Idp()).IdentityName()}
+	identities := []string{commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()).IdentityName()}
 	if userAcc.Spec.PropagatedClaims.OriginalSub != "" {
 		identities = append(identities, commonidentity.NewIdentityNamingStandard(userAcc.Spec.PropagatedClaims.OriginalSub, config.Auth().Idp()).IdentityName())
 	}

@@ -52,7 +52,7 @@ func TestReconcile(t *testing.T) {
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+			Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
 			UID:  types.UID(userAcc.Name + "identity"),
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey:    username,
@@ -67,7 +67,7 @@ func TestReconcile(t *testing.T) {
 
 	preexistingIdentityForSsoUserAnnotation := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ToIdentityName(userAcc.ObjectMeta.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()),
+			Name: ToIdentityName(userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp()),
 			UID:  types.UID(userAcc.Name + "identity"),
 			Labels: map[string]string{
 				"toolchain.dev.openshift.com/owner": username,
@@ -92,8 +92,8 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		Identities: []string{
-			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
-			ToIdentityName(userAcc.ObjectMeta.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp()),
+			ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
+			ToIdentityName(userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp()),
 		},
 	}
 
@@ -142,9 +142,9 @@ func TestReconcile(t *testing.T) {
 			// Check the identity is not created yet
 			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
 
-			t.Run("test missing UserID annotation propagates to User", func(t *testing.T) {
-				// Remove the UserID annotation from the UserAccount and reconcile again
-				delete(userAcc.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
+			t.Run("test missing UserID property propagates to User", func(t *testing.T) {
+				// Remove the UserID from the UserAccount and reconcile again
+				userAcc.Spec.PropagatedClaims.UserID = ""
 				r, req, _, _ = prepareReconcile(t, username, userAcc)
 				//when
 				res, err = r.Reconcile(context.TODO(), req)
@@ -157,8 +157,8 @@ func TestReconcile(t *testing.T) {
 				require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
 				require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
 
-				t.Run("reset UserID annotation and reconcile again", func(t *testing.T) {
-					userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = "123456"
+				t.Run("reset UserID and reconcile again", func(t *testing.T) {
+					userAcc.Spec.PropagatedClaims.UserID = "123456"
 					r, req, _, _ = prepareReconcile(t, username, userAcc)
 					//when
 					res, err = r.Reconcile(context.TODO(), req)
@@ -173,7 +173,7 @@ func TestReconcile(t *testing.T) {
 
 					t.Run("test missing AccountID annotation propagates to User", func(t *testing.T) {
 						// Remove the AccountID annotation from the UserAccount and reconcile again
-						delete(userAcc.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+						userAcc.Spec.PropagatedClaims.AccountID = ""
 						r, req, _, _ = prepareReconcile(t, username, userAcc)
 						//when
 						res, err = r.Reconcile(context.TODO(), req)
@@ -187,7 +187,7 @@ func TestReconcile(t *testing.T) {
 						require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
 
 						t.Run("reset AccountID annotation and reconcile again", func(t *testing.T) {
-							userAcc.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey] = "987654"
+							userAcc.Spec.PropagatedClaims.AccountID = "987654"
 							r, req, _, _ = prepareReconcile(t, username, userAcc)
 							//when
 							res, err = r.Reconcile(context.TODO(), req)
@@ -302,7 +302,7 @@ func TestReconcile(t *testing.T) {
 
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+				Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
 				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
@@ -328,7 +328,7 @@ func TestReconcile(t *testing.T) {
 			res, err := r.Reconcile(context.TODO(), req)
 
 			//then
-			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())))
+			require.EqualError(t, err, fmt.Sprintf("failed to create identity '%s': unable to create identity", ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp())))
 			assert.Equal(t, reconcile.Result{}, res)
 
 			// Check that the user account status has been updated
@@ -340,7 +340,7 @@ func TestReconcile(t *testing.T) {
 			// given
 			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
-				Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+				Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
 				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey: userAcc.Name,
@@ -366,8 +366,8 @@ func TestReconcile(t *testing.T) {
 
 	// Next cycle of reconcile.
 	// User has been already created.
-	// Identity for UserAccount.Spec.UserID has been already created
-	// No need to create Identity for UserAccount.Spec.OriginalSub because it's not set.
+	// Identity for UserAccount.Spec.PropagatedClaims.Sub has been already created
+	// No need to create Identity for UserAccount.Spec.PropagatedClaims.OriginalSub because it's not set.
 	// Creating Identity for UserAccount.Annotations[sso_userID].
 	t.Run("identity for sso userID annotation", func(t *testing.T) {
 		// given
@@ -385,7 +385,7 @@ func TestReconcile(t *testing.T) {
 			HasConditions(provisioning())
 
 		// Check the created identity
-		identity := assertIdentityForUserID(t, r, userAcc, userAcc.ObjectMeta.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey], config.Auth().Idp())
+		identity := assertIdentityForUserID(t, r, userAcc, userAcc.Spec.PropagatedClaims.UserID, config.Auth().Idp())
 
 		// Check the user identity mapping
 		checkMapping(t, preexistingUser, preexistingIdentity, identity)
@@ -530,7 +530,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 
 			identity := &userv1.Identity{}
-			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp())}, identity)
 			require.NoError(t, err)
 			assertUserNotFound(t, r, userAcc)
 
@@ -553,7 +553,7 @@ func TestReconcile(t *testing.T) {
 			require.NoError(t, err)
 
 			identity := &userv1.Identity{}
-			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
+			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp())}, identity)
 			require.NoError(t, err)
 			user := &userv1.User{}
 			err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
@@ -862,8 +862,8 @@ func TestReconcile(t *testing.T) {
 	// Test UserAccount with OriginalSub property set
 	// TODO remove this test after migration is complete
 	t.Run("create or update identities from OriginalSub OK", func(t *testing.T) {
-		userAcc := newUserAccount(username, userAcc.ObjectMeta.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]) // Sub Claim == SSO UserID
-		userAcc.Spec.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
+		userAcc := newUserAccount(username, userAcc.Spec.PropagatedClaims.UserID) // Sub Claim == SSO UserID
+		userAcc.Spec.PropagatedClaims.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
 
 		t.Run("create user identity mapping", func(t *testing.T) {
 			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
@@ -911,10 +911,11 @@ func TestReconcile(t *testing.T) {
 					// Check the second created/updated identity
 					identity2 := &userv1.Identity{}
 					err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(
-						fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))),
+						fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.PropagatedClaims.OriginalSub))),
 						config.Auth().Idp())}, identity2)
 					require.NoError(t, err)
-					assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), identity2.Name)
+					assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.
+						EncodeToString([]byte(userAcc.Spec.PropagatedClaims.OriginalSub))), identity2.Name)
 					require.Equal(t, userAcc.Name, identity2.Labels[toolchainv1alpha1.OwnerLabelKey])
 					assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
 
@@ -937,7 +938,7 @@ func TestReconcile(t *testing.T) {
 	// Test UserAccount with UserID containing invalid chars
 	t.Run("create or update identities from UserID with invalid chars OK", func(t *testing.T) {
 		userAcc := newUserAccount(username, userID)
-		userAcc.Spec.UserID = "01234:ABCDEF"
+		userAcc.Spec.PropagatedClaims.Sub = "01234:ABCDEF"
 
 		t.Run("create user identity mapping", func(t *testing.T) {
 			r, req, _, _ := prepareReconcile(t, username, userAcc, preexistingUser)
@@ -1096,9 +1097,9 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	username := "kjones"
 
 	userAcc := newUserAccount(username, userID)
-	// Unset the sso-user-id annotation so that a third identity isn't created
-	delete(userAcc.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
-	userAcc.Spec.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
+	// Unset the UserID property so that a third identity isn't created
+	userAcc.Spec.PropagatedClaims.UserID = ""
+	userAcc.Spec.PropagatedClaims.OriginalSub = fmt.Sprintf("original-sub:%s", userID)
 
 	// Reconcile to create the user
 	r, req, _, _ := prepareReconcile(t, username, userAcc)
@@ -1137,10 +1138,11 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	// Check the second created/updated identity
 	identity2 := &userv1.Identity{}
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(
-		fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))),
+		fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.PropagatedClaims.OriginalSub))),
 		config.Auth().Idp())}, identity2)
 	require.NoError(t, err)
-	assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString([]byte(userAcc.Spec.OriginalSub))), identity2.Name)
+	assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.
+		EncodeToString([]byte(userAcc.Spec.PropagatedClaims.OriginalSub))), identity2.Name)
 	require.Equal(t, userAcc.Name, identity2.Labels["toolchain.dev.openshift.com/owner"])
 	assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
 
@@ -1162,7 +1164,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 	username := "hcollins"
 
 	userAcc := newUserAccount(username, userID)
-	userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = "ABCDE:98765"
+	userAcc.Spec.PropagatedClaims.UserID = "ABCDE:98765"
 	userUID := types.UID(username + "user")
 
 	preexistingUser := &userv1.User{
@@ -1178,7 +1180,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 			},
 		},
 		Identities: []string{
-			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+			ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
 		},
 	}
 
@@ -1208,11 +1210,12 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 	// Check the second created/updated identity
 	identity2 := &userv1.Identity{}
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(
-		fmt.Sprintf("b64:%s", base64.RawStdEncoding.EncodeToString([]byte(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]))),
+		fmt.Sprintf("b64:%s", base64.RawStdEncoding.
+			EncodeToString([]byte(userAcc.Spec.PropagatedClaims.UserID))),
 		config.Auth().Idp())}, identity2)
 	require.NoError(t, err)
 	assert.Equal(t, fmt.Sprintf("%s:b64:%s", config.Auth().Idp(), base64.RawStdEncoding.EncodeToString(
-		[]byte(userAcc.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey]))), identity2.Name)
+		[]byte(userAcc.Spec.PropagatedClaims.UserID))), identity2.Name)
 	require.Equal(t, userAcc.Name, identity2.Labels["toolchain.dev.openshift.com/owner"])
 	assert.Empty(t, identity2.OwnerReferences) // Identity has no explicit owner reference.
 
@@ -1339,7 +1342,7 @@ func TestDisabledUserAccount(t *testing.T) {
 	userUID := types.UID(username + "user")
 	preexistingIdentity := &userv1.Identity{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+			Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
 			UID:  types.UID(username + "identity"),
 			Labels: map[string]string{
 				toolchainv1alpha1.OwnerLabelKey: username,
@@ -1359,7 +1362,7 @@ func TestDisabledUserAccount(t *testing.T) {
 			},
 		},
 		Identities: []string{
-			ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp()),
+			ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
 		},
 	}
 
@@ -1438,7 +1441,7 @@ func TestDisabledUserAccount(t *testing.T) {
 
 		// identity & user without label stay there
 		identity := &userv1.Identity{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.UserID, config.Auth().Idp())}, identity)
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp())}, identity)
 		require.NoError(t, err)
 		user := &userv1.User{}
 		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: userAcc.Name}, user)
@@ -1555,7 +1558,7 @@ func assertUser(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAcco
 }
 
 func assertIdentityNotFound(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAccount, idp string) {
-	identityName := ToIdentityName(userAcc.Spec.UserID, idp)
+	identityName := ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, idp)
 	// Check that the associated identity has been deleted
 	// since disabled has been set to true
 	identity := &userv1.Identity{}
@@ -1565,7 +1568,7 @@ func assertIdentityNotFound(t *testing.T, r *Reconciler, userAcc *toolchainv1alp
 }
 
 func assertIdentity(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAccount, idp string) *userv1.Identity {
-	return assertIdentityForUserID(t, r, userAcc, userAcc.Spec.UserID, idp)
+	return assertIdentityForUserID(t, r, userAcc, userAcc.Spec.PropagatedClaims.Sub, idp)
 }
 
 func assertIdentityForUserID(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAccount, userID, idp string) *userv1.Identity {
@@ -1604,13 +1607,17 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 				toolchainv1alpha1.TierLabelKey: "basic",
 			},
 			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey:    userName + "@acme.com",
-				toolchainv1alpha1.SSOUserIDAnnotationKey:    "123456",
-				toolchainv1alpha1.SSOAccountIDAnnotationKey: "987654",
+				toolchainv1alpha1.UserEmailAnnotationKey: userName + "@acme.com",
 			},
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
 			UserID: userID,
+			PropagatedClaims: toolchainv1alpha1.PropagatedClaims{
+				Email:     userName + "@acme.com",
+				UserID:    "123456",
+				AccountID: "987654",
+				Sub:       userID,
+			},
 		},
 	}
 	for _, apply := range opts {

@@ -1608,7 +1608,6 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 			},
 		},
 		Spec: toolchainv1alpha1.UserAccountSpec{
-			UserID: userID,
 			PropagatedClaims: toolchainv1alpha1.PropagatedClaims{
 				Email:     userName + "@acme.com",
 				UserID:    "123456",

@@ -267,8 +267,8 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 			if err != nil {
 				return emails, errs.Wrapf(err, "could not get the MUR")
 			}
-			if email := getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey]; email != "" {
-				emails = append(emails, getMUR.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey])
+			if email := getMUR.Spec.PropagatedClaims.Email; email != "" {
+				emails = append(emails, getMUR.Spec.PropagatedClaims.Email)
 			}
 		}
 	} else {

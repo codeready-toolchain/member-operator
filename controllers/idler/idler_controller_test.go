@@ -975,7 +975,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		delete(mur.Annotations, toolchainv1alpha1.MasterUserRecordEmailAnnotationKey)
+		mur.Spec.PropagatedClaims.Email = ""
 		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -988,7 +988,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		mur.Annotations[toolchainv1alpha1.MasterUserRecordEmailAnnotationKey] = "invalid-email-address"
+		mur.Spec.PropagatedClaims.Email = "invalid-email-address"
 		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -1454,8 +1454,10 @@ func newMUR(name string) *toolchainv1alpha1.MasterUserRecord {
 			Namespace:  test.HostOperatorNs,
 			Name:       name,
 			Finalizers: []string{toolchainv1alpha1.FinalizerName},
-			Annotations: map[string]string{
-				toolchainv1alpha1.MasterUserRecordEmailAnnotationKey: fmt.Sprintf("%s@test.com", name),
+		},
+		Spec: toolchainv1alpha1.MasterUserRecordSpec{
+			PropagatedClaims: toolchainv1alpha1.PropagatedClaims{
+				Email: fmt.Sprintf("%s@test.com", name),
 			},
 		},
 	}

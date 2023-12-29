@@ -61,11 +61,6 @@ spec:
                 description: If set to true then the corresponding user should not
                   be able to login "false" is assumed by default
                 type: boolean
-              originalSub:
-                description: OriginalSub is an optional property temporarily introduced
-                  for the purpose of migrating the users to a new IdP provider client,
-                  and contains the user's "original-sub" claim
-                type: string
               propagatedClaims:
                 description: PropagatedClaims contains a selection of claim values
                   from the SSO Identity Provider which are intended to be "propagated"
@@ -93,13 +88,6 @@ spec:
                 - email
                 - sub
                 type: object
-              userID:
-                description: UserID is the user ID from RHD Identity Provider token
-                  (“sub” claim) Is to be used to create Identity and UserIdentityMapping
-                  resources
-                type: string
-            required:
-            - userID
             type: object
           status:
             description: UserAccountStatus defines the observed state of UserAccount

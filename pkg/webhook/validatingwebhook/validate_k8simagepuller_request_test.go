@@ -2,6 +2,7 @@ package validatingwebhook
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,7 +29,7 @@ func TestHandleValidateK8sImagePullerAdmissionRequest(t *testing.T) {
 		req := newCreateK8sImagePullerAdmissionRequest(t, "johnsmith")
 
 		// when
-		response := v.validate(req)
+		response := v.validate(context.TODO(), req)
 
 		// then
 		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. you are trying to create a KubernetesImagePuller resource, which is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
@@ -39,7 +40,7 @@ func TestHandleValidateK8sImagePullerAdmissionRequest(t *testing.T) {
 		req := newCreateK8sImagePullerAdmissionRequest(t, "johnsmith-crtadmin")
 
 		// when
-		response := v.validate(req)
+		response := v.validate(context.TODO(), req)
 
 		// then
 		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")

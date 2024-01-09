@@ -2,6 +2,7 @@ package validatingwebhook
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +42,7 @@ func TestValidateRoleBindingAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts is denied", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := v.validate(sandboxUserForAllServiceAccountsJSON)
+		response := v.validate(context.TODO(), sandboxUserForAllServiceAccountsJSON)
 		// then
 		test.VerifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
@@ -49,7 +50,7 @@ func TestValidateRoleBindingAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all serviceaccounts: is denied", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := v.validate(sandboxUserForAllServiceAccountsJSON2)
+		response := v.validate(context.TODO(), sandboxUserForAllServiceAccountsJSON2)
 		// then
 		test.VerifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad7g8")
 	})
@@ -57,7 +58,7 @@ func TestValidateRoleBindingAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all authenticated users is denied", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := v.validate(sandboxUserForAllUsersJSON)
+		response := v.validate(context.TODO(), sandboxUserForAllUsersJSON)
 		// then
 		test.VerifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad8k8")
 	})
@@ -65,7 +66,7 @@ func TestValidateRoleBindingAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create rolebinding for all authenticated: is denied", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "johnsmith", true)
 		// when
-		response := v.validate(sandboxUserForAllUsersJSON2)
+		response := v.validate(context.TODO(), sandboxUserForAllUsersJSON2)
 		// then
 		test.VerifyRequestBlocked(t, response, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad9l9")
 	})
@@ -76,7 +77,7 @@ func TestValidateRoleBindingAdmissionRequestAllowed(t *testing.T) {
 	t.Run("SA or kubeadmin trying to create rolebinding is allowed", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "system:kubeadmin", false)
 		// when user is kubeadmin
-		response := v.validate(allowedUserJSON)
+		response := v.validate(context.TODO(), allowedUserJSON)
 
 		// then
 		test.VerifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6g7")
@@ -85,7 +86,7 @@ func TestValidateRoleBindingAdmissionRequestAllowed(t *testing.T) {
 	t.Run("non sandbox user trying to create rolebinding is allowed", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "nonsandbox", false)
 		// when
-		response := v.validate(nonSandboxUserJSON)
+		response := v.validate(context.TODO(), nonSandboxUserJSON)
 		// then
 		test.VerifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f7")
 	})
@@ -93,7 +94,7 @@ func TestValidateRoleBindingAdmissionRequestAllowed(t *testing.T) {
 	t.Run("unable to find the requesting user, allow request", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "random-user", true)
 		// when
-		response := v.validate(sandboxUserForAllServiceAccountsJSON)
+		response := v.validate(context.TODO(), sandboxUserForAllServiceAccountsJSON)
 		// then
 		test.VerifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad6f6")
 	})
@@ -101,7 +102,7 @@ func TestValidateRoleBindingAdmissionRequestAllowed(t *testing.T) {
 	t.Run("sandbox user creating a rolebinding for a specific user is allowed", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "laracroft", true)
 		//when
-		response := v.validate(allowedRbJSON)
+		response := v.validate(context.TODO(), allowedRbJSON)
 		//then
 		test.VerifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad8g8")
 	})
@@ -114,7 +115,7 @@ func TestValidateRolebBndingAdmissionRequestFailsOnInvalidJson(t *testing.T) {
 	v := &RoleBindingRequestValidator{}
 
 	// when
-	response := v.validate(rawJSON)
+	response := v.validate(context.TODO(), rawJSON)
 
 	// then
 	test.VerifyRequestBlocked(t, response, "cannot unmarshal string into Go value of type struct", "")
@@ -125,7 +126,7 @@ func TestValidateRolebBndingAdmissionRequestFailsOnInvalidObjectJson(t *testing.
 	v := &RoleBindingRequestValidator{}
 
 	// when
-	response := v.validate(test.IncorrectRequestObjectJSON)
+	response := v.validate(context.TODO(), test.IncorrectRequestObjectJSON)
 
 	// then
 	test.VerifyRequestBlocked(t, response, "unable to unmarshal object or object is not a rolebinding", "a68769e5-d817-4617-bec5-90efa2bad6f8")

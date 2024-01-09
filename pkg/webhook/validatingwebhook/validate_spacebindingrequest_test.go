@@ -47,7 +47,7 @@ func TestHandleValidateSpaceBindingRequest(t *testing.T) {
 			})
 
 			// when
-			response := v.validate(req)
+			response := v.validate(context.TODO(), req)
 
 			// then
 			// it should not be allowed to update MUR field
@@ -65,7 +65,7 @@ func TestHandleValidateSpaceBindingRequest(t *testing.T) {
 			})
 
 			// when
-			response := v.validate(req)
+			response := v.validate(context.TODO(), req)
 
 			// then
 			// it should be allowed to update SpaceRole field
@@ -90,7 +90,7 @@ func TestHandleValidateSpaceBindingRequest(t *testing.T) {
 		})
 
 		// when
-		response := v.validate(req)
+		response := v.validate(context.TODO(), req)
 
 		// then
 		// it should not be allowed to create new SBR
@@ -104,7 +104,7 @@ func TestValidateSpaceBindingRequestFailsOnInvalidJson(t *testing.T) {
 
 	t.Run("object is not spacebindingrequest", func(t *testing.T) {
 		// when
-		response := v.validate(test.IncorrectRequestObjectJSON)
+		response := v.validate(context.TODO(), test.IncorrectRequestObjectJSON)
 
 		// then
 		test.VerifyRequestBlocked(t, response, "unable to unmarshal object or object is not a spacebindingrequest", "a68769e5-d817-4617-bec5-90efa2bad6f8")
@@ -113,7 +113,7 @@ func TestValidateSpaceBindingRequestFailsOnInvalidJson(t *testing.T) {
 	t.Run("json is invalid", func(t *testing.T) {
 		// when
 		rawJSON := []byte(`something wrong !`)
-		response := v.validate(rawJSON)
+		response := v.validate(context.TODO(), rawJSON)
 
 		// then
 		test.VerifyRequestBlocked(t, response, "cannot unmarshal string into Go value of type struct", "")
@@ -139,7 +139,7 @@ func TestValidateSpaceBindingRequestFailsOnGettingSBR(t *testing.T) {
 	})
 
 	// when
-	response := v.validate(req)
+	response := v.validate(context.TODO(), req)
 
 	// then
 	test.VerifyRequestBlocked(t, response, "unable to validate the SpaceBindingRequest. SpaceBindingRequest.Name: john-sbr: mock error", "xvadsfasdf")

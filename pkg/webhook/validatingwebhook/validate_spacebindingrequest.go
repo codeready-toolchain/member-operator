@@ -39,7 +39,7 @@ func (v SpaceBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *h
 		respBody = []byte("unable to read the body of the request")
 	} else {
 		// validate the request
-		respBody = v.validate(body)
+		respBody = v.validate(r.Context(), body)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := io.WriteString(w, string(respBody)); err != nil {
@@ -47,7 +47,7 @@ func (v SpaceBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *h
 	}
 }
 
-func (v SpaceBindingRequestValidator) validate(body []byte) []byte {
+func (v SpaceBindingRequestValidator) validate(ctx context.Context, body []byte) []byte {
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		//sanitize the body
@@ -66,7 +66,7 @@ func (v SpaceBindingRequestValidator) validate(body []byte) []byte {
 	}
 	// fetch SBR and check that MUR is unchanged
 	existingSBR := &toolchainv1alpha1.SpaceBindingRequest{}
-	if err := v.Client.Get(context.TODO(), types.NamespacedName{
+	if err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      newSBR.GetName(),
 		Namespace: newSBR.GetNamespace(),
 	}, existingSBR); err != nil {

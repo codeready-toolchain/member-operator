@@ -98,8 +98,6 @@ spec:
                   (“sub” claim) Is to be used to create Identity and UserIdentityMapping
                   resources
                 type: string
-            required:
-            - userID
             type: object
           status:
             description: UserAccountStatus defines the observed state of UserAccount

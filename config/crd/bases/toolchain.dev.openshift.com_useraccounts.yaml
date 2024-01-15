@@ -92,7 +92,6 @@ spec:
                 required:
                 - email
                 - sub
-                - userID
                 type: object
               userID:
                 description: UserID is the user ID from RHD Identity Provider token

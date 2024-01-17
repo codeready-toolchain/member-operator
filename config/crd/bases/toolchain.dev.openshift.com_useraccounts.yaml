@@ -99,7 +99,7 @@ spec:
                   resources
                 type: string
             required:
-            - userID
+            - propagatedClaims
             type: object
           status:
             description: UserAccountStatus defines the observed state of UserAccount

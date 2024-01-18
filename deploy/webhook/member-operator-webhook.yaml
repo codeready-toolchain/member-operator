@@ -218,34 +218,6 @@ objects:
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain
-    # The users.kubernetesimagepullers.webhook.sandbox validation webhook ensures that KubernetesImagePuller CRs cannot be created by a sandbox user.
-    # This webhook is needed to prevent user-created KubernetesImagePuller CRs from interfering with the devworkspace-controller-manager-* pod, as high memory
-    # usage was previously observed.
-    # The webhook code is available at member-operator/pkg/webhook/validatingwebhook/validate_k8simagepuller_request.go
-    - name: users.kubernetesimagepullers.webhook.sandbox
-      admissionReviewVersions:
-        - v1
-      clientConfig:
-        caBundle: ${CA_BUNDLE}
-        service:
-          name: member-operator-webhook
-          namespace: ${NAMESPACE}
-          path: "/validate-users-kubernetesimagepullers"
-          port: 443
-      matchPolicy: Equivalent
-      rules:
-        - operations: ["CREATE"]
-          apiGroups: ["che.eclipse.org"]
-          apiVersions: ["v1alpha1"]
-          resources: ["kubernetesimagepullers"]
-          scope: "Namespaced"
-      sideEffects: None
-      timeoutSeconds: 5
-      reinvocationPolicy: Never
-      failurePolicy: Fail
-      namespaceSelector:
-        matchLabels:
-          toolchain.dev.openshift.com/provider: codeready-toolchain
     # The users.spacebindingrequests.webhook.sandbox webhook validates SpaceBindingRequest CRs,
     # Specifically it makes sure that once a SBR resource is created, the SpaceBindingRequest.Spec.MasterUserRecord field is not changed by the user.
     # The reason for making SpaceBindingRequest.Spec.MasterUserRecord field immutable is that as of now the SpaceBinding resource name is composed as follows: <Space.Name>-checksum(<Space.Name>-<MasterUserRecord.Name>),

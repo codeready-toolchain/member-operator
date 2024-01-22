@@ -33,7 +33,7 @@ func (v K8sImagePullerRequestValidator) HandleValidate(w http.ResponseWriter, r 
 		respBody = []byte("unable to read the body of the request")
 	} else {
 		// validate the request
-		respBody = v.validate(body)
+		respBody = v.validate(r.Context(), body)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := io.WriteString(w, string(respBody)); err != nil {
@@ -41,7 +41,7 @@ func (v K8sImagePullerRequestValidator) HandleValidate(w http.ResponseWriter, r 
 	}
 }
 
-func (v K8sImagePullerRequestValidator) validate(body []byte) []byte {
+func (v K8sImagePullerRequestValidator) validate(ctx context.Context, body []byte) []byte {
 	log.Info("incoming request", "body", string(body))
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
@@ -52,7 +52,7 @@ func (v K8sImagePullerRequestValidator) validate(body []byte) []byte {
 	}
 	//check if the requesting user is a sandbox user
 	requestingUser := &userv1.User{}
-	err := v.Client.Get(context.TODO(), types.NamespacedName{
+	err := v.Client.Get(ctx, types.NamespacedName{
 		Name: admReview.Request.UserInfo.Username,
 	}, requestingUser)
 

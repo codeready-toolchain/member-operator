@@ -37,7 +37,7 @@ func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *ht
 		respBody = []byte("unable to read the body of the request")
 	} else {
 		// validate the request
-		respBody = v.validate(body)
+		respBody = v.validate(r.Context(), body)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := io.WriteString(w, string(respBody)); err != nil {
@@ -45,7 +45,7 @@ func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *ht
 	}
 }
 
-func (v RoleBindingRequestValidator) validate(body []byte) []byte {
+func (v RoleBindingRequestValidator) validate(ctx context.Context, body []byte) []byte {
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
 		//sanitize the body
@@ -72,7 +72,7 @@ func (v RoleBindingRequestValidator) validate(body []byte) []byte {
 	for _, sub := range subjects {
 		if containsSubject(subjectsList, sub) {
 			requestingUser := &userv1.User{}
-			err := v.Client.Get(context.TODO(), types.NamespacedName{
+			err := v.Client.Get(ctx, types.NamespacedName{
 				Name: admReview.Request.UserInfo.Username,
 			}, requestingUser)
 

@@ -275,6 +275,30 @@ objects:
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain
+    - name: users.virtualmachines.ssp.webhook.sandbox
+      admissionReviewVersions:
+        - v1
+      clientConfig:
+        caBundle: ${CA_BUNDLE}
+        service:
+          name: member-operator-webhook
+          namespace: ${NAMESPACE}
+          path: "/validate-ssprequests"
+          port: 443
+      matchPolicy: Equivalent
+      rules:
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: ["ssp.kubevirt.io"]
+          apiVersions: ["*"]
+          resources: ["ssps"]
+          scope: "Namespaced"
+      sideEffects: None
+      timeoutSeconds: 5
+      reinvocationPolicy: Never
+      failurePolicy: Fail
+      namespaceSelector:
+        matchLabels:
+          toolchain.dev.openshift.com/provider: codeready-toolchain
 parameters:
 - name: NAMESPACE
   value: 'toolchain-member-operator'

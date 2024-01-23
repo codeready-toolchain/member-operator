@@ -102,9 +102,6 @@ func main() {
 	rolebindingValidator := &validatingwebhook.RoleBindingRequestValidator{
 		Client: cl,
 	}
-	k8sImagePullerRequestValidator := &validatingwebhook.K8sImagePullerRequestValidator{
-		Client: cl,
-	}
 	spacebindingrequestValidator := &validatingwebhook.SpaceBindingRequestValidator{
 		Client: cl,
 	}
@@ -113,7 +110,6 @@ func main() {
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutateUserPods)
 	mux.HandleFunc("/mutate-virtual-machines", mutatingwebhook.HandleMutateVirtualMachines)
 	mux.HandleFunc("/validate-users-rolebindings", rolebindingValidator.HandleValidate)
-	mux.HandleFunc("/validate-users-kubernetesimagepullers", k8sImagePullerRequestValidator.HandleValidate)
 	mux.HandleFunc("/validate-spacebindingrequests", spacebindingrequestValidator.HandleValidate)
 
 	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)

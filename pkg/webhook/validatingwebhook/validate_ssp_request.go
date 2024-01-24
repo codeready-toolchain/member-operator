@@ -59,7 +59,7 @@ func (v SSPRequestValidator) validate(ctx context.Context, body []byte) []byte {
 
 	if err != nil {
 		log.Error(err, "unable to find the user requesting creation of the SSP resource", "username", admReview.Request.UserInfo.Username)
-		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the  creation of the SSP resource"))
+		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the creation of the SSP resource"))
 	}
 	if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
 		log.Info("sandbox user is trying to create a SSP", "AdmissionReview", admReview)

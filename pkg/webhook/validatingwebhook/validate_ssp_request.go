@@ -15,11 +15,12 @@ import (
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type K8sImagePullerRequestValidator struct {
+// The SSP resources is a CNV specific resource
+type SSPRequestValidator struct {
 	Client runtimeClient.Client
 }
 
-func (v K8sImagePullerRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {
+func (v SSPRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Request) {
 	var respBody []byte
 	body, err := io.ReadAll(r.Body)
 	defer func() {
@@ -41,7 +42,7 @@ func (v K8sImagePullerRequestValidator) HandleValidate(w http.ResponseWriter, r 
 	}
 }
 
-func (v K8sImagePullerRequestValidator) validate(ctx context.Context, body []byte) []byte {
+func (v SSPRequestValidator) validate(ctx context.Context, body []byte) []byte {
 	log.Info("incoming request", "body", string(body))
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {
@@ -57,12 +58,12 @@ func (v K8sImagePullerRequestValidator) validate(ctx context.Context, body []byt
 	}, requestingUser)
 
 	if err != nil {
-		log.Error(err, "unable to find the user requesting creation of the KubernetesImagePuller resource", "username", admReview.Request.UserInfo.Username)
-		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the  creation of the KubernetesImagePuller resource"))
+		log.Error(err, "unable to find the user requesting creation of the SSP resource", "username", admReview.Request.UserInfo.Username)
+		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the creation of the SSP resource"))
 	}
 	if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
-		log.Info("sandbox user is trying to create a KubernetesImagePuller", "AdmissionReview", admReview)
-		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. you are trying to create a KubernetesImagePuller resource, which is not allowed"))
+		log.Info("sandbox user is trying to create a SSP", "AdmissionReview", admReview)
+		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. you are trying to create a SSP resource, which is not allowed"))
 	}
 	// at this point, it is clear the user isn't a sandbox user, allow request
 	return allowAdmissionRequest(admReview)

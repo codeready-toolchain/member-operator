@@ -102,10 +102,10 @@ func main() {
 	rolebindingValidator := &validatingwebhook.RoleBindingRequestValidator{
 		Client: cl,
 	}
-	k8sImagePullerRequestValidator := &validatingwebhook.K8sImagePullerRequestValidator{
+	spacebindingrequestValidator := &validatingwebhook.SpaceBindingRequestValidator{
 		Client: cl,
 	}
-	spacebindingrequestValidator := &validatingwebhook.SpaceBindingRequestValidator{
+	sspRequestValidator := &validatingwebhook.SSPRequestValidator{
 		Client: cl,
 	}
 	mux := http.NewServeMux()
@@ -113,8 +113,8 @@ func main() {
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutateUserPods)
 	mux.HandleFunc("/mutate-virtual-machines", mutatingwebhook.HandleMutateVirtualMachines)
 	mux.HandleFunc("/validate-users-rolebindings", rolebindingValidator.HandleValidate)
-	mux.HandleFunc("/validate-users-kubernetesimagepullers", k8sImagePullerRequestValidator.HandleValidate)
 	mux.HandleFunc("/validate-spacebindingrequests", spacebindingrequestValidator.HandleValidate)
+	mux.HandleFunc("/validate-ssprequests", sspRequestValidator.HandleValidate) // SSP is a CNV specific resource
 
 	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)
 		Addr:    ":8443",

@@ -194,7 +194,7 @@ func (r *Reconciler) memberOperatorHandleStatus(ctx context.Context, memberStatu
 	operatorStatus.DeploymentName = memberOperatorDeploymentName
 
 	// Check member operator deployment status
-	deploymentConditions := status.GetDeploymentStatusConditions(r.Client, memberOperatorDeploymentName, memberStatus.Namespace)
+	deploymentConditions := status.GetDeploymentStatusConditions(ctx, r.Client, memberOperatorDeploymentName, memberStatus.Namespace)
 	errDeploy = status.ValidateComponentConditionReady(deploymentConditions...)
 	operatorStatus.Conditions = deploymentConditions
 	memberStatus.Status.MemberOperator = operatorStatus

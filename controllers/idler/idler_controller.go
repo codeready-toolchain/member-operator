@@ -234,7 +234,7 @@ func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1a
 				WithNotificationType(toolchainv1alpha1.NotificationTypeIdled).
 				WithTemplate("idlertriggered").
 				WithKeysAndValues(keysAndVals).
-				Create(userEmail)
+				Create(ctx, userEmail)
 			if err != nil {
 				return errs.Wrapf(err, "unable to create Notification CR from Idler")
 			}

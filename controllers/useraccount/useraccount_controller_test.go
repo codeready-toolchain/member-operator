@@ -88,7 +88,7 @@ func TestReconcile(t *testing.T) {
 				toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Spec.PropagatedClaims.Email,
+				toolchainv1alpha1.EmailUserAnnotationKey: userAcc.Spec.PropagatedClaims.Email,
 			},
 		},
 		Identities: []string{
@@ -136,8 +136,8 @@ func TestReconcile(t *testing.T) {
 			user.UID = preexistingUser.UID // we have to set UID for the obtained user because the fake client doesn't set it
 
 			checkMapping(t, user, preexistingIdentity, preexistingIdentityForSsoUserAnnotation)
-			require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey])
-			require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
+			require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.UserIDUserAnnotationKey])
+			require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.AccountIDUserAnnotationKey])
 
 			// Check the identity is not created yet
 			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
@@ -154,8 +154,8 @@ func TestReconcile(t *testing.T) {
 
 				// Check the created/updated user
 				user := assertUser(t, r, userAcc)
-				require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
-				require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+				require.NotContains(t, user.Annotations, toolchainv1alpha1.UserIDUserAnnotationKey)
+				require.NotContains(t, user.Annotations, toolchainv1alpha1.AccountIDUserAnnotationKey)
 
 				t.Run("reset UserID and reconcile again", func(t *testing.T) {
 					userAcc.Spec.PropagatedClaims.UserID = "123456"
@@ -168,8 +168,8 @@ func TestReconcile(t *testing.T) {
 
 					// Check the created/updated user
 					user := assertUser(t, r, userAcc)
-					require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey])
-					require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
+					require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.UserIDUserAnnotationKey])
+					require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.AccountIDUserAnnotationKey])
 
 					t.Run("test missing AccountID annotation propagates to User", func(t *testing.T) {
 						// Remove the AccountID annotation from the UserAccount and reconcile again
@@ -183,8 +183,8 @@ func TestReconcile(t *testing.T) {
 
 						// Check the created/updated user
 						user := assertUser(t, r, userAcc)
-						require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
-						require.NotContains(t, user.Annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+						require.NotContains(t, user.Annotations, toolchainv1alpha1.UserIDUserAnnotationKey)
+						require.NotContains(t, user.Annotations, toolchainv1alpha1.AccountIDUserAnnotationKey)
 
 						t.Run("reset AccountID annotation and reconcile again", func(t *testing.T) {
 							userAcc.Spec.PropagatedClaims.AccountID = "987654"
@@ -197,8 +197,8 @@ func TestReconcile(t *testing.T) {
 
 							// Check the created/updated user
 							user := assertUser(t, r, userAcc)
-							require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.SSOUserIDAnnotationKey])
-							require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey])
+							require.Equal(t, "123456", user.Annotations[toolchainv1alpha1.UserIDUserAnnotationKey])
+							require.Equal(t, "987654", user.Annotations[toolchainv1alpha1.AccountIDUserAnnotationKey])
 						})
 					})
 				})
@@ -1176,7 +1176,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 				toolchainv1alpha1.ProviderLabelKey:  toolchainv1alpha1.ProviderLabelValue,
 			},
 			Annotations: map[string]string{
-				toolchainv1alpha1.UserEmailAnnotationKey: userAcc.Spec.PropagatedClaims.Email,
+				toolchainv1alpha1.EmailUserAnnotationKey: userAcc.Spec.PropagatedClaims.Email,
 			},
 		},
 		Identities: []string{
@@ -1551,7 +1551,7 @@ func assertUser(t *testing.T, r *Reconciler, userAcc *toolchainv1alpha1.UserAcco
 	assert.Equal(t, toolchainv1alpha1.ProviderLabelValue, user.Labels[toolchainv1alpha1.ProviderLabelKey])
 
 	assert.NotNil(t, user.Annotations)
-	assert.Equal(t, userAcc.Spec.PropagatedClaims.Email, user.Annotations[toolchainv1alpha1.UserEmailAnnotationKey])
+	assert.Equal(t, userAcc.Spec.PropagatedClaims.Email, user.Annotations[toolchainv1alpha1.EmailUserAnnotationKey])
 
 	assert.Empty(t, user.OwnerReferences) // User has no explicit owner reference.// Check the user identity mapping
 	return user

@@ -1,8 +1,8 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20240116164228-8d18c9262420
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20240126111814-12ab087b62d2
+	github.com/codeready-toolchain/api v0.0.0-20240207000013-661b63025269
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20240207000544-9cd055b3a18c
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9
 	// using latest commit from 'github.com/openshift/api branch release-4.12'
@@ -110,7 +110,3 @@ require (
 )
 
 go 1.20
-
-replace github.com/codeready-toolchain/api => github.com/sbryzak/api v0.0.0-20240204045223-0c2f53dbc8f6
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/sbryzak/toolchain-common v0.0.0-20240201055525-d57dc5ee80f5

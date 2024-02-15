@@ -50,6 +50,8 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const useClusterRL = false
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
@@ -208,6 +210,7 @@ func main() {
 		mgr,
 		namespace,
 		crtConfig.ToolchainCluster().HealthCheckTimeout(),
+		useClusterRL,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
 		os.Exit(1)

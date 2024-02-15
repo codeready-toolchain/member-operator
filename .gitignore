@@ -94,3 +94,6 @@ bundle.Dockerfile
 /bin
 
 database
+
+webconsole_source/dist
+webconsole_source/node_modules

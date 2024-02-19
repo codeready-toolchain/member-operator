@@ -69,13 +69,13 @@ func TestEnsureLimits(t *testing.T) {
 		assert.Empty(t, actualPatchItems) // no limits patch expected because no requests were set
 	})
 
-	t.Run("only memory request is set", func(t *testing.T) {
+	t.Run("only domain:resources:memory request is set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req))
 
 		expectedLimits := resourceList("1Gi", "")
-		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)} // only memory limits patch expected
+		expectedPatchItems := []map[string]interface{}{addLimitsToResources(expectedLimits)} // only memory limits patch expected
 		actualPatchItems := []map[string]interface{}{}
 
 		// when
@@ -85,12 +85,12 @@ func TestEnsureLimits(t *testing.T) {
 		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
-	t.Run("memory and cpu requests are set", func(t *testing.T) {
+	t.Run("domain:resources:memory and domain:resources:cpu requests are set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req))
 		expectedLimits := resourceList("1Gi", "1")
-		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)} // limits patch with memory and cpu expected
+		expectedPatchItems := []map[string]interface{}{addLimitsToResources(expectedLimits)} // limits patch with memory and cpu expected
 		actualPatchItems := []map[string]interface{}{}
 
 		// when
@@ -100,11 +100,11 @@ func TestEnsureLimits(t *testing.T) {
 		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
-	t.Run("memory and cpu requests are set but both limits are already set", func(t *testing.T) {
+	t.Run("domain:resources:memory and domain:resources:cpu requests are set but both limits are already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "2")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req), setDomainResourcesLimits(lim))
 		actualPatchItems := []map[string]interface{}{}
 
 		// when
@@ -114,14 +114,14 @@ func TestEnsureLimits(t *testing.T) {
 		assert.Empty(t, actualPatchItems) // no limits patch expected because limits are already set
 	})
 
-	t.Run("memory and cpu requests are set but memory limit is already set", func(t *testing.T) {
+	t.Run("domain:resources:memory and domain:resources:cpu requests are set but memory limit is already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("2Gi", "")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req), setDomainResourcesLimits(lim))
 		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("2Gi", "1") // expect cpu limit to be set to the value of the cpu request
-		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)}
+		expectedPatchItems := []map[string]interface{}{addLimitsToResources(expectedLimits)}
 
 		// when
 		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
@@ -130,14 +130,75 @@ func TestEnsureLimits(t *testing.T) {
 		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 	})
 
-	t.Run("memory and cpu requests are set but cpu limit is already set", func(t *testing.T) {
+	t.Run("domain:resources:memory and domain:resources:cpu requests are set but cpu limit is already set", func(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("", "2")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req), setDomainResourcesLimits(lim))
 		actualPatchItems := []map[string]interface{}{}
 		expectedLimits := resourceList("1Gi", "2") // expect memory limit to be set to the value of the memory request
-		expectedPatchItems := []map[string]interface{}{limitsPatch(expectedLimits)}
+		expectedPatchItems := []map[string]interface{}{addLimitsToResources(expectedLimits)}
+
+		// when
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
+
+		// then
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+	})
+
+	t.Run("only domain:memory:guest is set", func(t *testing.T) {
+		// given
+		dMem := domainMemory("3Gi", "")
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainMemory(dMem))
+		actualPatchItems := []map[string]interface{}{}
+		expectedLimits := resourceList("3Gi", "") // expect memory limit to be set to the value of the domain memory guest value
+		expectedPatchItems := []map[string]interface{}{addResourcesToDomain(expectedLimits)}
+
+		// when
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
+
+		// then
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+	})
+
+	t.Run("only domain:memory:maxguest is set", func(t *testing.T) {
+		// given
+		dMem := domainMemory("", "4Gi")
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainMemory(dMem))
+		actualPatchItems := []map[string]interface{}{}
+		expectedLimits := resourceList("4Gi", "") // expect memory limit to be set to the value of the domain memory max guest value
+		expectedPatchItems := []map[string]interface{}{addResourcesToDomain(expectedLimits)}
+
+		// when
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
+
+		// then
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+	})
+
+	t.Run("domain:memory:guest and domain:memory:maxguest are both set", func(t *testing.T) {
+		// given
+		dMem := domainMemory("3Gi", "4Gi")
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainMemory(dMem))
+		actualPatchItems := []map[string]interface{}{}
+		expectedLimits := resourceList("4Gi", "") // expect memory limit to be set to the value of the domain memory max guest value
+		expectedPatchItems := []map[string]interface{}{addResourcesToDomain(expectedLimits)}
+
+		// when
+		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
+
+		// then
+		assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+	})
+
+	t.Run("domain:memory:guest and domain:resources:memory are both set", func(t *testing.T) {
+		// given
+		dMem := domainMemory("2Gi", "")
+		req := resourceList("1Gi", "1")
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req), setDomainMemory(dMem))
+		actualPatchItems := []map[string]interface{}{}
+		expectedLimits := resourceList("1Gi", "1") // expect memory limit to be set to the value of the domain resources request
+		expectedPatchItems := []map[string]interface{}{addLimitsToResources(expectedLimits)}
 
 		// when
 		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
@@ -150,7 +211,7 @@ func TestEnsureLimits(t *testing.T) {
 		// given
 		req := resourceList("1Gi", "1")
 		lim := resourceList("", "2")
-		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setRequests(req), setLimits(lim))
+		vmAdmReviewRequest := vmAdmReviewRequestObject(t, setDomainResourcesRequests(req), setDomainResourcesLimits(lim))
 		existingPatch := map[string]interface{}{
 			"op":    "add",
 			"path":  "/spec/template/spec/test",
@@ -158,7 +219,7 @@ func TestEnsureLimits(t *testing.T) {
 		}
 		actualPatchItems := []map[string]interface{}{existingPatch}
 		expectedLimits := resourceList("1Gi", "2")
-		expectedPatchItems := []map[string]interface{}{existingPatch, limitsPatch(expectedLimits)} // expect both patches to be present
+		expectedPatchItems := []map[string]interface{}{existingPatch, addLimitsToResources(expectedLimits)} // expect both patches to be present
 
 		// when
 		actualPatchItems = ensureLimits(vmAdmReviewRequest, actualPatchItems)
@@ -336,16 +397,23 @@ func TestAddSSHKeyToUserData(t *testing.T) {
 
 type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
 
-func setRequests(requests map[string]interface{}) admissionReviewOption {
+func setDomainResourcesRequests(requests map[string]string) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
-		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
+		err := unstructured.SetNestedStringMap(unstructuredAdmReview.Object, requests, "request", "object", "spec", "template", "spec", "domain", "resources", "requests")
 		require.NoError(t, err)
 	}
 }
 
-func setLimits(limits map[string]interface{}) admissionReviewOption {
+func setDomainResourcesLimits(limits map[string]string) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
-		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
+		err := unstructured.SetNestedStringMap(unstructuredAdmReview.Object, limits, "request", "object", "spec", "template", "spec", "domain", "resources", "limits")
+		require.NoError(t, err)
+	}
+}
+
+func setDomainMemory(memory map[string]interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
+		err := unstructured.SetNestedMap(unstructuredAdmReview.Object, memory, "request", "object", "spec", "template", "spec", "domain", "memory")
 		require.NoError(t, err)
 	}
 }
@@ -354,14 +422,6 @@ func setVolumes(volumes ...interface{}) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedSlice(unstructuredAdmReview.Object, volumes, "request", "object", "spec", "template", "spec", "volumes")
 		require.NoError(t, err)
-	}
-}
-
-func limitsPatch(expectedLimits map[string]interface{}) map[string]interface{} {
-	return map[string]interface{}{
-		"op":    "add",
-		"path":  "/spec/template/spec/domain/resources/limits",
-		"value": expectedLimits,
 	}
 }
 
@@ -378,8 +438,8 @@ func volumesPatch(expectedCloudInitDiskVolume map[string]interface{}) map[string
 	}
 }
 
-func resourceList(mem, cpu string) map[string]interface{} {
-	req := map[string]interface{}{}
+func resourceList(mem, cpu string) map[string]string {
+	req := map[string]string{}
 	if mem != "" {
 		req["memory"] = mem
 	}
@@ -387,6 +447,17 @@ func resourceList(mem, cpu string) map[string]interface{} {
 		req["cpu"] = cpu
 	}
 	return req
+}
+
+func domainMemory(guest, maxGuest string) map[string]interface{} {
+	dMem := map[string]interface{}{}
+	if guest != "" {
+		dMem["guest"] = guest
+	}
+	if maxGuest != "" {
+		dMem["maxGuest"] = maxGuest
+	}
+	return dMem
 }
 
 func rootDiskVolume() map[string]interface{} {
@@ -582,8 +653,6 @@ var vmRawAdmissionReviewJSONTemplate = []byte(`{
                             },
                             "machine": {
                                 "type": "pc-q35-rhel9.2.0"
-                            },
-                            "resources": {
                             }
                         },
                         "evictionStrategy": "LiveMigrate",

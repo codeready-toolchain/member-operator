@@ -390,11 +390,11 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 
 	if isUserResource {
 		annotations := object.GetAnnotations()
-		if _, exists := annotations[toolchainv1alpha1.UserEmailAnnotationKey]; !exists {
+		if _, exists := annotations[toolchainv1alpha1.EmailUserAnnotationKey]; !exists {
 			if annotations == nil {
 				annotations = map[string]string{}
 			}
-			annotations[toolchainv1alpha1.UserEmailAnnotationKey] = userAcc.Spec.PropagatedClaims.Email
+			annotations[toolchainv1alpha1.EmailUserAnnotationKey] = userAcc.Spec.PropagatedClaims.Email
 			object.SetAnnotations(annotations)
 			changed = true
 		}
@@ -406,8 +406,8 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 			if annotations == nil {
 				annotations = map[string]string{}
 			}
-			annotations[toolchainv1alpha1.SSOUserIDAnnotationKey] = userAcc.Spec.PropagatedClaims.UserID
-			annotations[toolchainv1alpha1.SSOAccountIDAnnotationKey] = userAcc.Spec.PropagatedClaims.AccountID
+			annotations[toolchainv1alpha1.UserIDUserAnnotationKey] = userAcc.Spec.PropagatedClaims.UserID
+			annotations[toolchainv1alpha1.AccountIDUserAnnotationKey] = userAcc.Spec.PropagatedClaims.AccountID
 			object.SetAnnotations(annotations)
 			changed = true
 
@@ -416,8 +416,8 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 		// Delete the UserID and AccountID annotations if they don't exist in the UserAccount
 		if !set && object.GetAnnotations() != nil {
 			annotations = object.GetAnnotations()
-			delete(annotations, toolchainv1alpha1.SSOUserIDAnnotationKey)
-			delete(annotations, toolchainv1alpha1.SSOAccountIDAnnotationKey)
+			delete(annotations, toolchainv1alpha1.UserIDUserAnnotationKey)
+			delete(annotations, toolchainv1alpha1.AccountIDUserAnnotationKey)
 			object.SetAnnotations(annotations)
 			changed = true
 		}

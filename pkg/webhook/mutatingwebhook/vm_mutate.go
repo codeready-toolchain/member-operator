@@ -179,13 +179,25 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 // This should be removed once https://issues.redhat.com/browse/CNV-32069 is complete.
 func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
 
-	requests, reqFound, err := unstructured.NestedStringMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources", "requests")
+	_, domainResourcesFound, err := unstructured.NestedMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources")
+	if err != nil {
+		vmLogger.Error(err, "unable to get resources from VirtualMachine", "VirtualMachine", unstructuredObj)
+		return patchItems
+	}
+
+	domainResourceReq, domainResourcesReqFound, err := unstructured.NestedStringMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources", "requests")
 	if err != nil {
 		vmLogger.Error(err, "unable to get requests from VirtualMachine", "VirtualMachine", unstructuredObj)
 		return patchItems
 	}
 
-	if !reqFound {
+	domainMemory, domainMemoryReqFound, err := unstructured.NestedStringMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "memory")
+	if err != nil {
+		vmLogger.Error(err, "unable to get domain memory request from VirtualMachine", "VirtualMachine", unstructuredObj)
+		return patchItems
+	}
+
+	if !domainResourcesReqFound && !domainMemoryReqFound {
 		return patchItems
 	}
 
@@ -203,20 +215,33 @@ func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[s
 	anyChanges := false
 	for _, r := range []string{"memory", "cpu"} {
 		_, isLimitDefined := limits[r]
-		_, isRequestDefined := requests[r]
+		_, isRequestDefined := domainResourceReq[r]
 		if !isLimitDefined && isRequestDefined {
-			limits[r] = requests[r]
+			limits[r] = domainResourceReq[r]
+			anyChanges = true
+		}
+	}
+
+	// if domain memory is specified but memory limits are still not set, then set the limit to the same value as the requested guest OS memory
+	if domainMemoryReqFound && limits["memory"] == "" {
+		// use maxGuest value if it's defined, otherwise use guest value
+		if domainMemory["maxGuest"] != "" {
+			limits["memory"] = domainMemory["maxGuest"]
+			anyChanges = true
+		} else if domainMemory["guest"] != "" {
+			limits["memory"] = domainMemory["guest"]
 			anyChanges = true
 		}
 	}
 
 	if anyChanges {
-		patchItems = append(patchItems,
-			map[string]interface{}{
-				"op":    "add",
-				"path":  "/spec/template/spec/domain/resources/limits",
-				"value": limits,
-			})
+		if domainResourcesFound {
+			vmLogger.Info("domain resources found", "vm-name", unstructuredObj.GetName(), "namespace", unstructuredObj.GetNamespace())
+			patchItems = append(patchItems, addLimitsToResources(limits))
+		} else {
+			vmLogger.Info("domain resources not found", "vm-name", unstructuredObj.GetName(), "namespace", unstructuredObj.GetNamespace())
+			patchItems = append(patchItems, addResourcesToDomain(limits))
+		}
 		vmLogger.Info("setting resource limits on the virtual machine", "vm-name", unstructuredObj.GetName(), "namespace", unstructuredObj.GetNamespace(), "limits", limits)
 	}
 	return patchItems
@@ -226,4 +251,25 @@ func defaultUserData(sshKeys []string) string {
 	authorizedKeys := fmt.Sprintf("ssh_authorized_keys: [%s]\n", sshKeys)
 	return strings.Join(
 		append([]string{cloudConfigHeader}, authorizedKeys), "\n")
+}
+
+func addLimitsToResources(limits map[string]string) map[string]interface{} {
+	return map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/template/spec/domain/resources/limits",
+		"value": limits,
+	}
+}
+
+func addResourcesToDomain(limits map[string]string) map[string]interface{} {
+	// wrap limits in resources
+	resources := map[string]interface{}{
+		"limits": limits,
+	}
+
+	return map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/template/spec/domain/resources",
+		"value": resources,
+	}
 }

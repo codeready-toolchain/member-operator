@@ -181,7 +181,7 @@ func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[s
 
 	_, domainResourcesFound, err := unstructured.NestedMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources")
 	if err != nil {
-		vmLogger.Error(err, "unable to get requests from VirtualMachine", "VirtualMachine", unstructuredObj)
+		vmLogger.Error(err, "unable to get resources from VirtualMachine", "VirtualMachine", unstructuredObj)
 		return patchItems
 	}
 

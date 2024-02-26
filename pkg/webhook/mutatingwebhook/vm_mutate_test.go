@@ -434,6 +434,23 @@ func TestEnsureTolerations(t *testing.T) {
 			// then
 			assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
 		})
+
+		t.Run("existing sandbox-cnv toleration", func(t *testing.T) {
+			// given
+			anotherToleration := map[string]interface{}{
+				"effect":   "NoSchedule",
+				"key":      "another",
+				"operator": "Exists",
+			}
+			// expect existing toleration and sandbox toleration
+			vmAdmReviewRequestObj := vmAdmReviewRequestObject(t, setTolerations(anotherToleration, sandboxToleration))
+
+			// when
+			actualPatchItems := ensureTolerations(vmAdmReviewRequestObj, []map[string]interface{}{})
+
+			// then
+			assert.Empty(t, actualPatchItems) // sandbox toleration exists so patch not needed
+		})
 	})
 }
 

@@ -265,7 +265,12 @@ func ensureTolerations(unstructuredRequestObj *unstructured.Unstructured, patchI
 		return patchItems
 	}
 
-	// no need to check original contents of tolerations, if there were existing tolerations the sandbox one will be appended; if there were no tolerations then the patch will add the sandbox toleration
+	for _, toleration := range tolerations {
+		tol, ok := toleration.(map[string]interface{})
+		if ok && tol["key"] == "sandbox-cnv" {
+			return patchItems // the toleration already exists
+		}
+	}
 	tolerations = append(tolerations, sandboxToleration)
 	patchItems = append(patchItems, addTolerations(tolerations))
 

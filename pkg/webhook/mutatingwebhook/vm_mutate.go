@@ -21,6 +21,12 @@ const (
 
 var vmLogger = logf.Log.WithName("virtual_machines_mutating_webhook")
 
+var sandboxToleration = map[string]interface{}{
+	"effect":   "NoSchedule",
+	"key":      "sandbox-cnv",
+	"operator": "Exists",
+}
+
 func HandleMutateVirtualMachines(w http.ResponseWriter, r *http.Request) {
 	handleMutate(vmLogger, w, r, vmMutator)
 }
@@ -47,6 +53,9 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 
 	// ensure limits are set in a best effort approach, if the limits are not set for any reason the request will still be allowed
 	vmPatchItems = ensureLimits(unstructuredRequestObj, vmPatchItems)
+
+	// ensure tolerations are set so vm can be scheduled to the metal node
+	vmPatchItems = ensureTolerations(unstructuredRequestObj, vmPatchItems)
 
 	// ensure cloud-init config is set, if the cloud-init config cannot be set for any reason the request will be blocked
 	var cloudInitConfigErr error
@@ -247,6 +256,22 @@ func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[s
 	return patchItems
 }
 
+// ensureTolerations ensures tolerations are set on the VirtualMachine
+func ensureTolerations(unstructuredRequestObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
+	// get existing tolerations, if any
+	tolerations, _, err := unstructured.NestedSlice(unstructuredRequestObj.Object, "spec", "template", "spec", "tolerations")
+	if err != nil {
+		vmLogger.Error(err, "unable to get tolerations from VirtualMachine", "VirtualMachine", unstructuredRequestObj)
+		return patchItems
+	}
+
+	// no need to check original contents of tolerations, if there were existing tolerations the sandbox one will be appended; if there were no tolerations then the patch will add the sandbox toleration
+	tolerations = append(tolerations, sandboxToleration)
+	patchItems = append(patchItems, addTolerations(tolerations))
+
+	return patchItems
+}
+
 func defaultUserData(sshKeys []string) string {
 	authorizedKeys := fmt.Sprintf("ssh_authorized_keys: [%s]\n", sshKeys)
 	return strings.Join(
@@ -271,5 +296,13 @@ func addResourcesToDomain(limits map[string]string) map[string]interface{} {
 		"op":    "add",
 		"path":  "/spec/template/spec/domain/resources",
 		"value": resources,
+	}
+}
+
+func addTolerations(tolerations []interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/template/spec/tolerations",
+		"value": tolerations,
 	}
 }

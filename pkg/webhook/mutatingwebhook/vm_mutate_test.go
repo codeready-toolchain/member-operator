@@ -31,13 +31,19 @@ func TestVMMutator(t *testing.T) {
 		// given
 		admReview := admissionReview(t, vmRawAdmissionReviewJSONTemplate, setVolumes(rootDiskVolume(), cloudInitVolume(cloudInitNoCloud, userDataWithoutSSHKey)))
 		expectedVolumes := cloudInitVolume(cloudInitNoCloud, userDataWithSSHKey) // expect SSH key will be added to userData
-		expectedVolumesPatch := []map[string]interface{}{volumesPatch(expectedVolumes)}
+		expectedVolumesPatch := volumesPatch(expectedVolumes)
+		expectedTolerationsPatch := addTolerations([]interface{}{sandboxToleration})
 
 		// when
 		actualResponse := vmMutator(admReview)
 
 		// then
-		assert.Equal(t, expectedVMMutateRespSuccess(t, expectedVolumesPatch...), *actualResponse)
+		expectedPatches := []map[string]interface{}{expectedTolerationsPatch, expectedVolumesPatch}
+		actualPatchContent := actualResponse.Patch
+		expectedPatchContent, err := json.Marshal(expectedPatches)
+		require.NoError(t, err)
+		require.Equal(t, string(expectedPatchContent), string(actualPatchContent))
+		assert.Equal(t, expectedVMMutateRespSuccess(t, expectedTolerationsPatch, expectedVolumesPatch), *actualResponse)
 	})
 
 	t.Run("fail", func(t *testing.T) {
@@ -395,6 +401,42 @@ func TestAddSSHKeyToUserData(t *testing.T) {
 	}
 }
 
+func TestEnsureTolerations(t *testing.T) {
+
+	t.Run("success", func(t *testing.T) {
+		t.Run("no existing tolerations", func(t *testing.T) {
+			// given
+			vmAdmReviewRequestObj := vmAdmReviewRequestObject(t)
+			// expect only sandbox toleration
+			expectedPatchItems := []map[string]interface{}{addTolerations([]interface{}{sandboxToleration})}
+
+			// when
+			actualPatchItems := ensureTolerations(vmAdmReviewRequestObj, []map[string]interface{}{})
+
+			// then
+			assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+		})
+
+		t.Run("some existing tolerations", func(t *testing.T) {
+			// given
+			existingToleration := map[string]interface{}{
+				"effect":   "NoSchedule",
+				"key":      "another",
+				"operator": "Exists",
+			}
+			// expect existing toleration and sandbox toleration
+			vmAdmReviewRequestObj := vmAdmReviewRequestObject(t, setTolerations(existingToleration))
+			expectedPatchItems := []map[string]interface{}{addTolerations([]interface{}{existingToleration, sandboxToleration})} // patch should include existing toleration
+
+			// when
+			actualPatchItems := ensureTolerations(vmAdmReviewRequestObj, []map[string]interface{}{})
+
+			// then
+			assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+		})
+	})
+}
+
 type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
 
 func setDomainResourcesRequests(requests map[string]string) admissionReviewOption {
@@ -421,6 +463,13 @@ func setDomainMemory(memory map[string]interface{}) admissionReviewOption {
 func setVolumes(volumes ...interface{}) admissionReviewOption {
 	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
 		err := unstructured.SetNestedSlice(unstructuredAdmReview.Object, volumes, "request", "object", "spec", "template", "spec", "volumes")
+		require.NoError(t, err)
+	}
+}
+
+func setTolerations(tolerations ...interface{}) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
+		err := unstructured.SetNestedSlice(unstructuredAdmReview.Object, tolerations, "request", "object", "spec", "template", "spec", "tolerations")
 		require.NoError(t, err)
 	}
 }

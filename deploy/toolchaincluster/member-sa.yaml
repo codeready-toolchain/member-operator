@@ -1,0 +1,109 @@
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: toolchaincluster-member
+  namespace: {{.Namespace}}
+rules:
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - "idlers"
+  - "nstemplatesets"
+  - "memberoperatorconfigs"
+  - "memberstatuses"
+  - "toolchainclusters"
+  - "useraccounts"
+  verbs:
+  - "*"
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: toolchaincluster-member-toolchain-member-operator-toolchaincluster
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups: [""]
+  resources: ["users", "groups"]
+  verbs: ["impersonate"]
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - "spacerequests"
+  verbs:
+  - "*"
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - spacerequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - spacerequests/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - "namespaces"
+  verbs:
+  - "get"
+  - "list"
+  - "watch"
+- apiGroups:
+  - ""
+  resources:
+  - "secrets"
+  - "serviceaccounts/token"
+  verbs:
+  - "*"
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - "spacebindingrequests"
+  verbs:
+  - "*"
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - spacebindingrequests/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - toolchain.dev.openshift.com
+  resources:
+  - spacebindingrequests/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: toolchaincluster-member-toolchain-member-operator-toolchaincluster
+subjects:
+- kind: ServiceAccount
+  name: toolchaincluster-member
+  namespace: {{.Namespace}}
+roleRef:
+  kind: ClusterRole
+  name: toolchaincluster-member-toolchain-member-operator-toolchaincluster
+  apiGroup: rbac.authorization.k8s.io

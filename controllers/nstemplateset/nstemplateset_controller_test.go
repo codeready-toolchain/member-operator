@@ -1216,7 +1216,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "stage"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return errors.New("unable to update status")
 		}
 
@@ -1256,7 +1256,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
 		rb2 := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, rb, rb2)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			if nsTmpl, ok := obj.(*toolchainv1alpha1.NSTemplateSet); ok {
 				if len(nsTmpl.Status.ProvisionedNamespaces) > 0 {
 					return errors.New("unable to update provisioned namespaces list")
@@ -1511,33 +1511,33 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	})
 }
 
-func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	r, fakeClient := prepareController(t, initObjs...)
 	return r, newReconcileRequest(namespaceName, name), fakeClient
 }
 
-func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {
+func prepareStatusManager(t *testing.T, initObjs ...client.Object) (*statusManager, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return &statusManager{
 		APIClient: apiClient,
 	}, fakeClient
 }
 
-func prepareNamespacesManager(t *testing.T, initObjs ...runtime.Object) (*namespacesManager, *test.FakeClient) {
+func prepareNamespacesManager(t *testing.T, initObjs ...client.Object) (*namespacesManager, *test.FakeClient) {
 	statusManager, fakeClient := prepareStatusManager(t, initObjs...)
 	return &namespacesManager{
 		statusManager: statusManager,
 	}, fakeClient
 }
 
-func prepareClusterResourcesManager(t *testing.T, initObjs ...runtime.Object) (*clusterResourcesManager, *test.FakeClient) {
+func prepareClusterResourcesManager(t *testing.T, initObjs ...client.Object) (*clusterResourcesManager, *test.FakeClient) {
 	statusManager, fakeClient := prepareStatusManager(t, initObjs...)
 	return &clusterResourcesManager{
 		statusManager: statusManager,
 	}, fakeClient
 }
 
-func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *test.FakeClient) {
+func prepareController(t *testing.T, initObjs ...client.Object) (*Reconciler, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return NewReconciler(apiClient), fakeClient
 }
@@ -1829,8 +1829,8 @@ func withLastAppliedSpaceRoles(nsTmplSet *toolchainv1alpha1.NSTemplateSet) objec
 	}
 }
 
-func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
-	var tierTemplates []runtime.Object
+func prepareTemplateTiers(decoder runtime.Decoder) ([]client.Object, error) {
+	var tierTemplates []client.Object
 
 	// templates indexed by tiername / type / revision
 	tmpls := map[string]map[string]map[string]string{

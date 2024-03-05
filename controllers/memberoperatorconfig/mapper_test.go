@@ -1,6 +1,7 @@
 package memberoperatorconfig
 
 import (
+	"context"
 	"testing"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -13,6 +14,7 @@ import (
 
 func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 	// when
+	ctx := context.TODO()
 	secretData := map[string][]byte{
 		"che-admin-username": []byte("cheadmin"),
 		"che-admin-password": []byte("password"),
@@ -23,7 +25,7 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 		secret := newSecret("test-secret", secretData)
 
 		// when
-		req := MapSecretToMemberOperatorConfig()(secret)
+		req := MapSecretToMemberOperatorConfig()(ctx, secret)
 
 		// then
 		require.Len(t, req, 1)
@@ -38,7 +40,7 @@ func TestSecretToMemberOperatorConfigMapper(t *testing.T) {
 		pod := &corev1.Pod{}
 
 		// when
-		req := MapSecretToMemberOperatorConfig()(pod)
+		req := MapSecretToMemberOperatorConfig()(ctx, pod)
 
 		// then
 		require.Len(t, req, 0)

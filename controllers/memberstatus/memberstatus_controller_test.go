@@ -25,7 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
@@ -714,7 +713,7 @@ func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterF
 	return NewGetHostClusterWithProbe(fakeClient, false, corev1.ConditionFalse, metav1.Now())
 }
 
-func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, lastGitHubAPICall time.Time, mockedGitHubClient commonclient.GetGitHubClientFunc, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, lastGitHubAPICall time.Time, mockedGitHubClient commonclient.GetGitHubClientFunc, initObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	fakeClient := test.NewFakeClient(t, initObjs...)
@@ -779,8 +778,8 @@ func withMemoryUsage(usage string) nodeMetricsModifier {
 	}
 }
 
-func newNodesAndNodeMetrics(nodeAndMetricsCreators ...nodeAndMetricsCreator) []runtime.Object {
-	var objects []runtime.Object
+func newNodesAndNodeMetrics(nodeAndMetricsCreators ...nodeAndMetricsCreator) []client.Object {
+	var objects []client.Object
 	for _, create := range nodeAndMetricsCreators {
 		node, nodeMetrics := create()
 		objects = append(objects, node, nodeMetrics)

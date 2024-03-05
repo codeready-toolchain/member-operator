@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -40,9 +39,9 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 		// TODO remove NSTemplateSet watch once appstudio workarounds are removed
 		// UserAccount does not contain NSTemplateSet details in its Spec anymore but this controller must still watch NSTemplateSet due to appstudio cases
 		// See https://github.com/codeready-toolchain/member-operator/blob/147dbe58f4923b9d936a21995be8b0c084544c6d/controllers/useraccount/useraccount_controller.go#L167-L172
-		Watches(&source.Kind{Type: &toolchainv1alpha1.NSTemplateSet{}}, &handler.EnqueueRequestForObject{}).
-		Watches(&source.Kind{Type: &userv1.User{}}, mapToOwnerByLabel).
-		Watches(&source.Kind{Type: &userv1.Identity{}}, mapToOwnerByLabel).
+		Watches(&toolchainv1alpha1.NSTemplateSet{}, &handler.EnqueueRequestForObject{}).
+		Watches(&userv1.User{}, mapToOwnerByLabel).
+		Watches(&userv1.Identity{}, mapToOwnerByLabel).
 		Complete(r)
 }
 

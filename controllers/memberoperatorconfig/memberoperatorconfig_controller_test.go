@@ -21,7 +21,6 @@ import (
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -341,7 +340,7 @@ func TestHandleWebConsolePluginDeploy(t *testing.T) {
 	})
 }
 
-func prepareReconcile(t *testing.T, initObjs ...runtime.Object) (*Reconciler, client.Client) {
+func prepareReconcile(t *testing.T, initObjs ...client.Object) (*Reconciler, client.Client) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	restore := test.SetEnvVarAndRestore(t, "MEMBER_OPERATOR_WEBHOOK_IMAGE", "webhookimage")
 	t.Cleanup(restore)

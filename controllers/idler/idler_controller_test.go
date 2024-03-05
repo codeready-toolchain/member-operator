@@ -80,9 +80,11 @@ func TestReconcile(t *testing.T) {
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "being-deleted",
+				Finalizers:        []string{"toolchain.dev.openshift.com"},
 				DeletionTimestamp: &now,
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			//Status: toolchainv1alpha1.IdlerStatus{Conditions: make([]toolchainv1alpha1.Condition, 0)},
 		}
 		reconciler, req, _, _, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
 
@@ -635,7 +637,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		require.NoError(t, err)
 
 		// second reconcile to delete pods and create notification
-		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return fmt.Errorf("cannot set status to fail")
 		}
 		_, err = reconciler.Reconcile(context.TODO(), req)
@@ -935,7 +937,7 @@ func TestCreateNotification(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return errors.New("can't update condition")
 		}
 		//when
@@ -1327,7 +1329,7 @@ func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime meta
 	return podsToTrack
 }
 
-func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
+func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)

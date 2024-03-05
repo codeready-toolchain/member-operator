@@ -8,12 +8,7 @@ rules:
 - apiGroups:
   - toolchain.dev.openshift.com
   resources:
-  - "idlers"
-  - "nstemplatesets"
-  - "memberoperatorconfigs"
-  - "memberstatuses"
-  - "toolchainclusters"
-  - "useraccounts"
+  - "*"
   verbs:
   - "*"
 ---

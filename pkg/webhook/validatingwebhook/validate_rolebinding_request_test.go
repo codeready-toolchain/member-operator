@@ -12,7 +12,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook/test"
 
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -29,12 +28,12 @@ func TestHandleValidateRoleBindingAdmissionRequestBlocked(t *testing.T) {
 	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(sandboxUserForAllServiceAccountsJSON))
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	defer func() {
 		require.NoError(t, resp.Body.Close())
 	}()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	test.VerifyRequestBlocked(t, body, "please create a rolebinding for a specific user or service account to avoid this error", "a68769e5-d817-4617-bec5-90efa2bad6f6")
 }
 

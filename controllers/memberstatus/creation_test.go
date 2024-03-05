@@ -45,7 +45,6 @@ func TestCreateOrUpdateResources(t *testing.T) {
 		err = CreateOrUpdateResources(context.TODO(), cl, MemberOperatorNs, MemberStatusName)
 
 		// then
-		require.Error(t, err)
-		require.Equal(t, err.Error(), "unable to create resource of kind: , version: : creation failed")
+		require.EqualError(t, err, "unable to create resource of kind: , version: : creation failed")
 	})
 }

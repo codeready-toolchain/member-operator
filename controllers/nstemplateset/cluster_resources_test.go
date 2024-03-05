@@ -94,7 +94,7 @@ func TestClusterResourceKinds(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			require.Len(t, existingResources, 0)
+			assert.Empty(t, existingResources)
 		})
 
 		t.Run("listExistingResourcesIfAvailable should return an error when listing resources of gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -109,7 +109,7 @@ func TestClusterResourceKinds(t *testing.T) {
 
 			// then
 			require.Error(t, err)
-			require.Len(t, existingResources, 0)
+			assert.Empty(t, existingResources)
 		})
 
 		t.Run("listExistingResourcesIfAvailable should not return any resource when APIGroup is missing for gvk "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestClusterResourceKinds(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			require.Len(t, existingResources, 0)
+			assert.Empty(t, existingResources)
 		})
 
 		t.Run("listExistingResourcesIfAvailable should not return any resource when APIGroup is present but is missing the version "+clusterResourceKind.gvk.String(), func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestClusterResourceKinds(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			require.Empty(t, existingResources)
+			assert.Empty(t, existingResources)
 		})
 	}
 
@@ -815,7 +815,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				assert.True(t, updated)
 				err = cl.List(context.TODO(), quotas, &client.ListOptions{})
 				require.NoError(t, err)
-				assert.Len(t, quotas.Items, 0)
+				assert.Empty(t, quotas.Items)
 				AssertThatCluster(t, cl).
 					HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
@@ -828,11 +828,11 @@ func TestPromoteClusterResources(t *testing.T) {
 					assert.True(t, updated)
 					err = cl.List(context.TODO(), quotas, &client.ListOptions{})
 					require.NoError(t, err)
-					assert.Len(t, quotas.Items, 0)
+					assert.Empty(t, quotas.Items)
 					roleBindings := &rbacv1.ClusterRoleBindingList{}
 					err = cl.List(context.TODO(), roleBindings, &client.ListOptions{})
 					require.NoError(t, err)
-					assert.Len(t, roleBindings.Items, 0)
+					assert.Empty(t, roleBindings.Items)
 				})
 			})
 		})

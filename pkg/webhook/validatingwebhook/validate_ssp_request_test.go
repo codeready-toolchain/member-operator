@@ -13,7 +13,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook/test"
 
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -30,12 +29,12 @@ func TestHandleValidateSSPAdmissionRequestBlocked(t *testing.T) {
 	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateSSPAdmissionRequest(t, SSPAdmReviewTmplParams{"CREATE", "johnsmith"})))
 
 	// then
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	body, err := io.ReadAll(resp.Body)
 	defer func() {
 		require.NoError(t, resp.Body.Close())
 	}()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. you are trying to create a SSP resource, which is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
 }
 

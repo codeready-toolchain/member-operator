@@ -59,7 +59,7 @@ func TestHandleMutateUserPods(t *testing.T) {
 		defer func() {
 			require.NoError(t, resp.Body.Close())
 		}()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assertResponseEqual(t, body, expectedMutatePodsRespSuccess(t))
 	})
 }

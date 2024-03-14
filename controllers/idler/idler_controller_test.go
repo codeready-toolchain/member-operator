@@ -323,7 +323,9 @@ func TestEnsureIdling(t *testing.T) {
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 		//check the notification is actually created
-		hostCl, _ := reconciler.GetHostCluster()
+		allclustersCl := reconciler.GetHostCluster()
+		hostCl := allclustersCl[0]
+
 		notification := &toolchainv1alpha1.Notification{}
 		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
 			Namespace: test.HostOperatorNs,
@@ -841,7 +843,8 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 					HasConditions(memberoperatortest.Running())
 			}
 			//check the notification is actually created
-			hostCl, _ := reconciler.GetHostCluster()
+			allclustersCl := reconciler.GetHostCluster()
+			hostCl := allclustersCl[0]
 			notification := &toolchainv1alpha1.Notification{}
 			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
 				Namespace: test.HostOperatorNs,
@@ -887,7 +890,8 @@ func TestCreateNotification(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
 		//check notification was created
-		hostCl, _ := reconciler.GetHostCluster()
+		allclustersCl := reconciler.GetHostCluster()
+		hostCl := allclustersCl[0]
 		notification := toolchainv1alpha1.Notification{}
 		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{Name: "alex-stage-idled", Namespace: hostCl.OperatorNamespace}, &notification)
 		require.NoError(t, err)
@@ -1015,7 +1019,8 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		hostCluster, _ := reconciler.GetHostCluster()
+		allclustersCl := reconciler.GetHostCluster()
+		hostCluster := allclustersCl[0]
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
@@ -1034,7 +1039,8 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		mur2 := newMUR("brian")
 		mur3 := newMUR("charlie")
 		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
-		hostCluster, _ := reconciler.GetHostCluster()
+		allclustersCl := reconciler.GetHostCluster()
+		hostCluster := allclustersCl[0]
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
@@ -1049,7 +1055,8 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 	t.Run("unable to get NSTemplateSet", func(t *testing.T) {
 		//given
 		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-		hostCluster, _ := reconciler.GetHostCluster()
+		allclustersCl := reconciler.GetHostCluster()
+		hostCluster := allclustersCl[0]
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
@@ -1063,7 +1070,8 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
-		hostCluster, _ := reconciler.GetHostCluster()
+		allclustersCl := reconciler.GetHostCluster()
+		hostCluster := allclustersCl[0]
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
@@ -1327,7 +1335,7 @@ func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime meta
 	return podsToTrack
 }
 
-func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
+func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetClustersFunc, initIdlerObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1415,7 +1423,7 @@ func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha
 	return reconciler, req, cl, allCl, dynamicClient
 }
 
-func getHostCluster(fakeClient client.Client) cluster.GetHostClusterFunc {
+func getHostCluster(fakeClient client.Client) cluster.GetClustersFunc {
 	return memberoperatortest.NewGetHostCluster(fakeClient, true, corev1.ConditionTrue)
 }
 

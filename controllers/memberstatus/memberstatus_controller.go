@@ -61,7 +61,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
 type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
-	GetHostCluster      func() (*cluster.CachedToolchainCluster, bool)
+	GetHostCluster      cluster.GetClustersFunc
 	AllNamespacesClient client.Client
 	VersionCheckManager status.VersionCheckManager
 }
@@ -150,9 +150,9 @@ func (r *Reconciler) aggregateAndUpdateStatus(ctx context.Context, memberStatus 
 func (r *Reconciler) hostConnectionHandleStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 
 	attributes := status.ToolchainClusterAttributes{
-		GetClusterFunc: r.GetHostCluster,
-		Period:         config.ToolchainCluster().HealthCheckPeriod(),
-		Timeout:        config.ToolchainCluster().HealthCheckTimeout(),
+		GetClustersFunc: r.GetHostCluster,
+		Period:          config.ToolchainCluster().HealthCheckPeriod(),
+		Timeout:         config.ToolchainCluster().HealthCheckTimeout(),
 	}
 
 	// look up host connection status

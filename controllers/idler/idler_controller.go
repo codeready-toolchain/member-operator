@@ -56,7 +56,7 @@ type Reconciler struct {
 	AllNamespacesClient client.Client
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
-	GetHostCluster      cluster.GetHostClusterFunc
+	GetHostCluster      cluster.GetClustersFunc
 	Namespace           string
 }
 
@@ -195,8 +195,8 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) error {
 	log.FromContext(ctx).Info("Create Notification")
 	//Get the HostClient
-	hostCluster, ok := r.GetHostCluster()
-	if !ok {
+	clusters := r.GetHostCluster()
+	if len(clusters) != 1 {
 		return fmt.Errorf("unable to get the host cluster")
 	}
 	//check the condition on Idler if notification already sent, only create a notification if not created before
@@ -204,7 +204,7 @@ func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1a
 		// notification already created
 		return nil
 	}
-
+	hostCluster := clusters[0]
 	notificationName := fmt.Sprintf("%s-%s", idler.Name, toolchainv1alpha1.NotificationTypeIdled)
 	notification := &toolchainv1alpha1.Notification{}
 	// Check if notification already exists in host

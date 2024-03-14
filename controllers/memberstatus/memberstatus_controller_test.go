@@ -695,26 +695,26 @@ func newMemberDeploymentWithConditions(deploymentConditions ...appsv1.Deployment
 	}
 }
 
-func newGetHostClusterReady(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterReady(fakeClient client.Client) cluster.GetClustersFunc {
 	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionTrue, metav1.Now())
 }
 
-func newGetHostClusterNotReady(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterNotReady(fakeClient client.Client) cluster.GetClustersFunc {
 	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionFalse, metav1.Now())
 }
 
-func newGetHostClusterProbeNotWorking(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterProbeNotWorking(fakeClient client.Client) cluster.GetClustersFunc {
 	aMinuteAgo := metav1.Time{
 		Time: time.Now().Add(time.Duration(-60 * time.Second)),
 	}
 	return NewGetHostClusterWithProbe(fakeClient, true, corev1.ConditionTrue, aMinuteAgo)
 }
 
-func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetHostClusterFunc {
+func newGetHostClusterNotExist(fakeClient client.Client) cluster.GetClustersFunc {
 	return NewGetHostClusterWithProbe(fakeClient, false, corev1.ConditionFalse, metav1.Now())
 }
 
-func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, allNamespacesClient *test.FakeClient, lastGitHubAPICall time.Time, mockedGitHubClient commonclient.GetGitHubClientFunc, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, requestName string, getHostClusterFunc func(fakeClient client.Client) cluster.GetClustersFunc, allNamespacesClient *test.FakeClient, lastGitHubAPICall time.Time, mockedGitHubClient commonclient.GetGitHubClientFunc, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	fakeClient := test.NewFakeClient(t, initObjs...)

@@ -110,3 +110,5 @@ require (
 )
 
 go 1.20
+
+replace github.com/codeready-toolchain/toolchain-common => ../toolchain-common

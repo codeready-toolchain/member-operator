@@ -218,7 +218,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
 		DynamicClient:       dynamicClient,
-		GetHostCluster:      cluster.GetHostCluster,
+		GetHostCluster:      cluster.GetClusters,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Idler")
@@ -228,7 +228,7 @@ func main() {
 	if err = (&memberstatus.Reconciler{
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
-		GetHostCluster:      cluster.GetHostCluster,
+		GetHostCluster:      cluster.GetClusters,
 		AllNamespacesClient: allNamespacesClient,
 		VersionCheckManager: status.VersionCheckManager{GetGithubClientFunc: commonclient.NewGitHubClient},
 	}).SetupWithManager(mgr); err != nil {
@@ -239,7 +239,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		AllNamespacesClient: allNamespacesClient,
 		Scheme:              mgr.GetScheme(),
-		GetHostCluster:      cluster.GetHostCluster,
+		GetHostCluster:      cluster.GetClusters,
 	})).SetupWithManager(mgr, allNamespacesCluster, discoveryClient); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
 		os.Exit(1)

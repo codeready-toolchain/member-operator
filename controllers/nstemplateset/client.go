@@ -19,7 +19,7 @@ type APIClient struct {
 	AllNamespacesClient runtimeclient.Client
 	Client              runtimeclient.Client
 	Scheme              *runtime.Scheme
-	GetHostCluster      cluster.GetHostClusterFunc
+	GetHostCluster      cluster.GetClustersFunc
 	AvailableAPIGroups  []metav1.APIGroup
 }
 

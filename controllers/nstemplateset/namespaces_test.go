@@ -753,6 +753,7 @@ func TestDeleteNamespace(t *testing.T) {
 		// given namespace with deletion timestamp
 		timeStamp := metav1.Now()
 		deletedNS := codeNS.DeepCopy()
+		deletedNS.Finalizers = []string{toolchainv1alpha1.FinalizerName}
 		deletedNS.DeletionTimestamp = &timeStamp
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, deletedNS)
 

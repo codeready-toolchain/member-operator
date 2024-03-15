@@ -247,6 +247,12 @@ func (r *clusterResourcesManager) deleteClusterResource(ctx context.Context, nsT
 	if err := r.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet); err != nil {
 		return false, err
 	}
+	//remove finalizer before deleting
+	toDelete.SetFinalizers(nil)
+	if err := r.Client.Update(ctx, toDelete); err != nil {
+		return false, errs.Wrapf(err, "failed to remove finalizer on cluster resource of name '%s' and gvk '%v'",
+			toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
+	}
 	if err := r.Client.Delete(ctx, toDelete); err != nil {
 		return false, errs.Wrapf(err, "failed to delete an existing redundant cluster resource of name '%s' and gvk '%v'",
 			toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
@@ -316,6 +322,11 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 			}
 
 			log.FromContext(ctx).Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
+			// remove finalizer before deleting
+			toDelete.SetFinalizers(nil)
+			if err := r.Client.Update(ctx, toDelete); err != nil {
+				return false, r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusTerminatingFailed, err, "failed to remove finalizer from cluster resource '%s'", toDelete.GetName())
+			}
 			if err := r.Client.Delete(ctx, toDelete); err != nil && errors.IsNotFound(err) {
 				// ignore case where the resource did not exist anymore, move to the next one to delete
 				continue

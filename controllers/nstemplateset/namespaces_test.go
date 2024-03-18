@@ -189,7 +189,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
-		assert.Error(t, err, "mock List error")
+		require.Error(t, err, "mock List error")
 		require.True(t, found)
 	})
 

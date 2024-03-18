@@ -194,7 +194,7 @@ func TestEnsureIdling(t *testing.T) {
 				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
-			assert.Equal(t, int(res.RequeueAfter), 0) // pods running for too long should be killed immediately
+			assert.Equal(t, 0, int(res.RequeueAfter)) // pods running for too long should be killed immediately
 
 			t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
 				//when
@@ -314,12 +314,12 @@ func TestEnsureIdling(t *testing.T) {
 		res, err := reconciler.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
 		assert.True(t, res.Requeue)
-		assert.Equal(t, int(res.RequeueAfter), 0)
+		assert.Equal(t, 0, int(res.RequeueAfter))
 
 		// second reconcile should delete pods and create notification
 		res, err = reconciler.Reconcile(context.TODO(), req)
 		//then
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 		//check the notification is actually created
@@ -337,7 +337,7 @@ func TestEnsureIdling(t *testing.T) {
 		// third reconcile should not create a notification
 		res, err = reconciler.Reconcile(context.TODO(), req)
 		//then
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
@@ -519,7 +519,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
-				assert.NoError(t, err) // 'NotFound' errors are ignored!
+				require.NoError(t, err) // 'NotFound' errors are ignored!
 				assert.Equal(t, reconcile.Result{
 					Requeue:      true,
 					RequeueAfter: 60 * time.Second,
@@ -743,7 +743,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 
 			//then
 			require.NoError(t, err)
-			require.Equal(t, true, deletedByController)
+			require.True(t, deletedByController)
 			require.Equal(t, tc.expectedAppType, appType)
 			require.Equal(t, tc.expectedAppName, appName)
 		})
@@ -825,13 +825,13 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 
 			// first reconcile to track pods
 			res, err := reconciler.Reconcile(context.TODO(), req)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, res.Requeue)
 
 			// second reconcile should delete pods and create notification
 			res, err = reconciler.Reconcile(context.TODO(), req)
 			//then
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			if tcs.expectedNotificationCreated {
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
@@ -1054,7 +1054,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
 		require.EqualError(t, err, "nstemplatesets.toolchain.dev.openshift.com \"alex\" not found")
-		require.Len(t, emails, 0)
+		assert.Empty(t, emails)
 	})
 
 	t.Run("unable to get MUR, no error but no email found", func(t *testing.T) {
@@ -1068,7 +1068,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
 		//then
 		require.Error(t, err)
-		require.Len(t, emails, 0)
+		assert.Empty(t, emails)
 	})
 }
 

@@ -29,9 +29,13 @@ rules:
   - tokenreviews
   verbs:
   - create
-- apiGroups: [""]
-  resources: ["users", "groups"]
-  verbs: ["impersonate"]
+- apiGroups:
+  - ""
+  resources:
+  - users
+  - groups
+  verbs:
+  - impersonate
 - apiGroups:
   - toolchain.dev.openshift.com
   resources:

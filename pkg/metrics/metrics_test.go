@@ -17,8 +17,8 @@ func TestInitGaugeVec(t *testing.T) {
 	m.WithLabelValues("member-2").Set(2)
 
 	// then
-	assert.Equal(t, float64(1), promtestutil.ToFloat64(m.WithLabelValues("member-1")))
-	assert.Equal(t, float64(2), promtestutil.ToFloat64(m.WithLabelValues("member-2")))
+	assert.InDelta(t, float64(1), promtestutil.ToFloat64(m.WithLabelValues("member-1")), 0.01)
+	assert.InDelta(t, float64(2), promtestutil.ToFloat64(m.WithLabelValues("member-2")), 0.01)
 }
 
 func TestRegisterCustomMetrics(t *testing.T) {

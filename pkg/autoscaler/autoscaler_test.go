@@ -73,7 +73,7 @@ func TestDeploy(t *testing.T) {
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+		fakeClient.MockCreate = func(_ context.Context, _ client.Object, _ ...client.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -81,7 +81,7 @@ func TestDeploy(t *testing.T) {
 		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "7Gi", 3)
 
 		// then
-		assert.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")
+		require.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")
 	})
 }
 
@@ -123,7 +123,7 @@ func TestDelete(t *testing.T) {
 	t.Run("when loading previously deployed objects fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+		fakeClient.MockGet = func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -131,14 +131,14 @@ func TestDelete(t *testing.T) {
 		deleted, err := Delete(context.TODO(), fakeClient, s, test.MemberOperatorNs)
 
 		// then
-		assert.EqualError(t, err, "cannot get autoscaling buffer object: some error")
+		require.EqualError(t, err, "cannot get autoscaling buffer object: some error")
 		assert.False(t, deleted)
 	})
 
 	t.Run("when deleting previously deployed objects fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t, namespace, prioClass, dm)
-		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+		fakeClient.MockDelete = func(_ context.Context, _ client.Object, _ ...client.DeleteOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -146,7 +146,7 @@ func TestDelete(t *testing.T) {
 		deleted, err := Delete(context.TODO(), fakeClient, s, test.MemberOperatorNs)
 
 		// then
-		assert.EqualError(t, err, "cannot delete autoscaling buffer object: some error")
+		require.EqualError(t, err, "cannot delete autoscaling buffer object: some error")
 		assert.False(t, deleted)
 	})
 }

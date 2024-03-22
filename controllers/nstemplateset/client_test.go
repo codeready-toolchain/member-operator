@@ -20,7 +20,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -28,7 +27,7 @@ func TestApplyToolchainObjects(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	ctx := log.IntoContext(context.TODO(), logger)
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	role := newRole("john-dev", "edit-john", "john")
 	devNs := newNamespace("advanced", "john", "dev")
 	optionalDeployment := newOptionalDeployment("john-dev-deployment", "john")

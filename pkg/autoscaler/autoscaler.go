@@ -15,10 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func Deploy(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
+func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
 	objs, err := getTemplateObjects(s, namespace, requestsMemory, replicas)
 	if err != nil {
 		return err
@@ -61,7 +60,7 @@ func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 	return deleted, nil
 }
 
-func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, replicas int) ([]runtimeclient.Object, error) {
+func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, replicas int) ([]client.Object, error) {
 	deployment, err := Asset("member-operator-autoscaler.yaml")
 	if err != nil {
 		return nil, err

@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -25,7 +24,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 
 	t.Run("success", func(t *testing.T) {

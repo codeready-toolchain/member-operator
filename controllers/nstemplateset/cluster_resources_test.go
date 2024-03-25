@@ -24,7 +24,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -170,7 +169,7 @@ func TestClusterResourceKinds(t *testing.T) {
 func TestEnsureClusterResourcesOK(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -296,7 +295,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith-space"
 	namespaceName := "toolchain-member"
@@ -364,7 +363,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -494,7 +493,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -904,7 +903,7 @@ func TestUpdateClusterResources(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"

@@ -19,13 +19,12 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestUpdateStatus(t *testing.T) {
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 
 	s := scheme.Scheme
@@ -125,7 +124,7 @@ func TestUpdateStatus(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "code"))
 		statusManager, _ := prepareStatusManager(t, nsTmplSet)
-		lctx := log.IntoContext(ctx, logf.Log.WithName("test"))
+		lctx := log.IntoContext(ctx, log.Log.WithName("test"))
 
 		t.Run("status_updated", func(t *testing.T) {
 			// given
@@ -220,7 +219,7 @@ func TestUpdateStatus(t *testing.T) {
 }
 func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)

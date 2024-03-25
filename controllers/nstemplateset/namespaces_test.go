@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -28,7 +27,7 @@ import (
 func TestFindNamespace(t *testing.T) {
 
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 
 	namespaces := []corev1.Namespace{
 		{
@@ -70,7 +69,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	nsTmplSet := newNSTmplSet("toolchain-member", "johnsmith", "basic", withNamespaces("abcde11", "dev", "stage"))
 	manager, fakeClient := prepareNamespacesManager(t, nsTmplSet)
@@ -189,7 +188,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
 
 		// then
-		assert.Error(t, err, "mock List error")
+		require.Error(t, err, "mock List error")
 		require.True(t, found)
 	})
 
@@ -394,7 +393,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -512,7 +511,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 func TestEnsureNamespacesFail(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -663,7 +662,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 func TestDeleteNamespace(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -796,7 +795,7 @@ func TestPromoteNamespaces(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -1014,7 +1013,7 @@ func TestUpdateNamespaces(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
@@ -1248,7 +1247,7 @@ func TestUpdateNamespaces(t *testing.T) {
 func TestIsUpToDateAndProvisioned(t *testing.T) {
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)

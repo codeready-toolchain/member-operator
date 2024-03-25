@@ -84,8 +84,8 @@ parameters:
 	// then
 	require.NoError(t, err)
 	require.Len(t, obj, 1)
-	assert.Equal(t, obj[0].GetNamespace(), "my-member-operator-namespace")
-	assert.Equal(t, obj[0].GetName(), "johnsmith")
+	assert.Equal(t, "my-member-operator-namespace", obj[0].GetNamespace())
+	assert.Equal(t, "johnsmith", obj[0].GetName())
 }
 
 func TestGetTierTemplate(t *testing.T) {
@@ -288,7 +288,7 @@ func TestGetTierTemplate(t *testing.T) {
 					retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
 
 					// then
-					assert.NoError(t, err)
+					assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
 					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
 				}(tierTemplate)
 			}

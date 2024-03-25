@@ -186,13 +186,13 @@ func TestHandleAutoscalerDeploy(t *testing.T) {
 		ctx := log.IntoContext(context.TODO(), controller.Log)
 
 		// when
-		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+		cl.(*test.FakeClient).MockGet = func(_ context.Context, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
 			return fmt.Errorf("client error")
 		}
 		err = controller.handleAutoscalerDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
-		require.NotNil(t, err)
+		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot deploy autoscaling buffer template: ")
 	})
 

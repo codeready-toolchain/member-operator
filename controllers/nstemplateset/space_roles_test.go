@@ -16,7 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -24,7 +23,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
-	logf.SetLogger(logger)
+	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 
 	t.Run("success", func(t *testing.T) {
@@ -221,7 +220,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			_, err := mgr.ensure(ctx, nsTmplSet)
 
 			// then
-			assert.EqualError(t, err, "failed to list namespaces for workspace 'oddity': mock error")
+			require.EqualError(t, err, "failed to list namespaces for workspace 'oddity': mock error")
 			// at this point, the NSTemplateSet is still in `updating` state
 			AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 				HasConditions(UnableToProvision("mock error"))
@@ -241,7 +240,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			_, err := mgr.ensure(ctx, nsTmplSet)
 
 			// then
-			assert.EqualError(t, err, "failed to retrieve space roles to apply: unable to retrieve the TierTemplate 'admin-unknown-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"admin-unknown-abcde11\" not found")
+			require.EqualError(t, err, "failed to retrieve space roles to apply: unable to retrieve the TierTemplate 'admin-unknown-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com \"admin-unknown-abcde11\" not found")
 			AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 				HasConditions(UpdateFailed(`unable to retrieve the TierTemplate 'admin-unknown-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com "admin-unknown-abcde11" not found`))
 		})

@@ -209,7 +209,7 @@ func main() {
 		namespace,
 		crtConfig.ToolchainCluster().HealthCheckTimeout(),
 	).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
+		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterCache")
 		os.Exit(1)
 	}
 	if err := (&idler.Reconciler{

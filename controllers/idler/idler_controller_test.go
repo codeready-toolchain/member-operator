@@ -83,8 +83,8 @@ func TestReconcile(t *testing.T) {
 				Finalizers:        []string{"toolchain.dev.openshift.com"},
 				DeletionTimestamp: &now,
 			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
-			//Status: toolchainv1alpha1.IdlerStatus{Conditions: make([]toolchainv1alpha1.Condition, 0)},
+			Spec:   toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			Status: toolchainv1alpha1.IdlerStatus{Conditions: make([]toolchainv1alpha1.Condition, 0)},
 		}
 		reconciler, req, _, _, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
 

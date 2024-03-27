@@ -1580,12 +1580,6 @@ func withFinalizer() userAccountOption {
 	}
 }
 
-func withDeletionTimestamp(ts metav1.Time) userAccountOption {
-	return func(userAcc *toolchainv1alpha1.UserAccount) {
-		userAcc.DeletionTimestamp = &ts
-	}
-}
-
 func newUserAccount(userName, userID string, opts ...userAccountOption) *toolchainv1alpha1.UserAccount {
 	userAcc := &toolchainv1alpha1.UserAccount{
 		ObjectMeta: metav1.ObjectMeta{

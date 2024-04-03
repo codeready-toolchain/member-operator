@@ -15,7 +15,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/metrics"
 	"github.com/codeready-toolchain/member-operator/version"
-	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
+	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclustercache"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -204,12 +204,12 @@ func main() {
 	}
 
 	// Setup all Controllers
-	if err = toolchaincluster.NewReconciler(
+	if err = toolchainclustercache.NewReconciler(
 		mgr,
 		namespace,
 		crtConfig.ToolchainCluster().HealthCheckTimeout(),
 	).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
+		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterCache")
 		os.Exit(1)
 	}
 	if err := (&idler.Reconciler{
@@ -270,7 +270,7 @@ func main() {
 		}
 
 		setupLog.Info("Starting ToolchainCluster health checks.")
-		toolchaincluster.StartHealthChecks(stopChannel, mgr, namespace, crtConfig.ToolchainCluster().HealthCheckPeriod())
+		toolchainclustercache.StartHealthChecks(stopChannel, mgr, namespace, crtConfig.ToolchainCluster().HealthCheckPeriod())
 
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")

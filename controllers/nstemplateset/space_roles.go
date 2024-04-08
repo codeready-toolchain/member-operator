@@ -31,7 +31,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 	}
 	logger.Info("ensuring space roles", "namespace_count", len(nss), "role_count", len(nsTmplSet.Spec.SpaceRoles))
 	for _, ns := range nss {
-		ns := ns
+		ns := ns // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		// space roles previously applied
 		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all obsolete resources (based on their kind/names)
 		var lastAppliedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole

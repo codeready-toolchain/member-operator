@@ -132,7 +132,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	}
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		pod := pod
+		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		logger := log.FromContext(ctx)
 		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {

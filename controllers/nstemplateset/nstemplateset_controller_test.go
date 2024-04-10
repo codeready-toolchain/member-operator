@@ -1376,8 +1376,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
 		nsTmplSet.SetDeletionTimestamp(&metav1.Time{Time: time.Now().Add(-61 * time.Second)})
-		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withFinalizer(toolchainv1alpha1.FinalizerName))
-		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"), withFinalizer(toolchainv1alpha1.FinalizerName))
+		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withFinalizer())
+		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"), withFinalizer())
 
 		r, _ := prepareController(t, nsTmplSet, devNS, stageNS)
 		req := newReconcileRequest(namespaceName, spacename)
@@ -1391,7 +1391,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
 		// given an NSTemplateSet resource and 2 user namespaces ("dev" and "stage")
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
-		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withFinalizer(toolchainv1alpha1.FinalizerName))
+		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withFinalizer())
 		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"))
 
 		r, fakeClient := prepareController(t, nsTmplSet, devNS, stageNS)
@@ -1679,7 +1679,6 @@ func newTektonClusterRoleBinding(spacename, tier string) *rbacv1.ClusterRoleBind
 			},
 			Name:       spacename + "-tekton-view",
 			Generation: int64(1),
-			Finalizers: []string{toolchainv1alpha1.FinalizerName},
 		},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
@@ -1711,7 +1710,6 @@ func newClusterResourceQuota(spacename, tier string, options ...objectMetaOption
 			Annotations: map[string]string{},
 			Name:        "for-" + spacename,
 			Generation:  int64(1),
-			Finalizers:  []string{toolchainv1alpha1.FinalizerName},
 		},
 		Spec: quotav1.ClusterResourceQuotaSpec{
 			Quota: corev1.ResourceQuotaSpec{
@@ -1786,9 +1784,9 @@ func withLastAppliedSpaceRoles(nsTmplSet *toolchainv1alpha1.NSTemplateSet) objec
 	}
 }
 
-func withFinalizer(finalizer string) objectMetaOption {
+func withFinalizer() objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
-		meta.Finalizers = append(meta.Finalizers, finalizer)
+		meta.Finalizers = append(meta.Finalizers, toolchainv1alpha1.FinalizerName)
 		return meta
 	}
 }

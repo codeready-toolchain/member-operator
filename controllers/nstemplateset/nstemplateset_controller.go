@@ -58,14 +58,14 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.SpaceLabelKey))
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		Watches(&source.Kind{Type: &corev1.Namespace{}}, mapToOwnerByLabel).
-		Watches(source.NewKindWithCache(&rbac.Role{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{})).
-		Watches(source.NewKindWithCache(&rbac.RoleBinding{}, allNamespaceCluster.GetCache()), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+		Watches(&corev1.Namespace{}, mapToOwnerByLabel).
+		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &rbac.Role{}), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{})).
+		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &rbac.RoleBinding{}), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources and only when the API group is present in the cluster
 		if apiGroupIsPresent(apiGroupList.Groups, clusterResource.gvk) {
-			build = build.Watches(&source.Kind{Type: clusterResource.object}, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+			build = build.Watches(clusterResource.object, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
 		}
 	}
 

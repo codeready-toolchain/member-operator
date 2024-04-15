@@ -1,6 +1,7 @@
 package consoleplugin
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -51,7 +52,7 @@ func TestConsolePluginServer(t *testing.T) {
 func waitForReady(t *testing.T) {
 	cl := http.Client{}
 
-	err := wait.Poll(DefaultRetryInterval, DefaultTimeout, func() (done bool, err error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), DefaultRetryInterval, DefaultTimeout, false, func(ctx context.Context) (done bool, err error) {
 		req, err := http.NewRequest("GET", "http://localhost:9443/status", nil)
 		if err != nil {
 			return false, err

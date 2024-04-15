@@ -434,7 +434,7 @@ func TestDeleteClusterResources(t *testing.T) {
 	t.Run("delete the second ClusterResourceQuota since the first one has deletion timestamp set", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
-		crq := newClusterResourceQuota(spacename, "withemptycrq")
+		crq := newClusterResourceQuota(spacename, "withemptycrq", withFinalizer())
 		deletionTS := metav1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")

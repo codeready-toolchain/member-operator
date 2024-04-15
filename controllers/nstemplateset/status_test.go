@@ -162,7 +162,7 @@ func TestUpdateStatus(t *testing.T) {
 			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))
 			r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet)
-			fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+			fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 				return fmt.Errorf("status update mock error")
 			}
 			// when a reconcile loop is triggered

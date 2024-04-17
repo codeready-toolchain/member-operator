@@ -219,8 +219,6 @@ func main() {
 
 	if err := toolchainclusterhealth.NewReconciler(
 		mgr,
-		namespace,
-		crtConfig.ToolchainCluster().HealthCheckTimeout(),
 		requeAfter,
 	).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterHealth")

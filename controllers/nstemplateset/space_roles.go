@@ -31,6 +31,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 	}
 	logger.Info("ensuring space roles", "namespace_count", len(nss), "role_count", len(nsTmplSet.Spec.SpaceRoles))
 	for _, ns := range nss {
+		ns := ns // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		// space roles previously applied
 		// read annotation to see what was applied last time, so we can compare with the new SpaceRoles and remove all obsolete resources (based on their kind/names)
 		var lastAppliedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole
@@ -47,12 +48,12 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 				return false, err
 			}
 		}
-		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(lctx, &ns, lastAppliedSpaceRoles) // nolint:gosec
+		lastAppliedSpaceRoleObjs, err := r.getSpaceRolesObjects(lctx, &ns, lastAppliedSpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(lctx, nsTmplSet, err, "failed to retrieve last applied space roles")
 		}
 		// space roles to apply now
-		spaceRoleObjs, err := r.getSpaceRolesObjects(lctx, &ns, nsTmplSet.Spec.SpaceRoles) // nolint:gosec
+		spaceRoleObjs, err := r.getSpaceRolesObjects(lctx, &ns, nsTmplSet.Spec.SpaceRoles)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForSpaceRolesFailure(lctx, nsTmplSet, err, "failed to retrieve space roles to apply")
 		}
@@ -84,7 +85,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 				ns.Annotations = map[string]string{}
 			}
 			ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
-			if err := r.Client.Update(ctx, &ns); err != nil { // nolint:gosec
+			if err := r.Client.Update(ctx, &ns); err != nil {
 				return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusProvisionFailed, err,
 					fmt.Sprintf("failed to update namespace with '%s' annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
 			}

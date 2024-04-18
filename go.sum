@@ -136,8 +136,8 @@ github.com/cockroachdb/errors v1.2.4/go.mod h1:rQD95gz6FARkaKkQXUksEje/d9a6wBJoC
 github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f/go.mod h1:i/u985jwjWRlyHXQbwatDASoW0RMlZ/3i9yJHE2xLkI=
 github.com/codeready-toolchain/api v0.0.0-20240322110702-5ab3840476e9 h1:Lm7bFLrzfJzrUiRGVqtsSaZMpj+akLiR/fvAFjjE9gM=
 github.com/codeready-toolchain/api v0.0.0-20240322110702-5ab3840476e9/go.mod h1:cfNN6YPX4TORvhhZXMSjSPesqAHlB3nD/WAfGe4WLKQ=
-github.com/codeready-toolchain/toolchain-common v0.0.0-20240404090512-046d250d7d78 h1:4jFHu6xN/T+hml9egbiZyJmptrMO0azWfF94liICmrM=
-github.com/codeready-toolchain/toolchain-common v0.0.0-20240404090512-046d250d7d78/go.mod h1:OJ3L9aaTRMGjxr2WeH/9l6m5OjExwEK3Bp/+P+efoGg=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20240417084737-d3c148491687 h1:ZPURdFfMNOsEyNKtCTzY9Gsj0jKQL13tR/uj7OAlZL4=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20240417084737-d3c148491687/go.mod h1:Iat3N+zBZcVgm/HWxa/ltSEoelM/YCXQUvbL9C8OSTw=
 github.com/coreos/bbolt v1.3.2/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
 github.com/coreos/etcd v3.3.10+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
 github.com/coreos/etcd v3.3.13+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
@@ -325,8 +325,9 @@ github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1/go.mod h1:kpwsk12EmLe
 github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
 github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510/go.mod h1:pupxD2MaaD3pAXIBCelhxNneeOaAeabZDe5s4K6zSpQ=
 github.com/google/uuid v1.1.1/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/google/uuid v1.1.2 h1:EVhdT+1Kseyi1/pUmXKaFxYsDNy9RQYkMWRH68J/W7Y=
 github.com/google/uuid v1.1.2/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
+github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/googleapis/gax-go/v2 v2.0.4/go.mod h1:0Wqv26UfaUD9n4G6kQubkQ+KchISgw+vpHVxEJEs9eg=
 github.com/googleapis/gax-go/v2 v2.0.5/go.mod h1:DWXyrwAJ9X0FpwwEdw+IPEYBICEFu5mhpdKc/us6bOk=
 github.com/googleapis/gax-go/v2 v2.1.0/go.mod h1:Q3nei7sK6ybPYH7twZdmQpAd1MKb7pfu6SK+H1/DsU0=

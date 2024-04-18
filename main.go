@@ -12,12 +12,14 @@ import (
 	"github.com/codeready-toolchain/member-operator/controllers/memberstatus"
 	"github.com/codeready-toolchain/member-operator/controllers/nstemplateset"
 	"github.com/codeready-toolchain/member-operator/controllers/useraccount"
+	"github.com/codeready-toolchain/member-operator/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/metrics"
 	"github.com/codeready-toolchain/member-operator/version"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclustercache"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclusterhealth"
+	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclusterresources"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -208,6 +210,14 @@ func main() {
 	}
 
 	// Setup all Controllers
+	if err = (&toolchainclusterresources.Reconciler{
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Templates: &deploy.ToolchainClusterTemplateFS,
+	}).SetupWithManager(mgr, namespace); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterResources")
+		os.Exit(1)
+	}
 	if err = toolchainclustercache.NewReconciler(
 		mgr,
 		namespace,

@@ -17,8 +17,8 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/metrics"
 	"github.com/codeready-toolchain/member-operator/version"
+	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclustercache"
-	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclusterhealth"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclusterresources"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -53,8 +53,6 @@ var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
-
-const requeAfter = 10 * time.Second
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -227,11 +225,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := toolchainclusterhealth.NewReconciler(
-		mgr,
-		requeAfter,
-	).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterHealth")
+	if err := (&toolchaincluster.Reconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		RequeAfter: 10 * time.Second,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
 		os.Exit(1)
 	}
 	if err := (&idler.Reconciler{

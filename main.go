@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	goruntime "runtime"
+	"time"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
 	membercfgctrl "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -16,6 +17,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/metrics"
 	"github.com/codeready-toolchain/member-operator/version"
+	"github.com/codeready-toolchain/toolchain-common/controllers/toolchaincluster"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclustercache"
 	"github.com/codeready-toolchain/toolchain-common/controllers/toolchainclusterresources"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -222,6 +224,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterCache")
 		os.Exit(1)
 	}
+
+	if err := (&toolchaincluster.Reconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		RequeAfter: 10 * time.Second,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ToolchainCluster")
+		os.Exit(1)
+	}
 	if err := (&idler.Reconciler{
 		Scheme:              mgr.GetScheme(),
 		AllNamespacesClient: allNamespacesClient,
@@ -278,9 +289,6 @@ func main() {
 			setupLog.Error(fmt.Errorf("timed out waiting for main cache to sync"), "")
 			os.Exit(1)
 		}
-
-		setupLog.Info("Starting ToolchainCluster health checks.")
-		toolchainclustercache.StartHealthChecks(stopChannel, mgr, namespace, crtConfig.ToolchainCluster().HealthCheckPeriod())
 
 		// create or update Member status during the operator deployment
 		setupLog.Info("Creating/updating the MemberStatus resource")

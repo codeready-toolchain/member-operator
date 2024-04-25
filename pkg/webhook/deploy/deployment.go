@@ -8,6 +8,9 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 
 	tmplv1 "github.com/openshift/api/template/v1"
 	errs "github.com/pkg/errors"
@@ -44,6 +47,44 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 		}
 	}
 	return nil
+}
+
+// Delete deletes the webhook app if it's deployed. Does nothing if it's not.
+// Returns true if the app was deleted.
+func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace string, oldObjectOnly bool) (bool, error) {
+	objs, err := getTemplateObjects(s, namespace, "0", []byte{00000001})
+	if err != nil {
+		return false, err
+	}
+
+	var deleted bool
+	for _, obj := range objs {
+		unst := &unstructured.Unstructured{}
+		unst.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+		objName := obj.GetName()
+		// TODO --- temporary migration step to delete the objects by using the old name
+		if oldObjectOnly {
+			oldName, found := obj.GetLabels()["toolchain.dev.openshift.com/old-name"]
+			if !found {
+				// this object needs to stay
+				continue
+			}
+			objName = oldName
+		}
+		// TODO --- end temporary migration step
+		if err := cl.Get(ctx, types.NamespacedName{Namespace: obj.GetNamespace(), Name: objName}, unst); err != nil {
+			if !errors.IsNotFound(err) { // Ignore not found
+				return false, errs.Wrap(err, "cannot get webhook object")
+			}
+		} else {
+			if err := cl.Delete(ctx, unst); err != nil {
+				return false, errs.Wrap(err, "cannot get webhook object")
+			}
+			deleted = true
+		}
+	}
+
+	return deleted, nil
 }
 
 func getTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {

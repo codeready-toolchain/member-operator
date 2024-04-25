@@ -61,7 +61,9 @@ objects:
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
-    name: webhook-rolebinding
+    name: webhook-rolebinding-${NAMESPACE}
+    labels:
+      old-name: webhook-rolebinding
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
@@ -130,8 +132,9 @@ objects:
 - apiVersion: admissionregistration.k8s.io/v1
   kind: MutatingWebhookConfiguration
   metadata:
-    name: member-operator-webhook
+    name: member-operator-webhook-${NAMESPACE}
     labels:
+      old-name: member-operator-webhook
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
   webhooks:
@@ -189,8 +192,9 @@ objects:
 - apiVersion: admissionregistration.k8s.io/v1
   kind: ValidatingWebhookConfiguration
   metadata:
-    name: member-operator-validating-webhook
+    name: member-operator-validating-webhook-${NAMESPACE}
     labels:
+      old-name: member-operator-validating-webhook
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
   webhooks:

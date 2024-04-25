@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	errs "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -225,7 +227,8 @@ func TestHandleWebhookDeploy(t *testing.T) {
 	t.Run("deployment not created when webhook deploy is false", func(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
-		controller, cl := prepareReconcile(t, config)
+		ns := newNamespace(test.MemberOperatorNs, "disabled")
+		controller, cl := prepareReconcile(t, config, ns)
 
 		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
@@ -364,4 +367,18 @@ func newRequest() reconcile.Request {
 
 func matchesDefaultConfig(t *testing.T, actual membercfg.Configuration) {
 	assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
+}
+
+func newNamespace(namespace, webhookLabelValue string) *corev1.Namespace {
+	labels := map[string]string{
+		toolchainv1alpha1.LabelKeyPrefix + "webhook": webhookLabelValue,
+	}
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   namespace,
+			Labels: labels,
+		},
+		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
+	}
+	return ns
 }

@@ -6,9 +6,10 @@ objects:
 - apiVersion: scheduling.k8s.io/v1
   kind: PriorityClass
   metadata:
-    name: sandbox-users-pods
+    name: sandbox-users-pods-${NAMESPACE}
     labels:
       toolchain.dev.openshift.com/provider: codeready-toolchain
+      old-name: sandbox-users-pods # TODO temporary migration step to delete the objects by using the old name
   value: -3
   globalDefault: false
   description: "Priority class for pods in users' namespaces"
@@ -16,8 +17,11 @@ objects:
   kind: ClusterRole
   metadata:
     creationTimestamp: null
-    name: webhook-role
-  rules:    
+    name: webhook-role-${NAMESPACE}
+    labels:
+      toolchain.dev.openshift.com/provider: codeready-toolchain
+      old-name: webhook-role # TODO temporary migration step to delete the objects by using the old name
+  rules:
     - apiGroups:
         - ""
       resources:
@@ -67,7 +71,7 @@ objects:
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
-    name: webhook-role
+    name: webhook-role-${NAMESPACE}
   subjects:
     - kind: ServiceAccount
       name: member-operator-webhook-sa
@@ -134,7 +138,7 @@ objects:
   metadata:
     name: member-operator-webhook-${NAMESPACE}
     labels:
-      old-name: member-operator-webhook
+      old-name: member-operator-webhook  # TODO temporary migration step to delete the objects by using the old name
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
   webhooks:
@@ -194,7 +198,7 @@ objects:
   metadata:
     name: member-operator-validating-webhook-${NAMESPACE}
     labels:
-      old-name: member-operator-validating-webhook
+      old-name: member-operator-validating-webhook  # TODO temporary migration step to delete the objects by using the old name
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
   webhooks:

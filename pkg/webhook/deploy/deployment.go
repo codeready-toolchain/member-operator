@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	tmplv1 "github.com/openshift/api/template/v1"
 	errs "github.com/pkg/errors"
@@ -26,6 +28,8 @@ const (
 	// serviceName is the name of webhook service
 	serviceName = "member-operator-webhook"
 )
+
+var log = logf.Log.WithName("webhook_deploy")
 
 func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
 	caBundle, err := cert.EnsureSecret(ctx, cl, namespace, certSecretName, serviceName, cert.Expiration)
@@ -82,6 +86,7 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 				return false, errs.Wrap(err, "cannot get webhook object")
 			}
 		} else {
+			log.Info(fmt.Sprintf("Deleting %s  name:%s namespace:%s of kind  ", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
 			if err := cl.Delete(ctx, unst); err != nil {
 				return false, errs.Wrap(err, "cannot get webhook object")
 			}

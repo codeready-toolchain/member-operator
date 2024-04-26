@@ -6,10 +6,10 @@ objects:
 - apiVersion: scheduling.k8s.io/v1
   kind: PriorityClass
   metadata:
-    name: sandbox-users-pods-${NAMESPACE}
+    name: sandbox-users-pods
     labels:
+      toolchain.dev.openshift.com/no-deletion: ""
       toolchain.dev.openshift.com/provider: codeready-toolchain
-      old-name: sandbox-users-pods # TODO temporary migration step to delete the objects by using the old name
   value: -3
   globalDefault: false
   description: "Priority class for pods in users' namespaces"

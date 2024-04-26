@@ -62,6 +62,11 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 		unst := &unstructured.Unstructured{}
 		unst.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 		objName := obj.GetName()
+		_, doNotDeleteFound := obj.GetLabels()["toolchain.dev.openshift.com/no-deletion"]
+		if doNotDeleteFound {
+			// this object needs to stay
+			continue
+		}
 		// TODO --- temporary migration step to delete the objects by using the old name
 		if oldObjectOnly {
 			oldName, found := obj.GetLabels()["toolchain.dev.openshift.com/old-name"]

@@ -8,8 +8,6 @@ import (
 	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/go-logr/logr"
-	errs "github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -117,18 +115,12 @@ func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Conf
 		// TODO -- end temporary migration
 		logger.Info("(Re)Deployed users' pods webhook")
 	} else {
-		memberNS := &corev1.Namespace{}
-		if err := r.Client.Get(ctx, types.NamespacedName{Name: namespace}, memberNS); err != nil {
-			return errs.Wrapf(err, "cannot get member namespace %s", memberNS)
+		deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace, false)
+		if err != nil {
+			return err
 		}
-		if value, found := memberNS.Labels["toolchain.dev.openshift.com/webhook"]; found && value == "disabled" {
-			deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace, false)
-			if err != nil {
-				return err
-			}
-			if deleted {
-				logger.Info("Deleted previously deployed webhook app")
-			}
+		if deleted {
+			logger.Info("Deleted previously deployed webhook app")
 		}
 	}
 	return nil

@@ -56,7 +56,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 // Delete deletes the webhook app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
 func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace string, oldObjectOnly bool) (bool, error) {
-	objs, err := getTemplateObjects(s, namespace, "0", []byte{00000001})
+	objs, err := getTemplateObjects(s, namespace, "dummy-image", []byte{00000001})
 	if err != nil {
 		return false, err
 	}

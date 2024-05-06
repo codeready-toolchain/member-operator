@@ -81,7 +81,8 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 			objName = oldName
 		}
 		// TODO --- end temporary migration step
-		log.Info(fmt.Sprintf("Seraching for object to delete: %s  name:%s namespace:%s", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
+		logger := logf.FromContext(ctx).WithName("webhook_deploy").WithValues("gvk", obj.GetObjectKind().GroupVersionKind(), "name", objName, "namespace", obj.GetNamespace())
+		logger.Info("Searching for object to delete")
 		if err := cl.Get(ctx, types.NamespacedName{Namespace: obj.GetNamespace(), Name: objName}, unst); err != nil {
 			if !errors.IsNotFound(err) { // Ignore not found
 				return false, errs.Wrap(err, "cannot get webhook object")

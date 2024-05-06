@@ -86,13 +86,13 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 			if !errors.IsNotFound(err) { // Ignore not found
 				return false, errs.Wrap(err, "cannot get webhook object")
 			}
-		} else {
-			log.Info(fmt.Sprintf("Deleting %s  name:%s namespace:%s", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
-			if err := cl.Delete(ctx, unst); err != nil {
-				return false, errs.Wrap(err, "cannot delete webhook object")
-			}
-			deleted = true
+			continue
 		}
+		log.Info(fmt.Sprintf("Deleting %s  name:%s namespace:%s", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
+		if err := cl.Delete(ctx, unst); err != nil {
+			return false, errs.Wrap(err, "cannot delete webhook object")
+		}
+		deleted = true
 	}
 
 	return deleted, nil

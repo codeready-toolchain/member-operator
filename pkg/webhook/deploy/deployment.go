@@ -56,7 +56,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 // Delete deletes the webhook app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
 func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace string, oldObjectOnly bool) (bool, error) {
-	objs, err := getTemplateObjects(s, namespace, "0", []byte{00000001})
+	objs, err := getTemplateObjects(s, namespace, "dummy-image", []byte{00000001})
 	if err != nil {
 		return false, err
 	}
@@ -81,18 +81,19 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 			objName = oldName
 		}
 		// TODO --- end temporary migration step
-		log.Info(fmt.Sprintf("Seraching for object to delete: %s  name:%s namespace:%s", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
+		logger := logf.FromContext(ctx).WithName("webhook_deploy").WithValues("gvk", obj.GetObjectKind().GroupVersionKind(), "name", objName, "namespace", obj.GetNamespace())
+		logger.Info("Searching for object to delete")
 		if err := cl.Get(ctx, types.NamespacedName{Namespace: obj.GetNamespace(), Name: objName}, unst); err != nil {
 			if !errors.IsNotFound(err) { // Ignore not found
 				return false, errs.Wrap(err, "cannot get webhook object")
 			}
-		} else {
-			log.Info(fmt.Sprintf("Deleting %s  name:%s namespace:%s", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
-			if err := cl.Delete(ctx, unst); err != nil {
-				return false, errs.Wrap(err, "cannot delete webhook object")
-			}
-			deleted = true
+			continue
 		}
+		log.Info(fmt.Sprintf("Deleting %s  name:%s namespace:%s", obj.GetObjectKind().GroupVersionKind(), objName, obj.GetNamespace()))
+		if err := cl.Delete(ctx, unst); err != nil {
+			return false, errs.Wrap(err, "cannot delete webhook object")
+		}
+		deleted = true
 	}
 
 	return deleted, nil

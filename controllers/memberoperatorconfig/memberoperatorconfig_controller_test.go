@@ -7,17 +7,18 @@ import (
 	"testing"
 	"time"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	errs "github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
+	errs "github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/admissionregistration/v1"
+	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	appsv1 "k8s.io/api/apps/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
@@ -227,8 +228,7 @@ func TestHandleWebhookDeploy(t *testing.T) {
 	t.Run("deployment not created when webhook deploy is false", func(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
-		ns := newNamespace(test.MemberOperatorNs, "disabled")
-		controller, cl := prepareReconcile(t, config, ns)
+		controller, cl := prepareReconcile(t, config)
 
 		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
@@ -244,6 +244,114 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		require.Error(t, err)
 		require.True(t, errors.IsNotFound(err))
 	})
+
+	t.Run("webhook deployment deleted when deploy is disabled", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
+		s := scheme.Scheme
+		err := apis.AddToScheme(s)
+		require.NoError(t, err)
+		objs, err := deploy.GetTemplateObjects(s, test.MemberOperatorNs, "test/image", []byte("asdfasdfasdf"))
+		initObjs := make([]runtime.Object, len(objs))
+		for i, obj := range objs {
+			initObjs[i] = obj.DeepCopyObject()
+		}
+		require.NoError(t, err)
+		controller, cl := prepareReconcile(t, append(initObjs, config)...)
+
+		actualConfig, err := membercfg.GetConfiguration(cl)
+		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
+
+		// when
+		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		for _, obj := range objs {
+			actualObject := &unstructured.Unstructured{}
+			actualObject.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+			err = cl.Get(context.TODO(), test.NamespacedName(obj.GetNamespace(), obj.GetName()), actualObject)
+			if _, found := obj.GetAnnotations()[deploy.WebhookDeploymentNoDeletionAnnotation]; found {
+				// resource should not be deleted
+				require.NoError(t, err)
+			} else {
+				// resource should be deleted
+				require.Error(t, err)
+				require.True(t, errors.IsNotFound(err))
+			}
+		}
+	})
+
+	// TODO --  temporary migration test to check that old objects are replaced by new ones
+	t.Run("old webhook config is replaced by new one", func(t *testing.T) {
+		// given
+		// there are some running objects
+		// that should be deleted
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
+		existingValidatingWebhookConfig := &v1.ValidatingWebhookConfiguration{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "member-operator-webhook",
+			},
+			Webhooks: nil,
+		}
+		existingMutatingWebhookConfig := &v1.MutatingWebhookConfiguration{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "member-operator-webhook",
+			},
+			Webhooks: nil,
+		}
+		existingCR := &rbac.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "webhook-role",
+			},
+		}
+		existingCRB := &rbac.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "webhook-rolebinding",
+			},
+		}
+		controller, cl := prepareReconcile(t, config, existingValidatingWebhookConfig, existingMutatingWebhookConfig, existingCR, existingCRB)
+
+		actualConfig, err := membercfg.GetConfiguration(cl)
+		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
+
+		// when
+		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
+
+		// then
+		s := scheme.Scheme
+		err = apis.AddToScheme(s)
+		require.NoError(t, err)
+		objs, err := deploy.GetTemplateObjects(s, test.MemberOperatorNs, "test/image", []byte("asdfasdfasdf"))
+		for _, obj := range objs {
+			actualObject := &unstructured.Unstructured{}
+			actualObject.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+			err = cl.Get(context.TODO(), test.NamespacedName(obj.GetNamespace(), obj.GetName()), actualObject)
+			require.NoError(t, err)
+		}
+		// old objects should have been deleted
+		previousValidatingWebhook := &v1.ValidatingWebhookConfiguration{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-webhook"), previousValidatingWebhook)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+		previousMutatingWebhook := &v1.MutatingWebhookConfiguration{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-webhook"), previousMutatingWebhook)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+		previousClusterRole := &rbac.ClusterRole{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "webhook-role"), previousClusterRole)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+		previousClusterRoleBinding := &rbac.ClusterRoleBinding{}
+		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "webhook-rolebinding"), previousClusterRoleBinding)
+		require.Error(t, err)
+		require.True(t, errors.IsNotFound(err))
+	})
+	// TODO -- end migration code
 
 	t.Run("deployment created when webhook deploy is true", func(t *testing.T) {
 		// given
@@ -367,18 +475,4 @@ func newRequest() reconcile.Request {
 
 func matchesDefaultConfig(t *testing.T, actual membercfg.Configuration) {
 	assert.Equal(t, 5*time.Second, actual.MemberStatus().RefreshPeriod())
-}
-
-func newNamespace(namespace, webhookLabelValue string) *corev1.Namespace {
-	labels := map[string]string{
-		toolchainv1alpha1.LabelKeyPrefix + "webhook": webhookLabelValue,
-	}
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   namespace,
-			Labels: labels,
-		},
-		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
-	}
-	return ns
 }

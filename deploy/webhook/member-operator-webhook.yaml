@@ -19,10 +19,10 @@ objects:
   metadata:
     creationTimestamp: null
     name: webhook-role-${NAMESPACE}
-    labels:
-      toolchain.dev.openshift.com/provider: codeready-toolchain
     annotations:
       toolchain.dev.openshift.com/old-name: webhook-role # TODO temporary migration step to delete the objects by using the old name
+    labels:
+      toolchain.dev.openshift.com/provider: codeready-toolchain
   rules:
     - apiGroups:
         - ""
@@ -139,11 +139,11 @@ objects:
   kind: MutatingWebhookConfiguration
   metadata:
     name: member-operator-webhook-${NAMESPACE}
+    annotations:
+      toolchain.dev.openshift.com/old-name: member-operator-webhook  # TODO temporary migration step to delete the objects by using the old name
     labels:
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
-    annotations:
-      toolchain.dev.openshift.com/old-name: member-operator-webhook  # TODO temporary migration step to delete the objects by using the old name
   webhooks:
   - name: users.pods.webhook.sandbox
     admissionReviewVersions:
@@ -200,11 +200,11 @@ objects:
   kind: ValidatingWebhookConfiguration
   metadata:
     name: member-operator-validating-webhook-${NAMESPACE}
+    annotations:
+      toolchain.dev.openshift.com/old-name: member-operator-validating-webhook  # TODO temporary migration step to delete the objects by using the old name
     labels:
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
-    annotations:
-      toolchain.dev.openshift.com/old-name: member-operator-validating-webhook  # TODO temporary migration step to delete the objects by using the old name
   webhooks:
     - name: users.rolebindings.webhook.sandbox
       admissionReviewVersions:

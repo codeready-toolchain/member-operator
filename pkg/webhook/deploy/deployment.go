@@ -3,12 +3,15 @@ package deploy
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"testing"
 
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,6 +30,12 @@ const (
 
 	// serviceName is the name of webhook service
 	serviceName = "member-operator-webhook"
+
+	// WebhookDeploymentNoDeletionAnnotation is used on webhook resources that should not be deleted when the deployment of the webhook is disabled
+	WebhookDeploymentNoDeletionAnnotation = "toolchain.dev.openshift.com/no-deletion"
+
+	// WebhookDeploymentOldNameAnnotation has to old name used to deploy the resource, this is used to replace the current object with the new one
+	WebhookDeploymentOldNameAnnotation = "toolchain.dev.openshift.com/old-name"
 )
 
 var log = logf.Log.WithName("webhook_deploy")
@@ -37,7 +46,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}
 
-	objs, err := getTemplateObjects(s, namespace, image, caBundle)
+	objs, err := GetTemplateObjects(s, namespace, image, caBundle)
 	if err != nil {
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}
@@ -56,7 +65,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 // Delete deletes the webhook app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
 func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace string, oldObjectOnly bool) (bool, error) {
-	objs, err := getTemplateObjects(s, namespace, "dummy-image", []byte{00000001})
+	objs, err := GetTemplateObjects(s, namespace, "dummy-image", []byte{00000001})
 	if err != nil {
 		return false, err
 	}
@@ -66,14 +75,14 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 		unst := &unstructured.Unstructured{}
 		unst.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
 		objName := obj.GetName()
-		_, doNotDeleteFound := obj.GetAnnotations()["toolchain.dev.openshift.com/no-deletion"]
+		_, doNotDeleteFound := obj.GetAnnotations()[WebhookDeploymentNoDeletionAnnotation]
 		if doNotDeleteFound {
 			// this object needs to stay
 			continue
 		}
 		// TODO --- temporary migration step to delete the objects by using the old name
 		if oldObjectOnly {
-			oldName, found := obj.GetLabels()["toolchain.dev.openshift.com/old-name"]
+			oldName, found := obj.GetAnnotations()[WebhookDeploymentOldNameAnnotation]
 			if !found {
 				// this object needs to stay
 				continue
@@ -99,7 +108,7 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 	return deleted, nil
 }
 
-func getTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {
+func GetTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {
 	deployment, err := webhooks.Asset("member-operator-webhook.yaml")
 	if err != nil {
 		return nil, err
@@ -115,4 +124,15 @@ func getTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []b
 		"CA_BUNDLE": base64.StdEncoding.EncodeToString(caBundle),
 		"IMAGE":     image,
 	})
+}
+
+func unmarshalObj(t *testing.T, content string, target runtime.Object) {
+	err := json.Unmarshal([]byte(content), target)
+	require.NoError(t, err)
+}
+
+func GetUnstructuredObject(t *testing.T, content string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	unmarshalObj(t, content, obj)
+	return obj
 }

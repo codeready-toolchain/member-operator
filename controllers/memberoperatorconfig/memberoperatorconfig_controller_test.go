@@ -252,12 +252,12 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		err := apis.AddToScheme(s)
 		require.NoError(t, err)
 		objs, err := deploy.GetTemplateObjects(s, test.MemberOperatorNs, "test/image", []byte("asdfasdfasdf"))
-		initObjs := make([]runtime.Object, len(objs))
-		for i, obj := range objs {
-			initObjs[i] = obj.DeepCopyObject()
+		initObjs := []runtime.Object{config}
+		for _, obj := range objs {
+			initObjs = append(initObjs, obj.DeepCopyObject())
 		}
 		require.NoError(t, err)
-		controller, cl := prepareReconcile(t, append(initObjs, config)...)
+		controller, cl := prepareReconcile(t, initObjs...)
 
 		actualConfig, err := membercfg.GetConfiguration(cl)
 		require.NoError(t, err)
@@ -323,10 +323,12 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
 
 		// then
+		require.NoError(t, err)
 		s := scheme.Scheme
 		err = apis.AddToScheme(s)
 		require.NoError(t, err)
 		objs, err := deploy.GetTemplateObjects(s, test.MemberOperatorNs, "test/image", []byte("asdfasdfasdf"))
+		require.NoError(t, err)
 		for _, obj := range objs {
 			actualObject := &unstructured.Unstructured{}
 			actualObject.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())

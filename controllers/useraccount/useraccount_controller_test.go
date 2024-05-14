@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	v1 "k8s.io/api/rbac/v1"
 	"os"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ import (
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func TestReconcile(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 
 	username := "johnsmith"
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
@@ -303,7 +304,7 @@ func TestReconcile(t *testing.T) {
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
-				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
+				UID:  types.UID(uuid.NewString()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
 					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
@@ -341,7 +342,7 @@ func TestReconcile(t *testing.T) {
 			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
-				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
+				UID:  types.UID(uuid.NewString()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey: userAcc.Name,
 				},
@@ -472,6 +473,294 @@ func TestReconcile(t *testing.T) {
 					useraccount.AssertThatUserAccount(t, username, r.Client).
 						DoesNotExist()
 					require.Equal(t, 0, *mockCallsCounter)
+				})
+			})
+		})
+	})
+
+	t.Run("delete useraccount with console resources removes subsequent resources", func(t *testing.T) {
+		// when the console resources can only be found by name of the type "user-settings-UserUID"
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
+
+		mockCallsCounter := new(int)
+		userAcc := newUserAccount(username, userID)
+		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+		resourceName := ConsoleUserSettingsPrefix + string(userUID)
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		role := &v1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		rb := &v1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb)
+
+		t.Run("first reconcile deletes identity", func(t *testing.T) {
+			// given
+			// Set the deletionTimestamp
+			now := metav1.NewTime(time.Now())
+			userAcc.DeletionTimestamp = &now
+			err = r.Client.Update(context.TODO(), userAcc)
+			require.NoError(t, err)
+
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			assert.Equal(t, reconcile.Result{}, res)
+			require.NoError(t, err)
+
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(notReady("Terminating", "deleting user/identity"))
+
+			// Check that the associated identity has been deleted
+			// when reconciling the useraccount with a deletion timestamp
+			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
+			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+			t.Run("second reconcile deletes configmap", func(t *testing.T) {
+				// when
+				res, err = r.Reconcile(context.TODO(), req)
+
+				// then
+				assert.Equal(t, reconcile.Result{}, res)
+				require.NoError(t, err)
+
+				useraccount.AssertThatUserAccount(t, req.Name, cl).
+					HasConditions(notReady("Terminating", "deleting user/identity"))
+
+				// Check that the associated configmap has been deleted
+				// when reconciling the useraccount with a deletion timestamp
+				retrievedConfigMap := &corev1.ConfigMap{}
+				err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedConfigMap)
+				require.Error(t, err)
+				assert.True(t, apierros.IsNotFound(err))
+				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+				t.Run("third reconcile removes role", func(t *testing.T) {
+					// when
+					res, err = r.Reconcile(context.TODO(), req)
+
+					// then
+					assert.Equal(t, reconcile.Result{}, res)
+					require.NoError(t, err)
+
+					// Check that the associated role has been deleted
+					// when reconciling the useraccount with a deletion timestamp
+					retrievedrole := &v1.Role{}
+					err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedrole)
+					require.Error(t, err)
+					assert.True(t, apierros.IsNotFound(err))
+					useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+					t.Run("fourth reconcile removes rolebinding", func(t *testing.T) {
+						// when
+						res, err = r.Reconcile(context.TODO(), req)
+
+						// then
+						assert.Equal(t, reconcile.Result{}, res)
+						require.NoError(t, err)
+
+						// Check that the associated role has been deleted
+						// when reconciling the useraccount with a deletion timestamp
+						retrievedrb := &v1.RoleBinding{}
+						err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedrb)
+						require.Error(t, err)
+						assert.True(t, apierros.IsNotFound(err))
+						useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+						t.Run("fifth reconcile deletes User", func(t *testing.T) {
+							// when
+							res, err = r.Reconcile(context.TODO(), req)
+
+							// then
+							assert.Equal(t, reconcile.Result{}, res)
+							require.NoError(t, err)
+
+							useraccount.AssertThatUserAccount(t, req.Name, cl).
+								HasConditions(notReady("Terminating", "deleting user/identity"))
+
+							// Check that the associated user has been deleted
+							// when reconciling the useraccount with a deletion timestamp
+							assertUserNotFound(t, r, userAcc)
+							useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+							t.Run("sixth reconcile deletes userAccount", func(t *testing.T) {
+								// when
+								res, err = r.Reconcile(context.TODO(), req)
+
+								// then
+								assert.Equal(t, reconcile.Result{}, res)
+								require.NoError(t, err)
+
+								// Check that the user account has been removed since the finalizer was deleted
+								// when reconciling the useraccount with a deletion timestamp
+								useraccount.AssertThatUserAccount(t, username, r.Client).
+									DoesNotExist()
+								require.Equal(t, 0, *mockCallsCounter)
+							})
+						})
+					})
+				})
+			})
+		})
+	})
+
+	t.Run("delete useraccount with console resources having labels removes subsequent resources", func(t *testing.T) {
+		// when the console resources can only be found by name of the type "user-settings-UserUID"
+		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
+
+		mockCallsCounter := new(int)
+		userAcc := newUserAccount(username, userID)
+		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+		resourceName := "randomusername" // give a random username so that can only be identified by labels and not name
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+					ConsoleUserSettingsUID:        userID,
+				},
+			},
+		}
+		role := &v1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+					ConsoleUserSettingsUID:        userID,
+				},
+			},
+		}
+		rb := &v1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+					ConsoleUserSettingsUID:        userID,
+				},
+			},
+		}
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb)
+
+		t.Run("first reconcile deletes identity", func(t *testing.T) {
+			// given
+			// Set the deletionTimestamp
+			now := metav1.NewTime(time.Now())
+			userAcc.DeletionTimestamp = &now
+			err = r.Client.Update(context.TODO(), userAcc)
+			require.NoError(t, err)
+
+			// when
+			res, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			assert.Equal(t, reconcile.Result{}, res)
+			require.NoError(t, err)
+
+			useraccount.AssertThatUserAccount(t, req.Name, cl).
+				HasConditions(notReady("Terminating", "deleting user/identity"))
+
+			// Check that the associated identity has been deleted
+			// when reconciling the useraccount with a deletion timestamp
+			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
+			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+			t.Run("second reconcile deletes configmap", func(t *testing.T) {
+				// when
+				res, err = r.Reconcile(context.TODO(), req)
+
+				// then
+				assert.Equal(t, reconcile.Result{}, res)
+				require.NoError(t, err)
+
+				useraccount.AssertThatUserAccount(t, req.Name, cl).
+					HasConditions(notReady("Terminating", "deleting user/identity"))
+
+				// Check that the associated configmap has been deleted
+				// when reconciling the useraccount with a deletion timestamp
+				retrievedConfigMap := &corev1.ConfigMap{}
+				err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedConfigMap)
+				require.Error(t, err)
+				assert.True(t, apierros.IsNotFound(err))
+				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+				t.Run("third reconcile removes role", func(t *testing.T) {
+					// when
+					res, err = r.Reconcile(context.TODO(), req)
+
+					// then
+					assert.Equal(t, reconcile.Result{}, res)
+					require.NoError(t, err)
+
+					// Check that the associated role has been deleted
+					// when reconciling the useraccount with a deletion timestamp
+					retrievedrole := &v1.Role{}
+					err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedrole)
+					require.Error(t, err)
+					assert.True(t, apierros.IsNotFound(err))
+					useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+					t.Run("fourth reconcile removes rolebinding", func(t *testing.T) {
+						// when
+						res, err = r.Reconcile(context.TODO(), req)
+
+						// then
+						assert.Equal(t, reconcile.Result{}, res)
+						require.NoError(t, err)
+
+						// Check that the associated role has been deleted
+						// when reconciling the useraccount with a deletion timestamp
+						retrievedrb := &v1.RoleBinding{}
+						err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedrb)
+						require.Error(t, err)
+						assert.True(t, apierros.IsNotFound(err))
+						useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+						t.Run("fifth reconcile deletes User", func(t *testing.T) {
+							// when
+							res, err = r.Reconcile(context.TODO(), req)
+
+							// then
+							assert.Equal(t, reconcile.Result{}, res)
+							require.NoError(t, err)
+
+							useraccount.AssertThatUserAccount(t, req.Name, cl).
+								HasConditions(notReady("Terminating", "deleting user/identity"))
+
+							// Check that the associated user has been deleted
+							// when reconciling the useraccount with a deletion timestamp
+							assertUserNotFound(t, r, userAcc)
+							useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+
+							t.Run("sixth reconcile deletes userAccount", func(t *testing.T) {
+								// when
+								res, err = r.Reconcile(context.TODO(), req)
+
+								// then
+								assert.Equal(t, reconcile.Result{}, res)
+								require.NoError(t, err)
+
+								// Check that the user account has been removed since the finalizer was deleted
+								// when reconciling the useraccount with a deletion timestamp
+								useraccount.AssertThatUserAccount(t, username, r.Client).
+									DoesNotExist()
+								require.Equal(t, 0, *mockCallsCounter)
+							})
+						})
+					})
 				})
 			})
 		})
@@ -1093,7 +1382,7 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	username := "kjones"
 
 	userAcc := newUserAccount(username, userID)
@@ -1160,7 +1449,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	username := "hcollins"
 
 	userAcc := newUserAccount(username, userID)
@@ -1235,7 +1524,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 func TestUpdateStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johnsmith"
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1331,7 +1620,7 @@ func TestUpdateStatus(t *testing.T) {
 func TestDisabledUserAccount(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	username := "johndoe"
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1602,7 +1891,7 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
 			Namespace: test.MemberOperatorNs,
-			UID:       types.UID(uuid.Must(uuid.NewV4()).String()),
+			UID:       types.UID(uuid.NewString()),
 			Labels: map[string]string{
 				toolchainv1alpha1.TierLabelKey: "basic",
 			},

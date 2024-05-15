@@ -56,9 +56,10 @@ func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionSt
 			Client: cl,
 			ClusterStatus: &toolchainv1alpha1.ToolchainClusterStatus{
 				Conditions: []toolchainv1alpha1.ToolchainClusterCondition{{
-					Type:          toolchainv1alpha1.ToolchainClusterReady,
-					Status:        status,
-					LastProbeTime: lastProbeTime,
+					Type:            toolchainv1alpha1.ToolchainClusterReady,
+					Status:          status,
+					LastProbeTime:   lastProbeTime,
+					LastUpdatedTime: &lastProbeTime,
 				}},
 			},
 		}, true

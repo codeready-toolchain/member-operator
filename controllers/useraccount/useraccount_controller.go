@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	v1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -520,9 +521,13 @@ func (r *Reconciler) deleteUserResources(ctx context.Context, userID string) (bo
 func (r *Reconciler) deleteConfigMap(ctx context.Context, uid string) (bool, error) {
 	name := ConsoleUserSettingsPrefix + uid
 	logger := log.FromContext(ctx)
-	logger.Info(fmt.Sprintf("deleteing configmap with name %s", name))
+	logger.Info(fmt.Sprintf("deleting configmap with name %s", name))
 	toDelete := &corev1.ConfigMap{}
-	if configMap, err := getConfigMapByName(ctx, r.Client, name); err != nil || configMap == (&corev1.ConfigMap{}) {
+	toDelete.SetGroupVersionKind(schema.GroupVersionKind{
+		Kind: "ConfigMap",
+	})
+	configMap, err := getObjectByName(ctx, r.Client, name, toDelete)
+	if err != nil || configMap == nil {
 		// try with label
 		if configMapList, err := getConfigMapByLabel(ctx, r.Client, uid); err != nil || len(configMapList) == 0 {
 			return false, err
@@ -530,7 +535,7 @@ func (r *Reconciler) deleteConfigMap(ctx context.Context, uid string) (bool, err
 			toDelete = &configMapList[0]
 		}
 	} else {
-		toDelete = configMap
+		toDelete = configMap.(*corev1.ConfigMap)
 	}
 	if err := r.Client.Delete(ctx, toDelete); err != nil {
 		return false, err
@@ -541,7 +546,10 @@ func (r *Reconciler) deleteConfigMap(ctx context.Context, uid string) (bool, err
 func (r *Reconciler) deleteRole(ctx context.Context, uid string) (bool, error) {
 	name := ConsoleUserSettingsPrefix + uid
 	toDelete := &v1.Role{}
-	if role, err := getRoleByName(ctx, r.Client, name); err != nil || role == (&v1.Role{}) {
+	toDelete.SetGroupVersionKind(schema.GroupVersionKind{
+		Kind: "Role",
+	})
+	if role, err := getObjectByName(ctx, r.Client, name, toDelete); err != nil || role == (&v1.Role{}) {
 		// try with label
 		if roleList, err := getRolesByLabel(ctx, r.Client, uid); err != nil || len(roleList) == 0 {
 			return false, err
@@ -549,7 +557,7 @@ func (r *Reconciler) deleteRole(ctx context.Context, uid string) (bool, error) {
 			toDelete = &roleList[0]
 		}
 	} else {
-		toDelete = role
+		toDelete = role.(*v1.Role)
 	}
 	if err := r.Client.Delete(ctx, toDelete); err != nil {
 		return false, err
@@ -560,7 +568,10 @@ func (r *Reconciler) deleteRole(ctx context.Context, uid string) (bool, error) {
 func (r *Reconciler) deleteRoleBinding(ctx context.Context, uid string) (bool, error) {
 	name := ConsoleUserSettingsPrefix + uid
 	toDelete := &v1.RoleBinding{}
-	if rb, err := getRoleBindingByName(ctx, r.Client, name); err != nil || rb == (&v1.RoleBinding{}) {
+	toDelete.SetGroupVersionKind(schema.GroupVersionKind{
+		Kind: "RoleBinding",
+	})
+	if rb, err := getObjectByName(ctx, r.Client, name, toDelete); err != nil || rb == (&v1.RoleBinding{}) {
 		// try with label
 		if rbList, err := getRoleBindingsByLabel(ctx, r.Client, uid); err != nil || len(rbList) == 0 {
 			return false, err
@@ -568,7 +579,7 @@ func (r *Reconciler) deleteRoleBinding(ctx context.Context, uid string) (bool, e
 			toDelete = &rbList[0]
 		}
 	} else {
-		toDelete = rb
+		toDelete = rb.(*v1.RoleBinding)
 	}
 	if err := r.Client.Delete(ctx, toDelete); err != nil {
 		return false, err
@@ -766,33 +777,6 @@ func getUsersByOwnerName(ctx context.Context, cl client.Client, owner string) ([
 		return []userv1.User{}, err
 	}
 	return userList.Items, nil
-}
-
-func getConfigMapByName(ctx context.Context, cl client.Client, name string) (*corev1.ConfigMap, error) {
-	configMap := &corev1.ConfigMap{}
-	err := cl.Get(ctx, types.NamespacedName{Namespace: UserSettingNS, Name: name}, configMap)
-	if err != nil {
-		return &corev1.ConfigMap{}, err
-	}
-	return configMap, nil
-}
-
-func getRoleByName(ctx context.Context, cl client.Client, name string) (*v1.Role, error) {
-	role := &v1.Role{}
-	err := cl.Get(ctx, types.NamespacedName{Namespace: UserSettingNS, Name: name}, role)
-	if err != nil {
-		return &v1.Role{}, err
-	}
-	return role, nil
-}
-
-func getRoleBindingByName(ctx context.Context, cl client.Client, name string) (*v1.RoleBinding, error) {
-	rb := &v1.RoleBinding{}
-	err := cl.Get(ctx, types.NamespacedName{Namespace: UserSettingNS, Name: name}, rb)
-	if err != nil {
-		return &v1.RoleBinding{}, err
-	}
-	return rb, nil
 }
 
 func getConfigMapByLabel(ctx context.Context, cl client.Client, uid string) ([]corev1.ConfigMap, error) {

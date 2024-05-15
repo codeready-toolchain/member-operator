@@ -630,7 +630,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: UserSettingNS,
 				Labels: map[string]string{
 					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        userID,
+					ConsoleUserSettingsUID:        string(userUID),
 				},
 			},
 		}
@@ -640,7 +640,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: UserSettingNS,
 				Labels: map[string]string{
 					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        userID,
+					ConsoleUserSettingsUID:        string(userUID),
 				},
 			},
 		}
@@ -650,7 +650,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: UserSettingNS,
 				Labels: map[string]string{
 					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        userID,
+					ConsoleUserSettingsUID:        string(userUID),
 				},
 			},
 		}

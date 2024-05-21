@@ -491,8 +491,8 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	return true, nil
 }
 
-// Returns `true` if the associated resources (configMap, role and role-binding) created for a user by console is deleted, `false` otherwise with the underlying error.
-// This function only looks for these resources in the namespace - openshift-console-user-settings -
+// Returns `true` if the associated resources (configMap, role and role-binding) created for a user by console are deleted, `false` otherwise.
+// This function only looks for these resources in the namespace - openshift-console-user-settings
 func (r *Reconciler) deleteUserResources(ctx context.Context, userID string) error {
 
 	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix

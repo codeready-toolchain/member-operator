@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	ConsoleUserSettingsIdentifier = "console.openshift.io/user-settings"
-	ConsoleUserSettingsUID        = "console.openshift.io/user-settings-uid"
-	UserSettingNS                 = "openshift-console-user-settings"
-	ConsoleUserSettingsPrefix     = "user-settings-"
+	ConsoleUserSettingsIdentifier         = "console.openshift.io/user-settings"
+	ConsoleUserSettingsUID                = "console.openshift.io/user-settings-uid"
+	UserSettingNS                         = "openshift-console-user-settings"
+	ConsoleUserSettingsResourceNamePrefix = "user-settings-"
 )
 
 // deleteConfigMap deletes a ConfigMap associated with a user from console setting.
@@ -24,7 +24,7 @@ const (
 // If multiple ConfigMaps are found by label, all of them are deleted.
 // The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
 func deleteConfigMap(ctx context.Context, cl client.Client, uid string) (bool, error) {
-	name := ConsoleUserSettingsPrefix + uid
+	name := ConsoleUserSettingsResourceNamePrefix + uid
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting configmap with name %s", name))
 	var toDelete []client.Object
@@ -61,7 +61,7 @@ func deleteConfigMap(ctx context.Context, cl client.Client, uid string) (bool, e
 // If multiple Roles are found by label, all of them are deleted.
 // The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
 func deleteRole(ctx context.Context, cl client.Client, uid string) (bool, error) {
-	name := ConsoleUserSettingsPrefix + uid
+	name := ConsoleUserSettingsResourceNamePrefix + uid
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting role with name %s", name))
 
@@ -95,7 +95,7 @@ func deleteRole(ctx context.Context, cl client.Client, uid string) (bool, error)
 // If multiple Rolebindings are found by label, all of them are deleted.
 // The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
 func deleteRoleBinding(ctx context.Context, cl client.Client, uid string) (bool, error) {
-	name := ConsoleUserSettingsPrefix + uid
+	name := ConsoleUserSettingsResourceNamePrefix + uid
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting rolebinding with name %s", name))
 

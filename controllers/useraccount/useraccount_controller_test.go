@@ -485,7 +485,7 @@ func TestReconcile(t *testing.T) {
 		mockCallsCounter := new(int)
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		resourceName := ConsoleUserSettingsPrefix + string(userUID)
+		resourceName := ConsoleUserSettingsResourceNamePrefix + string(userUID)
 		configMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName,

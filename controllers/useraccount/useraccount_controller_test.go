@@ -442,7 +442,7 @@ func TestReconcile(t *testing.T) {
 			// Check that the associated identity has been deleted
 			// when reconciling the useraccount with a deletion timestamp
 			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
-			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
 
 			t.Run("second reconcile deletes user", func(t *testing.T) {
 				// when
@@ -458,7 +458,7 @@ func TestReconcile(t *testing.T) {
 				// Check that the associated user has been deleted
 				// when reconciling the useraccount with a deletion timestamp
 				assertUserNotFound(t, r, userAcc)
-				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
 
 				t.Run("third reconcile removes finalizer and triggers the deletion", func(t *testing.T) {
 					// when
@@ -531,7 +531,7 @@ func TestReconcile(t *testing.T) {
 			// Check that the associated identity has been deleted
 			// when reconciling the useraccount with a deletion timestamp
 			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
-			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
 
 			t.Run("second reconcile deletes user and its resources - configmap, role and rolebinding", func(t *testing.T) {
 				// when
@@ -563,7 +563,7 @@ func TestReconcile(t *testing.T) {
 				// Check that the associated user has been deleted
 				// when reconciling the useraccount with a deletion timestamp
 				assertUserNotFound(t, r, userAcc)
-				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
 
 				t.Run("third reconcile deletes userAccount", func(t *testing.T) {
 					// when
@@ -1938,11 +1938,11 @@ func provisioning() toolchainv1alpha1.Condition {
 	}
 }
 
-func terminating(msg string) toolchainv1alpha1.Condition {
+func terminating() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
 		Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
-		Message: msg,
+		Message: "deleting user/identity",
 	}
 }

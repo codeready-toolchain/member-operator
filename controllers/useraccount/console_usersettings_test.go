@@ -52,7 +52,7 @@ func TestGetConsoleUserSettingObjectByName(t *testing.T) {
 
 			result, err := getConsoleUserSettingObjectByName(ctx, cl, name, rb)
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in getting configmap")
+			require.Equal(t, "error in getting configmap", err.Error())
 			require.Nil(t, result)
 		})
 	})
@@ -94,7 +94,7 @@ func TestGetConsoleUserSettingObjectByName(t *testing.T) {
 
 			result, err := getConsoleUserSettingObjectByName(ctx, cl, name, role)
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in getting Role")
+			require.Equal(t, "error in getting Role", err.Error())
 			require.Nil(t, result)
 		})
 	})
@@ -136,7 +136,7 @@ func TestGetConsoleUserSettingObjectByName(t *testing.T) {
 
 			result, err := getConsoleUserSettingObjectByName(ctx, cl, name, rb)
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in getting RoleBinding")
+			require.Equal(t, "error in getting RoleBinding", err.Error())
 			require.Nil(t, result)
 		})
 	})
@@ -156,7 +156,7 @@ func TestGetConsoleUserSettingObjectByName(t *testing.T) {
 		result, err := getConsoleUserSettingObjectByName(ctx, cl, name, get_obj)
 		require.Error(t, err)
 		require.Nil(t, result)
-		require.Equal(t, err.Error(), "object type Secret is not a console setting supported object")
+		require.Equal(t, "object type Secret is not a console setting supported object", err.Error())
 	})
 }
 
@@ -177,7 +177,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, deleted)
 		})
-		t.Run("Configmap found by label and deletes succesfully", func(t *testing.T) {
+		t.Run("Configmap found by label and deletes successfully", func(t *testing.T) {
 			cm := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -194,7 +194,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, deleted)
 		})
-		t.Run("multiple configmaps found by label and deletes succesfully", func(t *testing.T) {
+		t.Run("multiple configmaps found by label and deletes successfully", func(t *testing.T) {
 			cm1 := &corev1.ConfigMap{
 				TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -229,7 +229,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in getting configmap")
+			require.Equal(t, "error in getting configmap", err.Error())
 			require.False(t, deleted)
 		})
 		t.Run("Error is returned when error in deleting configmap", func(t *testing.T) {
@@ -242,7 +242,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in deleting configmap")
+			require.Equal(t, "error in deleting configmap", err.Error())
 			require.False(t, deleted)
 		})
 		t.Run("No Error is returned when no configmap not found", func(t *testing.T) {
@@ -258,7 +258,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in listing configmaps")
+			require.Equal(t, "error in listing configmaps", err.Error())
 			require.False(t, deleted)
 		})
 	})
@@ -279,7 +279,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, deleted)
 		})
-		t.Run("Role found by label and deleted succesfully", func(t *testing.T) {
+		t.Run("Role found by label and deleted successfully", func(t *testing.T) {
 			role := &rbac.Role{
 				TypeMeta: metav1.TypeMeta{Kind: "Role"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -296,7 +296,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, deleted)
 		})
-		t.Run("multiple roles found by label and deletes succesfully", func(t *testing.T) {
+		t.Run("multiple roles found by label and deletes successfully", func(t *testing.T) {
 			role1 := &rbac.Role{
 				TypeMeta: metav1.TypeMeta{Kind: "Role"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -331,7 +331,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in getting role")
+			require.Equal(t, "error in getting role", err.Error())
 			require.False(t, deleted)
 		})
 		t.Run("Error is returned when error in deleting role", func(t *testing.T) {
@@ -344,7 +344,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in deleting role")
+			require.Equal(t, "error in deleting role", err.Error())
 			require.False(t, deleted)
 		})
 		t.Run("No Error is returned when no role not found", func(t *testing.T) {
@@ -360,7 +360,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in listing roles")
+			require.Equal(t, "error in listing roles", err.Error())
 			require.False(t, deleted)
 		})
 	})
@@ -380,7 +380,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, deleted)
 		})
-		t.Run("RoleBinding found by label and deleted succesfully", func(t *testing.T) {
+		t.Run("RoleBinding found by label and deleted successfully", func(t *testing.T) {
 			rb := &rbac.RoleBinding{
 				TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -397,7 +397,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, deleted)
 		})
-		t.Run("multiple RoleBindings found by label and deletes succesfully", func(t *testing.T) {
+		t.Run("multiple RoleBindings found by label and deletes successfully", func(t *testing.T) {
 			rb1 := &rbac.RoleBinding{
 				TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"},
 				ObjectMeta: metav1.ObjectMeta{
@@ -432,7 +432,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in getting RoleBinding")
+			require.Equal(t, "error in getting RoleBinding", err.Error())
 			require.False(t, deleted)
 		})
 		t.Run("Error is returned when error in deleting RoleBinding", func(t *testing.T) {
@@ -445,7 +445,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in deleting RoleBinding")
+			require.Equal(t, "error in deleting RoleBinding", err.Error())
 			require.False(t, deleted)
 		})
 		t.Run("No Error is returned when no RoleBinding not found", func(t *testing.T) {
@@ -461,7 +461,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
-			require.Equal(t, err.Error(), "error in listing RoleBindings")
+			require.Equal(t, "error in listing RoleBindings", err.Error())
 			require.False(t, deleted)
 		})
 	})

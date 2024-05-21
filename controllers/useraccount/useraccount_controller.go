@@ -3,8 +3,6 @@ package useraccount
 import (
 	"context"
 	"fmt"
-	v1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -31,13 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-)
-
-const (
-	ConsoleUserSettingsIdentifier = "console.openshift.io/user-settings"
-	ConsoleUserSettingsUID        = "console.openshift.io/user-settings-uid"
-	UserSettingNS                 = "openshift-console-user-settings"
-	ConsoleUserSettingsPrefix     = "user-settings-"
 )
 
 // SetupWithManager sets up the controller with the Manager.
@@ -485,11 +476,11 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	logger.Info("deleting the User resources")
 
 	//get the UID before deleting the user
-	// TO DO: this is a temporary solution to remove resources created for users logging in from OIDC which don't have owner references after 4.15
+	// TO DO: this is a workaround for breaking change introduced by console with upgrade to 4.15. This remove resources created for users logging in from OIDC which don't have owner references after 4.15
 	uid := userList[0].UID
-	logger.Info(fmt.Sprintf("checking for user settings resources with UID [%s] to be deleted", uid))
-	if deleted, err := r.deleteUserResources(ctx, string(uid)); err != nil || deleted {
-		return deleted, err
+	logger.Info(fmt.Sprintf("checking for user settings resources for the user with UID [%s] to be deleted", uid))
+	if err := r.deleteUserResources(ctx, string(uid)); err != nil {
+		return false, err
 	}
 	// Delete User associated with UserAccount
 	if err := r.Client.Delete(ctx, &userList[0]); err != nil {
@@ -502,89 +493,24 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 
 // Returns `true` if the associated resources (configMap, role and role-binding) created for a user by console is deleted, `false` otherwise with the underlying error.
 // This function only looks for these resources in the namespace - openshift-console-user-settings -
-func (r *Reconciler) deleteUserResources(ctx context.Context, userID string) (bool, error) {
+func (r *Reconciler) deleteUserResources(ctx context.Context, userID string) error {
 
-	// new user will have a label introduced which can help retrieve resources, otherwise older ones will have to rely on the name of the resource being of type `user-settings-<UID>`
+	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix
+	// will have a label which will help to map the User to the User settings resources.
+
+	// Users created before that won't have that label, and we have to rely on the name of the resource being of type `user-settings-<UID>`,
+	// where <UID> is the User's UID.
 	// delete ConfigMap, Role and RoleBinding
-	if deleted, err := r.deleteConfigMap(ctx, userID); err != nil || deleted {
-		return deleted, err
+	if _, err := deleteConfigMap(ctx, r.Client, userID); err != nil {
+		return err
 	}
-	if deleted, err := r.deleteRole(ctx, userID); err != nil || deleted {
-		return deleted, err
+	if _, err := deleteRole(ctx, r.Client, userID); err != nil {
+		return err
 	}
-	if deleted, err := r.deleteRoleBinding(ctx, userID); err != nil || deleted {
-		return deleted, err
+	if _, err := deleteRoleBinding(ctx, r.Client, userID); err != nil {
+		return err
 	}
-	return false, nil
-}
-
-func (r *Reconciler) deleteConfigMap(ctx context.Context, uid string) (bool, error) {
-	name := ConsoleUserSettingsPrefix + uid
-	logger := log.FromContext(ctx)
-	logger.Info(fmt.Sprintf("deleting configmap with name %s", name))
-	toDelete := &corev1.ConfigMap{}
-	toDelete.SetGroupVersionKind(schema.GroupVersionKind{
-		Kind: "ConfigMap",
-	})
-	configMap, err := getObjectByName(ctx, r.Client, name, toDelete)
-	if err != nil || configMap == nil {
-		// try with label
-		if configMapList, err := getConfigMapByLabel(ctx, r.Client, uid); err != nil || len(configMapList) == 0 {
-			return false, err
-		} else if len(configMapList) > 0 {
-			toDelete = &configMapList[0]
-		}
-	} else {
-		toDelete = configMap.(*corev1.ConfigMap)
-	}
-	if err := r.Client.Delete(ctx, toDelete); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *Reconciler) deleteRole(ctx context.Context, uid string) (bool, error) {
-	name := ConsoleUserSettingsPrefix + uid
-	toDelete := &v1.Role{}
-	toDelete.SetGroupVersionKind(schema.GroupVersionKind{
-		Kind: "Role",
-	})
-	if role, err := getObjectByName(ctx, r.Client, name, toDelete); err != nil || role == (&v1.Role{}) {
-		// try with label
-		if roleList, err := getRolesByLabel(ctx, r.Client, uid); err != nil || len(roleList) == 0 {
-			return false, err
-		} else if len(roleList) > 0 {
-			toDelete = &roleList[0]
-		}
-	} else {
-		toDelete = role.(*v1.Role)
-	}
-	if err := r.Client.Delete(ctx, toDelete); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *Reconciler) deleteRoleBinding(ctx context.Context, uid string) (bool, error) {
-	name := ConsoleUserSettingsPrefix + uid
-	toDelete := &v1.RoleBinding{}
-	toDelete.SetGroupVersionKind(schema.GroupVersionKind{
-		Kind: "RoleBinding",
-	})
-	if rb, err := getObjectByName(ctx, r.Client, name, toDelete); err != nil || rb == (&v1.RoleBinding{}) {
-		// try with label
-		if rbList, err := getRoleBindingsByLabel(ctx, r.Client, uid); err != nil || len(rbList) == 0 {
-			return false, err
-		} else if len(rbList) > 0 {
-			toDelete = &rbList[0]
-		}
-	} else {
-		toDelete = rb.(*v1.RoleBinding)
-	}
-	if err := r.Client.Delete(ctx, toDelete); err != nil {
-		return false, err
-	}
-	return true, nil
+	return nil
 }
 
 // deleteIdentity deletes the Identity resources owned by the specified UserAccount.
@@ -777,62 +703,4 @@ func getUsersByOwnerName(ctx context.Context, cl client.Client, owner string) ([
 		return []userv1.User{}, err
 	}
 	return userList.Items, nil
-}
-
-func getConfigMapByLabel(ctx context.Context, cl client.Client, uid string) ([]corev1.ConfigMap, error) {
-	configMapList := &corev1.ConfigMapList{}
-	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: uid}
-	err := cl.List(ctx, configMapList, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
-	if err != nil {
-		return []corev1.ConfigMap{}, err
-	}
-	return configMapList.Items, nil
-}
-
-func getRolesByLabel(ctx context.Context, cl client.Client, uid string) ([]v1.Role, error) {
-	roleList := &v1.RoleList{}
-	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: uid}
-	err := cl.List(ctx, roleList, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
-	if err != nil {
-		return []v1.Role{}, err
-	}
-	return roleList.Items, nil
-}
-
-func getRoleBindingsByLabel(ctx context.Context, cl client.Client, uid string) ([]v1.RoleBinding, error) {
-	rbList := &v1.RoleBindingList{}
-	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: uid}
-	err := cl.List(ctx, rbList, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
-	if err != nil {
-		return []v1.RoleBinding{}, err
-	}
-	return rbList.Items, nil
-}
-
-func getObjectByName(ctx context.Context, cl client.Client, name string, object client.Object) (client.Object, error) {
-	var returnObj client.Object
-	switch object.GetObjectKind().GroupVersionKind().Kind {
-	case "Role":
-		role := &v1.Role{}
-		err := cl.Get(ctx, types.NamespacedName{Namespace: UserSettingNS, Name: name}, role)
-		if err != nil {
-			return &v1.Role{}, err
-		}
-		return role, nil
-	case "RoleBinding":
-		rb := &v1.RoleBinding{}
-		err := cl.Get(ctx, types.NamespacedName{Namespace: UserSettingNS, Name: name}, rb)
-		if err != nil {
-			return &v1.RoleBinding{}, err
-		}
-		return rb, nil
-	case "ConfigMap":
-		configMap := &corev1.ConfigMap{}
-		err := cl.Get(ctx, types.NamespacedName{Namespace: UserSettingNS, Name: name}, configMap)
-		if err != nil {
-			return &corev1.ConfigMap{}, err
-		}
-		return configMap, nil
-	}
-	return returnObj, nil
 }

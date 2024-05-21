@@ -493,7 +493,7 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 
 // Returns `true` if the associated resources (configMap, role and role-binding) created for a user by console are deleted, `false` otherwise.
 // This function only looks for these resources in the namespace - openshift-console-user-settings
-func (r *Reconciler) deleteUserResources(ctx context.Context, userID string) error {
+func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) error {
 
 	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix
 	// will have a label which will help to map the User to the User settings resources.
@@ -501,13 +501,13 @@ func (r *Reconciler) deleteUserResources(ctx context.Context, userID string) err
 	// Users created before that won't have that label, and we have to rely on the name of the resource being of type `user-settings-<UID>`,
 	// where <UID> is the User's UID.
 	// delete ConfigMap, Role and RoleBinding
-	if _, err := deleteConfigMap(ctx, r.Client, userID); err != nil {
+	if _, err := deleteConfigMap(ctx, r.Client, userUID); err != nil {
 		return err
 	}
-	if _, err := deleteRole(ctx, r.Client, userID); err != nil {
+	if _, err := deleteRole(ctx, r.Client, userUID); err != nil {
 		return err
 	}
-	if _, err := deleteRoleBinding(ctx, r.Client, userID); err != nil {
+	if _, err := deleteRoleBinding(ctx, r.Client, userUID); err != nil {
 		return err
 	}
 	return nil

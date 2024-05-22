@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
-	"golang.org/x/exp/slices"
-
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -166,10 +164,7 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 
 		if authorizedKeysFound {
 			authKeys := userData["ssh_authorized_keys"].([]interface{})
-			// append the key to the existing list
-			if !keyExists(sshValue, authKeys) {
-				userData["ssh_authorized_keys"] = append(authKeys, sshValue)
-			}
+			userData["ssh_authorized_keys"] = append(authKeys, sshValue)
 		} else {
 			// create a new list with the key
 			userData["ssh_authorized_keys"] = []interface{}{sshValue}
@@ -183,15 +178,6 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 
 	// the cloud config header '#cloud-config' is lost during unmarshalling (all yaml comments are lost) so it needs to be prepended before returning
 	return cloudConfigHeader + string(updatedYaml), nil
-}
-
-// keysExists checks if the given ssh key is already present in the authKeys list
-func keyExists(sshKey string, authKeys []interface{}) bool {
-	authKeysList := make([]string, len(authKeys))
-	for i, v := range authKeys {
-		authKeysList[i] = v.(string)
-	}
-	return slices.Contains(authKeysList, sshKey)
 }
 
 // ensureLimits ensures resource limits are set on the VirtualMachine if requests are set, this is a workaround for https://issues.redhat.com/browse/CNV-28746 (https://issues.redhat.com/browse/CNV-32069)

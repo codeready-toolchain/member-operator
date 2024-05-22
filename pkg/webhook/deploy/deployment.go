@@ -3,15 +3,12 @@ package deploy
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"testing"
 
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -124,15 +121,4 @@ func GetTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []b
 		"CA_BUNDLE": base64.StdEncoding.EncodeToString(caBundle),
 		"IMAGE":     image,
 	})
-}
-
-func unmarshalObj(t *testing.T, content string, target runtime.Object) {
-	err := json.Unmarshal([]byte(content), target)
-	require.NoError(t, err)
-}
-
-func GetUnstructuredObject(t *testing.T, content string) *unstructured.Unstructured {
-	obj := &unstructured.Unstructured{}
-	unmarshalObj(t, content, obj)
-	return obj
 }

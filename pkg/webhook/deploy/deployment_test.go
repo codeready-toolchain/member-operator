@@ -3,11 +3,13 @@ package deploy
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
 
 	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -195,6 +197,17 @@ func contains(t *testing.T, objects []runtimeclient.Object, expected string) {
 		}
 	}
 	assert.Fail(t, "webhook template doesn't contain expected object", "Expected object: %s", expected)
+}
+
+func unmarshalObj(t *testing.T, content string, target runtime.Object) {
+	err := json.Unmarshal([]byte(content), target)
+	require.NoError(t, err)
+}
+
+func GetUnstructuredObject(t *testing.T, content string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	unmarshalObj(t, content, obj)
+	return obj
 }
 
 func priorityClass() string {

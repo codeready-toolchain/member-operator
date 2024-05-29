@@ -476,7 +476,7 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	logger.Info("deleting the User resources")
 
 	//get the UID before deleting the user
-	// TO DO: this is a workaround for breaking change introduced by console with upgrade to 4.15. This remove resources created for users logging in from OIDC which don't have owner references after 4.15
+	// TO DO: this is a workaround for breaking change introduced by console with upgrade to 4.15. This remove resources created for users logging in from OIDC which don't have owner references starting from OCP 4.15 version.
 	uid := userList[0].UID
 	logger.Info(fmt.Sprintf("checking for user settings resources for the user with UID [%s] to be deleted", uid))
 	if err := r.deleteUserResources(ctx, string(uid)); err != nil {
@@ -491,8 +491,9 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	return true, nil
 }
 
-// Returns `true` if the associated resources (configMap, role and role-binding) created for a user by console are deleted, `false` otherwise.
+// deleteUserResources deletes the user settings resources (configmap, role and role-binding) associated with the specified user, created for a user by console.
 // This function only looks for these resources in the namespace - openshift-console-user-settings
+// Returns an error if any of the deletion operations fail.
 func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) error {
 
 	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix

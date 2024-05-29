@@ -22,8 +22,8 @@ const (
 // deleteConfigMap deletes a ConfigMap associated with a user from console setting.
 // It first attempts to find the ConfigMap by name. If not found, it then looks for the ConfigMap by label.
 // If multiple ConfigMaps are found by label, all of them are deleted.
-// The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
-func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) (bool, error) {
+// The function returns an error if any occurred.
+func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) error {
 	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting configmap with name %s", name))
@@ -37,7 +37,7 @@ func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) (boo
 	if err == nil && configMap == nil {
 		// could not find the CM by name, try finding the configmap by label
 		if configMapList, err := getConfigMapByLabel(ctx, cl, userUID); err != nil || len(configMapList) == 0 {
-			return false, err
+			return err
 		} else if len(configMapList) > 0 {
 			// if the number of items retrieved are more than one, should delete all of them
 			for key := range configMapList {
@@ -48,19 +48,19 @@ func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) (boo
 		toDelete = append(toDelete, configMap)
 	} else {
 		// there was some kind of error in getting
-		return false, err
+		return err
 	}
 	if err := deleteResources(ctx, cl, toDelete); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // deleteRole deletes a Role associated with a user from console setting.
 // It first attempts to find the Role by name. If not found, it then looks for the Role by label.
 // If multiple Roles are found by label, all of them are deleted.
-// The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
-func deleteRole(ctx context.Context, cl client.Client, userUID string) (bool, error) {
+// The function returns an error if any occurred.
+func deleteRole(ctx context.Context, cl client.Client, userUID string) error {
 	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting role with name %s", name))
@@ -72,7 +72,7 @@ func deleteRole(ctx context.Context, cl client.Client, userUID string) (bool, er
 	if err == nil && role == nil {
 		// could not find the role by name, try finding the role by label
 		if roleList, err := getRolesByLabel(ctx, cl, userUID); err != nil || len(roleList) == 0 {
-			return false, err
+			return err
 		} else if len(roleList) > 0 {
 			for key := range roleList {
 				toDelete = append(toDelete, &roleList[key])
@@ -82,19 +82,19 @@ func deleteRole(ctx context.Context, cl client.Client, userUID string) (bool, er
 		toDelete = append(toDelete, role)
 	} else {
 		// there was some kind of error in getting
-		return false, err
+		return err
 	}
 	if err := deleteResources(ctx, cl, toDelete); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 // deleteRoleBinding deletes a Rolebinding associated with a user from console setting.
 // It first attempts to find the Rolebinding by name. If not found, it then looks for the Rolebinding by label.
 // If multiple Rolebindings are found by label, all of them are deleted.
-// The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
-func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) (bool, error) {
+// The function returns an error if any occurred.
+func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) error {
 	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting rolebinding with name %s", name))
@@ -106,7 +106,7 @@ func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) (b
 	if err == nil && rb == nil {
 		// try with label
 		if rbList, err := getRoleBindingsByLabel(ctx, cl, userUID); err != nil || len(rbList) == 0 {
-			return false, err
+			return err
 		} else if len(rbList) > 0 {
 			for key := range rbList {
 				toDelete = append(toDelete, &rbList[key])
@@ -116,12 +116,12 @@ func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) (b
 		toDelete = append(toDelete, rb)
 	} else {
 		// there was some kind of error in getting
-		return false, err
+		return err
 	}
 	if err := deleteResources(ctx, cl, toDelete); err != nil {
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
 
 func getConfigMapByLabel(ctx context.Context, cl client.Client, userUID string) ([]corev1.ConfigMap, error) {

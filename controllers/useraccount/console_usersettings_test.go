@@ -173,9 +173,8 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			cl := fake.NewClientBuilder().WithObjects(cm).Build()
 
-			deleted, err := deleteConfigMap(ctx, cl, "johnsmith")
+			err := deleteConfigMap(ctx, cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("Configmap found by label and deletes successfully", func(t *testing.T) {
 			cm := &corev1.ConfigMap{
@@ -190,9 +189,8 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				},
 			}
 			cl := fake.NewClientBuilder().WithObjects(cm).Build()
-			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
+			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("multiple configmaps found by label and deletes successfully", func(t *testing.T) {
 			cm1 := &corev1.ConfigMap{
@@ -218,19 +216,18 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				},
 			}
 			cl := fake.NewClientBuilder().WithObjects(cm1, cm2).Build()
-			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
+			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
+
 		})
 		t.Run("Error is returned when error in getting configmap", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
 			cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 				return fmt.Errorf("error in getting configmap")
 			}
-			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
+			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in getting configmap", err.Error())
-			require.False(t, deleted)
 		})
 		t.Run("Error is returned when error in deleting configmap", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
@@ -240,26 +237,23 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("error in deleting configmap")
 			}
-			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
+			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in deleting configmap", err.Error())
-			require.False(t, deleted)
 		})
 		t.Run("No Error is returned when no configmap not found", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
-			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
+			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.False(t, deleted)
 		})
 		t.Run("Error is returned when there is an error in listing configmaps", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
 			cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				return fmt.Errorf("error in listing configmaps")
 			}
-			deleted, err := deleteConfigMap(context.TODO(), cl, "johnsmith")
+			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in listing configmaps", err.Error())
-			require.False(t, deleted)
 		})
 	})
 
@@ -275,9 +269,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			cl := fake.NewClientBuilder().WithObjects(rb).Build()
 
-			deleted, err := deleteRole(ctx, cl, "johnsmith")
+			err := deleteRole(ctx, cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
+			// check that the role was deleted
 		})
 		t.Run("Role found by label and deleted successfully", func(t *testing.T) {
 			role := &rbac.Role{
@@ -292,9 +286,8 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				},
 			}
 			cl := test.NewFakeClient(t, role)
-			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
+			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("multiple roles found by label and deletes successfully", func(t *testing.T) {
 			role1 := &rbac.Role{
@@ -320,19 +313,17 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				},
 			}
 			cl := test.NewFakeClient(t, role1, role2)
-			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
+			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("Error is returned when error in getting role", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
 			cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 				return fmt.Errorf("error in getting role")
 			}
-			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
+			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in getting role", err.Error())
-			require.False(t, deleted)
 		})
 		t.Run("Error is returned when error in deleting role", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
@@ -342,26 +333,23 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("error in deleting role")
 			}
-			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
+			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in deleting role", err.Error())
-			require.False(t, deleted)
 		})
 		t.Run("No Error is returned when no role not found", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
-			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
+			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.False(t, deleted)
 		})
 		t.Run("Error is returned when there is an error in listing roles", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
 			cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				return fmt.Errorf("error in listing roles")
 			}
-			deleted, err := deleteRole(context.TODO(), cl, "johnsmith")
+			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in listing roles", err.Error())
-			require.False(t, deleted)
 		})
 	})
 
@@ -376,9 +364,8 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			}
 			cl := test.NewFakeClient(t, rb)
 
-			deleted, err := deleteRoleBinding(context.Background(), cl, "johnsmith")
+			err := deleteRoleBinding(context.Background(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("RoleBinding found by label and deleted successfully", func(t *testing.T) {
 			rb := &rbac.RoleBinding{
@@ -393,9 +380,8 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				},
 			}
 			cl := test.NewFakeClient(t, rb)
-			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
+			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("multiple RoleBindings found by label and deletes successfully", func(t *testing.T) {
 			rb1 := &rbac.RoleBinding{
@@ -421,19 +407,17 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				},
 			}
 			cl := test.NewFakeClient(t, rb1, rb2)
-			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
+			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.True(t, deleted)
 		})
 		t.Run("Error is returned when error in getting RoleBinding", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
 			cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 				return fmt.Errorf("error in getting RoleBinding")
 			}
-			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
+			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in getting RoleBinding", err.Error())
-			require.False(t, deleted)
 		})
 		t.Run("Error is returned when error in deleting RoleBinding", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
@@ -443,26 +427,23 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 				return fmt.Errorf("error in deleting RoleBinding")
 			}
-			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
+			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in deleting RoleBinding", err.Error())
-			require.False(t, deleted)
 		})
 		t.Run("No Error is returned when no RoleBinding not found", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
-			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
+			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-			require.False(t, deleted)
 		})
 		t.Run("Error is returned when there is an error in listing RoleBindings", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
 			cl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 				return fmt.Errorf("error in listing RoleBindings")
 			}
-			deleted, err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
+			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.Error(t, err)
 			require.Equal(t, "error in listing RoleBindings", err.Error())
-			require.False(t, deleted)
 		})
 	})
 }

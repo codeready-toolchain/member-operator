@@ -501,13 +501,13 @@ func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) er
 	// Users created before that won't have that label, and we have to rely on the name of the resource being of type `user-settings-<UID>`,
 	// where <UID> is the User's UID.
 	// delete ConfigMap, Role and RoleBinding
-	if _, err := deleteConfigMap(ctx, r.Client, userUID); err != nil {
+	if err := deleteConfigMap(ctx, r.Client, userUID); err != nil {
 		return err
 	}
-	if _, err := deleteRole(ctx, r.Client, userUID); err != nil {
+	if err := deleteRole(ctx, r.Client, userUID); err != nil {
 		return err
 	}
-	if _, err := deleteRoleBinding(ctx, r.Client, userUID); err != nil {
+	if err := deleteRoleBinding(ctx, r.Client, userUID); err != nil {
 		return err
 	}
 	return nil

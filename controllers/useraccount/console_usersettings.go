@@ -23,8 +23,8 @@ const (
 // It first attempts to find the ConfigMap by name. If not found, it then looks for the ConfigMap by label.
 // If multiple ConfigMaps are found by label, all of them are deleted.
 // The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
-func deleteConfigMap(ctx context.Context, cl client.Client, uid string) (bool, error) {
-	name := ConsoleUserSettingsResourceNamePrefix + uid
+func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) (bool, error) {
+	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting configmap with name %s", name))
 	var toDelete []client.Object
@@ -36,7 +36,7 @@ func deleteConfigMap(ctx context.Context, cl client.Client, uid string) (bool, e
 	configMap, err := getConsoleUserSettingObjectByName(ctx, cl, name, objectType)
 	if err == nil && configMap == nil {
 		// could not find the CM by name, try finding the configmap by label
-		if configMapList, err := getConfigMapByLabel(ctx, cl, uid); err != nil || len(configMapList) == 0 {
+		if configMapList, err := getConfigMapByLabel(ctx, cl, userUID); err != nil || len(configMapList) == 0 {
 			return false, err
 		} else if len(configMapList) > 0 {
 			// if the number of items retrieved are more than one, should delete all of them
@@ -60,8 +60,8 @@ func deleteConfigMap(ctx context.Context, cl client.Client, uid string) (bool, e
 // It first attempts to find the Role by name. If not found, it then looks for the Role by label.
 // If multiple Roles are found by label, all of them are deleted.
 // The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
-func deleteRole(ctx context.Context, cl client.Client, uid string) (bool, error) {
-	name := ConsoleUserSettingsResourceNamePrefix + uid
+func deleteRole(ctx context.Context, cl client.Client, userUID string) (bool, error) {
+	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting role with name %s", name))
 
@@ -71,7 +71,7 @@ func deleteRole(ctx context.Context, cl client.Client, uid string) (bool, error)
 	role, err := getConsoleUserSettingObjectByName(ctx, cl, name, objectType)
 	if err == nil && role == nil {
 		// could not find the role by name, try finding the role by label
-		if roleList, err := getRolesByLabel(ctx, cl, uid); err != nil || len(roleList) == 0 {
+		if roleList, err := getRolesByLabel(ctx, cl, userUID); err != nil || len(roleList) == 0 {
 			return false, err
 		} else if len(roleList) > 0 {
 			for key := range roleList {
@@ -94,8 +94,8 @@ func deleteRole(ctx context.Context, cl client.Client, uid string) (bool, error)
 // It first attempts to find the Rolebinding by name. If not found, it then looks for the Rolebinding by label.
 // If multiple Rolebindings are found by label, all of them are deleted.
 // The function returns a boolean indicating whether the deletion was successful and an error if any occurred.
-func deleteRoleBinding(ctx context.Context, cl client.Client, uid string) (bool, error) {
-	name := ConsoleUserSettingsResourceNamePrefix + uid
+func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) (bool, error) {
+	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("deleting rolebinding with name %s", name))
 
@@ -105,7 +105,7 @@ func deleteRoleBinding(ctx context.Context, cl client.Client, uid string) (bool,
 	rb, err := getConsoleUserSettingObjectByName(ctx, cl, name, objectType)
 	if err == nil && rb == nil {
 		// try with label
-		if rbList, err := getRoleBindingsByLabel(ctx, cl, uid); err != nil || len(rbList) == 0 {
+		if rbList, err := getRoleBindingsByLabel(ctx, cl, userUID); err != nil || len(rbList) == 0 {
 			return false, err
 		} else if len(rbList) > 0 {
 			for key := range rbList {
@@ -124,9 +124,9 @@ func deleteRoleBinding(ctx context.Context, cl client.Client, uid string) (bool,
 	return true, nil
 }
 
-func getConfigMapByLabel(ctx context.Context, cl client.Client, uid string) ([]corev1.ConfigMap, error) {
+func getConfigMapByLabel(ctx context.Context, cl client.Client, userUID string) ([]corev1.ConfigMap, error) {
 	configMapList := &corev1.ConfigMapList{}
-	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: uid}
+	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: userUID}
 	err := cl.List(ctx, configMapList, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
 	if err != nil {
 		return []corev1.ConfigMap{}, err
@@ -134,9 +134,9 @@ func getConfigMapByLabel(ctx context.Context, cl client.Client, uid string) ([]c
 	return configMapList.Items, nil
 }
 
-func getRolesByLabel(ctx context.Context, cl client.Client, uid string) ([]v1.Role, error) {
+func getRolesByLabel(ctx context.Context, cl client.Client, userUID string) ([]v1.Role, error) {
 	roleList := &v1.RoleList{}
-	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: uid}
+	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: userUID}
 	err := cl.List(ctx, roleList, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
 	if err != nil {
 		return []v1.Role{}, err
@@ -144,9 +144,9 @@ func getRolesByLabel(ctx context.Context, cl client.Client, uid string) ([]v1.Ro
 	return roleList.Items, nil
 }
 
-func getRoleBindingsByLabel(ctx context.Context, cl client.Client, uid string) ([]v1.RoleBinding, error) {
+func getRoleBindingsByLabel(ctx context.Context, cl client.Client, userUID string) ([]v1.RoleBinding, error) {
 	rbList := &v1.RoleBindingList{}
-	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: uid}
+	labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: userUID}
 	err := cl.List(ctx, rbList, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
 	if err != nil {
 		return []v1.RoleBinding{}, err

@@ -3,7 +3,6 @@ package deploy
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
@@ -34,8 +33,6 @@ const (
 	// WebhookDeploymentOldNameAnnotation has to old name used to deploy the resource, this is used to replace the current object with the new one
 	WebhookDeploymentOldNameAnnotation = "toolchain.dev.openshift.com/old-name"
 )
-
-var log = logf.Log.WithName("webhook_deploy")
 
 func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
 	caBundle, err := cert.EnsureSecret(ctx, cl, namespace, certSecretName, serviceName, cert.Expiration)

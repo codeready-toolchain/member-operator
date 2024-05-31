@@ -508,7 +508,40 @@ func TestReconcile(t *testing.T) {
 				Namespace: UserSettingNS,
 			},
 		}
-		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb)
+		noiseCm := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "noise-object",
+				Namespace: UserSettingNS,
+			},
+		}
+		noiseRole := &v1.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName + "noise-role",
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+				},
+			},
+		}
+		noiseRb := &v1.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "RoleBinding",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "noise-rb",
+				Namespace: UserSettingNS,
+			},
+		}
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb, noiseCm, noiseRole, noiseRb)
 
 		t.Run("first reconcile deletes identity", func(t *testing.T) {
 			// given
@@ -559,6 +592,20 @@ func TestReconcile(t *testing.T) {
 				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedRb)
 				require.Error(t, err)
 				assert.True(t, apierros.IsNotFound(err))
+
+				// Check that the noise resources are not deleted
+				retrievedNoiseCm := &corev1.ConfigMap{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "noise-object", Namespace: UserSettingNS}, retrievedNoiseCm)
+				require.NoError(t, err)
+				assert.Equal(t, noiseCm, retrievedNoiseCm)
+				retrievedNoiseRole := &v1.Role{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName + "noise-role", Namespace: UserSettingNS}, retrievedNoiseRole)
+				require.NoError(t, err)
+				assert.Equal(t, noiseRole, retrievedNoiseRole)
+				retrievedNoiseRb := &v1.RoleBinding{}
+				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "noise-rb", Namespace: UserSettingNS}, retrievedNoiseRb)
+				require.NoError(t, err)
+				require.Equal(t, noiseRb, retrievedNoiseRb)
 
 				// Check that the associated user has been deleted
 				// when reconciling the useraccount with a deletion timestamp

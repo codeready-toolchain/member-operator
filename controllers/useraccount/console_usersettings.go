@@ -34,7 +34,10 @@ func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) erro
 
 	// Attempt to find the ConfigMap by name
 	configMap, err := getConsoleUserSettingObjectByName(ctx, cl, name, objectType)
-	if err == nil && configMap == nil {
+	if err != nil {
+		return err
+	}
+	if configMap == nil {
 		// could not find the CM by name, try finding the configmap by label
 		if configMapList, err := getConfigMapByLabel(ctx, cl, userUID); err != nil || len(configMapList) == 0 {
 			return err
@@ -44,12 +47,10 @@ func deleteConfigMap(ctx context.Context, cl client.Client, userUID string) erro
 				toDelete = append(toDelete, &configMapList[key])
 			}
 		}
-	} else if configMap != nil {
-		toDelete = append(toDelete, configMap)
 	} else {
-		// there was some kind of error in getting
-		return err
+		toDelete = append(toDelete, configMap)
 	}
+
 	if err := deleteResources(ctx, cl, toDelete); err != nil {
 		return err
 	}
@@ -69,7 +70,10 @@ func deleteRole(ctx context.Context, cl client.Client, userUID string) error {
 	objectType := &v1.Role{TypeMeta: metav1.TypeMeta{Kind: "Role"}}
 
 	role, err := getConsoleUserSettingObjectByName(ctx, cl, name, objectType)
-	if err == nil && role == nil {
+	if err != nil {
+		return err
+	}
+	if role == nil {
 		// could not find the role by name, try finding the role by label
 		if roleList, err := getRolesByLabel(ctx, cl, userUID); err != nil || len(roleList) == 0 {
 			return err
@@ -78,11 +82,8 @@ func deleteRole(ctx context.Context, cl client.Client, userUID string) error {
 				toDelete = append(toDelete, &roleList[key])
 			}
 		}
-	} else if role != nil {
-		toDelete = append(toDelete, role)
 	} else {
-		// there was some kind of error in getting
-		return err
+		toDelete = append(toDelete, role)
 	}
 	if err := deleteResources(ctx, cl, toDelete); err != nil {
 		return err
@@ -103,7 +104,10 @@ func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) er
 	objectType := &v1.RoleBinding{TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"}}
 
 	rb, err := getConsoleUserSettingObjectByName(ctx, cl, name, objectType)
-	if err == nil && rb == nil {
+	if err != nil {
+		return err
+	}
+	if rb == nil {
 		// try with label
 		if rbList, err := getRoleBindingsByLabel(ctx, cl, userUID); err != nil || len(rbList) == 0 {
 			return err
@@ -112,11 +116,8 @@ func deleteRoleBinding(ctx context.Context, cl client.Client, userUID string) er
 				toDelete = append(toDelete, &rbList[key])
 			}
 		}
-	} else if rb != nil {
-		toDelete = append(toDelete, rb)
 	} else {
-		// there was some kind of error in getting
-		return err
+		toDelete = append(toDelete, rb)
 	}
 	if err := deleteResources(ctx, cl, toDelete); err != nil {
 		return err

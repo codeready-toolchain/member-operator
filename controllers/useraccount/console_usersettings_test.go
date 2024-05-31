@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -175,6 +176,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 
 			err := deleteConfigMap(ctx, cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the configmap doesn't exist anymore
+			err = cl.Get(ctx, client.ObjectKey{Name: "user-settings-johnsmith", Namespace: UserSettingNS}, &corev1.ConfigMap{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("Configmap found by label and deletes successfully", func(t *testing.T) {
 			cm := &corev1.ConfigMap{
@@ -191,6 +195,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl := fake.NewClientBuilder().WithObjects(cm).Build()
 			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the configmap doesn't exist anymore
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match", Namespace: UserSettingNS}, &corev1.ConfigMap{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("multiple configmaps found by label and deletes successfully", func(t *testing.T) {
 			cm1 := &corev1.ConfigMap{
@@ -218,7 +225,11 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl := fake.NewClientBuilder().WithObjects(cm1, cm2).Build()
 			err := deleteConfigMap(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
-
+			// check that the configmaps don't exist anymore
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match", Namespace: UserSettingNS}, &corev1.ConfigMap{})
+			require.True(t, errors.IsNotFound(err))
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match-second", Namespace: UserSettingNS}, &corev1.ConfigMap{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("Error is returned when error in getting configmap", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
@@ -272,6 +283,8 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			err := deleteRole(ctx, cl, "johnsmith")
 			require.NoError(t, err)
 			// check that the role was deleted
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-johnsmith", Namespace: UserSettingNS}, &rbac.Role{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("Role found by label and deleted successfully", func(t *testing.T) {
 			role := &rbac.Role{
@@ -288,6 +301,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl := test.NewFakeClient(t, role)
 			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the role was deleted
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match", Namespace: UserSettingNS}, &rbac.Role{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("multiple roles found by label and deletes successfully", func(t *testing.T) {
 			role1 := &rbac.Role{
@@ -315,6 +331,11 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl := test.NewFakeClient(t, role1, role2)
 			err := deleteRole(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the roles were deleted
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match", Namespace: UserSettingNS}, &rbac.Role{})
+			require.True(t, errors.IsNotFound(err))
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match-second", Namespace: UserSettingNS}, &rbac.Role{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("Error is returned when error in getting role", func(t *testing.T) {
 			cl := test.NewFakeClient(t)
@@ -366,6 +387,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 
 			err := deleteRoleBinding(context.Background(), cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the rolebinding doesn't exist anymore
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-johnsmith", Namespace: UserSettingNS}, &rbac.RoleBinding{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("RoleBinding found by label and deleted successfully", func(t *testing.T) {
 			rb := &rbac.RoleBinding{
@@ -382,6 +406,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl := test.NewFakeClient(t, rb)
 			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the rolebinding doesn't exist anymore
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match", Namespace: UserSettingNS}, &rbac.RoleBinding{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("multiple RoleBindings found by label and deletes successfully", func(t *testing.T) {
 			rb1 := &rbac.RoleBinding{
@@ -409,6 +436,11 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			cl := test.NewFakeClient(t, rb1, rb2)
 			err := deleteRoleBinding(context.TODO(), cl, "johnsmith")
 			require.NoError(t, err)
+			// check that the rolebindings don't exist anymore
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match", Namespace: UserSettingNS}, &rbac.RoleBinding{})
+			require.True(t, errors.IsNotFound(err))
+			err = cl.Get(context.TODO(), client.ObjectKey{Name: "user-settings-name-no-match-second", Namespace: UserSettingNS}, &rbac.RoleBinding{})
+			require.True(t, errors.IsNotFound(err))
 		})
 		t.Run("Error is returned when error in getting RoleBinding", func(t *testing.T) {
 			cl := test.NewFakeClient(t)

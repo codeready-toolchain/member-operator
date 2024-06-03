@@ -168,7 +168,9 @@ spec:
                 properties:
                   deploy:
                     description: Defines the flag that determines whether to deploy
-                      the Webhook
+                      the Webhook. If the deploy flag is set to False and the Webhook
+                      was deployed previously it will be deleted by the memberoperatorconfig
+                      controller.
                     type: boolean
                   secret:
                     description: Defines all secrets related to webhook configuration

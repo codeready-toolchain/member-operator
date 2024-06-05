@@ -3,6 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
+	rbac "k8s.io/api/rbac/v1"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -499,16 +500,16 @@ func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) er
 	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix
 	// will have a label which will help to map the User to the User settings resources.
 
-	// Users created before that won't have that label, and we have to rely on the name of the resource being of type `user-settings-<UID>`,
-	// where <UID> is the User's UID.
+	// Users created before that won't have that label, and we have to rely on the name of the resource being of type `user-settings-<UserUID>`,
 	// delete ConfigMap, Role and RoleBinding
-	if err := deleteConfigMap(ctx, r.Client, userUID); err != nil {
+
+	if err := deleteResource(ctx, r.Client, userUID, &corev1.ConfigMap{}); err != nil {
 		return err
 	}
-	if err := deleteRole(ctx, r.Client, userUID); err != nil {
+	if err := deleteResource(ctx, r.Client, userUID, &rbac.Role{}); err != nil {
 		return err
 	}
-	if err := deleteRoleBinding(ctx, r.Client, userUID); err != nil {
+	if err := deleteResource(ctx, r.Client, userUID, &rbac.RoleBinding{}); err != nil {
 		return err
 	}
 	return nil

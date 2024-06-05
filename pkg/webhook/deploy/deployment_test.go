@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	. "github.com/codeready-toolchain/member-operator/test"
@@ -20,7 +21,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +36,7 @@ func TestGetTemplateObjects(t *testing.T) {
 	s := setScheme(t)
 
 	// when
-	objs, err := getTemplateObjects(s, test.MemberOperatorNs, imgLoc, []byte("super-cool-ca"))
+	objs, err := GetTemplateObjects(s, test.MemberOperatorNs, imgLoc, []byte("super-cool-ca"))
 
 	// then
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestGetTemplateObjects(t *testing.T) {
 	contains(t, objs, mutatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
 	contains(t, objs, validatingWebhookConfig(test.MemberOperatorNs, "c3VwZXItY29vbC1jYQ=="))
 	contains(t, objs, serviceAccount(test.MemberOperatorNs))
-	contains(t, objs, clusterRole())
+	contains(t, objs, clusterRole(test.MemberOperatorNs))
 	contains(t, objs, clusterRoleBinding(test.MemberOperatorNs))
 }
 
@@ -139,16 +139,16 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	})
 
 	expClusterRole := &rbac.ClusterRole{}
-	unmarshalObj(t, clusterRole(), expClusterRole)
+	unmarshalObj(t, clusterRole(test.MemberOperatorNs), expClusterRole)
 	actualClusterRole := &rbac.ClusterRole{}
-	AssertObject(t, fakeClient, "", "webhook-role", actualClusterRole, func() {
+	AssertObject(t, fakeClient, "", "webhook-role-"+test.MemberOperatorNs, actualClusterRole, func() {
 		assert.Equal(t, expClusterRole.Rules, actualClusterRole.Rules)
 	})
 
 	expClusterRb := &rbac.ClusterRoleBinding{}
 	unmarshalObj(t, clusterRoleBinding(test.MemberOperatorNs), expClusterRb)
 	actualClusterRb := &rbac.ClusterRoleBinding{}
-	AssertObject(t, fakeClient, "", "webhook-rolebinding", actualClusterRb, func() {
+	AssertObject(t, fakeClient, "", "webhook-rolebinding-"+test.MemberOperatorNs, actualClusterRb, func() {
 		assert.Equal(t, expClusterRb.Subjects, actualClusterRb.Subjects)
 		assert.Equal(t, expClusterRb.RoleRef, actualClusterRb.RoleRef)
 	})
@@ -168,7 +168,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expMutWbhConf := &admv1.MutatingWebhookConfiguration{}
 	unmarshalObj(t, mutatingWebhookConfig(test.MemberOperatorNs, base64.StdEncoding.EncodeToString(secret.Data["ca-cert.pem"])), expMutWbhConf)
 	actualMutWbhConf := &admv1.MutatingWebhookConfiguration{}
-	AssertObject(t, fakeClient, "", "member-operator-webhook", actualMutWbhConf, func() {
+	AssertObject(t, fakeClient, "", "member-operator-webhook-"+test.MemberOperatorNs, actualMutWbhConf, func() {
 		assert.Equal(t, expMutWbhConf.Labels, actualMutWbhConf.Labels)
 		assert.Equal(t, expMutWbhConf.Webhooks, actualMutWbhConf.Webhooks)
 	})
@@ -176,7 +176,7 @@ func verifyWebhookDeployment(t *testing.T, fakeClient *test.FakeClient) {
 	expValWbhConf := &admv1.ValidatingWebhookConfiguration{}
 	unmarshalObj(t, validatingWebhookConfig(test.MemberOperatorNs, base64.StdEncoding.EncodeToString(secret.Data["ca-cert.pem"])), expValWbhConf)
 	actualValWbhConf := &admv1.ValidatingWebhookConfiguration{}
-	AssertObject(t, fakeClient, "", "member-operator-validating-webhook", actualValWbhConf, func() {
+	AssertObject(t, fakeClient, "", "member-operator-validating-webhook-"+test.MemberOperatorNs, actualValWbhConf, func() {
 		assert.Equal(t, expValWbhConf.Labels, actualValWbhConf.Labels)
 		assert.Equal(t, expValWbhConf.Webhooks, actualValWbhConf.Webhooks)
 	})
@@ -190,7 +190,7 @@ func setScheme(t *testing.T) *runtime.Scheme {
 }
 
 func contains(t *testing.T, objects []runtimeclient.Object, expected string) {
-	expectedObject := getUnstructuredObject(t, expected)
+	expectedObject := GetUnstructuredObject(t, expected)
 	for _, obj := range objects {
 		if reflect.DeepEqual(obj, runtime.Object(expectedObject)) {
 			return
@@ -204,14 +204,14 @@ func unmarshalObj(t *testing.T, content string, target runtime.Object) {
 	require.NoError(t, err)
 }
 
-func getUnstructuredObject(t *testing.T, content string) *unstructured.Unstructured {
+func GetUnstructuredObject(t *testing.T, content string) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{}
 	unmarshalObj(t, content, obj)
 	return obj
 }
 
 func priorityClass() string {
-	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"sandbox-users-pods","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-3,"globalDefault":false,"description":"Priority class for pods in users' namespaces"}`
+	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"sandbox-users-pods","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}, "annotations":{"toolchain.dev.openshift.com/no-deletion":""}},"value":-3,"globalDefault":false,"description":"Priority class for pods in users' namespaces"}`
 }
 
 func service(namespace string) string {
@@ -223,21 +223,21 @@ func deployment(namespace, sa string, image string) string {
 }
 
 func mutatingWebhookConfig(namespace, caBundle string) string {
-	return fmt.Sprintf(`{"apiVersion":"admissionregistration.k8s.io/v1","kind":"MutatingWebhookConfiguration","metadata":{"name":"member-operator-webhook","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"webhooks":[{"name":"users.pods.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%[1]s","service":{"name":"member-operator-webhook","namespace":"%[2]s","path":"/mutate-users-pods","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE"],"apiGroups":[""],"apiVersions":["v1"],"resources":["pods"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Ignore","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}},{"name":"users.virtualmachines.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%[1]s","service":{"name":"member-operator-webhook","namespace":"%[2]s","path":"/mutate-virtual-machines","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE"],"apiGroups":["kubevirt.io"],"apiVersions":["v1"],"resources":["virtualmachines"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Fail","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}}]}`, caBundle, namespace)
+	return fmt.Sprintf(`{"apiVersion":"admissionregistration.k8s.io/v1","kind":"MutatingWebhookConfiguration","metadata":{"name":"member-operator-webhook-%[2]s","labels":{"app":"member-operator-webhook","toolchain.dev.openshift.com/provider":"codeready-toolchain"}, "annotations": {"toolchain.dev.openshift.com/old-name": "member-operator-webhook"}},"webhooks":[{"name":"users.pods.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%[1]s","service":{"name":"member-operator-webhook","namespace":"%[2]s","path":"/mutate-users-pods","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE"],"apiGroups":[""],"apiVersions":["v1"],"resources":["pods"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Ignore","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}},{"name":"users.virtualmachines.webhook.sandbox","admissionReviewVersions":["v1"],"clientConfig":{"caBundle":"%[1]s","service":{"name":"member-operator-webhook","namespace":"%[2]s","path":"/mutate-virtual-machines","port":443}},"matchPolicy":"Equivalent","rules":[{"operations":["CREATE"],"apiGroups":["kubevirt.io"],"apiVersions":["v1"],"resources":["virtualmachines"],"scope":"Namespaced"}],"sideEffects":"None","timeoutSeconds":5,"reinvocationPolicy":"Never","failurePolicy":"Fail","namespaceSelector":{"matchLabels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}}}]}`, caBundle, namespace)
 }
 
 func validatingWebhookConfig(namespace, caBundle string) string {
-	return fmt.Sprintf(`{"apiVersion": "admissionregistration.k8s.io/v1","kind": "ValidatingWebhookConfiguration","metadata": {"labels": {"app": "member-operator-webhook","toolchain.dev.openshift.com/provider": "codeready-toolchain"},"name": "member-operator-validating-webhook"},"webhooks": [{"admissionReviewVersions": ["v1"],"clientConfig": {"caBundle": "%[1]s","service": {"name": "member-operator-webhook","namespace": "%[2]s","path": "/validate-users-rolebindings","port": 443}},"failurePolicy": "Ignore","matchPolicy": "Equivalent","name": "users.rolebindings.webhook.sandbox","namespaceSelector": {"matchLabels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}},"reinvocationPolicy": "Never","rules": [{"apiGroups": ["rbac.authorization.k8s.io","authorization.openshift.io"],"apiVersions": ["v1"],"operations": ["CREATE","UPDATE"],"resources": ["rolebindings"],"scope": "Namespaced"}],"sideEffects": "None","timeoutSeconds": 5},{"admissionReviewVersions": ["v1"],"clientConfig": {"caBundle": "%[1]s","service": {"name": "member-operator-webhook","namespace": "%[2]s","path": "/validate-spacebindingrequests","port": 443}},"failurePolicy": "Fail","matchPolicy": "Equivalent","name": "users.spacebindingrequests.webhook.sandbox","namespaceSelector": {"matchLabels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}},"reinvocationPolicy": "Never","rules": [{"apiGroups": ["toolchain.dev.openshift.com"],"apiVersions": ["v1alpha1"],"operations": ["CREATE","UPDATE"],"resources": ["spacebindingrequests"],"scope": "Namespaced"}],"sideEffects": "None","timeoutSeconds": 5},{"admissionReviewVersions": ["v1"],"clientConfig": {"caBundle": "%[1]s","service": {"name": "member-operator-webhook","namespace": "%[2]s","path": "/validate-ssprequests","port": 443}},"failurePolicy": "Fail","matchPolicy": "Equivalent","name": "users.virtualmachines.ssp.webhook.sandbox","namespaceSelector": {"matchLabels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}},"reinvocationPolicy": "Never","rules": [{"apiGroups": ["ssp.kubevirt.io"],"apiVersions": ["*"],"operations": ["CREATE","UPDATE"],"resources": ["ssps"],"scope": "Namespaced"}],"sideEffects": "None","timeoutSeconds": 5}]}`, caBundle, namespace)
+	return fmt.Sprintf(`{"apiVersion": "admissionregistration.k8s.io/v1","kind": "ValidatingWebhookConfiguration","metadata": {"labels": {"app": "member-operator-webhook","toolchain.dev.openshift.com/provider": "codeready-toolchain"}, "annotations": {"toolchain.dev.openshift.com/old-name": "member-operator-validating-webhook"},"name": "member-operator-validating-webhook-%[2]s"},"webhooks": [{"admissionReviewVersions": ["v1"],"clientConfig": {"caBundle": "%[1]s","service": {"name": "member-operator-webhook","namespace": "%[2]s","path": "/validate-users-rolebindings","port": 443}},"failurePolicy": "Ignore","matchPolicy": "Equivalent","name": "users.rolebindings.webhook.sandbox","namespaceSelector": {"matchLabels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}},"reinvocationPolicy": "Never","rules": [{"apiGroups": ["rbac.authorization.k8s.io","authorization.openshift.io"],"apiVersions": ["v1"],"operations": ["CREATE","UPDATE"],"resources": ["rolebindings"],"scope": "Namespaced"}],"sideEffects": "None","timeoutSeconds": 5},{"admissionReviewVersions": ["v1"],"clientConfig": {"caBundle": "%[1]s","service": {"name": "member-operator-webhook","namespace": "%[2]s","path": "/validate-spacebindingrequests","port": 443}},"failurePolicy": "Fail","matchPolicy": "Equivalent","name": "users.spacebindingrequests.webhook.sandbox","namespaceSelector": {"matchLabels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}},"reinvocationPolicy": "Never","rules": [{"apiGroups": ["toolchain.dev.openshift.com"],"apiVersions": ["v1alpha1"],"operations": ["CREATE","UPDATE"],"resources": ["spacebindingrequests"],"scope": "Namespaced"}],"sideEffects": "None","timeoutSeconds": 5},{"admissionReviewVersions": ["v1"],"clientConfig": {"caBundle": "%[1]s","service": {"name": "member-operator-webhook","namespace": "%[2]s","path": "/validate-ssprequests","port": 443}},"failurePolicy": "Fail","matchPolicy": "Equivalent","name": "users.virtualmachines.ssp.webhook.sandbox","namespaceSelector": {"matchLabels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}},"reinvocationPolicy": "Never","rules": [{"apiGroups": ["ssp.kubevirt.io"],"apiVersions": ["*"],"operations": ["CREATE","UPDATE"],"resources": ["ssps"],"scope": "Namespaced"}],"sideEffects": "None","timeoutSeconds": 5}]}`, caBundle, namespace)
 }
 
 func serviceAccount(namespace string) string {
 	return fmt.Sprintf(`{"apiVersion": "v1","kind": "ServiceAccount", "metadata":{"name": "member-operator-webhook-sa", "namespace": "%s"}}`, namespace)
 }
 
-func clusterRole() string {
-	return `{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRole","metadata": {"creationTimestamp": null,"name": "webhook-role"}, "rules": [{"apiGroups": [""],"resources": ["secrets"],"verbs": ["get","list","watch"]},{"apiGroups": ["user.openshift.io"],"resources": ["identities","useridentitymappings","users"],"verbs": ["get","list","watch"]},{"apiGroups": ["toolchain.dev.openshift.com"],"resources": ["memberoperatorconfigs","spacebindingrequests"],"verbs": ["get","list","watch"]},{"apiGroups": ["kubevirt.io"],"resources": ["virtualmachines"],"verbs": ["get","list","watch"]}]}`
+func clusterRole(namespace string) string {
+	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRole","metadata": {"creationTimestamp": null,"name": "webhook-role-%[1]s", "labels": {"toolchain.dev.openshift.com/provider": "codeready-toolchain"}, "annotations": {"toolchain.dev.openshift.com/old-name": "webhook-role"}}, "rules": [{"apiGroups": [""],"resources": ["secrets"],"verbs": ["get","list","watch"]},{"apiGroups": ["user.openshift.io"],"resources": ["identities","useridentitymappings","users"],"verbs": ["get","list","watch"]},{"apiGroups": ["toolchain.dev.openshift.com"],"resources": ["memberoperatorconfigs","spacebindingrequests"],"verbs": ["get","list","watch"]},{"apiGroups": ["kubevirt.io"],"resources": ["virtualmachines"],"verbs": ["get","list","watch"]}]}`, namespace)
 }
 
 func clusterRoleBinding(namespace string) string {
-	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRoleBinding", "metadata": {"name": "webhook-rolebinding"},"roleRef": {"apiGroup": "rbac.authorization.k8s.io","kind": "ClusterRole","name": "webhook-role"},"subjects": [{"kind": "ServiceAccount","name": "member-operator-webhook-sa","namespace": "%s"}]}`, namespace)
+	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRoleBinding", "metadata": {"name": "webhook-rolebinding-%[1]s", "annotations": {"toolchain.dev.openshift.com/old-name": "webhook-rolebinding"}},"roleRef": {"apiGroup": "rbac.authorization.k8s.io","kind": "ClusterRole","name": "webhook-role-%[1]s"},"subjects": [{"kind": "ServiceAccount","name": "member-operator-webhook-sa","namespace": "%[1]s"}]}`, namespace)
 }

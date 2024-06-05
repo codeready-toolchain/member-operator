@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
-
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -165,7 +164,6 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 
 		if authorizedKeysFound {
 			authKeys := userData["ssh_authorized_keys"].([]interface{})
-			// append the key to the existing list
 			userData["ssh_authorized_keys"] = append(authKeys, sshValue)
 		} else {
 			// create a new list with the key

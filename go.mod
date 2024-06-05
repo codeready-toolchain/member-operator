@@ -23,6 +23,7 @@ require (
 require (
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.12.2
+	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	k8s.io/apiextensions-apiserver v0.25.0
 	k8s.io/apimachinery v0.25.0
 	k8s.io/kubectl v0.24.0

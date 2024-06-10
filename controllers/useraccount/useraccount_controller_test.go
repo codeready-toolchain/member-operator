@@ -5,13 +5,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	v1 "k8s.io/api/rbac/v1"
+	rbac "k8s.io/api/rbac/v1"
 	"os"
 	"testing"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	identity2 "github.com/codeready-toolchain/toolchain-common/pkg/identity"
@@ -409,17 +410,75 @@ func TestReconcile(t *testing.T) {
 	})
 
 	// Delete useraccount and ensure related resources are also removed
+	// Adds check to see console settings resources are removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
 
 		// given
-
+		// console settings resources
+		resourceName := ConsoleUserSettingsResourceNamePrefix + string(userUID)
+		noiseResourceName := "noise-resource"
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		role := &rbac.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName + "random",
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+					ConsoleUserSettingsUID:        string(userUID),
+				},
+			},
+		}
+		rb := &rbac.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		noiseCm := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      noiseResourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		noiseRole := &rbac.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      noiseResourceName,
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+				},
+			},
+		}
+		noiseRb := &rbac.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "RoleBinding",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      noiseResourceName,
+				Namespace: UserSettingNS,
+			},
+		}
 		// when
 		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 		mockCallsCounter := new(int)
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity)
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb, noiseRole, noiseRb, noiseCm)
 
 		t.Run("first reconcile deletes identity", func(t *testing.T) {
 			// given
@@ -455,6 +514,19 @@ func TestReconcile(t *testing.T) {
 				useraccount.AssertThatUserAccount(t, req.Name, cl).
 					HasConditions(notReady("Terminating", "deleting user/identity"))
 
+				// Check that the associated console settings resources have been deleted
+				for _, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.RoleBinding{}} {
+					AssertObjectNotFound(t, cl, UserSettingNS, resourceName, obj)
+				}
+				AssertObjectNotFound(t, cl, UserSettingNS, resourceName+"random", &rbac.Role{})
+
+				// Check that the noise resources are not deleted
+				for _, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.Role{}, &rbac.RoleBinding{}} {
+					AssertObject(t, cl, UserSettingNS, noiseResourceName, obj, func() {
+						assert.Equal(t, noiseResourceName, obj.GetName())
+					})
+				}
+
 				// Check that the associated user has been deleted
 				// when reconciling the useraccount with a deletion timestamp
 				assertUserNotFound(t, r, userAcc)
@@ -474,159 +546,6 @@ func TestReconcile(t *testing.T) {
 						DoesNotExist()
 					require.Equal(t, 0, *mockCallsCounter)
 				})
-			})
-		})
-	})
-
-	t.Run("delete useraccount with console resources removes subsequent resources", func(t *testing.T) {
-		// when the console resources can only be found by name of the type "user-settings-UserUID"
-		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
-
-		mockCallsCounter := new(int)
-		userAcc := newUserAccount(username, userID)
-		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		resourceName := ConsoleUserSettingsResourceNamePrefix + string(userUID)
-		configMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: UserSettingNS,
-			},
-		}
-		role := &v1.Role{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName + "random",
-				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        string(userUID),
-				},
-			},
-		}
-		rb := &v1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: UserSettingNS,
-			},
-		}
-		noiseCm := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "noise-object",
-				Namespace: UserSettingNS,
-			},
-		}
-		noiseRole := &v1.Role{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Role",
-				APIVersion: "rbac.authorization.k8s.io/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName + "noise-role",
-				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-				},
-			},
-		}
-		noiseRb := &v1.RoleBinding{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "RoleBinding",
-				APIVersion: "rbac.authorization.k8s.io/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "noise-rb",
-				Namespace: UserSettingNS,
-			},
-		}
-		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb, noiseCm, noiseRole, noiseRb)
-
-		t.Run("first reconcile deletes identity", func(t *testing.T) {
-			// given
-			// Set the deletionTimestamp
-			now := metav1.NewTime(time.Now())
-			userAcc.DeletionTimestamp = &now
-			err = r.Client.Update(context.TODO(), userAcc)
-			require.NoError(t, err)
-
-			// when
-			res, err := r.Reconcile(context.TODO(), req)
-
-			// then
-			assert.Equal(t, reconcile.Result{}, res)
-			require.NoError(t, err)
-
-			useraccount.AssertThatUserAccount(t, req.Name, cl).
-				HasConditions(notReady("Terminating", "deleting user/identity"))
-
-			// Check that the associated identity has been deleted
-			// when reconciling the useraccount with a deletion timestamp
-			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
-			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
-
-			t.Run("second reconcile deletes user and its resources - configmap, role and rolebinding", func(t *testing.T) {
-				// when
-				res, err = r.Reconcile(context.TODO(), req)
-
-				// then
-				assert.Equal(t, reconcile.Result{}, res)
-				require.NoError(t, err)
-
-				useraccount.AssertThatUserAccount(t, req.Name, cl).
-					HasConditions(notReady("Terminating", "deleting user/identity"))
-
-				// Check that the associated configmap has been deleted
-				retrievedConfigMap := &corev1.ConfigMap{}
-				err := r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedConfigMap)
-				require.Error(t, err)
-				assert.True(t, apierros.IsNotFound(err))
-				// Check that the associated role has been deleted
-				retrievedRole := &v1.Role{}
-				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedRole)
-				require.Error(t, err)
-				assert.True(t, apierros.IsNotFound(err))
-				// Check that the associated rolebinding has been deleted
-				retrievedRb := &v1.RoleBinding{}
-				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName, Namespace: UserSettingNS}, retrievedRb)
-				require.Error(t, err)
-				assert.True(t, apierros.IsNotFound(err))
-
-				// Check that the noise resources are not deleted
-				retrievedNoiseCm := &corev1.ConfigMap{}
-				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "noise-object", Namespace: UserSettingNS}, retrievedNoiseCm)
-				require.NoError(t, err)
-				assert.Equal(t, noiseCm, retrievedNoiseCm)
-				retrievedNoiseRole := &v1.Role{}
-				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: resourceName + "noise-role", Namespace: UserSettingNS}, retrievedNoiseRole)
-				require.NoError(t, err)
-				assert.Equal(t, noiseRole, retrievedNoiseRole)
-				retrievedNoiseRb := &v1.RoleBinding{}
-				err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "noise-rb", Namespace: UserSettingNS}, retrievedNoiseRb)
-				require.NoError(t, err)
-				require.Equal(t, noiseRb, retrievedNoiseRb)
-
-				// Check that the associated user has been deleted
-				// when reconciling the useraccount with a deletion timestamp
-				assertUserNotFound(t, r, userAcc)
-				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
-
-				t.Run("third reconcile deletes userAccount", func(t *testing.T) {
-					// when
-					res, err = r.Reconcile(context.TODO(), req)
-
-					// then
-					assert.Equal(t, reconcile.Result{}, res)
-					require.NoError(t, err)
-
-					// Check that the user account has been removed since the finalizer was deleted
-					// when reconciling the useraccount with a deletion timestamp
-					useraccount.AssertThatUserAccount(t, username, r.Client).
-						DoesNotExist()
-					require.Equal(t, 0, *mockCallsCounter)
-				})
-
 			})
 		})
 	})

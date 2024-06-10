@@ -509,10 +509,7 @@ func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) er
 	if err := deleteResource(ctx, r.Client, userUID, &rbac.Role{}); err != nil {
 		return err
 	}
-	if err := deleteResource(ctx, r.Client, userUID, &rbac.RoleBinding{}); err != nil {
-		return err
-	}
-	return nil
+	return deleteResource(ctx, r.Client, userUID, &rbac.RoleBinding{})
 }
 
 // deleteIdentity deletes the Identity resources owned by the specified UserAccount.

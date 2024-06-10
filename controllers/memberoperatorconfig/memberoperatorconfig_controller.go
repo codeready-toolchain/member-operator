@@ -104,18 +104,9 @@ func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Conf
 		if err := deploy.Webhook(ctx, r.Client, r.Client.Scheme(), namespace, webhookImage); err != nil {
 			return err
 		}
-		// TODO --  temporary migration step to delete the webhook with the old names
-		deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace, true)
-		if err != nil {
-			return err
-		}
-		if deleted {
-			logger.Info("Deleted previously deployed webhook app")
-		}
-		// TODO -- end temporary migration
 		logger.Info("(Re)Deployed users' pods webhook")
 	} else {
-		deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace, false)
+		deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace)
 		if err != nil {
 			return err
 		}

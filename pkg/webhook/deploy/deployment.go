@@ -29,9 +29,6 @@ const (
 
 	// WebhookDeploymentNoDeletionAnnotation is used on webhook resources that should not be deleted when the deployment of the webhook is disabled
 	WebhookDeploymentNoDeletionAnnotation = "toolchain.dev.openshift.com/no-deletion"
-
-	// WebhookDeploymentOldNameAnnotation has to old name used to deploy the resource, this is used to replace the current object with the new one
-	WebhookDeploymentOldNameAnnotation = "toolchain.dev.openshift.com/old-name"
 )
 
 func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace, image string) error {
@@ -58,7 +55,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 
 // Delete deletes the webhook app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
-func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace string, oldObjectOnly bool) (bool, error) {
+func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, namespace string) (bool, error) {
 	objs, err := GetTemplateObjects(s, namespace, "dummy-image", []byte{00000001})
 	if err != nil {
 		return false, err
@@ -74,16 +71,6 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 			// this object needs to stay
 			continue
 		}
-		// TODO --- temporary migration step to delete the objects by using the old name
-		if oldObjectOnly {
-			oldName, found := obj.GetAnnotations()[WebhookDeploymentOldNameAnnotation]
-			if !found {
-				// this object needs to stay
-				continue
-			}
-			objName = oldName
-		}
-		// TODO --- end temporary migration step
 		logger := logf.FromContext(ctx).WithName("webhook_deploy").WithValues("gvk", obj.GetObjectKind().GroupVersionKind(), "name", objName, "namespace", obj.GetNamespace())
 		logger.Info("Searching for object to delete")
 		if err := cl.Get(ctx, types.NamespacedName{Namespace: obj.GetNamespace(), Name: objName}, unst); err != nil {

@@ -66,7 +66,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			assert.Equal(t, map[string]string{ConsoleUserSettingsIdentifier: "true"}, noiseObject.Labels)
 		})
 	})
-	t.Run("multiple configmaps found by label and deletes successfully", func(t *testing.T) {
+	t.Run("multiple objects found by label and deletes successfully", func(t *testing.T) {
 		cm1 := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
 			ObjectMeta: metav1.ObjectMeta{

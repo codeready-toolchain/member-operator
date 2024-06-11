@@ -17,6 +17,7 @@ import (
 
 func TestDeleteConsoleSettingObjects(t *testing.T) {
 	t.Run("Object found by name and deleted", func(t *testing.T) {
+		// given
 		ctx := context.Background()
 		cm := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
@@ -27,13 +28,17 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		}
 		cl := fake.NewClientBuilder().WithObjects(cm).Build()
 
+		// when
 		err := deleteResource(ctx, cl, "johnsmith", cm)
+
+		// then
 		require.NoError(t, err)
 		// check that the configmap doesn't exist anymore
 		err = cl.Get(ctx, client.ObjectKey{Name: "user-settings-johnsmith", Namespace: UserSettingNS}, &corev1.ConfigMap{})
 		require.True(t, errors.IsNotFound(err))
 	})
 	t.Run("Object found by label and deletes successfully", func(t *testing.T) {
+		// given
 		cm := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
 			ObjectMeta: metav1.ObjectMeta{
@@ -60,7 +65,11 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			},
 		}
 		cl := test.NewFakeClient(t, cm, noiseObject)
+
+		// when
 		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
+
+		// then
 		require.NoError(t, err)
 		// check that the configmap doesn't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "johnsmith", &corev1.ConfigMap{})
@@ -71,6 +80,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		})
 	})
 	t.Run("multiple objects found by label and deletes successfully", func(t *testing.T) {
+		// given
 		cm1 := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
 			ObjectMeta: metav1.ObjectMeta{
@@ -94,7 +104,11 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 			},
 		}
 		cl := test.NewFakeClient(t, cm1, cm2)
+
+		// when
 		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
+
+		// then
 		require.NoError(t, err)
 		// check that the configmaps don't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-name-no-match", &corev1.ConfigMap{})
@@ -102,6 +116,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 	})
 
 	t.Run("Error is returned when error in deleting configmap", func(t *testing.T) {
+		// given
 		cl := test.NewFakeClient(t)
 		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			return nil
@@ -109,13 +124,20 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("error in deleting configmap")
 		}
+
+		// when
 		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
+
+		// then
 		require.Error(t, err)
 		require.Equal(t, "error in deleting configmap", err.Error())
 	})
-	t.Run("No Error is returned when no configmap not found", func(t *testing.T) {
+	t.Run("No Error is returned when no object is found", func(t *testing.T) {
+		// given
 		cl := test.NewFakeClient(t)
+		// when
 		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
+		// then
 		require.NoError(t, err)
 	})
 

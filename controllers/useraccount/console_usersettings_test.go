@@ -47,7 +47,10 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		}
 		// create a noise objects where the labels don't match
 		noiseObject := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "user-settings-name-no-match-noise",
 				Namespace: UserSettingNS,
@@ -62,8 +65,9 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		// check that the configmap doesn't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "johnsmith", &corev1.ConfigMap{})
 		// check that the noise object still exists
-		AssertObject(t, cl, UserSettingNS, "user-settings-name-no-match-noise", noiseObject, func() {
-			assert.Equal(t, map[string]string{ConsoleUserSettingsIdentifier: "true"}, noiseObject.Labels)
+		retrievedNoise := &corev1.ConfigMap{}
+		AssertObject(t, cl, UserSettingNS, "user-settings-name-no-match-noise", retrievedNoise, func() {
+			assert.Equal(t, noiseObject, retrievedNoise)
 		})
 	})
 	t.Run("multiple objects found by label and deletes successfully", func(t *testing.T) {

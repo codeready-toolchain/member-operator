@@ -439,6 +439,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: UserSettingNS,
 			},
 		}
+
 		noiseCm := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "ConfigMap",
@@ -471,6 +472,9 @@ func TestReconcile(t *testing.T) {
 				Name:      noiseResourceName,
 				Namespace: UserSettingNS,
 			},
+		}
+		noiseObjects := []client.Object{
+			noiseCm, noiseRole, noiseRb,
 		}
 		// when
 		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
@@ -521,9 +525,9 @@ func TestReconcile(t *testing.T) {
 				AssertObjectNotFound(t, cl, UserSettingNS, resourceName+"random", &rbac.Role{})
 
 				// Check that the noise resources are not deleted
-				for _, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.Role{}, &rbac.RoleBinding{}} {
+				for key, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.Role{}, &rbac.RoleBinding{}} {
 					AssertObject(t, cl, UserSettingNS, noiseResourceName, obj, func() {
-						assert.Equal(t, noiseResourceName, obj.GetName())
+						assert.Equal(t, noiseObjects[key], obj)
 					})
 				}
 

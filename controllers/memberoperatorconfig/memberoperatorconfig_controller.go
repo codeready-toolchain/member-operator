@@ -7,7 +7,6 @@ import (
 	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
 	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
-
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -107,7 +106,13 @@ func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Conf
 		}
 		logger.Info("(Re)Deployed users' pods webhook")
 	} else {
-		logger.Info("Skipping deployment of users' pods webhook")
+		deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace)
+		if err != nil {
+			return err
+		}
+		if deleted {
+			logger.Info("Deleted previously deployed webhook app")
+		}
 	}
 	return nil
 }

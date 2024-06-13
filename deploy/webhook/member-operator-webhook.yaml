@@ -9,6 +9,8 @@ objects:
     name: sandbox-users-pods
     labels:
       toolchain.dev.openshift.com/provider: codeready-toolchain
+    annotations:
+      toolchain.dev.openshift.com/no-deletion: ""
   value: -3
   globalDefault: false
   description: "Priority class for pods in users' namespaces"
@@ -16,8 +18,10 @@ objects:
   kind: ClusterRole
   metadata:
     creationTimestamp: null
-    name: webhook-role
-  rules:    
+    name: webhook-role-${NAMESPACE}
+    labels:
+      toolchain.dev.openshift.com/provider: codeready-toolchain
+  rules:
     - apiGroups:
         - ""
       resources:
@@ -61,11 +65,11 @@ objects:
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
-    name: webhook-rolebinding
+    name: webhook-rolebinding-${NAMESPACE}
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
-    name: webhook-role
+    name: webhook-role-${NAMESPACE}
   subjects:
     - kind: ServiceAccount
       name: member-operator-webhook-sa
@@ -130,7 +134,7 @@ objects:
 - apiVersion: admissionregistration.k8s.io/v1
   kind: MutatingWebhookConfiguration
   metadata:
-    name: member-operator-webhook
+    name: member-operator-webhook-${NAMESPACE}
     labels:
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
@@ -189,7 +193,7 @@ objects:
 - apiVersion: admissionregistration.k8s.io/v1
   kind: ValidatingWebhookConfiguration
   metadata:
-    name: member-operator-validating-webhook
+    name: member-operator-validating-webhook-${NAMESPACE}
     labels:
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain

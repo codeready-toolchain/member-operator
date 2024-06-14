@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,7 +30,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		cl := fake.NewClientBuilder().WithObjects(cm).Build()
 
 		// when
-		err := deleteResource(ctx, cl, "johnsmith", cm)
+		err := deleteResource(ctx, cl, "johnsmith", &corev1.ConfigMap{})
 
 		// then
 		require.NoError(t, err)
@@ -134,7 +135,17 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 	})
 	t.Run("No Error is returned when no object is found", func(t *testing.T) {
 		// given
-		cl := test.NewFakeClient(t)
+		noiseObject := &rbac.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "user-settings-johnsmith",
+				Namespace: UserSettingNS,
+			},
+		}
+		cl := test.NewFakeClient(t, noiseObject)
 		// when
 		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
 		// then

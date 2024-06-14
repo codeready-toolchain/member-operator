@@ -492,7 +492,7 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	return true, nil
 }
 
-// deleteUserResources deletes the user settings resources (configmap, role and role-binding) associated with the specified user, created for a user by console.
+// deleteUserResources deletes the user settings resources (configmap, role and role-binding) associated with the specified user, created for a user by Openshift Web Console.
 // This function only looks for these resources in the namespace - openshift-console-user-settings
 // Returns an error if any of the deletion operations fail.
 func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) error {

@@ -17,7 +17,7 @@ const (
 // It first attempts to delete the resource by name, and if not found, it deletes all resources with matching labels.
 //
 // userUID : The unique identifier of the user for whom the resource is being deleted.
-// Returns an error if the deletion operation fails, or nil if the operation is successful.
+// Returns an error if the deletion operation fails. Returns nil if the operation is successful or there is nothing to delete.
 func deleteResource(ctx context.Context, cl client.Client, userUID string, toDelete client.Object) error {
 
 	name := ConsoleUserSettingsResourceNamePrefix + userUID

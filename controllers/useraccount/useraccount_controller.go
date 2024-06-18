@@ -59,6 +59,7 @@ type Reconciler struct {
 
 //+kubebuilder:rbac:groups=user.openshift.io,resources=identities;users;useridentitymappings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io, resources=roles,rolebindings,verbs=get;list;delete;deletecollection
 
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
 // and what is in the UserAccount.Spec

@@ -9,10 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"testing"
 )
 
@@ -27,7 +25,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 				Namespace: UserSettingNS,
 			},
 		}
-		cl := fake.NewClientBuilder().WithObjects(cm).Build()
+		cl := test.NewFakeClient(t, cm)
 
 		// when
 		err := deleteResource(ctx, cl, "johnsmith", &corev1.ConfigMap{})
@@ -35,8 +33,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		// check that the configmap doesn't exist anymore
-		err = cl.Get(ctx, client.ObjectKey{Name: "user-settings-johnsmith", Namespace: UserSettingNS}, &corev1.ConfigMap{})
-		require.True(t, errors.IsNotFound(err))
+		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith", &corev1.ConfigMap{})
 	})
 	t.Run("Object found by label and deletes successfully", func(t *testing.T) {
 		// given
@@ -119,9 +116,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 	t.Run("Error is returned when error in deleting configmap", func(t *testing.T) {
 		// given
 		cl := test.NewFakeClient(t)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-			return nil
-		}
+
 		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			return fmt.Errorf("error in deleting configmap")
 		}

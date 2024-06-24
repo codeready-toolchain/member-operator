@@ -5,12 +5,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	rbac "k8s.io/api/rbac/v1"
 	"os"
 	"testing"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	. "github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	identity2 "github.com/codeready-toolchain/toolchain-common/pkg/identity"
@@ -18,7 +20,7 @@ import (
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test/useraccount"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	userv1 "github.com/openshift/api/user/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +43,7 @@ func TestReconcile(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 
 	username := "johnsmith"
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
@@ -303,7 +305,7 @@ func TestReconcile(t *testing.T) {
 		t.Run("update", func(t *testing.T) {
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
-				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
+				UID:  types.UID(uuid.NewString()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey:    userAcc.Name,
 					toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
@@ -341,7 +343,7 @@ func TestReconcile(t *testing.T) {
 			userAcc := newUserAccount(username, userID, withFinalizer())
 			preexistingIdentityWithNoMapping := &userv1.Identity{ObjectMeta: metav1.ObjectMeta{
 				Name: ToIdentityName(userAcc.Spec.PropagatedClaims.Sub, config.Auth().Idp()),
-				UID:  types.UID(uuid.Must(uuid.NewV4()).String()),
+				UID:  types.UID(uuid.NewString()),
 				Labels: map[string]string{
 					toolchainv1alpha1.OwnerLabelKey: userAcc.Name,
 				},
@@ -408,17 +410,79 @@ func TestReconcile(t *testing.T) {
 	})
 
 	// Delete useraccount and ensure related resources are also removed
+	// Adds check to see console settings resources are removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
 
 		// given
+		// console settings resources
+		resourceName := ConsoleUserSettingsResourceNamePrefix + string(userUID)
+		noiseResourceName := "noise-resource"
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		role := &rbac.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName + "random",
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+					ConsoleUserSettingsUID:        string(userUID),
+				},
+			},
+		}
+		rb := &rbac.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      resourceName,
+				Namespace: UserSettingNS,
+			},
+		}
 
+		noiseCm := &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ConfigMap",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      noiseResourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		noiseRole := &rbac.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      noiseResourceName,
+				Namespace: UserSettingNS,
+				Labels: map[string]string{
+					ConsoleUserSettingsIdentifier: "true",
+				},
+			},
+		}
+		noiseRb := &rbac.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "RoleBinding",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      noiseResourceName,
+				Namespace: UserSettingNS,
+			},
+		}
+		noiseObjects := []client.Object{
+			noiseCm, noiseRole, noiseRb,
+		}
 		// when
 		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 		mockCallsCounter := new(int)
 		userAcc := newUserAccount(username, userID)
 		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
-		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity)
+		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb, noiseRole, noiseRb, noiseCm)
 
 		t.Run("first reconcile deletes identity", func(t *testing.T) {
 			// given
@@ -441,7 +505,7 @@ func TestReconcile(t *testing.T) {
 			// Check that the associated identity has been deleted
 			// when reconciling the useraccount with a deletion timestamp
 			assertIdentityNotFound(t, r, userAcc, config.Auth().Idp())
-			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+			useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
 
 			t.Run("second reconcile deletes user", func(t *testing.T) {
 				// when
@@ -454,10 +518,23 @@ func TestReconcile(t *testing.T) {
 				useraccount.AssertThatUserAccount(t, req.Name, cl).
 					HasConditions(notReady("Terminating", "deleting user/identity"))
 
+				// Check that the associated console settings resources have been deleted
+				for _, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.RoleBinding{}} {
+					AssertObjectNotFound(t, cl, UserSettingNS, resourceName, obj)
+				}
+				AssertObjectNotFound(t, cl, UserSettingNS, resourceName+"random", &rbac.Role{})
+
+				// Check that the noise resources are not deleted
+				for key, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.Role{}, &rbac.RoleBinding{}} {
+					AssertObject(t, cl, UserSettingNS, noiseResourceName, obj, func() {
+						assert.Equal(t, noiseObjects[key], obj)
+					})
+				}
+
 				// Check that the associated user has been deleted
 				// when reconciling the useraccount with a deletion timestamp
 				assertUserNotFound(t, r, userAcc)
-				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating("deleting user/identity"))
+				useraccount.AssertThatUserAccount(t, userAcc.Name, cl).HasConditions(terminating())
 
 				t.Run("third reconcile removes finalizer and triggers the deletion", func(t *testing.T) {
 					// when
@@ -1093,7 +1170,7 @@ func TestCreateIdentitiesOKWhenOriginalSubPresent(t *testing.T) {
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	username := "kjones"
 
 	userAcc := newUserAccount(username, userID)
@@ -1160,7 +1237,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 	config, err := membercfg.GetConfiguration(test.NewFakeClient(t))
 	require.NoError(t, err)
 
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	username := "hcollins"
 
 	userAcc := newUserAccount(username, userID)
@@ -1235,7 +1312,7 @@ func TestCreateIdentitiesOKWhenSSOUserIDAnnotationPresent(t *testing.T) {
 func TestUpdateStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	username := "johnsmith"
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1331,7 +1408,7 @@ func TestUpdateStatus(t *testing.T) {
 func TestDisabledUserAccount(t *testing.T) {
 	os.Setenv("WATCH_NAMESPACE", test.MemberOperatorNs)
 	username := "johndoe"
-	userID := uuid.Must(uuid.NewV4()).String()
+	userID := uuid.NewString()
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
@@ -1602,7 +1679,7 @@ func newUserAccount(userName, userID string, opts ...userAccountOption) *toolcha
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      userName,
 			Namespace: test.MemberOperatorNs,
-			UID:       types.UID(uuid.Must(uuid.NewV4()).String()),
+			UID:       types.UID(uuid.NewString()),
 			Labels: map[string]string{
 				toolchainv1alpha1.TierLabelKey: "basic",
 			},
@@ -1681,11 +1758,11 @@ func provisioning() toolchainv1alpha1.Condition {
 	}
 }
 
-func terminating(msg string) toolchainv1alpha1.Condition {
+func terminating() toolchainv1alpha1.Condition {
 	return toolchainv1alpha1.Condition{
 		Type:    toolchainv1alpha1.ConditionReady,
 		Status:  corev1.ConditionFalse,
 		Reason:  toolchainv1alpha1.UserAccountTerminatingReason,
-		Message: msg,
+		Message: "deleting user/identity",
 	}
 }

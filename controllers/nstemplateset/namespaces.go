@@ -209,11 +209,12 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 		}
 	}
 
+	objsToCreate := objectsToCreate(newObjs, nsTmplSet)
 	var labels = map[string]string{
 		toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
 		toolchainv1alpha1.SpaceLabelKey:    nsTmplSet.GetName(),
 	}
-	if _, err = r.ApplyToolchainObjects(ctx, newObjs, labels); err != nil {
+	if _, err = r.ApplyToolchainObjects(ctx, objsToCreate, labels); err != nil {
 		return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with required resources", nsName)
 	}
 
@@ -232,6 +233,19 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 
 	// TODO add validation for other objects
 	return nil // nothing changed, no error occurred
+}
+
+// Returns only objects which we need to create and filter out any objects for disabled features
+func objectsToCreate(newObjects []runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NSTemplateSet) []runtimeclient.Object {
+	objsToCreate := make([]runtimeclient.Object, len(newObjects))
+	for _, obj := range newObjects {
+		// Check if the new object is associated with a feature toggle.
+		// If yes then ignore this object if it represents a feature or features which are not enabled for this NSTemplateSet
+		if shouldCreate(obj, nsTmplSet) {
+			objsToCreate = append(objsToCreate, obj)
+		}
+	}
+	return objsToCreate
 }
 
 // ensureDeleted ensures that the namespaces that are owned by the space (based on the label) are deleted.

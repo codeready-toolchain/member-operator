@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
@@ -120,7 +121,7 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
-	// go though all cluster resource kinds
+	// go through all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {
 		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
 		gvkCtx := log.IntoContext(ctx, gvkLogger)
@@ -258,7 +259,7 @@ func (r *clusterResourcesManager) deleteClusterResource(ctx context.Context, nsT
 // If such a object is found, then it creates it and returns 'true, nil'. If no missing resource was found then returns 'false, nil'.
 // In case of any error 'false, error'
 func (r *clusterResourcesManager) createMissing(ctx context.Context, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	// go though all new (expected) objects to check if all of them already exist or not
+	// go through all new (expected) objects to check if all of them already exist or not
 NewObjects:
 	for _, newObject := range newObjs {
 
@@ -268,6 +269,11 @@ NewObjects:
 			if newObject.GetName() == currentObject.GetName() {
 				continue NewObjects
 			}
+		}
+		// Check if the new object is associated with a feature toggle.
+		// If yes then ignore this object if it represents a feature or features which are not enabled for this NSTemplateSet
+		if !shouldCreate(newObject, nsTmplSet) {
+			continue NewObjects
 		}
 		// if there was no existing object found that would match with the new one, then set the status appropriately
 		namespaces, err := fetchNamespacesByOwner(ctx, r.Client, nsTmplSet.Name)
@@ -290,6 +296,17 @@ NewObjects:
 	}
 	return false, nil
 }
+
+// TODO Move to common
+// FeatureToggleAnnotationKey generates an annotation key for the feature name.
+// This key can be used in Space, NSTemplateSet, etc. CRs to indicate that the corresponding feature toggle should be enabled.
+// This is the format of such keys: toolchain.dev.openshift.com/feature/<featureName>
+func FeatureToggleAnnotationKey(featureName string) string {
+	return fmt.Sprintf("%s%s", FeatureAnnotationKeyPrefix, featureName)
+}
+
+// TODO Move to api
+const FeatureAnnotationKeyPrefix = toolchainv1alpha1.FeatureToggleNameAnnotationKey + "/"
 
 // delete deletes one cluster scoped resource owned by the user and returns 'true, nil'. If no cluster-scoped resource owned
 // by the user is found, then it returns 'false, nil'. In case of any errors 'false, error'

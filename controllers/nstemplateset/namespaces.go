@@ -237,7 +237,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 
 // Returns only objects which we need to create and filter out any objects for disabled features
 func objectsToCreate(newObjects []runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NSTemplateSet) []runtimeclient.Object {
-	objsToCreate := make([]runtimeclient.Object, len(newObjects))
+	objsToCreate := make([]runtimeclient.Object, 0, len(newObjects))
 	for _, obj := range newObjects {
 		// Check if the new object is associated with a feature toggle.
 		// If yes then ignore this object if it represents a feature or features which are not enabled for this NSTemplateSet

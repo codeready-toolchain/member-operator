@@ -1836,7 +1836,7 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	tmpls := map[string]map[string]map[string]string{
 		"advanced": {
 			"clusterresources": {
-				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerStage), test.WithParams(spacename, username)),
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerStage, clusterRbFeature1, clusterRbFeature2), test.WithParams(spacename, username)),
 				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(spacename)),
 			},
 			"dev": {
@@ -2095,6 +2095,36 @@ var (
   spec:
     timeoutSeconds: 28800 # 8 hours
   `
+	clusterRbFeature1 test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-1
+    name: ${SPACE_NAME}-feature-1
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: feature1-for-${SPACE_NAME}
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+`
+	clusterRbFeature2 test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-2
+    name: ${SPACE_NAME}-feature-2
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: feature2-for-${SPACE_NAME}
+  subjects:
+    - kind: User
+      name: ${USERNAME}
+`
 
 	spaceAdmin test.TemplateObject = `
 - apiVersion: rbac.authorization.k8s.io/v1

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/utils/strings/slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,22 +180,111 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	t.Run("should create only CRQ and set status to provisioning", func(t *testing.T) {
-		// given
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
+	t.Run("should create only CRQs and set status to provisioning", func(t *testing.T) {
+		tests := []struct {
+			name             string
+			enabledFeatures  string
+			expectedFeatures string
+		}{
+			{
+				name:            "no enabled features",
+				enabledFeatures: "",
+			},
+			{
+				name:            "feature-1 enabled",
+				enabledFeatures: "feature-1",
+			},
+			{
+				name:            "feature-1 and feature-2 enabled",
+				enabledFeatures: "feature-1,feature-2",
+			},
+			{
+				name:            "feature-1 and feature-3 enabled",
+				enabledFeatures: "feature-1,feature-3",
+			},
+			{
+				name:            "feature-2 enabled",
+				enabledFeatures: "feature-2",
+			},
+			{
+				name:            "all features enabled",
+				enabledFeatures: "feature-1,feature-2,feature-3",
+			},
+		}
+		for _, testRun := range tests {
+			t.Run(testRun.name, func(t *testing.T) {
+				// given
 
-		// when
-		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
+				// Create a NSTemplate referring to a tier with four ClusterResourceQuota objects
+				// The first one is with no feature annotation.
+				// The other three represent feature-1, feature-2 and feature-3.
+				allTierFeatures := []string{"feature-1", "feature-2", "feature-3"}
+				nsTmplSet = newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+				if testRun.enabledFeatures != "" {
+					nsTmplSet.Annotations = map[string]string{
+						toolchainv1alpha1.FeatureToggleNameAnnotationKey: testRun.enabledFeatures,
+					}
+				}
+				manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
-		// then
-		require.NoError(t, err)
-		assert.True(t, createdOrUpdated)
-		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
-			HasFinalizer().
-			HasConditions(Provisioning())
-		AssertThatCluster(t, fakeClient).
-			HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
-			HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+				t.Run("first iteration - create first resource with no feature", func(t *testing.T) {
+					// when
+
+					// Each iteration of ensure() applies a single object only (if any) and exists after that.
+					// Assuming that the controller would watch the created resources and would trigger another reconcile/ensure()
+					// to apply all the objects one by one.
+					// So the first iteration always creates the first ClusterResourceQuota with no feature only.
+					// Even if the features are enabled.
+					createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
+
+					// then
+					require.NoError(t, err)
+					assert.True(t, createdOrUpdated)
+					AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+						HasFinalizer().
+						HasConditions(Provisioning())
+					AssertThatCluster(t, fakeClient).
+						HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
+						HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+						HasNoResource("feature-1-for-"+spacename, &quotav1.ClusterResourceQuota{}).
+						HasNoResource("feature-2-for-"+spacename, &quotav1.ClusterResourceQuota{}).
+						HasNoResource("feature-3-for-"+spacename, &quotav1.ClusterResourceQuota{})
+
+					// Now, for each enabled feature, do another iteration to make sure the corresponding objects are created
+					if testRun.enabledFeatures != "" {
+						enabledFeatures := strings.Split(testRun.enabledFeatures, ",")
+						expectedFeatureToBeAlreadyCreated := make([]string, 0)
+						for _, feature := range enabledFeatures {
+							expectedFeatureToBeAlreadyCreated = append(expectedFeatureToBeAlreadyCreated, feature)
+							t.Run(fmt.Sprintf("next iteration - create resource for feature %s", feature), func(t *testing.T) {
+								// when
+								createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
+
+								// then
+								require.NoError(t, err)
+								assert.True(t, createdOrUpdated)
+								AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+									HasFinalizer().
+									HasConditions(Provisioning())
+								clusterAssertion := AssertThatCluster(t, fakeClient).
+									HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+									HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{})
+								// Check all expected features which should be already created by this and previous iterations
+								for _, expectedFeature := range expectedFeatureToBeAlreadyCreated {
+									clusterAssertion.HasResource(fmt.Sprintf("%s-for-%s", expectedFeature, spacename), &quotav1.ClusterResourceQuota{})
+								}
+								// Check that the rest of the features are not (yet) created
+								for _, tierFeature := range allTierFeatures {
+									if !slices.Contains(expectedFeatureToBeAlreadyCreated, tierFeature) {
+										clusterAssertion.HasNoResource(fmt.Sprintf("%s-for-%s", tierFeature, spacename), &quotav1.ClusterResourceQuota{})
+									}
+								}
+							})
+						}
+					}
+				})
+			})
+		}
 	})
 
 	t.Run("should not create ClusterResource objects when the field is nil", func(t *testing.T) {

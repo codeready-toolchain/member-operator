@@ -269,7 +269,7 @@ NewObjects:
 			}
 		}
 		// Check if the new object is associated with a feature toggle.
-		// If yes then ignore this object if it represents a feature or features which are not enabled for this NSTemplateSet
+		// If yes then ignore this object if it represents a feature which is not enabled for this NSTemplateSet
 		if !shouldCreate(newObject, nsTmplSet) {
 			continue NewObjects
 		}

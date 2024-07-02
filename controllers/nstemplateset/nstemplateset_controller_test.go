@@ -1614,6 +1614,14 @@ func withoutFinalizer() nsTmplSetOption {
 	}
 }
 
+func withNSTemplateSetFeatureAnnotation(feature string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Annotations = map[string]string{
+			toolchainv1alpha1.FeatureToggleNameAnnotationKey: feature,
+		}
+	}
+}
+
 func withDeletionTs() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		deletionTS := metav1.Now()
@@ -1811,6 +1819,22 @@ func withLabels(labels map[string]string) objectMetaOption {
 	}
 }
 
+func withFeatureAnnotation(feature string) objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		meta.Annotations = map[string]string{
+			toolchainv1alpha1.FeatureToggleNameAnnotationKey: feature,
+		}
+		return meta
+	}
+}
+
+func withName(name string) objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		meta.Name = name
+		return meta
+	}
+}
+
 func withTemplateRefUsingRevision(revision string) objectMetaOption {
 	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
 		meta.Labels[toolchainv1alpha1.TemplateRefLabelKey] = NewTierTemplateName(tier, typeName, revision)
@@ -1836,7 +1860,7 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 	tmpls := map[string]map[string]map[string]string{
 		"advanced": {
 			"clusterresources": {
-				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, clusterTektonRb, idlerDev, idlerStage), test.WithParams(spacename, username)),
+				"abcde11": test.CreateTemplate(test.WithObjects(advancedCrq, crqFeature1, crqFeature2, crqFeature3, clusterTektonRb, idlerDev, idlerStage), test.WithParams(spacename, username)),
 				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(spacename)),
 			},
 			"dev": {
@@ -2042,6 +2066,58 @@ var (
         openshift.io/requester: ${SPACE_NAME}
     labels: null
   `
+	crqFeature1 test.TemplateObject = `
+- apiVersion: quota.openshift.io/v1
+  kind: ClusterResourceQuota
+  metadata:
+    name: feature-1-for-${SPACE_NAME}
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-1
+  spec:
+    quota:
+      hard:
+        limits.cpu: 2000m
+        limits.memory: 10Gi
+    selector:
+      annotations:
+        openshift.io/requester: ${SPACE_NAME}
+    labels: null
+  `
+	crqFeature2 test.TemplateObject = `
+- apiVersion: quota.openshift.io/v1
+  kind: ClusterResourceQuota
+  metadata:
+    name: feature-2-for-${SPACE_NAME}
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-2
+  spec:
+    quota:
+      hard:
+        limits.cpu: 2000m
+        limits.memory: 10Gi
+    selector:
+      annotations:
+        openshift.io/requester: ${SPACE_NAME}
+    labels: null
+  `
+	crqFeature3 test.TemplateObject = `
+- apiVersion: quota.openshift.io/v1
+  kind: ClusterResourceQuota
+  metadata:
+    name: feature-3-for-${SPACE_NAME}
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-3
+  spec:
+    quota:
+      hard:
+        limits.cpu: 2000m
+        limits.memory: 10Gi
+    selector:
+      annotations:
+        openshift.io/requester: ${SPACE_NAME}
+    labels: null
+  `
+
 	teamCrq test.TemplateObject = `
 - apiVersion: quota.openshift.io/v1
   kind: ClusterResourceQuota

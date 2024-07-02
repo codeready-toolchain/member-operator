@@ -222,7 +222,12 @@ CurrentObjects:
 		// check if the object should still exist and should be updated
 		for _, newObject := range newObjs {
 			if newObject.GetName() == currentObject.GetName() {
-				// is found then let's check if we need to update it
+				// is found then let's check if the object represents a feature and if yes then the feature is still enabled
+				if !shouldCreate(newObject, nsTmplSet) {
+					break // proceed to deleting the object
+				}
+				// Either it's not a featured object or the feature is still enabled
+				// Do we need to update it?
 				if !isUpToDate(currentObject, newObject, tierTemplate) {
 					logger.Info("updating cluster resource")
 					// let's update it

@@ -543,6 +543,29 @@ func TestDeleteClusterResources(t *testing.T) {
 			HasNoResource("for-empty", &quotav1.ClusterResourceQuota{})
 	})
 
+	t.Run("delete ClusterResourceQuota for enabled feature", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName,
+			spacename,
+			"advanced",
+			withNamespaces("abcde11", "dev", "code"),
+			withDeletionTs(),
+			withClusterResources("abcde11"),
+			withNSTemplateSetFeatureAnnotation("feature-1"))
+		crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-1"))
+
+		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
+
+		// when
+		deleted, err := manager.delete(ctx, nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, deleted)
+		AssertThatCluster(t, cl).
+			HasNoResource(crq.Name, &quotav1.ClusterResourceQuota{})
+	})
+
 	t.Run("should not do anything when there is nothing to be deleted", func(t *testing.T) {
 		// given
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet)
@@ -808,6 +831,73 @@ func TestPromoteClusterResources(t *testing.T) {
 			})
 		})
 
+		t.Run("upgrade from team to advanced with enabled features by updating existing CRQ", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName,
+				spacename,
+				"advanced",
+				withClusterResources("abcde11"),
+				withNSTemplateSetFeatureAnnotation("feature-1"))
+			devNs := newNamespace("team", spacename, "dev")
+			crq := newClusterResourceQuota(spacename, "team")
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, devNs)
+
+			// when
+			updated, err := manager.ensure(ctx, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"),
+					WithLabel("toolchain.dev.openshift.com/tier", "advanced"),
+					Containing(`"limits.cpu":"2","limits.memory":"10Gi"`)).
+				HasNoResource("feature-1-for-"+spacename, &quotav1.ClusterResourceQuota{})
+
+			t.Run("upgrade from team to advanced by creating featured CRQ since regular CRQ is already created", func(t *testing.T) {
+				// when
+				updated, err := manager.ensure(ctx, nsTmplSet)
+
+				// then
+				require.NoError(t, err)
+				assert.True(t, updated)
+				AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
+					HasFinalizer().
+					HasConditions(Updating())
+				AssertThatCluster(t, cl).
+					HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
+					HasResource("feature-1-for-"+spacename, &quotav1.ClusterResourceQuota{})
+			})
+		})
+
+		t.Run("downgrade from advanced to team with featured CRQ to be deleted", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName,
+				spacename,
+				"team",
+				withClusterResources("abcde11"),
+				withNSTemplateSetFeatureAnnotation("feature-1"))
+			devNs := newNamespace("advanced", spacename, "dev")
+			crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-1"), withName("feature-1-for-"+spacename))
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, devNs)
+
+			// when
+			updated, err := manager.ensure(ctx, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
+				HasFinalizer().
+				HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasNoResource(crq.Name, &quotav1.ClusterResourceQuota{})
+		})
+
 		t.Run("with another user", func(t *testing.T) {
 			// given
 			anotherNsTmplSet := newNSTmplSet(namespaceName, "another-user", "basic")
@@ -1037,6 +1127,57 @@ func TestUpdateClusterResources(t *testing.T) {
 			})
 		})
 
+		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by deleting featured CRQ", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName,
+				spacename,
+				"advanced",
+				withNamespaces("abcde12", "dev"),
+				withClusterResources("abcde12"),
+				withNSTemplateSetFeatureAnnotation("feature-1"))
+			codeNs := newNamespace("advanced", spacename, "dev")
+			crqFeatured := newClusterResourceQuota(spacename, "advanced", withName("feature-1-for-"+spacename), withFeatureAnnotation("feature-1"))
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crqFeatured, codeNs)
+
+			// when
+			updated, err := manager.ensure(ctx, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, cl).HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasNoResource(crqFeatured.Name, &quotav1.ClusterResourceQuota{})
+		})
+
+		t.Run("update from abcde12 revision to abcde11 by restoring featured CRQ", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName,
+				spacename,
+				"advanced",
+				withNamespaces("abcde11", "dev"),
+				withClusterResources("abcde11"),
+				withNSTemplateSetFeatureAnnotation("feature-1"))
+			codeNs := newNamespace("advanced", spacename, "dev")
+			crqFeatured := newClusterResourceQuota(spacename,
+				"advanced",
+				withName("feature-1-for-"+spacename),
+				withTemplateRefUsingRevision("abcde12"),
+				withFeatureAnnotation("feature-1"))
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crqFeatured, codeNs)
+
+			// when
+			updated, err := manager.ensure(ctx, nsTmplSet)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, updated)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, cl).HasConditions(Updating())
+			AssertThatCluster(t, cl).
+				HasResource(crqFeatured.Name, &quotav1.ClusterResourceQuota{},
+					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"))
+		})
+
 		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -1117,6 +1258,41 @@ func TestUpdateClusterResources(t *testing.T) {
 				HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"))
 		})
+	})
+}
+
+func TestDeleteFeatureFromNSTemplateSet(t *testing.T) {
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	log.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
+	spacename := "johnsmith"
+	namespaceName := "toolchain-member"
+
+	t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by deleting featured CRQ", func(t *testing.T) {
+		// given
+		nsTmplSet := newNSTmplSet(namespaceName,
+			spacename,
+			"advanced",
+			withNamespaces("abcde11", "dev"),
+			withClusterResources("abcde11"))
+		codeNs := newNamespace("advanced", spacename, "dev")
+		crqFeatured := newClusterResourceQuota(spacename, "advanced", withName("feature-1-for-"+spacename), withFeatureAnnotation("feature-1"))
+		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crqFeatured, codeNs)
+
+		// when
+		updated, err := manager.ensure(ctx, nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, updated)
+		AssertThatNSTemplateSet(t, namespaceName, spacename, cl).HasConditions(Updating())
+		AssertThatCluster(t, cl).
+			HasNoResource(crqFeatured.Name, &quotav1.ClusterResourceQuota{})
 	})
 }
 

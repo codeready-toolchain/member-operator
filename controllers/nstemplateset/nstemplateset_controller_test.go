@@ -1614,6 +1614,14 @@ func withoutFinalizer() nsTmplSetOption {
 	}
 }
 
+func withNSTemplateSetFeatureAnnotation(feature string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Annotations = map[string]string{
+			toolchainv1alpha1.FeatureToggleNameAnnotationKey: feature,
+		}
+	}
+}
+
 func withDeletionTs() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		deletionTS := metav1.Now()
@@ -1807,6 +1815,22 @@ func withLabels(labels map[string]string) objectMetaOption {
 		for k, v := range labels {
 			meta.Labels[k] = v
 		}
+		return meta
+	}
+}
+
+func withFeatureAnnotation(feature string) objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		meta.Annotations = map[string]string{
+			toolchainv1alpha1.FeatureToggleNameAnnotationKey: feature,
+		}
+		return meta
+	}
+}
+
+func withName(name string) objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		meta.Name = name
 		return meta
 	}
 }

@@ -182,9 +182,8 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 
 	t.Run("should create only CRQs and set status to provisioning", func(t *testing.T) {
 		tests := []struct {
-			name             string
-			enabledFeatures  string
-			expectedFeatures string
+			name            string
+			enabledFeatures string
 		}{
 			{
 				name:            "no enabled features",

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/utils/strings/slices"
 	"os"
+	"strings"
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -81,7 +83,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		delete(userNamespaces[1].Labels, toolchainv1alpha1.TemplateRefLabelKey)
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -96,7 +98,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "basic-stage-123"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -111,7 +113,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[0].Labels[toolchainv1alpha1.TierLabelKey] = "advanced"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -126,7 +128,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "outdated"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -143,7 +145,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		userNamespaces[1].Labels[toolchainv1alpha1.TemplateRefLabelKey] = "basic-stage-abcde21"
 
 		// when
-		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		tierTemplate, userNS, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -168,7 +170,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 		})
 
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.NoError(t, err)
@@ -185,7 +187,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.Error(t, err, "mock List error")
@@ -202,7 +204,7 @@ func TestNextNamespaceToProvisionOrUpdate(t *testing.T) {
 			return fakeClient.Client.List(ctx, list, opts...)
 		}
 		// when
-		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces)
+		_, _, found, err := manager.nextNamespaceToProvisionOrUpdate(ctx, tierTemplates, userNamespaces, nsTmplSet)
 
 		// then
 		require.Error(t, err, "mock List error")
@@ -476,6 +478,120 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 		AssertThatNamespace(t, spacename+"-stage", manager.Client).
 			DoesNotExist()
+	})
+
+	t.Run("featured inner resources created", func(t *testing.T) {
+		tests := []struct {
+			name            string
+			enabledFeatures string
+		}{
+			{
+				name:            "no enabled features",
+				enabledFeatures: "",
+			},
+			{
+				name:            "feature-1 enabled",
+				enabledFeatures: "feature-1",
+			},
+			{
+				name:            "feature-1 and feature-2 enabled",
+				enabledFeatures: "feature-1,feature-2",
+			},
+			{
+				name:            "feature-1 and feature-3 enabled",
+				enabledFeatures: "feature-1,feature-3",
+			},
+			{
+				name:            "feature-2 enabled",
+				enabledFeatures: "feature-2",
+			},
+			{
+				name:            "all features enabled",
+				enabledFeatures: "feature-1,feature-2,feature-3",
+			},
+		}
+		for _, testRun := range tests {
+			t.Run(testRun.name, func(t *testing.T) {
+				// given
+
+				// Create a NSTemplate referring to a tier with multiple RoleBinding objects
+				// The first one is with no feature annotation.
+				// The next three represent feature-1, feature-2 and feature-3.
+				allTierFeatures := []string{"feature-1", "feature-2", "feature-3"}
+				nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withConditions(Provisioning()))
+				if testRun.enabledFeatures != "" {
+					nsTmplSet.Annotations = map[string]string{
+						toolchainv1alpha1.FeatureToggleNameAnnotationKey: testRun.enabledFeatures,
+					}
+				}
+				devNS := newNamespace("", spacename, "dev") // NS exist but it is not complete yet
+				manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
+
+				t.Run("first iteration - create first resource with no feature", func(t *testing.T) {
+					// when
+
+					// Each iteration of ensure() applies a single object only (if any) and exists after that.
+					// Assuming that the controller would apply all the objects one by one.
+					// So the first iteration always creates the first RoleBinding with no feature only.
+					// Even if the features are enabled.
+					createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
+
+					// then
+					require.NoError(t, err)
+					assert.True(t, createdOrUpdated)
+					AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+						HasFinalizer().
+						HasSpecNamespaces("dev", "stage").
+						HasConditions(Provisioning())
+
+					AssertThatNamespace(t, spacename+"-dev", fakeClient).
+						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+						HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+						HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+						HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+						HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+						HasNoResource("feature-1-rb", &rbacv1.RoleBinding{}).
+						HasNoResource("feature-1-rb", &rbacv1.RoleBinding{}).
+						HasNoResource("feature-1-rb", &rbacv1.RoleBinding{})
+					AssertThatNamespace(t, spacename+"-stage", manager.Client).
+						DoesNotExist()
+
+					// Now, for each enabled feature, do another iteration to make sure the corresponding objects are created
+					if testRun.enabledFeatures != "" {
+						enabledFeatures := strings.Split(testRun.enabledFeatures, ",")
+						expectedFeatureToBeAlreadyCreated := make([]string, 0)
+						for _, feature := range enabledFeatures {
+							expectedFeatureToBeAlreadyCreated = append(expectedFeatureToBeAlreadyCreated, feature)
+							t.Run(fmt.Sprintf("next iteration - create resource for feature %s", feature), func(t *testing.T) {
+								// when
+								createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
+
+								// then
+								require.NoError(t, err)
+								assert.True(t, createdOrUpdated)
+								AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+									HasFinalizer().
+									HasSpecNamespaces("dev", "stage").
+									HasConditions(Provisioning())
+								nsAssertion := AssertThatNamespace(t, spacename+"-dev", fakeClient).
+									HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
+								// Check all expected features which should be already created by this and previous iterations
+								for _, expectedFeature := range expectedFeatureToBeAlreadyCreated {
+									nsAssertion.HasResource(fmt.Sprintf("%s-rb", expectedFeature), &rbacv1.RoleBinding{})
+								}
+								// Check that the rest of the features are not (yet) created
+								for _, tierFeature := range allTierFeatures {
+									if !slices.Contains(expectedFeatureToBeAlreadyCreated, tierFeature) {
+										nsAssertion.HasNoResource(fmt.Sprintf("%s-rb", tierFeature), &rbacv1.RoleBinding{})
+									}
+								}
+							})
+						}
+					}
+				})
+			})
+		}
 	})
 
 	t.Run("ensure inner resources for stage namespace if the dev is already provisioned", func(t *testing.T) {
@@ -1266,7 +1382,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		// when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl, nsTmplSet)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1292,7 +1408,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl, nsTmplSet)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1307,7 +1423,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl, nsTmplSet)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1331,7 +1447,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl, nsTmplSet)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1353,7 +1469,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl, nsTmplSet)
 		//then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
@@ -1367,7 +1483,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
-		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
+		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl, nsTmplSet)
 		//then
 		require.Error(t, err, "namespace doesn't have space label")
 		require.False(t, isProvisioned)

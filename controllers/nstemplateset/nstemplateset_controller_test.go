@@ -1864,7 +1864,7 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
 				"abcde12": test.CreateTemplate(test.WithObjects(advancedCrq), test.WithParams(spacename)),
 			},
 			"dev": {
-				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole, crtAdminViewRb), test.WithParams(spacename)),
+				"abcde11": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, rbFeature1, rbFeature2, rbFeature3, execPodsRole, crtAdminViewRb), test.WithParams(spacename)),
 				"abcde12": test.CreateTemplate(test.WithObjects(ns, crtAdminRb, execPodsRole), test.WithParams(spacename)),
 			},
 			"stage": {
@@ -2024,6 +2024,57 @@ var (
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
     name: crtadmin-users-view`
+
+	rbFeature1 test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: feature-1-rb
+    namespace: ${SPACE_NAME}-NSTYPE
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-1
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: somerole
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: somegroup-1`
+
+	rbFeature2 test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: feature-2-rb
+    namespace: ${SPACE_NAME}-NSTYPE
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-2
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: somerole
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: somegroup-2`
+
+	rbFeature3 test.TemplateObject = `
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    name: feature-3-rb
+    namespace: ${SPACE_NAME}-NSTYPE
+    annotations:
+      toolchain.dev.openshift.com/feature: feature-3
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: somerole
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: somegroup-3`
 
 	crtAdminViewRb test.TemplateObject = `
 - apiVersion: rbac.authorization.k8s.io/v1

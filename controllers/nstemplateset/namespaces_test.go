@@ -524,72 +524,41 @@ func TestEnsureNamespacesOK(t *testing.T) {
 						toolchainv1alpha1.FeatureToggleNameAnnotationKey: testRun.enabledFeatures,
 					}
 				}
-				devNS := newNamespace("", spacename, "dev") // NS exist but it is not complete yet
+				devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11")) // NS exist but it is not complete yet
 				manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
 
-				t.Run("first iteration - create first resource with no feature", func(t *testing.T) {
-					// when
+				// when
+				createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
 
-					// Each iteration of ensure() applies a single object only (if any) and exists after that.
-					// Assuming that the controller would apply all the objects one by one.
-					// So the first iteration always creates the first RoleBinding with no feature only.
-					// Even if the features are enabled.
-					createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
+				// then
+				require.NoError(t, err)
+				assert.True(t, createdOrUpdated)
+				AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+					HasFinalizer().
+					HasSpecNamespaces("dev", "stage").
+					HasConditions(Provisioning())
 
-					// then
-					require.NoError(t, err)
-					assert.True(t, createdOrUpdated)
-					AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
-						HasFinalizer().
-						HasSpecNamespaces("dev", "stage").
-						HasConditions(Provisioning())
+				nsAssertion := AssertThatNamespace(t, spacename+"-dev", fakeClient).
+					HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+					HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+					HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
+					HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+					HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
+					HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 
-					AssertThatNamespace(t, spacename+"-dev", fakeClient).
-						HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
-						HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
-						HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde11").
-						HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
-						HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
-						HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
-						HasNoResource("feature-1-rb", &rbacv1.RoleBinding{}).
-						HasNoResource("feature-1-rb", &rbacv1.RoleBinding{}).
-						HasNoResource("feature-1-rb", &rbacv1.RoleBinding{})
-					AssertThatNamespace(t, spacename+"-stage", manager.Client).
-						DoesNotExist()
-
-					// Now, for each enabled feature, do another iteration to make sure the corresponding objects are created
-					if testRun.enabledFeatures != "" {
-						enabledFeatures := strings.Split(testRun.enabledFeatures, ",")
-						expectedFeatureToBeAlreadyCreated := make([]string, 0)
-						for _, feature := range enabledFeatures {
-							expectedFeatureToBeAlreadyCreated = append(expectedFeatureToBeAlreadyCreated, feature)
-							t.Run(fmt.Sprintf("next iteration - create resource for feature %s", feature), func(t *testing.T) {
-								// when
-								createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
-
-								// then
-								require.NoError(t, err)
-								assert.True(t, createdOrUpdated)
-								AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
-									HasFinalizer().
-									HasSpecNamespaces("dev", "stage").
-									HasConditions(Provisioning())
-								nsAssertion := AssertThatNamespace(t, spacename+"-dev", fakeClient).
-									HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
-								// Check all expected features which should be already created by this and previous iterations
-								for _, expectedFeature := range expectedFeatureToBeAlreadyCreated {
-									nsAssertion.HasResource(fmt.Sprintf("%s-rb", expectedFeature), &rbacv1.RoleBinding{})
-								}
-								// Check that the rest of the features are not (yet) created
-								for _, tierFeature := range allTierFeatures {
-									if !slices.Contains(expectedFeatureToBeAlreadyCreated, tierFeature) {
-										nsAssertion.HasNoResource(fmt.Sprintf("%s-rb", tierFeature), &rbacv1.RoleBinding{})
-									}
-								}
-							})
-						}
+				// Check enabled feature resources
+				enabledFeatures := strings.Split(testRun.enabledFeatures, ",")
+				// Check that the rest of the resources for disabled features are not created
+				for _, feature := range allTierFeatures {
+					if slices.Contains(enabledFeatures, feature) {
+						nsAssertion.HasResource(fmt.Sprintf("%s-rb", feature), &rbacv1.RoleBinding{})
+					} else {
+						nsAssertion.HasNoResource(fmt.Sprintf("%s-rb", feature), &rbacv1.RoleBinding{})
 					}
-				})
+				}
+
+				AssertThatNamespace(t, spacename+"-stage", manager.Client).
+					DoesNotExist()
 			})
 		}
 	})
@@ -922,7 +891,7 @@ func TestPromoteNamespaces(t *testing.T) {
 
 		t.Run("upgrade dev to advanced tier", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withNSTemplateSetFeatureAnnotation("feature-1"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("basic", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "exec-pods", spacename)
@@ -946,12 +915,15 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
-				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+				HasResource("feature-1-rb", &rbacv1.RoleBinding{}). // the only enabled feature in this NSTemplateSet
+				HasNoResource("feature-2-rb", &rbacv1.RoleBinding{}).
+				HasNoResource("feature-3-rb", &rbacv1.RoleBinding{})
 		})
 
 		t.Run("upgrade dev to advanced tier by changing only the tier label", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withNSTemplateSetFeatureAnnotation("feature-2"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
 			devNS.Labels[toolchainv1alpha1.TierLabelKey] = "base"
@@ -976,18 +948,26 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
-				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+				HasNoResource("feature-1-rb", &rbacv1.RoleBinding{}).
+				HasResource("feature-2-rb", &rbacv1.RoleBinding{}). // the only enabled feature in this NSTemplateSet
+				HasNoResource("feature-3-rb", &rbacv1.RoleBinding{})
+
 		})
 
 		t.Run("downgrade dev to basic tier", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"))
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"), withNSTemplateSetFeatureAnnotation("feature-1"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
+			featuredRB := newRoleBinding(devNS.Name, "feature-1-rb", spacename) // existing featured RB we need to make sure gets deleted after downgrading
+			featuredRB.Annotations = map[string]string{
+				toolchainv1alpha1.FeatureToggleNameAnnotationKey: "feature-1-rb",
+			}
 			rb2 := newRoleBinding(devNS.Name, "crtadmin-view", spacename)
 			ro := newRole(devNS.Name, "exec-pods", spacename)
-			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, rb2, ro)
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, rb, featuredRB, rb2, ro)
 
 			// when
 			updated, err := manager.ensure(ctx, nsTmplSet)
@@ -1006,9 +986,9 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic").
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
-				HasNoResource("exec-pods", &rbacv1.Role{}). // role does not exist
+				HasNoResource("exec-pods", &rbacv1.Role{}).            // role does not exist
+				HasNoResource(featuredRB.Name, &rbacv1.RoleBinding{}). // the featured RB has been also deleted
 				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
-
 		})
 
 		t.Run("delete redundant namespace while upgrading tier", func(t *testing.T) {
@@ -1037,7 +1017,7 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "basic-dev-abcde11"). // not upgraded yet
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 
-			t.Run("uprade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
+			t.Run("upgrade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
 
 				// when - should upgrade the -dev namespace
 				updated, err := manager.ensure(ctx, nsTmplSet)
@@ -1140,10 +1120,14 @@ func TestUpdateNamespaces(t *testing.T) {
 
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"))
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"), withNSTemplateSetFeatureAnnotation("feature-1"))
 			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
 			ro := newRole(devNS.Name, "exec-pods", spacename)
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
+			featuredRB := newRoleBinding(devNS.Name, "feature-1-rb", spacename) // existing featured RB we need to make sure gets deleted after updating since the new template doesn't have this featured object
+			featuredRB.Annotations = map[string]string{
+				toolchainv1alpha1.FeatureToggleNameAnnotationKey: "feature-1-rb",
+			}
 			rbacRb := newRoleBinding(devNS.Name, "crtadmin-view", spacename)
 			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rbacRb)
 
@@ -1165,12 +1149,13 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasResource("exec-pods", &rbacv1.Role{}).
-				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
+				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{}).
+				HasNoResource(featuredRB.Name, &rbacv1.RoleBinding{}) // The featured object is gone
 		})
 
 		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"))
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withNSTemplateSetFeatureAnnotation("feature-1"))
 			// create namespace (and assume it is complete since it has the expected revision number)
 			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde12"))
 			rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
@@ -1195,7 +1180,10 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasResource("exec-pods", &rbacv1.Role{}).
-				HasResource("crtadmin-view", &rbacv1.RoleBinding{})
+				HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+				HasResource("feature-1-rb", &rbacv1.RoleBinding{}). // The only featured object is present for the enabled feature
+				HasNoResource("feature-2-rb", &rbacv1.RoleBinding{}).
+				HasNoResource("feature-3-rb", &rbacv1.RoleBinding{})
 		})
 
 		t.Run("delete redundant namespace while updating revision", func(t *testing.T) {
@@ -1357,6 +1345,41 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 		})
 	})
+}
+
+func TestDisablingFeatureInNSTemplateSet(t *testing.T) {
+
+	// given
+	logger := zap.New(zap.UseDevMode(true))
+	log.SetLogger(logger)
+	ctx := log.IntoContext(context.TODO(), logger)
+	spacename := "johnsmith"
+	namespaceName := "toolchain-member"
+
+	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
+	t.Cleanup(restore)
+
+	nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"))
+	devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
+	featuredRB := newRoleBinding(devNS.Name, "feature-1-rb", spacename) // existing featured RB we need to make sure gets deleted
+	featuredRB.Annotations = map[string]string{
+		toolchainv1alpha1.FeatureToggleNameAnnotationKey: "feature-1-rb",
+	}
+	manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, featuredRB)
+
+	// when
+	updated, err := manager.ensure(ctx, nsTmplSet)
+
+	// then
+	require.NoError(t, err)
+	assert.True(t, updated)
+	AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
+		HasFinalizer().
+		HasConditions(Updating())
+	AssertThatNamespace(t, spacename+"-dev", cl).
+		HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+		HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+		HasNoResource(featuredRB.Name, &rbacv1.RoleBinding{}) // The featured object is gone
 }
 
 func TestIsUpToDateAndProvisioned(t *testing.T) {

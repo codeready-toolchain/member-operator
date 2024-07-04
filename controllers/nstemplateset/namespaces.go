@@ -3,7 +3,9 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/strings/slices"
 	"sort"
+	"strings"
 
 	rbac "k8s.io/api/rbac/v1"
 
@@ -189,23 +191,41 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 		return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to process template for namespace '%s'", nsName)
 	}
 
-	if currentRef, exists := namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey]; exists && currentRef != "" && currentRef != tierTemplate.templateRef {
-		logger.Info("checking obsolete namespace resources", "spacename", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
-		if err := r.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet); err != nil {
-			return err
+	// Check if we need to delete any obsolete resources
+	// First check if the namespace already has template reference meaning it's not freshly created and has not got any inner resources applied yet
+	currentRef, exists := namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey]
+	if exists {
+		// Now check if there is any featured object to be deleted in case the feature annotation does not present in the NSTemplateSet anymore
+		featureStr, _ := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+		features := strings.Split(featureStr, ",")
+		toDeleteObsoleteFeaturedObjects := false
+		for _, obj := range newObjs {
+			objFeature, found := obj.GetAnnotations()[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+			if found && !slices.Contains(features, objFeature) {
+				// This object represents a disabled feature. We need to delete obsolete objects.
+				toDeleteObsoleteFeaturedObjects = true
+				break
+			}
 		}
-		currentTierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, currentRef)
-		if err != nil {
-			return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
-		}
-		currentObjs, err := currentTierTemplate.process(r.Scheme, map[string]string{
-			SpaceName: nsTmplSet.GetName(),
-		}, template.RetainAllButNamespaces)
-		if err != nil {
-			return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to process template for TierTemplate with name '%s'", currentRef)
-		}
-		if err := deleteObsoleteObjects(ctx, r.Client, currentObjs, newObjs); err != nil {
-			return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
+		// Proceed with deleting potentially obsolete object only if there are obsolete featured objects or the current template reference is not up-to-date
+		if toDeleteObsoleteFeaturedObjects || (currentRef != "" && currentRef != tierTemplate.templateRef) {
+			logger.Info("checking obsolete namespace resources", "spacename", nsTmplSet.GetName(), "tier", nsTmplSet.Spec.TierName, "type", tierTemplate.typeName)
+			if err := r.setStatusUpdatingIfNotProvisioning(ctx, nsTmplSet); err != nil {
+				return err
+			}
+			currentTierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, currentRef)
+			if err != nil {
+				return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to retrieve current TierTemplate with name '%s'", currentRef)
+			}
+			currentObjs, err := currentTierTemplate.process(r.Scheme, map[string]string{
+				SpaceName: nsTmplSet.GetName(),
+			}, template.RetainAllButNamespaces)
+			if err != nil {
+				return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to process template for TierTemplate with name '%s'", currentRef)
+			}
+			if err := deleteObsoleteObjects(ctx, r.Client, currentObjs, newObjs, nsTmplSet); err != nil {
+				return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", nsName)
+			}
 		}
 	}
 

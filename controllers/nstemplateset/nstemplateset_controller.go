@@ -221,9 +221,10 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 }
 
 // deleteObsoleteObjects takes template objects of the current tier and of the new tier (provided as newObjects param),
-// compares their names and GVKs and deletes those ones that are in the current template but are not found in the new one.
-// return `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise
-func deleteObsoleteObjects(ctx context.Context, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object) error {
+// compares their names and GVKs and deletes those that are in the current template but are not found in the new one.
+// Also deletes objects which represent disabled features (features with no corresponding annotation in the NSTemplateSet).
+// Returns `true, nil` if an object was deleted, `false, nil`/`false, err` otherwise.
+func deleteObsoleteObjects(ctx context.Context, client runtimeclient.Client, currentObjs []runtimeclient.Object, newObjects []runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
 	logger := log.FromContext(ctx)
 	logger.Info("looking for obsolete objects", "count", len(currentObjs))
 Current:
@@ -231,7 +232,7 @@ Current:
 		objectLogger := logger.WithValues("objectName", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		objectLogger.Info("checking obsolete object", "object_namespace", currentObj.GetNamespace(), "object_name", currentObj.GetObjectKind().GroupVersionKind().Kind+"/"+currentObj.GetName())
 		for _, newObj := range newObjects {
-			if commonclient.SameGVKandName(currentObj, newObj) {
+			if shouldCreate(newObj, nsTmplSet) && commonclient.SameGVKandName(currentObj, newObj) {
 				continue Current
 			}
 		}

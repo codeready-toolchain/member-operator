@@ -1261,7 +1261,6 @@ func TestUpdateClusterResources(t *testing.T) {
 }
 
 func TestDeleteFeatureFromNSTemplateSet(t *testing.T) {
-
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -1272,27 +1271,24 @@ func TestDeleteFeatureFromNSTemplateSet(t *testing.T) {
 	spacename := "johnsmith"
 	namespaceName := "toolchain-member"
 
-	t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by deleting featured CRQ", func(t *testing.T) {
-		// given
-		nsTmplSet := newNSTmplSet(namespaceName,
-			spacename,
-			"advanced",
-			withNamespaces("abcde11", "dev"),
-			withClusterResources("abcde11"))
-		codeNs := newNamespace("advanced", spacename, "dev")
-		crqFeatured := newClusterResourceQuota(spacename, "advanced", withName("feature-1-for-"+spacename), withFeatureAnnotation("feature-1"))
-		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crqFeatured, codeNs)
+	nsTmplSet := newNSTmplSet(namespaceName,
+		spacename,
+		"advanced",
+		withNamespaces("abcde11", "dev"),
+		withClusterResources("abcde11")) // The NSTemplateSet does not have the feature annotation (anymore)
+	codeNs := newNamespace("advanced", spacename, "dev")
+	crqFeatured := newClusterResourceQuota(spacename, "advanced", withName("feature-1-for-"+spacename), withFeatureAnnotation("feature-1"))
+	manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crqFeatured, codeNs)
 
-		// when
-		updated, err := manager.ensure(ctx, nsTmplSet)
+	// when
+	updated, err := manager.ensure(ctx, nsTmplSet)
 
-		// then
-		require.NoError(t, err)
-		assert.True(t, updated)
-		AssertThatNSTemplateSet(t, namespaceName, spacename, cl).HasConditions(Updating())
-		AssertThatCluster(t, cl).
-			HasNoResource(crqFeatured.Name, &quotav1.ClusterResourceQuota{})
-	})
+	// then
+	require.NoError(t, err)
+	assert.True(t, updated)
+	AssertThatNSTemplateSet(t, namespaceName, spacename, cl).HasConditions(Updating())
+	AssertThatCluster(t, cl).
+		HasNoResource(crqFeatured.Name, &quotav1.ClusterResourceQuota{}) // The featured object is now deleted because the feature was disabled in the NSTemplateSet
 }
 
 func TestRetainObjectsOfSameGVK(t *testing.T) {

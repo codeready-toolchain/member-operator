@@ -550,8 +550,8 @@ func TestDeleteClusterResources(t *testing.T) {
 			withNamespaces("abcde11", "dev", "code"),
 			withDeletionTs(),
 			withClusterResources("abcde11"),
-			withNSTemplateSetFeatureAnnotation("feature-1"))
-		crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-1"))
+			withNSTemplateSetFeatureAnnotation("feature-2"))
+		crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-2"), withName("feature-2-for-"+spacename))
 
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 

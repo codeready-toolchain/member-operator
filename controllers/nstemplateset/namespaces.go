@@ -196,12 +196,12 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 	currentRef, exists := namespace.Labels[toolchainv1alpha1.TemplateRefLabelKey]
 	if exists {
 		// Now check if there is any featured object to be deleted in case the feature annotation does not present in the NSTemplateSet anymore
-		featureStr, _ := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
-		features := strings.Split(featureStr, ",")
 		toDeleteObsoleteFeaturedObjects := false
+		featureStr := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+		features := strings.Split(featureStr, ",")
 		for _, obj := range newObjs {
-			objFeature, found := obj.GetAnnotations()[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
-			if found && !slices.Contains(features, objFeature) {
+			objFeature, f := obj.GetAnnotations()[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+			if f && !slices.Contains(features, objFeature) {
 				// This object represents a disabled feature. We need to delete obsolete objects.
 				toDeleteObsoleteFeaturedObjects = true
 				break

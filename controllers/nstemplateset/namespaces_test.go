@@ -558,7 +558,7 @@ func TestEnsureNamespacesOK(t *testing.T) {
 				}
 
 				AssertThatNamespace(t, spacename+"-stage", manager.Client).
-					DoesNotExist()
+					DoesNotExist() // We provisioned the -dev namespace only
 			})
 		}
 	})
@@ -1129,7 +1129,7 @@ func TestUpdateNamespaces(t *testing.T) {
 				toolchainv1alpha1.FeatureToggleNameAnnotationKey: "feature-1-rb",
 			}
 			rbacRb := newRoleBinding(devNS.Name, "crtadmin-view", spacename)
-			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rbacRb)
+			manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, featuredRB, ro, rb, rbacRb)
 
 			// when
 			updated, err := manager.ensure(ctx, nsTmplSet)

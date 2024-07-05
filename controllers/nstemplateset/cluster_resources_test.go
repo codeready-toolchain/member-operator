@@ -218,7 +218,6 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 				// The first one is with no feature annotation.
 				// The other three represent feature-1, feature-2 and feature-3.
 				allTierFeatures := []string{"feature-1", "feature-2", "feature-3"}
-				nsTmplSet = newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
 				if testRun.enabledFeatures != "" {
 					nsTmplSet.Annotations = map[string]string{
 						toolchainv1alpha1.FeatureToggleNameAnnotationKey: testRun.enabledFeatures,

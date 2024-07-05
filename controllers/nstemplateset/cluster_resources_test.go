@@ -263,16 +263,15 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 							AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 								HasFinalizer().
 								HasConditions(Provisioning())
-							var clusterAssertion *ClusterAssertion
 							if testRun.enabledFeatures == "" {
-								clusterAssertion = AssertThatCluster(t, fakeClient).
+								AssertThatCluster(t, fakeClient).
 									HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
 									HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 									HasNoResource("feature-1-for-"+spacename, &quotav1.ClusterResourceQuota{}).
 									HasNoResource("feature-2-for-"+spacename, &quotav1.ClusterResourceQuota{}).
 									HasNoResource("feature-3-for-"+spacename, &quotav1.ClusterResourceQuota{})
 							} else {
-								clusterAssertion = AssertThatCluster(t, fakeClient).
+								clusterAssertion := AssertThatCluster(t, fakeClient).
 									HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 									HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{})
 								// Check all expected features which should be already created by this and previous iterations

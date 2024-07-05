@@ -196,7 +196,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 		// Now check if there is any featured object to be deleted in case the feature annotation does not present in the NSTemplateSet anymore
 		toDeleteObsoleteFeaturedObjects := false
 		featureStr := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
-		features := reallySplit(featureStr, ",")
+		features := splitCommaSeparatedList(featureStr)
 		for _, obj := range newObjs {
 			objFeature, f := obj.GetAnnotations()[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 			if f && !slices.Contains(features, objFeature) {

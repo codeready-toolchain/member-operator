@@ -99,9 +99,9 @@ func TestShouldCreate(t *testing.T) {
 }
 
 func TestReallySplit(t *testing.T) {
-	assert.Empty(t, reallySplit("", ","))
-	assert.Equal(t, strings.Split("1,2,3", ","), reallySplit("1,2,3", ","))
-	assert.Equal(t, strings.Split("1", ","), reallySplit("1", ","))
+	assert.Empty(t, splitCommaSeparatedList(""))
+	assert.Equal(t, strings.Split("1,2,3", ","), splitCommaSeparatedList("1,2,3"))
+	assert.Equal(t, strings.Split("1", ","), splitCommaSeparatedList("1"))
 }
 
 func p(s string) *string {

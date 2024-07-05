@@ -22,15 +22,15 @@ func shouldCreate(toCreate runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NS
 	if !found {
 		return false // No feature winners in the NSTemplateSet at all. Skip this object.
 	}
-	return slices.Contains(reallySplit(winners, ","), feature)
+	return slices.Contains(splitCommaSeparatedList(winners), feature)
 }
 
-// reallySplit acts exactly the same as strings.Split() but returns an empty slice for empty strings.
+// splitCommaSeparatedList acts exactly the same as strings.Split(s, ",") but returns an empty slice for empty strings.
 // To be used when, for example, we want to get an empty slice for empty comma separated list:
-// strings.Split("", ",") returns [""] while reallySplit("", ",") returns []
-func reallySplit(s, sep string) []string {
+// strings.Split("", ",") returns [""] while splitCommaSeparatedList("") returns []
+func splitCommaSeparatedList(s string) []string {
 	if len(s) == 0 {
 		return []string{}
 	}
-	return strings.Split(s, sep)
+	return strings.Split(s, ",")
 }

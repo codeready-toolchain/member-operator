@@ -82,7 +82,7 @@ func TestShouldCreate(t *testing.T) {
 		t.Run(testRun.name, func(t *testing.T) {
 			// given
 			obj := objectWithFeature(testRun.objFeature)
-			nsTmplSet := newNSTmplSet("na", "na", "na")
+			nsTmplSet := newNSTmplSet("dummy-namespace", "dummy-name", "dummy-tier")
 			if testRun.nsTemplateSetFeatures != nil {
 				nsTmplSet.Annotations = map[string]string{
 					toolchainv1alpha1.FeatureToggleNameAnnotationKey: *testRun.nsTemplateSetFeatures,

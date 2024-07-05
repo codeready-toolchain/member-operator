@@ -265,6 +265,11 @@ func (r *clusterResourcesManager) createMissing(ctx context.Context, currentObjs
 	// go through all new (expected) objects to check if all of them already exist or not
 NewObjects:
 	for _, newObject := range newObjs {
+		// Check if the new object is associated with a feature toggle.
+		// If yes then ignore this object if it represents a feature which is not enabled for this NSTemplateSet
+		if !shouldCreate(newObject, nsTmplSet) {
+			continue NewObjects
+		}
 
 		// go through current objects to check if is one of the new (expected)
 		for _, currentObject := range currentObjs {
@@ -272,11 +277,6 @@ NewObjects:
 			if newObject.GetName() == currentObject.GetName() {
 				continue NewObjects
 			}
-		}
-		// Check if the new object is associated with a feature toggle.
-		// If yes then ignore this object if it represents a feature which is not enabled for this NSTemplateSet
-		if !shouldCreate(newObject, nsTmplSet) {
-			continue NewObjects
 		}
 		// if there was no existing object found that would match with the new one, then set the status appropriately
 		namespaces, err := fetchNamespacesByOwner(ctx, r.Client, nsTmplSet.Name)

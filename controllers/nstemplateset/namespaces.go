@@ -426,7 +426,7 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ctx context.Context, ns *co
 		}
 
 		// check the names of the roles and roleBindings as well
-		// ignore featured objects if the corresponding feature is not enabled in the NSTemplateSet
+		// ignore feature-enabled objects if the corresponding feature is not enabled in the NSTemplateSet
 		for _, role := range processedRoles {
 			// It's NOT up-to-date if NOT found but should be created OR found but should NOT be created.
 			if found, err := r.containsRole(roleList.Items, role, spacename); (found != shouldCreate(role, nsTmplSet)) || err != nil {

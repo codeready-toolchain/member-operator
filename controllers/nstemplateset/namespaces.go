@@ -3,11 +3,9 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
+	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/utils/strings/slices"
 	"sort"
-	"strings"
-
-	rbac "k8s.io/api/rbac/v1"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -198,7 +196,7 @@ func (r *namespacesManager) ensureInnerNamespaceResources(ctx context.Context, n
 		// Now check if there is any featured object to be deleted in case the feature annotation does not present in the NSTemplateSet anymore
 		toDeleteObsoleteFeaturedObjects := false
 		featureStr := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
-		features := strings.Split(featureStr, ",")
+		features := reallySplit(featureStr, ",")
 		for _, obj := range newObjs {
 			objFeature, f := obj.GetAnnotations()[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 			if f && !slices.Contains(features, objFeature) {

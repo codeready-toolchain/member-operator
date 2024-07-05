@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"k8s.io/utils/strings/slices"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
@@ -21,10 +22,15 @@ func shouldCreate(toCreate runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NS
 	if !found {
 		return false // No feature winners in the NSTemplateSet at all. Skip this object.
 	}
-	for _, winner := range strings.Split(winners, ",") {
-		if winner == feature {
-			return true
-		}
+	return slices.Contains(reallySplit(winners, ","), feature)
+}
+
+// reallySplit acts exactly the same as strings.Split() but returns an empty slice for empty strings.
+// To be used when, for example, we want to get an empty slice for empty comma separated list:
+// strings.Split("", ",") returns [""] while reallySplit("", ",") returns []
+func reallySplit(s, sep string) []string {
+	if len(s) == 0 {
+		return []string{}
 	}
-	return false
+	return strings.Split(s, sep)
 }

@@ -1297,7 +1297,7 @@ func TestUpdateNamespaces(t *testing.T) {
 
 	t.Run("failure", func(t *testing.T) {
 
-		t.Run("update to abcde15 fails because it find the new template", func(t *testing.T) {
+		t.Run("update to abcde15 fails because it finds the new template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde15", "dev"))
 			devNS := newNamespace("basic", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
@@ -1321,7 +1321,7 @@ func TestUpdateNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 		})
 
-		t.Run("update from abcde15 fails because it find current template", func(t *testing.T) {
+		t.Run("update from abcde15 fails because it finds current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"))
 			devNS := newNamespace("basic", spacename, "dev", withTemplateRefUsingRevision("abcde15"))
@@ -1347,7 +1347,7 @@ func TestUpdateNamespaces(t *testing.T) {
 	})
 }
 
-func TestDisablingFeatureInNSTemplateSet(t *testing.T) {
+func TestDisablingAndEnablingFeatureInNSTemplateSet(t *testing.T) {
 
 	// given
 	logger := zap.New(zap.UseDevMode(true))
@@ -1359,27 +1359,51 @@ func TestDisablingFeatureInNSTemplateSet(t *testing.T) {
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
-	nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"))
 	devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
-	featuredRB := newRoleBinding(devNS.Name, "feature-1-rb", spacename) // existing featured RB we need to make sure gets deleted
-	featuredRB.Annotations = map[string]string{
-		toolchainv1alpha1.FeatureToggleNameAnnotationKey: "feature-1-rb",
-	}
-	manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, featuredRB)
+	ro := newRole(devNS.Name, "exec-pods", spacename)
+	rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
+	rb2 := newRoleBinding(devNS.Name, "crtadmin-view", spacename)
 
-	// when
-	updated, err := manager.ensure(ctx, nsTmplSet)
+	t.Run("disable a feature for already provisioned NSTemplateSet", func(t *testing.T) {
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"))
+		featuredRB := newRoleBinding(devNS.Name, "feature-1-rb", spacename) // existing featured RB we need to make sure gets deleted
+		featuredRB.Annotations = map[string]string{
+			toolchainv1alpha1.FeatureToggleNameAnnotationKey: "feature-1-rb",
+		}
+		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rb2, featuredRB)
 
-	// then
-	require.NoError(t, err)
-	assert.True(t, updated)
-	AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
-		HasFinalizer().
-		HasConditions(Updating())
-	AssertThatNamespace(t, spacename+"-dev", cl).
-		HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
-		HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
-		HasNoResource(featuredRB.Name, &rbacv1.RoleBinding{}) // The featured object is gone
+		// when
+		updated, err := manager.ensure(ctx, nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, updated)
+		AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
+			HasFinalizer().
+			HasConditions(Updating())
+		AssertThatNamespace(t, spacename+"-dev", cl).
+			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+			HasNoResource(featuredRB.Name, &rbacv1.RoleBinding{}) // The featured object is gone
+	})
+	t.Run("enable a feature for already provisioned NSTemplateSet", func(t *testing.T) {
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withNSTemplateSetFeatureAnnotation("feature-1"))
+		manager, cl := prepareNamespacesManager(t, nsTmplSet, devNS, ro, rb, rb2)
+
+		// when
+		updated, err := manager.ensure(ctx, nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		assert.True(t, updated)
+		AssertThatNSTemplateSet(t, namespaceName, spacename, cl).
+			HasFinalizer().
+			HasConditions(Updating())
+		AssertThatNamespace(t, spacename+"-dev", cl).
+			HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
+			HasResource("feature-1-rb", &rbacv1.RoleBinding{}) // The featured object is created now
+	})
 }
 
 func TestIsUpToDateAndProvisioned(t *testing.T) {

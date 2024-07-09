@@ -3,7 +3,7 @@ module github.com/codeready-toolchain/member-operator
 replace github.com/codeready-toolchain/toolchain-common => github.com/fbm3307/toolchain-common v0.0.0-20240704115306-a61b21af97e5
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20240620205422-a29b6c658d03
+	github.com/codeready-toolchain/api v0.0.0-20240708122235-0af5a9a178bb
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20240628050807-7f226f55a34a
 	github.com/go-logr/logr v1.2.3
 	github.com/google/go-cmp v0.5.9

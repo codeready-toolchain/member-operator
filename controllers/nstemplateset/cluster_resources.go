@@ -208,7 +208,7 @@ func (r *clusterResourcesManager) apply(ctx context.Context, nsTmplSet *toolchai
 //
 // If no resource to be updated or deleted was found then it returns 'false, nil'. In case of any errors 'false, error'
 func (r *clusterResourcesManager) updateOrDeleteRedundant(ctx context.Context, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
+	// go through all current objects, so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
 	logger := log.FromContext(ctx)
 	logger.Info("updating or deleting cluster resources")
 CurrentObjects:

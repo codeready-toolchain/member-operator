@@ -69,7 +69,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 			return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusNamespaceProvisionFailed, err, "failed to provision namespace '%s' with space roles", ns.Name)
 		}
 
-		if err := deleteObsoleteObjects(lctx, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs, nsTmplSet); err != nil {
+		if err := deleteObsoleteObjects(lctx, r.Client, lastAppliedSpaceRoleObjs, spaceRoleObjs); err != nil {
 			return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusUpdateFailed, err, "failed to delete redundant objects in namespace '%s'", ns.Name)
 		}
 

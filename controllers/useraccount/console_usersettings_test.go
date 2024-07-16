@@ -35,6 +35,47 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		// check that the configmap doesn't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith", &corev1.ConfigMap{})
 	})
+	t.Run("Role found by name and deleted", func(t *testing.T) {
+		// given
+		ctx := context.Background()
+		role := &rbac.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "user-settings-johnsmith-role",
+				Namespace: UserSettingNS,
+			},
+		}
+		cl := test.NewFakeClient(t, role)
+
+		// when
+		err := deleteResource(ctx, cl, "johnsmith", &rbac.Role{TypeMeta: metav1.TypeMeta{Kind: "Role"}})
+
+		// then
+		require.NoError(t, err)
+		// check that the configmap doesn't exist anymore
+		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith-role", &rbac.Role{})
+	})
+
+	t.Run("Rolebinding found by name and deleted", func(t *testing.T) {
+		// given
+		ctx := context.Background()
+		rb := &rbac.RoleBinding{
+			TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "user-settings-johnsmith-rolebinding",
+				Namespace: UserSettingNS,
+			},
+		}
+		cl := test.NewFakeClient(t, rb)
+
+		// when
+		err := deleteResource(ctx, cl, "johnsmith", &rbac.RoleBinding{TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"}})
+
+		// then
+		require.NoError(t, err)
+		// check that the configmap doesn't exist anymore
+		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith-rolebinding", &rbac.RoleBinding{})
+	})
+
 	t.Run("Object found by label and deletes successfully", func(t *testing.T) {
 		// given
 		cm := &corev1.ConfigMap{

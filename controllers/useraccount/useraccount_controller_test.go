@@ -424,6 +424,10 @@ func TestReconcile(t *testing.T) {
 			},
 		}
 		role := &rbac.Role{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Role",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      resourceName + "random",
 				Namespace: UserSettingNS,
@@ -434,8 +438,12 @@ func TestReconcile(t *testing.T) {
 			},
 		}
 		rb := &rbac.RoleBinding{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "RoleBinding",
+				APIVersion: "rbac.authorization.k8s.io/v1",
+			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
+				Name:      resourceName + ConsoleUserSettingsRoleBindingSuffix,
 				Namespace: UserSettingNS,
 			},
 		}

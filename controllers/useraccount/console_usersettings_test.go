@@ -51,7 +51,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// check that the configmap doesn't exist anymore
+		// check that the role doesn't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith-role", &rbac.Role{})
 	})
 
@@ -59,7 +59,6 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		// given
 		ctx := context.Background()
 		rb := &rbac.RoleBinding{
-			TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "user-settings-johnsmith-rolebinding",
 				Namespace: UserSettingNS,
@@ -72,7 +71,7 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// check that the configmap doesn't exist anymore
+		// check that the rolebinding doesn't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith-rolebinding", &rbac.RoleBinding{})
 	})
 

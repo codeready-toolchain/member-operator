@@ -9,9 +9,7 @@ import (
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/consoleplugin"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
-	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
@@ -19,8 +17,6 @@ import (
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -79,11 +75,6 @@ func main() {
 	setupLog.Info("Configuring web console plugin server ...")
 
 	runtimeScheme := runtime.NewScheme()
-	cfg, err := config.GetConfig()
-	if err != nil {
-		setupLog.Error(err, "getting config failed")
-		os.Exit(1)
-	}
 
 	if err := toolchainv1alpha1.AddToScheme(runtimeScheme); err != nil {
 		setupLog.Error(err, "adding toolchain api to scheme failed")
@@ -94,30 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cl, err := client.New(cfg, client.Options{
-		Scheme: runtimeScheme,
-	})
-	if err != nil {
-		setupLog.Error(err, "creating a new client failed")
-		os.Exit(1)
-	}
-
-	config, err := membercfg.GetConfiguration(cl)
-	if err != nil {
-		setupLog.Error(err, "Error retrieving Configuration")
-		os.Exit(1)
-	}
-
-	pluginServer := startConsolePluginService(config.WebConsolePlugin())
-
-	gracefulShutdown(gracefulTimeout, pluginServer)
-}
-
-func startConsolePluginService(config membercfg.WebConsolePluginConfig) *consoleplugin.Server {
-	consolePluginServer := consoleplugin.NewConsolePluginServer(config, setupLog)
-	consolePluginServer.Start()
-
-	return consolePluginServer
+	gracefulShutdown(gracefulTimeout)
 }
 
 func gracefulShutdown(timeout time.Duration, hs ...shutdown) {

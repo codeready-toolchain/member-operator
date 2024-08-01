@@ -148,8 +148,9 @@ func main() {
 func reloadMemberConfig(cl client.Client) context.Context {
 	ctx := ctrl.SetupSignalHandler()
 	go wait.Until(func() {
-		_, _, err := configuration.LoadLatest(cl, &toolchainv1alpha1.MemberOperatorConfig{})
-		setupLog.Error(err, "unable to load latest member config")
+		if _, _, err := configuration.LoadLatest(cl, &toolchainv1alpha1.MemberOperatorConfig{}); err != nil {
+			setupLog.Error(err, "unable to load latest member config")
+		}
 	}, 5*time.Second, ctx.Done())
 	return ctx
 }

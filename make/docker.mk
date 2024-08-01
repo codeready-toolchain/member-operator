@@ -12,7 +12,6 @@ IMAGE_PLATFORM ?= linux/amd64
 docker-image: build
 	$(Q)docker build --platform ${IMAGE_PLATFORM} -f build/Dockerfile -t ${IMAGE} .
 	$(Q)docker build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
-	$(Q)docker build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.consoleplugin -t ${CONSOLE_PLUGIN_IMAGE} .
 
 .PHONY: docker-push
 ## Push the binary image to quay.io registry
@@ -26,7 +25,6 @@ docker-push: check-namespace docker-image
 podman-image: build
 	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile -t ${IMAGE} .
 	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
-	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.consoleplugin -t ${CONSOLE_PLUGIN_IMAGE} .
 
 .PHONY: podman-push
 ## Push the binary image to quay.io registry

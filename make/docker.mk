@@ -4,7 +4,6 @@ IMAGE_TAG ?= ${GIT_COMMIT_ID_SHORT}
 IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}:${IMAGE_TAG}
 QUAY_USERNAME ?= ${QUAY_NAMESPACE}
 WEBHOOK_IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}-webhook:${IMAGE_TAG}
-CONSOLE_PLUGIN_IMAGE ?= ${TARGET_REGISTRY}/${QUAY_NAMESPACE}/${GO_PACKAGE_REPO_NAME}-console-plugin:${IMAGE_TAG}
 IMAGE_PLATFORM ?= linux/amd64
 
 .PHONY: docker-image
@@ -18,7 +17,6 @@ docker-image: build
 docker-push: check-namespace docker-image
 	$(Q)docker push ${IMAGE}
 	$(Q)docker push ${WEBHOOK_IMAGE}
-	$(Q)docker push ${CONSOLE_PLUGIN_IMAGE}
 
 .PHONY: podman-image
 ## Build the binary image
@@ -31,7 +29,6 @@ podman-image: build
 podman-push: check-namespace podman-image
 	$(Q)podman push ${IMAGE}
 	$(Q)podman push ${WEBHOOK_IMAGE}
-	$(Q)podman push ${CONSOLE_PLUGIN_IMAGE}
 
 .PHONY: check-namespace
 check-namespace:

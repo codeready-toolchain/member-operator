@@ -47,6 +47,10 @@ spec:
               autoscaler:
                 description: Keeps parameters concerned with the autoscaler
                 properties:
+                  bufferCPU:
+                    description: Represents how much CPU should be required by the
+                      autoscaler buffer
+                    type: string
                   bufferMemory:
                     description: Represents how much memory should be required by
                       the autoscaler buffer

@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
-	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -65,10 +64,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err := r.handleWebConsolePluginDeploy(ctx, crtConfig, request.Namespace); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	return reconcile.Result{}, nil
 }
 
@@ -113,22 +108,6 @@ func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Conf
 		if deleted {
 			logger.Info("Deleted previously deployed webhook app")
 		}
-	}
-	return nil
-}
-
-func (r *Reconciler) handleWebConsolePluginDeploy(ctx context.Context, cfg membercfg.Configuration, namespace string) error {
-	logger := log.FromContext(ctx)
-
-	if cfg.WebConsolePlugin().Deploy() {
-		webconsolepluginImage := os.Getenv("MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE")
-		logger.Info("(Re)Deploying web console plugin")
-		if err := consoledeploy.ConsolePlugin(ctx, r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
-			return err
-		}
-		logger.Info("(Re)Deployed web console plugin")
-	} else {
-		logger.Info("Skipping deployment of web console plugin")
 	}
 	return nil
 }

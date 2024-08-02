@@ -22,11 +22,6 @@ $(OUT_DIR)/operator:
 		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
 		-o $(OUT_DIR)/bin/member-operator-webhook \
 		cmd/webhook/main.go
-	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
-		go build ${V_FLAG} \
-		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
-		-o $(OUT_DIR)/bin/member-operator-console-plugin \
-		cmd/consoleplugin/main.go
 
 .PHONY: vendor
 vendor:
@@ -40,9 +35,6 @@ generate-assets: go-bindata
 	@echo "generating autoscaler buffer template data..."
 	@rm ./pkg/autoscaler/template_assets.go 2>/dev/null || true
 	@$(GO_BINDATA) -pkg autoscaler -o ./pkg/autoscaler/template_assets.go -nocompress -prefix deploy/autoscaler deploy/autoscaler
-	@echo "generating console plugin template data..."
-	@rm ./pkg/consoleplugin/deploy/template_assets.go 2>/dev/null || true
-	@$(GO_BINDATA) -pkg deploy -o ./pkg/consoleplugin/deploy/template_assets.go -nocompress -prefix deploy/consoleplugin deploy/consoleplugin
 
 .PHONY: verify-dependencies
 ## Runs commands to verify after the updated dependecies of toolchain-common/API(go mod replace), if the repo needs any changes to be made

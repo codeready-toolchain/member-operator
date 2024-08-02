@@ -3,7 +3,6 @@ package autoscaler
 import (
 	"context"
 	"fmt"
-
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 
@@ -17,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
-	objs, err := getTemplateObjects(s, namespace, requestsMemory, replicas)
+func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace, requestsMemory, requestsCPU string, replicas int) error {
+	objs, err := getTemplateObjects(s, namespace, requestsMemory, requestsCPU, replicas)
 	if err != nil {
 		return err
 	}
@@ -36,7 +35,7 @@ func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace,
 // Delete deletes the autoscaling buffer app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
 func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace string) (bool, error) {
-	objs, err := getTemplateObjects(s, namespace, "0", 0)
+	objs, err := getTemplateObjects(s, namespace, "0", "0", 0)
 	if err != nil {
 		return false, err
 	}
@@ -60,7 +59,7 @@ func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 	return deleted, nil
 }
 
-func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, replicas int) ([]client.Object, error) {
+func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory, requestsCPU string, replicas int) ([]client.Object, error) {
 	deployment, err := Asset("member-operator-autoscaler.yaml")
 	if err != nil {
 		return nil, err

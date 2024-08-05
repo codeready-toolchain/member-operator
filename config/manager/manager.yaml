@@ -65,8 +65,6 @@ spec:
           value: "member-operator"
         - name: MEMBER_OPERATOR_WEBHOOK_IMAGE
           value: REPLACE_MEMBER_OPERATOR_WEBHOOK_IMAGE
-        - name: MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE
-          value: REPLACE_MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE
         resources:
           requests:
             cpu: 500m

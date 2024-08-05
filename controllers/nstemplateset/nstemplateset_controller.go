@@ -57,7 +57,7 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.SpaceLabelKey))
 	build := ctrl.NewControllerManagedBy(mgr).
-		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
 		Watches(&corev1.Namespace{}, mapToOwnerByLabel).
 		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &rbac.Role{}), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{})).
 		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &rbac.RoleBinding{}), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))

@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	errs "github.com/pkg/errors"
-
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	testconfig "github.com/codeready-toolchain/toolchain-common/pkg/test/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	appsv1 "k8s.io/api/apps/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
@@ -241,6 +241,44 @@ func TestHandleWebhookDeploy(t *testing.T) {
 		require.True(t, errors.IsNotFound(err))
 	})
 
+	t.Run("webhook deployment deleted when deploy is disabled", func(t *testing.T) {
+		// given
+		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(false))
+		s := scheme.Scheme
+		err := apis.AddToScheme(s)
+		require.NoError(t, err)
+		objs, err := deploy.GetTemplateObjects(s, test.MemberOperatorNs, "test/image", []byte("asdfasdfasdf"))
+		initObjs := []client.Object{config}
+		for _, obj := range objs {
+			initObjs = append(initObjs, obj.DeepCopyObject().(client.Object))
+		}
+		require.NoError(t, err)
+		controller, cl := prepareReconcile(t, initObjs...)
+
+		actualConfig, err := membercfg.GetConfiguration(cl)
+		require.NoError(t, err)
+		ctx := log.IntoContext(context.TODO(), controller.Log)
+
+		// when
+		err = controller.handleWebhookDeploy(ctx, actualConfig, test.MemberOperatorNs)
+
+		// then
+		require.NoError(t, err)
+		for _, obj := range objs {
+			actualObject := &unstructured.Unstructured{}
+			actualObject.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+			err = cl.Get(context.TODO(), test.NamespacedName(obj.GetNamespace(), obj.GetName()), actualObject)
+			if _, found := obj.GetAnnotations()[deploy.WebhookDeploymentNoDeletionAnnotation]; found {
+				// resource should not be deleted
+				require.NoError(t, err)
+			} else {
+				// resource should be deleted
+				require.Error(t, err)
+				require.True(t, errors.IsNotFound(err))
+			}
+		}
+	})
+
 	t.Run("deployment created when webhook deploy is true", func(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Webhook().Deploy(true))
@@ -275,68 +313,6 @@ func TestHandleWebhookDeploy(t *testing.T) {
 
 		// then
 		require.EqualError(t, err, "cannot deploy webhook template: client error")
-	})
-}
-
-func TestHandleWebConsolePluginDeploy(t *testing.T) {
-	t.Run("deployment not created when webconsoleplugin deploy is false", func(t *testing.T) {
-		// given
-		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(false))
-		controller, cl := prepareReconcile(t, config)
-
-		actualConfig, err := membercfg.GetConfiguration(cl)
-		require.NoError(t, err)
-
-		ctx := log.IntoContext(context.TODO(), controller.Log)
-
-		// when
-		err = controller.handleWebConsolePluginDeploy(ctx, actualConfig, test.MemberOperatorNs)
-
-		// then
-		require.NoError(t, err)
-		actualDeployment := &appsv1.Deployment{}
-		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-console-plugin"), actualDeployment)
-		require.Error(t, err)
-		require.True(t, errors.IsNotFound(err))
-	})
-
-	t.Run("deployment created when webconsoleplugin deploy is true", func(t *testing.T) {
-		// given
-		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
-		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := membercfg.GetConfiguration(cl)
-		require.NoError(t, err)
-
-		ctx := log.IntoContext(context.TODO(), controller.Log)
-
-		// when
-		err = controller.handleWebConsolePluginDeploy(ctx, actualConfig, test.MemberOperatorNs)
-
-		// then
-		require.NoError(t, err)
-		actualDeployment := &appsv1.Deployment{}
-		err = cl.Get(context.TODO(), test.NamespacedName(test.MemberOperatorNs, "member-operator-console-plugin"), actualDeployment)
-		require.NoError(t, err)
-	})
-
-	t.Run("deployment error", func(t *testing.T) {
-		// given
-		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.WebConsolePlugin().Deploy(true))
-		controller, cl := prepareReconcile(t, config)
-		actualConfig, err := membercfg.GetConfiguration(cl)
-		require.NoError(t, err)
-
-		ctx := log.IntoContext(context.TODO(), controller.Log)
-
-		// when
-		cl.(*test.FakeClient).MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-			return fmt.Errorf("client error")
-		}
-		err = controller.handleWebConsolePluginDeploy(ctx, actualConfig, test.MemberOperatorNs)
-
-		// then
-		require.ErrorContains(t, err, "cannot deploy console plugin template")
-		require.ErrorContains(t, errs.Cause(err), "client error")
 	})
 }
 

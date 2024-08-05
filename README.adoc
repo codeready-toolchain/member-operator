@@ -14,14 +14,6 @@ Requires Go version 1.20.x (1.20.11 or higher) - download for your development e
 
 This repository uses https://github.com/golang/go/wiki/Modules[Go modules].
 
-== Building the Web Console Plugin source
-
-The web console plugin serves up some static Javascript files which have been compiled from NodeJS/React source contained in the /webconsole_source directory.
-
-The `make generate-webconsole-scripts` make target will recompile this source by starting up a container with Podman with the necessary tooling, then compile these source files, after which it will overwrite the content in /pkg/consoleplugin/contentserver/static with the newly compiled code.
-
-After executing this target the updated files should be committed to the repo.
-
 == Development
 
 The dev.mk targets in the toolchain-e2e repository can be used to build and deploy the host and member operators for development, or follow the guide - https://github.com/codeready-toolchain/toolchain-e2e/blob/master/dev_install.adoc

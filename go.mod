@@ -1,12 +1,12 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20240322110702-5ab3840476e9
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20240404090512-046d250d7d78
+	github.com/codeready-toolchain/api v0.0.0-20240802163003-cce070815e69
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20240802180627-14c41a99df18
 	github.com/go-logr/logr v1.2.4
 	github.com/google/go-cmp v0.5.9
 	// using latest commit from 'github.com/openshift/api branch release-4.12'
-	github.com/openshift/api v0.0.0-20231117205818-971e4ba78c9a
+	github.com/openshift/api v0.0.0-20240304080513-3e8192a10b13
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf
 	github.com/stretchr/testify v1.9.0
@@ -15,18 +15,18 @@ require (
 	k8s.io/api v0.27.2
 	k8s.io/client-go v0.27.2
 	k8s.io/klog v1.0.0
-	k8s.io/klog/v2 v2.90.1
+	k8s.io/klog/v2 v2.100.1
 	k8s.io/metrics v0.25.0
 	sigs.k8s.io/controller-runtime v0.15.0
 )
 
 require (
-	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.15.1
 	k8s.io/apiextensions-apiserver v0.27.2
 	k8s.io/apimachinery v0.27.2
 	k8s.io/kubectl v0.24.0
-	k8s.io/utils v0.0.0-20230209194617-a36077c30491
+	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -46,7 +46,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-logr/zapr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
-	github.com/go-openapi/jsonreference v0.20.1 // indirect
+	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -54,8 +54,7 @@ require (
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-github/v52 v52.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/h2non/parth v0.0.0-20190131123155-b4df798d6542 // indirect
 	github.com/huandu/xstrings v1.3.1 // indirect
@@ -81,7 +80,7 @@ require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
@@ -100,8 +99,9 @@ require (
 )
 
 replace (
-	github.com/codeready-toolchain/api v0.0.0-20240322110702-5ab3840476e9 => github.com/ranakan19/api v0.0.0-20240229043418-fb48d723557f
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20240404090512-046d250d7d78 => github.com/ranakan19/toolchain-common v0.0.0-20240405195257-0986552a3444
+	github.com/codeready-toolchain/api v0.0.0-20240802163003-cce070815e69 => github.com/ranakan19/api v0.0.0-20240802215814-2146811fbdf7
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20240802180627-14c41a99df18 => github.com/ranakan19/toolchain-common v0.0.0-20240802220420-631693e0140d
+
 )
 
 go 1.20

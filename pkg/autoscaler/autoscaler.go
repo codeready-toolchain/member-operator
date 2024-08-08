@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type BufferConfiguration interface {
@@ -26,12 +27,19 @@ func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 	if err != nil {
 		return err
 	}
+	logger := log.FromContext(ctx)
 
 	applyClient := applycl.NewApplyClient(cl)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, obj := range objs {
-		if _, err := applyClient.ApplyObject(ctx, obj); err != nil {
+		applied, err := applyClient.ApplyObject(ctx, obj)
+		if err != nil {
 			return errs.Wrap(err, "cannot deploy autoscaling buffer template")
+		}
+		if applied {
+			logger.Info("Autoscaling Buffer object created or updated", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
+		} else {
+			logger.Info("Autoscaling Buffer object has not changed", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
 		}
 	}
 	return nil

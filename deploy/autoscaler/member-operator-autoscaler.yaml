@@ -39,12 +39,16 @@ objects:
               resources:
                 requests:
                   memory: ${MEMORY}
+                  cpu: ${CPU}
                 limits:
                   memory: ${MEMORY}
+                  cpu: ${CPU}
 parameters:
   - name: NAMESPACE
     value: 'toolchain-member-operator'
   - name: MEMORY
+    required: true
+  - name: CPU
     required: true
   - name: REPLICAS
     required: true

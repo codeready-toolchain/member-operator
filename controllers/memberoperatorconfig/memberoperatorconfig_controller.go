@@ -71,7 +71,7 @@ func (r *Reconciler) handleAutoscalerDeploy(ctx context.Context, cfg membercfg.C
 	logger := log.FromContext(ctx)
 	if cfg.Autoscaler().Deploy() {
 		logger.Info("(Re)Deploying autoscaling buffer")
-		if err := autoscaler.Deploy(ctx, r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
+		if err := autoscaler.Deploy(ctx, r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler()); err != nil {
 			return err
 		}
 		logger.Info("(Re)Deployed autoscaling buffer")

@@ -3,10 +3,8 @@ package autoscaler
 import (
 	"context"
 	"fmt"
-
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
-
 	tmplv1 "github.com/openshift/api/template/v1"
 	errs "github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -15,19 +13,33 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace, requestsMemory string, replicas int) error {
-	objs, err := getTemplateObjects(s, namespace, requestsMemory, replicas)
+type BufferConfiguration interface {
+	BufferMemory() string
+	BufferCPU() string
+	BufferReplicas() int
+}
+
+func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace string, config BufferConfiguration) error {
+	objs, err := getTemplateObjects(s, namespace, config)
 	if err != nil {
 		return err
 	}
+	logger := log.FromContext(ctx)
 
 	applyClient := applycl.NewApplyClient(cl)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, obj := range objs {
-		if _, err := applyClient.ApplyObject(ctx, obj); err != nil {
+		applied, err := applyClient.ApplyObject(ctx, obj)
+		if err != nil {
 			return errs.Wrap(err, "cannot deploy autoscaling buffer template")
+		}
+		if applied {
+			logger.Info("Autoscaling Buffer object created or updated", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
+		} else {
+			logger.Info("Autoscaling Buffer object has not changed", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
 		}
 	}
 	return nil
@@ -36,7 +48,7 @@ func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace,
 // Delete deletes the autoscaling buffer app if it's deployed. Does nothing if it's not.
 // Returns true if the app was deleted.
 func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace string) (bool, error) {
-	objs, err := getTemplateObjects(s, namespace, "0", 0)
+	objs, err := getTemplateObjects(s, namespace, nil)
 	if err != nil {
 		return false, err
 	}
@@ -60,7 +72,7 @@ func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 	return deleted, nil
 }
 
-func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, replicas int) ([]client.Object, error) {
+func getTemplateObjects(s *runtime.Scheme, namespace string, config BufferConfiguration) ([]client.Object, error) {
 	deployment, err := Asset("member-operator-autoscaler.yaml")
 	if err != nil {
 		return nil, err
@@ -71,9 +83,16 @@ func getTemplateObjects(s *runtime.Scheme, namespace, requestsMemory string, rep
 		return nil, err
 	}
 
+	memory, cpu, replicas := "0", "0", 0
+	if config != nil {
+		memory = config.BufferMemory()
+		cpu = config.BufferCPU()
+		replicas = config.BufferReplicas()
+	}
 	return template.NewProcessor(s).Process(deploymentTemplate, map[string]string{
 		"NAMESPACE": namespace,
-		"MEMORY":    requestsMemory,
+		"MEMORY":    memory,
+		"CPU":       cpu,
 		"REPLICAS":  fmt.Sprintf("%d", replicas),
 	})
 }

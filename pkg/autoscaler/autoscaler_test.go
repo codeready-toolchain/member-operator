@@ -225,7 +225,7 @@ func priorityClass() string {
 }
 
 func deployment(memory, cpu string, replicas int) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%[1]s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":%[2]d,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.2","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%[3]s","cpu":"%[4]s"},"limits":{"memory":"%[3]s","cpu":"%[4]s"}}}]}}}}`, test.MemberOperatorNs, replicas, memory, cpu)
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%[1]s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":%[2]d,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.2","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%[3]s","cpu":"%[4]s"}}}]}}}}`, test.MemberOperatorNs, replicas, memory, cpu)
 }
 
 func bufferConfiguration(memory, cpu string, replicas int) BufferConfiguration {

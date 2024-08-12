@@ -40,9 +40,6 @@ objects:
                 requests:
                   memory: ${MEMORY}
                   cpu: ${CPU}
-                limits:
-                  memory: ${MEMORY}
-                  cpu: ${CPU}
 parameters:
   - name: NAMESPACE
     value: 'toolchain-member-operator'

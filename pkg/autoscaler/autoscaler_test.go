@@ -26,13 +26,13 @@ func TestGetTemplateObjects(t *testing.T) {
 	s := setScheme(t)
 
 	// when
-	objs, err := getTemplateObjects(s, test.MemberOperatorNs, "8Gi", 3)
+	objs, err := getTemplateObjects(s, test.MemberOperatorNs, bufferConfiguration("8Gi", "2000m", 3))
 
 	// then
 	require.NoError(t, err)
 	require.Len(t, objs, 2)
 	priorityClassEquals(t, priorityClass(), objs[0])
-	deploymentEquals(t, deployment("8Gi", 3), objs[1])
+	deploymentEquals(t, deployment("8Gi", "2000m", 3), objs[1])
 }
 
 func TestDeploy(t *testing.T) {
@@ -44,11 +44,11 @@ func TestDeploy(t *testing.T) {
 		fakeClient := test.NewFakeClient(t)
 
 		// when
-		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "500Mi", 10)
+		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, bufferConfiguration("500Mi", "3", 10))
 
 		// then
 		require.NoError(t, err)
-		verifyAutoscalerDeployment(t, fakeClient, "500Mi", 10)
+		verifyAutoscalerDeployment(t, fakeClient, "500Mi", "3", 10)
 	})
 
 	t.Run("when updated", func(t *testing.T) {
@@ -57,17 +57,17 @@ func TestDeploy(t *testing.T) {
 		priorityClass.Labels = map[string]string{}
 		priorityClass.Value = 100
 
-		deployment := unmarshalDeployment(t, deployment("1Gi", 5))
+		deployment := unmarshalDeployment(t, deployment("1Gi", "1", 5))
 		deployment.Spec.Template.Spec.Containers[0].Image = "some-dummy"
 
 		fakeClient := test.NewFakeClient(t, priorityClass, deployment)
 
 		// when
-		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "7Gi", 1)
+		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, bufferConfiguration("7Gi", "100m", 1))
 
 		// then
 		require.NoError(t, err)
-		verifyAutoscalerDeployment(t, fakeClient, "7Gi", 1)
+		verifyAutoscalerDeployment(t, fakeClient, "7Gi", "100m", 1)
 	})
 
 	t.Run("when creation fails", func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestDeploy(t *testing.T) {
 		}
 
 		// when
-		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, "7Gi", 3)
+		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, bufferConfiguration("7Gi", "1", 3))
 
 		// then
 		require.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")
@@ -89,7 +89,7 @@ func TestDelete(t *testing.T) {
 	// given
 	s := setScheme(t)
 	prioClass := unmarshalPriorityClass(t, priorityClass())
-	dm := unmarshalDeployment(t, deployment("100Mi", 3))
+	dm := unmarshalDeployment(t, deployment("100Mi", "100m", 3))
 	namespace := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: test.MemberOperatorNs}}
 
 	t.Run("when previously deployed", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestDelete(t *testing.T) {
 	})
 }
 
-func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient, memory string, replicas int) {
+func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient, memory, cpu string, replicas int) {
 	expPrioClass := unmarshalPriorityClass(t, priorityClass())
 	actualPrioClass := &schedulingv1.PriorityClass{}
 	AssertObject(t, fakeClient, "", "member-operator-autoscaling-buffer", actualPrioClass, func() {
@@ -161,7 +161,7 @@ func verifyAutoscalerDeployment(t *testing.T, fakeClient *test.FakeClient, memor
 		assert.Equal(t, expPrioClass.Description, actualPrioClass.Description)
 	})
 
-	expDeployment := unmarshalDeployment(t, deployment(memory, replicas))
+	expDeployment := unmarshalDeployment(t, deployment(memory, cpu, replicas))
 	actualDeployment := &appsv1.Deployment{}
 	AssertObject(t, fakeClient, test.MemberOperatorNs, "autoscaling-buffer", actualDeployment, func() {
 		assert.Equal(t, expDeployment.Labels, actualDeployment.Labels)
@@ -224,6 +224,32 @@ func priorityClass() string {
 	return `{"apiVersion":"scheduling.k8s.io/v1","kind":"PriorityClass","metadata":{"name":"member-operator-autoscaling-buffer","labels":{"toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"value":-5,"globalDefault":false,"description":"This priority class is to be used by the autoscaling buffer pod only"}`
 }
 
-func deployment(memory string, replicas int) string {
-	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":%d,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.2","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%s"},"limits":{"memory":"%s"}}}]}}}}`, test.MemberOperatorNs, replicas, memory, memory)
+func deployment(memory, cpu string, replicas int) string {
+	return fmt.Sprintf(`{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"autoscaling-buffer","namespace":"%[1]s","labels":{"app":"autoscaling-buffer","toolchain.dev.openshift.com/provider":"codeready-toolchain"}},"spec":{"replicas":%[2]d,"selector":{"matchLabels":{"app":"autoscaling-buffer"}},"template":{"metadata":{"labels":{"app":"autoscaling-buffer"}},"spec":{"priorityClassName":"member-operator-autoscaling-buffer","terminationGracePeriodSeconds":0,"containers":[{"name":"autoscaling-buffer","image":"gcr.io/google_containers/pause-amd64:3.2","imagePullPolicy":"IfNotPresent","resources":{"requests":{"memory":"%[3]s","cpu":"%[4]s"}}}]}}}}`, test.MemberOperatorNs, replicas, memory, cpu)
+}
+
+func bufferConfiguration(memory, cpu string, replicas int) BufferConfiguration {
+	return &bufferConfig{
+		memory:   memory,
+		cpu:      cpu,
+		replicas: replicas,
+	}
+}
+
+type bufferConfig struct {
+	memory   string
+	cpu      string
+	replicas int
+}
+
+func (b *bufferConfig) BufferMemory() string {
+	return b.memory
+}
+
+func (b *bufferConfig) BufferCPU() string {
+	return b.cpu
+}
+
+func (b *bufferConfig) BufferReplicas() int {
+	return b.replicas
 }

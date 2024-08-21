@@ -1216,7 +1216,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev", "stage"))
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return errors.New("unable to update status")
 		}
 
@@ -1256,7 +1256,7 @@ func TestReconcileProvisionFail(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
 		rb2 := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, rb, rb2)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			if nsTmpl, ok := obj.(*toolchainv1alpha1.NSTemplateSet); ok {
 				if len(nsTmpl.Status.ProvisionedNamespaces) > 0 {
 					return errors.New("unable to update provisioned namespaces list")
@@ -1372,42 +1372,16 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.Empty(t, result)
 	})
 
-	t.Run("delete when there is no finalizer", func(t *testing.T) {
-		// given an NSTemplateSet resource which is being deleted and whose finalizer was already removed
-		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withoutFinalizer(), withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "stage"))
-		r, req, _ := prepareReconcile(t, namespaceName, spacename, nsTmplSet)
-
-		// when a reconcile loop is triggered
-		_, err := r.Reconcile(context.TODO(), req)
-
-		// then
-		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
-			DoesNotHaveFinalizer() // finalizer was not added and nothing else was done
-	})
-
-	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
+	t.Run("NSTemplateSet deletion errors when namespace is not deleted in 1 min", func(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
 		nsTmplSet.SetDeletionTimestamp(&metav1.Time{Time: time.Now().Add(-61 * time.Second)})
-		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
-		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"))
+		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withFinalizer())
+		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"), withFinalizer())
 
-		r, fakeClient := prepareController(t, nsTmplSet, devNS, stageNS)
+		r, _ := prepareController(t, nsTmplSet, devNS, stageNS)
 		req := newReconcileRequest(namespaceName, spacename)
 
-		// only add deletion timestamp, but not delete
-		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-			if obj, ok := obj.(*corev1.Namespace); ok {
-				deletionTs := metav1.Now()
-				obj.DeletionTimestamp = &deletionTs
-				if err := r.Client.Update(context.TODO(), obj); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		// when
 		_, err := r.Reconcile(context.TODO(), req)
 
 		// then
@@ -1415,31 +1389,14 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	})
 
 	t.Run("NSTemplateSet not deleted until namespace is deleted", func(t *testing.T) {
-		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
+		// given an NSTemplateSet resource and 2 user namespaces ("dev" and "stage")
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))
-		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
+		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withFinalizer())
 		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"))
 
 		r, fakeClient := prepareController(t, nsTmplSet, devNS, stageNS)
 		req := newReconcileRequest(namespaceName, spacename)
 
-		// only add deletion timestamp, but not delete
-		fakeClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-			if obj, ok := obj.(*corev1.Namespace); ok {
-				if len(obj.Finalizers) == 0 {
-					deletionTs := metav1.Now()
-					obj.DeletionTimestamp = &deletionTs
-					// we need to set finalizer, otherwise, the fakeclient would delete it as soon as the deletion timestamp is set
-					obj.Finalizers = []string{"kubernetes"}
-				} else {
-					obj.Finalizers = nil
-				}
-				if err := r.Client.Update(context.TODO(), obj); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
 		// first reconcile, deletion is triggered
 		result, err := r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
@@ -1475,15 +1432,13 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			HasFinalizer().
 			HasConditions(Terminating())
 
-		// actually delete ns
+		// actually delete ns by removing finalizer
 		ns := &corev1.Namespace{}
 		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: firstNSName}, ns)
 		require.NoError(t, err)
-		err = fakeClient.Delete(context.TODO(), ns)
+		ns.SetFinalizers(nil)
+		err = fakeClient.Update(context.TODO(), ns)
 		require.NoError(t, err)
-
-		// set MockDelete to nil
-		fakeClient.MockDelete = nil //now removing the mockDelete
 
 		// deletion of firstNS would trigger another reconcile deleting secondNS
 		result, err = r.Reconcile(context.TODO(), req)
@@ -1511,33 +1466,33 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 	})
 }
 
-func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
+func prepareReconcile(t *testing.T, namespaceName, name string, initObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient) {
 	r, fakeClient := prepareController(t, initObjs...)
 	return r, newReconcileRequest(namespaceName, name), fakeClient
 }
 
-func prepareStatusManager(t *testing.T, initObjs ...runtime.Object) (*statusManager, *test.FakeClient) {
+func prepareStatusManager(t *testing.T, initObjs ...client.Object) (*statusManager, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return &statusManager{
 		APIClient: apiClient,
 	}, fakeClient
 }
 
-func prepareNamespacesManager(t *testing.T, initObjs ...runtime.Object) (*namespacesManager, *test.FakeClient) {
+func prepareNamespacesManager(t *testing.T, initObjs ...client.Object) (*namespacesManager, *test.FakeClient) {
 	statusManager, fakeClient := prepareStatusManager(t, initObjs...)
 	return &namespacesManager{
 		statusManager: statusManager,
 	}, fakeClient
 }
 
-func prepareClusterResourcesManager(t *testing.T, initObjs ...runtime.Object) (*clusterResourcesManager, *test.FakeClient) {
+func prepareClusterResourcesManager(t *testing.T, initObjs ...client.Object) (*clusterResourcesManager, *test.FakeClient) {
 	statusManager, fakeClient := prepareStatusManager(t, initObjs...)
 	return &clusterResourcesManager{
 		statusManager: statusManager,
 	}, fakeClient
 }
 
-func prepareController(t *testing.T, initObjs ...runtime.Object) (*Reconciler, *test.FakeClient) {
+func prepareController(t *testing.T, initObjs ...client.Object) (*Reconciler, *test.FakeClient) {
 	apiClient, fakeClient := prepareAPIClient(t, initObjs...)
 	return NewReconciler(apiClient), fakeClient
 }
@@ -1853,8 +1808,15 @@ func withLastAppliedSpaceRoles(nsTmplSet *toolchainv1alpha1.NSTemplateSet) objec
 	}
 }
 
-func prepareTemplateTiers(decoder runtime.Decoder) ([]runtime.Object, error) {
-	var tierTemplates []runtime.Object
+func withFinalizer() objectMetaOption {
+	return func(meta metav1.ObjectMeta, tier, typeName string) metav1.ObjectMeta {
+		meta.Finalizers = append(meta.Finalizers, toolchainv1alpha1.FinalizerName)
+		return meta
+	}
+}
+
+func prepareTemplateTiers(decoder runtime.Decoder) ([]client.Object, error) {
+	var tierTemplates []client.Object
 
 	// templates indexed by tiername / type / revision
 	tmpls := map[string]map[string]map[string]string{

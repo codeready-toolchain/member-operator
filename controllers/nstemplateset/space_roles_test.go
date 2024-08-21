@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -249,7 +248,7 @@ func TestEnsureSpaceRoles(t *testing.T) {
 	})
 }
 
-func prepareSpaceRolesManager(t *testing.T, initObjs ...runtime.Object) (*spaceRolesManager, *commontest.FakeClient) {
+func prepareSpaceRolesManager(t *testing.T, initObjs ...runtimeclient.Object) (*spaceRolesManager, *commontest.FakeClient) {
 	os.Setenv("WATCH_NAMESPACE", commontest.MemberOperatorNs)
 	statusManager, fakeClient := prepareStatusManager(t, initObjs...)
 	return &spaceRolesManager{

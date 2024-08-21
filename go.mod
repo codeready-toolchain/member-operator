@@ -5,8 +5,8 @@ require (
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20240816011540-2184e6268b4a
 	github.com/go-logr/logr v1.2.4
 	github.com/google/go-cmp v0.5.9
-	// using latest commit from 'github.com/openshift/api branch release-4.12'
-	github.com/openshift/api v0.0.0-20240304080513-3e8192a10b13
+	// using latest commit from 'github.com/openshift/api branch release-4.14'
+	github.com/openshift/api v0.0.0-20240805151103-d9c2a1dd30d2
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v1.3.3-0.20220121120056-862ef22b8cdf
 	github.com/stretchr/testify v1.9.0
@@ -16,7 +16,7 @@ require (
 	k8s.io/client-go v0.27.2
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.100.1
-	k8s.io/metrics v0.25.0
+	k8s.io/metrics v0.27.2
 	sigs.k8s.io/controller-runtime v0.15.0
 )
 

@@ -157,51 +157,15 @@ spec:
                 x-kubernetes-list-type: map
               featureToggles:
                 description: FeatureToggles holds the list of feature toggles/flags
-                  enabled for the current NSTemplateSet CR
+                  that were enabled when the NSTemplateSet CR was provisioned for
+                  the last time
                 items:
-                  description: 'FeatureToggle defines a feature toggle/flag. Each
-                    feature is supposed to have a unique name. Features are represented
-                    by kube object manifests in space and user templates. Such manifests
-                    must have an annotation which refers to the corresponding feature
-                    name. For example a manifest for a RoleBinding object in a space
-                    tier template with the following annotation: "toolchain.dev.openshift.com/feature:
-                    os-lightspeed" would refer to a feature with "os-lightspeed" name.
-                    When that template is applied for a new space then that RoleBinding
-                    object would be applied conditionally, according to its weight.'
-                  properties:
-                    name:
-                      description: A unique name of the feature
-                      type: string
-                    weight:
-                      default: 100
-                      description: 'Rollout weight of the feature. An integer between
-                        0-100. If not set then 100 is used by default. 0 means the
-                        corresponding feature should not be enabled at all, which
-                        means that corresponding template objects should not be applied
-                        at all. 100 means the feature should be always enabled (the
-                        template is always applied). The features are weighted independently
-                        of each other. For example if there are two features: - feature1,
-                        weight=5 - feature2, weight=90 And tiers (one or many) contain
-                        the following object manifests: - RoleBinding with "toolchain.dev.openshift.com/feature:
-                        feature1" annotation - ConfigMap with "toolchain.dev.openshift.com/feature:
-                        feature2" annotation Then the RoleBinding will be created
-                        for the corresponding tiers with probability of 0.05 (around
-                        5 out of every 100 spaces would have it) And the ConfigMap
-                        will be created with probability of 0.9 (around 90 out of
-                        every 100 spaces would have it)'
-                      maximum: 100
-                      minimum: 0
-                      type: integer
-                  required:
-                  - name
-                  type: object
+                  type: string
                 type: array
-                x-kubernetes-list-map-keys:
-                - name
-                x-kubernetes-list-type: map
+                x-kubernetes-list-type: atomic
               namespaces:
-                description: The namespace templates provisioned for the current NSTemplateSet
-                  CR
+                description: The namespace templates that were used last time to provision
+                  NSTemplateSet CR
                 items:
                   description: NSTemplateSetNamespace the namespace definition in
                     an NSTemplateSet resource
@@ -234,8 +198,9 @@ spec:
                 type: array
                 x-kubernetes-list-type: atomic
               spaceRoles:
-                description: the role template and the users to whom the templates
-                  was applied for the current NSTemplateSet CR
+                description: The SpaceRole template and the users to whom the template
+                  was applied for when the NSTemplateSet CR was provisioned for the
+                  last time
                 items:
                   description: NSTemplateSetSpaceRole the role template and the users
                     to whom the templates should be applied to

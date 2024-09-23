@@ -109,8 +109,8 @@ spec:
             description: NSTemplateSetStatus defines the observed state of NSTemplateSet
             properties:
               clusterResources:
-                description: the cluster resources template (for cluster-wide quotas,
-                  etc.) provisioned for the current NSTemplateSet CR
+                description: The cluster resources template (for cluster-wide quotas,
+                  etc.) that was used last time to provision the NSTemplateSet CR
                 properties:
                   templateRef:
                     description: TemplateRef The name of the TierTemplate resource

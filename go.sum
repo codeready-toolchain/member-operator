@@ -173,8 +173,8 @@ github.com/prometheus/procfs v0.9.0 h1:wzCHvIvM5SxWqYvwgVL7yJY8Lz3PKn49KQtpgMYJf
 github.com/prometheus/procfs v0.9.0/go.mod h1:+pB4zwohETzFnmlpe6yd2lSc+0/46IYZRB/chUwxUZY=
 github.com/ranakan19/api v0.0.0-20241108053314-93842107015c h1:agALJXbm/xEWKHTMWQFnfhQXR7mvXHA34PmhXTpCgHg=
 github.com/ranakan19/api v0.0.0-20241108053314-93842107015c/go.mod h1:DUq1ffy9Mbersdgji48i/cm9Y+6NMwAdAQJNlfOrPRo=
-github.com/ranakan19/toolchain-common v0.0.0-20241111042428-dac1298a0c8c h1:UPHeCGU3GQIC1sgtq+AFCr7bJB+lbAgSykiKYuKEc6Y=
-github.com/ranakan19/toolchain-common v0.0.0-20241111042428-dac1298a0c8c/go.mod h1:J9vb0EUHUsmg006rvOVNJXO/XSHXJfCut/hlBMFaBPc=
+github.com/ranakan19/toolchain-common v0.0.0-20241111060318-c3e2d61d824c h1:tp0grBkxns4xM20HbTJyc4ucHbyiJPIadRX1bvYluko=
+github.com/ranakan19/toolchain-common v0.0.0-20241111060318-c3e2d61d824c/go.mod h1:3ATGZSAA4mkyq46eh2q2CoHxu9+3VWkMdSC7hmFLo50=
 github.com/redhat-cop/operator-utils v1.3.6 h1:T+E/dxRMlFOIfqE1SAy1xFPXJXD8fKX4L7RL30N4D4w=
 github.com/redhat-cop/operator-utils v1.3.6/go.mod h1:Qou2Sxm9iAdxz1ibUTm4nQGjHNv4bU7kz42fAvK1UuU=
 github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=

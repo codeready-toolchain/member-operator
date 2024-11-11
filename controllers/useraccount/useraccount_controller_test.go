@@ -1311,7 +1311,7 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("status updated", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		fakeClient := test.NewFakeClient(t,userAcc)
+		fakeClient := test.NewFakeClient(t, userAcc)
 		reconciler := &Reconciler{
 			Client: fakeClient,
 			Scheme: s,

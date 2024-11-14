@@ -46,6 +46,10 @@ spec:
               autoscaler:
                 description: Keeps parameters concerned with the autoscaler
                 properties:
+                  bufferCPU:
+                    description: Represents how much CPU should be required by the
+                      autoscaler buffer
+                    type: string
                   bufferMemory:
                     description: Represents how much memory should be required by
                       the autoscaler buffer
@@ -145,29 +149,14 @@ spec:
                     description: Defines the timeout for each health check
                     type: string
                 type: object
-              webConsolePlugin:
-                description: WebConsolePlugin is used to configure the Web Console
-                  Plugin parameters
-                properties:
-                  deploy:
-                    description: Deploy determines whether the plugin will be deployed
-                      or not
-                    type: boolean
-                  pendoHost:
-                    description: PendoHost allows a host URL to be configured instead
-                      of communicating directly with the Pendo domain
-                    type: string
-                  pendoKey:
-                    description: PendoKey is the key value used to interact with the
-                      Pendo API
-                    type: string
-                type: object
               webhook:
                 description: Keeps parameters concerned with the webhook
                 properties:
                   deploy:
                     description: Defines the flag that determines whether to deploy
-                      the Webhook
+                      the Webhook. If the deploy flag is set to False and the Webhook
+                      was deployed previously it will be deleted by the memberoperatorconfig
+                      controller.
                     type: boolean
                   secret:
                     description: Defines all secrets related to webhook configuration

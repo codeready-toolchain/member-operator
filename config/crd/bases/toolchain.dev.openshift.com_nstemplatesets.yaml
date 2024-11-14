@@ -107,6 +107,18 @@ spec:
           status:
             description: NSTemplateSetStatus defines the observed state of NSTemplateSet
             properties:
+              clusterResources:
+                description: The cluster resources template (for cluster-wide quotas,
+                  etc.) that was used last time to provision the NSTemplateSet CR
+                properties:
+                  templateRef:
+                    description: TemplateRef The name of the TierTemplate resource
+                      which exists in the host cluster and which contains the template
+                      to use
+                    type: string
+                required:
+                - templateRef
+                type: object
               conditions:
                 description: 'Conditions is an array of current NSTemplateSet conditions
                   Supported condition types: ConditionReady'
@@ -142,6 +154,31 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              featureToggles:
+                description: FeatureToggles holds the list of feature toggles/flags
+                  that were enabled when the NSTemplateSet CR was provisioned for
+                  the last time
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+              namespaces:
+                description: The namespace templates that were used last time to provision
+                  NSTemplateSet CR
+                items:
+                  description: NSTemplateSetNamespace the namespace definition in
+                    an NSTemplateSet resource
+                  properties:
+                    templateRef:
+                      description: TemplateRef The name of the TierTemplate resource
+                        which exists in the host cluster and which contains the template
+                        to use
+                      type: string
+                  required:
+                  - templateRef
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               provisionedNamespaces:
                 description: ProvisionedNamespaces is a list of Namespaces that were
                   provisioned by the NSTemplateSet.
@@ -156,6 +193,31 @@ spec:
                     type:
                       description: Type the type of the namespace. eg. default
                       type: string
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              spaceRoles:
+                description: The SpaceRole template and the users to whom the template
+                  was applied for when the NSTemplateSet CR was provisioned for the
+                  last time
+                items:
+                  description: NSTemplateSetSpaceRole the role template and the users
+                    to whom the templates should be applied to
+                  properties:
+                    templateRef:
+                      description: TemplateRef The name of the TierTemplate resource
+                        which exists in the host cluster and which contains the template
+                        to use
+                      type: string
+                    usernames:
+                      description: Usernames the usernames to which the template applies
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  required:
+                  - templateRef
+                  - usernames
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic

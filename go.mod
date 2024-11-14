@@ -107,9 +107,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
 
-replace (
-	github.com/codeready-toolchain/api v0.0.0-20241009095520-331aa861d43b => github.com/ranakan19/api v0.0.0-20241108053314-93842107015c
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20241003135627-55e81430602b => github.com/ranakan19/toolchain-common v0.0.0-20241111060318-c3e2d61d824c
-)
-
 go 1.20

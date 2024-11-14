@@ -5,9 +5,7 @@ import (
 	"os"
 
 	"github.com/codeready-toolchain/member-operator/pkg/autoscaler"
-	consoledeploy "github.com/codeready-toolchain/member-operator/pkg/consoleplugin/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy"
-
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -66,10 +64,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err := r.handleWebConsolePluginDeploy(ctx, crtConfig, request.Namespace); err != nil {
-		return reconcile.Result{}, err
-	}
-
 	return reconcile.Result{}, nil
 }
 
@@ -77,7 +71,7 @@ func (r *Reconciler) handleAutoscalerDeploy(ctx context.Context, cfg membercfg.C
 	logger := log.FromContext(ctx)
 	if cfg.Autoscaler().Deploy() {
 		logger.Info("(Re)Deploying autoscaling buffer")
-		if err := autoscaler.Deploy(ctx, r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler().BufferMemory(), cfg.Autoscaler().BufferReplicas()); err != nil {
+		if err := autoscaler.Deploy(ctx, r.Client, r.Client.Scheme(), namespace, cfg.Autoscaler()); err != nil {
 			return err
 		}
 		logger.Info("(Re)Deployed autoscaling buffer")
@@ -107,23 +101,13 @@ func (r *Reconciler) handleWebhookDeploy(ctx context.Context, cfg membercfg.Conf
 		}
 		logger.Info("(Re)Deployed users' pods webhook")
 	} else {
-		logger.Info("Skipping deployment of users' pods webhook")
-	}
-	return nil
-}
-
-func (r *Reconciler) handleWebConsolePluginDeploy(ctx context.Context, cfg membercfg.Configuration, namespace string) error {
-	logger := log.FromContext(ctx)
-
-	if cfg.WebConsolePlugin().Deploy() {
-		webconsolepluginImage := os.Getenv("MEMBER_OPERATOR_WEBCONSOLEPLUGIN_IMAGE")
-		logger.Info("(Re)Deploying web console plugin")
-		if err := consoledeploy.ConsolePlugin(ctx, r.Client, r.Client.Scheme(), namespace, webconsolepluginImage); err != nil {
+		deleted, err := deploy.Delete(ctx, r.Client, r.Client.Scheme(), namespace)
+		if err != nil {
 			return err
 		}
-		logger.Info("(Re)Deployed web console plugin")
-	} else {
-		logger.Info("Skipping deployment of web console plugin")
+		if deleted {
+			logger.Info("Deleted previously deployed webhook app")
+		}
 	}
 	return nil
 }

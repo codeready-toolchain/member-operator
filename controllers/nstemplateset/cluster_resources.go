@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
@@ -120,7 +119,7 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
 	}
-	// go though all cluster resource kinds
+	// go through all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {
 		gvkLogger := userTierLogger.WithValues("gvk", clusterResourceKind.gvk)
 		gvkCtx := log.IntoContext(ctx, gvkLogger)
@@ -209,7 +208,7 @@ func (r *clusterResourcesManager) apply(ctx context.Context, nsTmplSet *toolchai
 //
 // If no resource to be updated or deleted was found then it returns 'false, nil'. In case of any errors 'false, error'
 func (r *clusterResourcesManager) updateOrDeleteRedundant(ctx context.Context, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	// go though all current objects so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
+	// go through all current objects, so we can compare then with the set of the requested and thus update the obsolete ones or delete redundant ones
 	logger := log.FromContext(ctx)
 	logger.Info("updating or deleting cluster resources")
 CurrentObjects:
@@ -223,7 +222,12 @@ CurrentObjects:
 		// check if the object should still exist and should be updated
 		for _, newObject := range newObjs {
 			if newObject.GetName() == currentObject.GetName() {
-				// is found then let's check if we need to update it
+				// is found then let's check if the object represents a feature and if yes then the feature is still enabled
+				if !shouldCreate(newObject, nsTmplSet) {
+					break // proceed to deleting the object
+				}
+				// Either it's not a featured object or the feature is still enabled
+				// Do we need to update it?
 				if !isUpToDate(currentObject, newObject, tierTemplate) {
 					logger.Info("updating cluster resource")
 					// let's update it
@@ -258,9 +262,14 @@ func (r *clusterResourcesManager) deleteClusterResource(ctx context.Context, nsT
 // If such a object is found, then it creates it and returns 'true, nil'. If no missing resource was found then returns 'false, nil'.
 // In case of any error 'false, error'
 func (r *clusterResourcesManager) createMissing(ctx context.Context, currentObjs []runtimeclient.Object, newObjs []runtimeclient.Object, tierTemplate *tierTemplate, nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, error) {
-	// go though all new (expected) objects to check if all of them already exist or not
+	// go through all new (expected) objects to check if all of them already exist or not
 NewObjects:
 	for _, newObject := range newObjs {
+		// Check if the new object is associated with a feature toggle.
+		// If yes then ignore this object if it represents a feature which is not enabled for this NSTemplateSet
+		if !shouldCreate(newObject, nsTmplSet) {
+			continue NewObjects
+		}
 
 		// go through current objects to check if is one of the new (expected)
 		for _, currentObject := range currentObjs {

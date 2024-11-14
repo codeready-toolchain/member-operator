@@ -3,6 +3,7 @@ package useraccount
 import (
 	"context"
 	"fmt"
+	rbac "k8s.io/api/rbac/v1"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -58,6 +59,7 @@ type Reconciler struct {
 
 //+kubebuilder:rbac:groups=user.openshift.io,resources=identities;users;useridentitymappings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;update;patch;create;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;delete;deletecollection
 
 // Reconcile reads that state of the cluster for a UserAccount object and makes changes based on the state read
 // and what is in the UserAccount.Spec
@@ -475,6 +477,13 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	logger := log.FromContext(ctx)
 	logger.Info("deleting the User resources")
 
+	//get the UID before deleting the user
+	// TO DO: this is a workaround for breaking change introduced by console with upgrade to 4.15. This remove resources created for users logging in from OIDC which don't have owner references starting from OCP 4.15 version.
+	uid := userList[0].UID
+	logger.Info(fmt.Sprintf("checking for user settings resources for the user with UID [%s] to be deleted", uid))
+	if err := r.deleteUserResources(ctx, string(uid)); err != nil {
+		return false, err
+	}
 	// Delete User associated with UserAccount
 	if err := r.Client.Delete(ctx, &userList[0]); err != nil {
 		return false, err
@@ -482,6 +491,26 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 	// Return here, as deleting the user should cause another reconcile of the UserAccount
 	logger.Info(fmt.Sprintf("deleted User resource [%s]", userList[0].Name))
 	return true, nil
+}
+
+// deleteUserResources deletes the user settings resources (configmap, role and role-binding) associated with the specified user, created for a user by Openshift Web Console.
+// This function only looks for these resources in the namespace - openshift-console-user-settings
+// Returns an error if any of the deletion operations fail.
+func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) error {
+
+	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix
+	// will have a label which will help to map the User to the User settings resources.
+
+	// Users created before that won't have that label, and we have to rely on the name of the resource being of type `user-settings-<UserUID>`,
+	// delete ConfigMap, Role and RoleBinding
+
+	if err := deleteResource(ctx, r.Client, userUID, &corev1.ConfigMap{}); err != nil {
+		return err
+	}
+	if err := deleteResource(ctx, r.Client, userUID, &rbac.Role{TypeMeta: metav1.TypeMeta{Kind: "Role"}}); err != nil {
+		return err
+	}
+	return deleteResource(ctx, r.Client, userUID, &rbac.RoleBinding{TypeMeta: metav1.TypeMeta{Kind: "RoleBinding"}})
 }
 
 // deleteIdentity deletes the Identity resources owned by the specified UserAccount.

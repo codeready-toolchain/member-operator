@@ -8,16 +8,18 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
 	"github.com/codeready-toolchain/member-operator/pkg/klog"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/mutatingwebhook"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook"
-	membercfg "github.com/codeready-toolchain/toolchain-common/pkg/configuration/memberoperatorconfig"
-
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -92,12 +94,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Calling GetConfiguration here to load the configuration and populate the cache
-	_, err = membercfg.GetConfiguration(cl)
-	if err != nil {
-		setupLog.Error(err, "getting member operator config failed")
-		os.Exit(1)
-	}
+	// keep the member cache config cache up to date
+	ctx := reloadMemberConfig(cl)
 
 	rolebindingValidator := &validatingwebhook.RoleBindingRequestValidator{
 		Client: cl,
@@ -141,7 +139,18 @@ func main() {
 	<-signalChan
 
 	setupLog.Info("Received OS shutdown signal - shutting down webhook server gracefully...")
-	if err := webhookServer.Shutdown(context.Background()); err != nil {
+	if err := webhookServer.Shutdown(ctx); err != nil {
 		setupLog.Error(err, "Unable to shutdown the webhook server")
 	}
+}
+
+// reloadMemberConfig start a goroutine that keeps the cache up to date with the latest member operator configuration
+func reloadMemberConfig(cl client.Client) context.Context {
+	ctx := ctrl.SetupSignalHandler()
+	go wait.Until(func() {
+		if _, _, err := configuration.LoadLatest(cl, &toolchainv1alpha1.MemberOperatorConfig{}); err != nil {
+			setupLog.Error(err, "unable to load latest member config")
+		}
+	}, 5*time.Second, ctx.Done())
+	return ctx
 }

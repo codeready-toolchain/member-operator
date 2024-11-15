@@ -22,13 +22,11 @@ import (
 
 	"github.com/google/uuid"
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -488,16 +486,13 @@ func TestReconcile(t *testing.T) {
 		cfg := commonconfig.NewMemberOperatorConfigWithReset(t)
 
 		mockCallsCounter := new(int)
-		userAcc := newUserAccount(username, userID)
-		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+		userAcc := newUserAccount(username, userID, withFinalizer())
 		r, req, cl, _ := prepareReconcile(t, username, cfg, userAcc, preexistingUser, preexistingIdentity, configMap, role, rb, noiseRole, noiseRb, noiseCm)
 
 		t.Run("first reconcile deletes identity", func(t *testing.T) {
 			// given
-			// Set the deletionTimestamp
-			now := metav1.NewTime(time.Now())
-			userAcc.DeletionTimestamp = &now
-			err = r.Client.Update(context.TODO(), userAcc)
+			// Set the deletionTimestamp by calling delete
+			err = r.Client.Delete(context.TODO(), userAcc)
 			require.NoError(t, err)
 
 			// when
@@ -651,8 +646,7 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("useraccount is being deleted and has no users or identities - delete calls returns not found - then it should just remove finalizer and be removed from the client", func(t *testing.T) {
 		// given
-		userAcc := newUserAccount(username, userID)
-		util.AddFinalizer(userAcc, toolchainv1alpha1.FinalizerName)
+		userAcc := newUserAccount(username, userID, withFinalizer())
 		r, req, cl, _ := prepareReconcile(t, username, userAcc)
 		cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 			if obj.GetObjectKind().GroupVersionKind().Kind == "UserAccount" {
@@ -660,9 +654,8 @@ func TestReconcile(t *testing.T) {
 			}
 			return cl.Client.Delete(ctx, obj, opts...)
 		}
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
+		// delete should add a deletion timestamp
+		err = r.Client.Delete(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// when
@@ -710,10 +703,8 @@ func TestReconcile(t *testing.T) {
 			HasFinalizer(toolchainv1alpha1.FinalizerName).
 			Get()
 
-		// Set the deletionTimestamp
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
+		// Set the deletionTimestamp by calling delete
+		err = r.Client.Delete(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// trigger the deletion of the first `Identity` resource
@@ -789,10 +780,8 @@ func TestReconcile(t *testing.T) {
 			HasFinalizer(toolchainv1alpha1.FinalizerName).
 			Get()
 
-		// Set the deletionTimestamp
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
+		// Set the deletionTimestamp by calling delete
+		err = r.Client.Delete(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock deleting identity failure
@@ -828,10 +817,8 @@ func TestReconcile(t *testing.T) {
 			HasFinalizer(toolchainv1alpha1.FinalizerName).
 			Get()
 
-		// Set the deletionTimestamp
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
+		// Set the deletionTimestamp by calling delete
+		err = r.Client.Delete(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock deleting identity failure
@@ -867,10 +854,8 @@ func TestReconcile(t *testing.T) {
 			HasFinalizer(toolchainv1alpha1.FinalizerName).
 			Get()
 
-		// Set the deletionTimestamp
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
+		// Set the deletionTimestamp by calling delete
+		err = r.Client.Delete(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock deleting user failure
@@ -917,10 +902,8 @@ func TestReconcile(t *testing.T) {
 			HasFinalizer(toolchainv1alpha1.FinalizerName).
 			Get()
 
-		// Set the deletionTimestamp
-		now := metav1.NewTime(time.Now())
-		userAcc.DeletionTimestamp = &now
-		err = r.Client.Update(context.TODO(), userAcc)
+		// Set the deletionTimestamp by calling delete
+		err = r.Client.Delete(context.TODO(), userAcc)
 		require.NoError(t, err)
 
 		// Mock deleting user failure
@@ -1328,7 +1311,7 @@ func TestUpdateStatus(t *testing.T) {
 	t.Run("status updated", func(t *testing.T) {
 		// given
 		userAcc := newUserAccount(username, userID)
-		fakeClient := fake.NewClientBuilder().WithObjects(userAcc).Build()
+		fakeClient := test.NewFakeClient(t, userAcc)
 		reconciler := &Reconciler{
 			Client: fakeClient,
 			Scheme: s,
@@ -1726,7 +1709,7 @@ func checkMapping(t *testing.T, user *userv1.User, identities ...*userv1.Identit
 	}
 }
 
-func prepareReconcile(t *testing.T, username string, initObjs ...runtime.Object) (*Reconciler, reconcile.Request, *test.FakeClient, membercfg.Configuration) {
+func prepareReconcile(t *testing.T, username string, initObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient, membercfg.Configuration) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)

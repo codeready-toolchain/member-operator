@@ -589,7 +589,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"))
 		devNS := newNamespace("advanced", spacename, "dev") // NS exists but is missing the resources
 		manager, fakeClient := prepareNamespacesManager(t, nsTmplSet, devNS)
-		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return errors.New("unable to update NSTmplSet")
 		}
 
@@ -752,6 +752,7 @@ func TestDeleteNamespace(t *testing.T) {
 		// given namespace with deletion timestamp
 		timeStamp := metav1.Now()
 		deletedNS := codeNS.DeepCopy()
+		deletedNS.Finalizers = []string{toolchainv1alpha1.FinalizerName}
 		deletedNS.DeletionTimestamp = &timeStamp
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, deletedNS)
 

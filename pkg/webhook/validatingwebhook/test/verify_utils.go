@@ -12,9 +12,9 @@ import (
 func VerifyRequestBlocked(t *testing.T, response []byte, msg string, UID string) {
 	reviewResponse := toReviewResponse(t, response)
 	assert.False(t, reviewResponse.Allowed)
-	assert.NotEmpty(t, reviewResponse.Result)
-	assert.Contains(t, reviewResponse.Result.Message, msg)
 	assert.Equal(t, UID, string(reviewResponse.UID))
+	require.NotEmpty(t, reviewResponse.Result)
+	assert.Contains(t, reviewResponse.Result.Message, msg)
 }
 
 func VerifyRequestAllowed(t *testing.T, response []byte, UID string) {

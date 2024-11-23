@@ -6,13 +6,9 @@ import (
 	"io"
 	"net/http"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-
-	userv1 "github.com/openshift/api/user/v1"
 	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,17 +48,6 @@ func (v VMRequestValidator) validate(ctx context.Context, body []byte) []byte {
 		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
 	}
 
-	//check if the requesting user is a sandbox user
-	requestingUser := &userv1.User{}
-	err := v.Client.Get(ctx, types.NamespacedName{
-		Name: admReview.Request.UserInfo.Username,
-	}, requestingUser)
-
-	if err != nil {
-		log.Error(err, "unable to find the user requesting creation of the VM resource", "username", admReview.Request.UserInfo.Username)
-		return denyAdmissionRequest(admReview, errors.New("unable to find the user requesting the creation of the VM resource"))
-	}
-
 	unstructuredRequestObj := &unstructured.Unstructured{}
 	if err := unstructuredRequestObj.UnmarshalJSON(admReview.Request.Object.Raw); err != nil {
 		log.Error(err, "unable to check runStrategy in VirtualMachine", "VirtualMachine", unstructuredRequestObj)
@@ -74,7 +59,7 @@ func (v VMRequestValidator) validate(ctx context.Context, body []byte) []byte {
 		log.Error(err, "failed to unmarshal VirtualMachine json object", "AdmissionReview", admReview)
 		return denyAdmissionRequest(admReview, errors.New("failed to validate VirtualMachine request"))
 	}
-	if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue && hasRunStrategy {
+	if hasRunStrategy {
 		log.Info("sandbox user is trying to create a VM with RunStrategy configured", "AdmissionReview", admReview) // not allowed because it interferes with the Dev Sandbox Idler
 		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed"))
 	}

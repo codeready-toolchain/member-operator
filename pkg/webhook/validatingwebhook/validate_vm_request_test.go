@@ -2,14 +2,12 @@ package validatingwebhook
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"text/template"
 
-	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/webhook/validatingwebhook/test"
 
 	userv1 "github.com/openshift/api/user/v1"
@@ -20,7 +18,7 @@ import (
 )
 
 func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
-	v := newVMRequestValidator(t, "johnsmith", true)
+	v := newVMRequestValidator(t, "johnsmith")
 	// given
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
 	defer ts.Close()
@@ -41,11 +39,11 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 func TestValidateVMAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create a VM resource with RunStrategy is denied", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith", true)
+		v := newVMRequestValidator(t, "johnsmith")
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)
 
 		// when
-		response := v.validate(context.TODO(), req)
+		response := v.validate(req)
 
 		// then
 		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
@@ -53,47 +51,23 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 	t.Run("sandbox user trying to update a VM resource with RunStrategy is denied", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith", true)
+		v := newVMRequestValidator(t, "johnsmith")
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)
 
 		// when
-		response := v.validate(context.TODO(), req)
+		response := v.validate(req)
 
 		// then
 		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
-	t.Run("non-sandbox user trying to create a VM resource with RunStrategy is allowed", func(t *testing.T) {
-		// given
-		v := newVMRequestValidator(t, "other", false)
-		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "other"}, createVMWithRunStrategyJSONTmpl)
-
-		// when
-		response := v.validate(context.TODO(), req)
-
-		// then
-		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
-	})
-
-	t.Run("non-sandbox user trying to update a VM resource with RunStrategy is allowed", func(t *testing.T) {
-		// given
-		v := newVMRequestValidator(t, "other", false)
-		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "other"}, createVMWithRunStrategyJSONTmpl)
-
-		// when
-		response := v.validate(context.TODO(), req)
-
-		// then
-		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
-	})
-
 	t.Run("sandbox user trying to create a VM resource without RunStrategy is allowed", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith", true)
+		v := newVMRequestValidator(t, "johnsmith")
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)
 
 		// when
-		response := v.validate(context.TODO(), req)
+		response := v.validate(req)
 
 		// then
 		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
@@ -101,11 +75,11 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith", true)
+		v := newVMRequestValidator(t, "johnsmith")
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)
 
 		// when
-		response := v.validate(context.TODO(), req)
+		response := v.validate(req)
 
 		// then
 		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
@@ -113,7 +87,7 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 }
 
-func newVMRequestValidator(t *testing.T, username string, isSandboxUser bool) *VMRequestValidator {
+func newVMRequestValidator(t *testing.T, username string) *VMRequestValidator {
 	s := scheme.Scheme
 	err := userv1.Install(s)
 	require.NoError(t, err)
@@ -123,11 +97,6 @@ func newVMRequestValidator(t *testing.T, username string, isSandboxUser bool) *V
 		},
 	}
 
-	if isSandboxUser {
-		testUser.Labels = map[string]string{
-			toolchainv1alpha1.ProviderLabelKey: toolchainv1alpha1.ProviderLabelValue,
-		}
-	}
 	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(testUser).Build()
 	return &VMRequestValidator{
 		Client: cl,

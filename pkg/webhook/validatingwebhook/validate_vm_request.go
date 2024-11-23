@@ -1,7 +1,6 @@
 package validatingwebhook
 
 import (
-	"context"
 	"html"
 	"io"
 	"net/http"
@@ -30,7 +29,7 @@ func (v VMRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Reques
 		respBody = []byte("unable to read the body of the request")
 	} else {
 		// validate the request
-		respBody = v.validate(r.Context(), body)
+		respBody = v.validate(body)
 		w.WriteHeader(http.StatusOK)
 	}
 	if _, err := io.WriteString(w, string(respBody)); err != nil {
@@ -38,7 +37,7 @@ func (v VMRequestValidator) HandleValidate(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (v VMRequestValidator) validate(ctx context.Context, body []byte) []byte {
+func (v VMRequestValidator) validate(body []byte) []byte {
 	log.Info("incoming request", "body", string(body))
 	admReview := admissionv1.AdmissionReview{}
 	if _, _, err := deserializer.Decode(body, nil, &admReview); err != nil {

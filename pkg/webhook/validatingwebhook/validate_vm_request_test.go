@@ -23,66 +23,62 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
 	defer ts.Close()
 
-	// when
-	resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)))
-
-	// then
-	require.NoError(t, err)
-	body, err := io.ReadAll(resp.Body)
-	defer func() {
-		require.NoError(t, resp.Body.Close())
-	}()
-	require.NoError(t, err)
-	test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
-}
-
-func TestValidateVMAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create a VM resource with RunStrategy is denied", func(t *testing.T) {
-		// given
-		v := newVMRequestValidator(t)
-		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)
-
 		// when
-		response := v.validate(req)
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)))
 
 		// then
-		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		require.NoError(t, err)
+		test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
 	t.Run("sandbox user trying to update a VM resource with RunStrategy is denied", func(t *testing.T) {
-		// given
-		v := newVMRequestValidator(t)
-		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)
-
 		// when
-		response := v.validate(req)
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)))
 
 		// then
-		test.VerifyRequestBlocked(t, response, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		require.NoError(t, err)
+		test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
 	t.Run("sandbox user trying to create a VM resource without RunStrategy is allowed", func(t *testing.T) {
-		// given
-		v := newVMRequestValidator(t)
-		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)
-
 		// when
-		response := v.validate(req)
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)))
 
 		// then
-		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		require.NoError(t, err)
+
+		test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
 	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) {
-		// given
-		v := newVMRequestValidator(t)
-		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)
-
 		// when
-		response := v.validate(req)
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)))
 
 		// then
-		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		defer func() {
+			require.NoError(t, resp.Body.Close())
+		}()
+		require.NoError(t, err)
+
+		test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
 }

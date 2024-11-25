@@ -180,7 +180,7 @@ objects:
     rules:
     - operations: ["CREATE"]
       apiGroups: ["kubevirt.io"]
-      apiVersions: ["v1"]
+      apiVersions: ["*"]
       resources: ["virtualmachines"]
       scope: "Namespaced"
     sideEffects: None

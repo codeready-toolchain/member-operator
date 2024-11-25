@@ -18,7 +18,7 @@ import (
 )
 
 func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
-	v := newVMRequestValidator(t, "johnsmith")
+	v := newVMRequestValidator(t)
 	// given
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
 	defer ts.Close()
@@ -39,7 +39,7 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 func TestValidateVMAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to create a VM resource with RunStrategy is denied", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith")
+		v := newVMRequestValidator(t)
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)
 
 		// when
@@ -51,7 +51,7 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 	t.Run("sandbox user trying to update a VM resource with RunStrategy is denied", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith")
+		v := newVMRequestValidator(t)
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)
 
 		// when
@@ -63,7 +63,7 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 	t.Run("sandbox user trying to create a VM resource without RunStrategy is allowed", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith")
+		v := newVMRequestValidator(t)
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)
 
 		// when
@@ -75,7 +75,7 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) {
 		// given
-		v := newVMRequestValidator(t, "johnsmith")
+		v := newVMRequestValidator(t)
 		req := newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)
 
 		// when
@@ -87,13 +87,13 @@ func TestValidateVMAdmissionRequest(t *testing.T) {
 
 }
 
-func newVMRequestValidator(t *testing.T, username string) *VMRequestValidator {
+func newVMRequestValidator(t *testing.T) *VMRequestValidator {
 	s := scheme.Scheme
 	err := userv1.Install(s)
 	require.NoError(t, err)
 	testUser := &userv1.User{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: username,
+			Name: "johnsmith",
 		},
 	}
 

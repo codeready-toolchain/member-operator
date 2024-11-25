@@ -62,7 +62,7 @@ func (v VMRequestValidator) validate(body []byte) []byte {
 		log.Info("sandbox user is trying to create a VM with RunStrategy configured", "AdmissionReview", admReview) // not allowed because it interferes with the Dev Sandbox Idler
 		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed"))
 	}
-	// the user is not creating a VM with the `runStrategy` configured, allowing the request.  
+	// the user is not creating a VM with the 'runStrategy' configured, allowing the request.
 	return allowAdmissionRequest(admReview)
 }
 

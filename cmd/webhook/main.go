@@ -107,6 +107,9 @@ func main() {
 	sspRequestValidator := &validatingwebhook.SSPRequestValidator{
 		Client: cl,
 	}
+	vmRequestValidator := &validatingwebhook.VMRequestValidator{
+		Client: cl,
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutateUserPods)
@@ -114,6 +117,7 @@ func main() {
 	mux.HandleFunc("/validate-users-rolebindings", rolebindingValidator.HandleValidate)
 	mux.HandleFunc("/validate-spacebindingrequests", spacebindingrequestValidator.HandleValidate)
 	mux.HandleFunc("/validate-ssprequests", sspRequestValidator.HandleValidate) // SSP is a CNV specific resource
+	mux.HandleFunc("/validate-vmrequests", vmRequestValidator.HandleValidate)
 
 	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)
 		Addr:    ":8443",

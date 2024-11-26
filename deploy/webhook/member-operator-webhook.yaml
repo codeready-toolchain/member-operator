@@ -180,7 +180,7 @@ objects:
     rules:
     - operations: ["CREATE"]
       apiGroups: ["kubevirt.io"]
-      apiVersions: ["v1"]
+      apiVersions: ["*"]
       resources: ["virtualmachines"]
       scope: "Namespaced"
     sideEffects: None
@@ -251,6 +251,9 @@ objects:
       namespaceSelector:
         matchLabels:
           toolchain.dev.openshift.com/provider: codeready-toolchain
+    # The users.virtualmachines.ssp.webhook.sandbox webhook validates SSP CRs,
+    # Specifically it blocks the creation/update of SSP resources by sandbox users because it should only be managed by the Virtualization operator
+    # The webhook code is available at member-operator/pkg/webhook/validatingwebhook/validate_ssp_request.go
     - name: users.virtualmachines.ssp.webhook.sandbox
       admissionReviewVersions:
         - v1
@@ -267,6 +270,33 @@ objects:
           apiGroups: ["ssp.kubevirt.io"]
           apiVersions: ["*"]
           resources: ["ssps"]
+          scope: "Namespaced"
+      sideEffects: None
+      timeoutSeconds: 5
+      reinvocationPolicy: Never
+      failurePolicy: Fail
+      namespaceSelector:
+        matchLabels:
+          toolchain.dev.openshift.com/provider: codeready-toolchain
+    # The users.virtualmachines.validating.webhook.sandbox webhook validates VirtualMachine CRs,
+    # Specifically it blocks the creation/update of VirtualMachine resources that have '.spec.RunStrategy' set because it interferes with the Idler.
+    # The webhook code is available at member-operator/pkg/webhook/validatingwebhook/validate_vm_request.go
+    - name: users.virtualmachines.validating.webhook.sandbox
+      admissionReviewVersions:
+        - v1
+      clientConfig:
+        caBundle: ${CA_BUNDLE}
+        service:
+          name: member-operator-webhook
+          namespace: ${NAMESPACE}
+          path: "/validate-vmrequests"
+          port: 443
+      matchPolicy: Equivalent
+      rules:
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: ["kubevirt.io"]
+          apiVersions: ["*"]
+          resources: ["virtualmachines"]
           scope: "Namespaced"
       sideEffects: None
       timeoutSeconds: 5

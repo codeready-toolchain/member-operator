@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -106,6 +107,9 @@ func main() {
 	sspRequestValidator := &validatingwebhook.SSPRequestValidator{
 		Client: cl,
 	}
+	vmRequestValidator := &validatingwebhook.VMRequestValidator{
+		Client: cl,
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/mutate-users-pods", mutatingwebhook.HandleMutateUserPods)
@@ -113,6 +117,7 @@ func main() {
 	mux.HandleFunc("/validate-users-rolebindings", rolebindingValidator.HandleValidate)
 	mux.HandleFunc("/validate-spacebindingrequests", spacebindingrequestValidator.HandleValidate)
 	mux.HandleFunc("/validate-ssprequests", sspRequestValidator.HandleValidate) // SSP is a CNV specific resource
+	mux.HandleFunc("/validate-vmrequests", vmRequestValidator.HandleValidate)
 
 	webhookServer := &http.Server{ //nolint:gosec //TODO: configure ReadHeaderTimeout (gosec G112)
 		Addr:    ":8443",
@@ -120,6 +125,14 @@ func main() {
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			NextProtos: []string{"http/1.1"}, // disable HTTP/2 for now
+
+			GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				cert, err := tls.LoadX509KeyPair("/etc/webhook/certs/"+cert.ServerCert, "/etc/webhook/certs/"+cert.ServerKey)
+				if err != nil {
+					return nil, fmt.Errorf("could not load TLS certs: %w", err)
+				}
+				return &cert, err
+			},
 		},
 	}
 
@@ -127,7 +140,7 @@ func main() {
 
 	go func() {
 		setupLog.Info("Listening...")
-		if err := webhookServer.ListenAndServeTLS("/etc/webhook/certs/"+cert.ServerCert, "/etc/webhook/certs/"+cert.ServerKey); err != nil {
+		if err := webhookServer.ListenAndServeTLS("", ""); err != nil {
 			setupLog.Error(err, "Listening and serving TLS failed")
 			os.Exit(1)
 		}

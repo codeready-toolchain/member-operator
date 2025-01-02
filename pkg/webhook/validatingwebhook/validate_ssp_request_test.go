@@ -54,7 +54,7 @@ func TestValidateSSPAdmissionRequest(t *testing.T) {
 	t.Run("sandbox user trying to update a SSP resource is denied", func(t *testing.T) {
 		// given
 		v := newSSPRequestValidator(t, "johnsmith", true)
-		req := newCreateSSPAdmissionRequest(t, SSPAdmReviewTmplParams{"CREATE", "johnsmith"})
+		req := newCreateSSPAdmissionRequest(t, SSPAdmReviewTmplParams{"UPDATE", "johnsmith"})
 
 		// when
 		response := v.validate(context.TODO(), req)

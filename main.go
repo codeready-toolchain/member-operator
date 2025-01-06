@@ -171,7 +171,7 @@ func main() {
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},
-		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{namespace: cache.Config{}}},
+		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{namespace: {}}},
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,

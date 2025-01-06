@@ -11,7 +11,7 @@ require (
 	go.uber.org/zap v1.26.0
 	gopkg.in/h2non/gock.v1 v1.0.14 // indirect
 	k8s.io/api v0.29.11
-	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/client-go v0.29.11
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.110.1
 	k8s.io/metrics v0.29.2
@@ -113,6 +113,4 @@ go 1.21
 replace (
 	github.com/codeready-toolchain/api v0.0.0-20241119094246-f6581d52dc80 => github.com/ranakan19/api v0.0.0-20241205210150-447a52b817de
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20241114215157-a6a85252b2f5 => github.com/ranakan19/toolchain-common v0.0.0-20210302144622-6e274ed57e69
-	k8s.io/api => k8s.io/api v0.29.2
-	k8s.io/client-go => k8s.io/client-go v0.29.2
 )

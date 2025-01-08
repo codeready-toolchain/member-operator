@@ -74,7 +74,7 @@ func TestNoMemberStatusFound(t *testing.T) {
 		getHostClusterFunc := newGetHostClusterReady
 		reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient)
 		fakeClient.MockGet = func(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
-			return fmt.Errorf(expectedErrMsg)
+			return fmt.Errorf("%s", expectedErrMsg)
 		}
 
 		// when

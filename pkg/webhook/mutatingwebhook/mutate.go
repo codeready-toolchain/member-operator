@@ -63,7 +63,7 @@ func handleMutate(logger logr.Logger, w http.ResponseWriter, r *http.Request, mu
 
 func writeResponse(logger logr.Logger, responseCode int, w http.ResponseWriter, respBody []byte) {
 	w.WriteHeader(responseCode)
-	if _, err := io.WriteString(w, string(respBody)); err != nil {
+	if _, err := io.Writer.Write(w, respBody); err != nil { //using 'io.Writer.Write' as per the static check SA6006: use io.Writer.Write instead of converting from []byte to string to use io.WriteString (staticcheck)
 		logger.Error(err, "unable to write adm review response")
 	}
 }

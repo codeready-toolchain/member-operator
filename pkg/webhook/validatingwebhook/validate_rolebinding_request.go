@@ -40,7 +40,7 @@ func (v RoleBindingRequestValidator) HandleValidate(w http.ResponseWriter, r *ht
 		respBody = v.validate(r.Context(), body)
 		w.WriteHeader(http.StatusOK)
 	}
-	if _, err := io.WriteString(w, string(respBody)); err != nil {
+	if _, err := io.Writer.Write(w, respBody); err != nil { //using 'io.Writer.Write' as per the static check SA6006: use io.Writer.Write instead of converting from []byte to string to use io.WriteString (staticcheck)
 		log.Error(err, "unable to write response")
 	}
 }

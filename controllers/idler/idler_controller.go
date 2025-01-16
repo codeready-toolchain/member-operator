@@ -454,6 +454,7 @@ func (r *Reconciler) scaleDeploymentConfigToZero(ctx context.Context, namespace 
 		return "", "", false, err
 	}
 	dc.Spec.Replicas = 0
+	dc.Spec.Paused = false
 	if err := r.AllNamespacesClient.Update(ctx, dc); err != nil {
 		return "", "", false, err
 	}

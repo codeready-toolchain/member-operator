@@ -1208,7 +1208,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	// DeploymentConfig
 	dc := &openshiftappsv1.DeploymentConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deploymentconfig", namePrefix, namespace), Namespace: namespace},
-		Spec:       openshiftappsv1.DeploymentConfigSpec{Replicas: replicas},
+		Spec:       openshiftappsv1.DeploymentConfigSpec{Replicas: replicas, Paused: true},
 	}
 	err = r.AllNamespacesClient.Create(context.TODO(), dc)
 	require.NoError(t, err)

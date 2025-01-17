@@ -176,7 +176,9 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "2fc71baf.toolchain.member.operator",
-		Client:                 client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&kmetrics.NodeMetrics{}}}},
+		// disable caching of Node metrics in the client to avoid getting the following error every second
+		// "failed to watch *v1beta1.NodeMetrics: the server does not allow this method on the requested resource (get nodes.metrics.k8s.io)"
+		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&kmetrics.NodeMetrics{}}}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

@@ -2,11 +2,11 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20250116110936-14cd9cc79fc6
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20241114215157-a6a85252b2f5
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20241128143121-e2e3546a35e9
 	github.com/go-logr/logr v1.4.1
 	github.com/google/go-cmp v0.6.0
 	// using latest commit from 'github.com/openshift/api branch release-4.16'
-	github.com/openshift/api v0.0.0-20240830023148-b7d0481c9094
+	github.com/openshift/api v0.0.0-20241031180523-b1c90a6cf9a3
 	github.com/pkg/errors v0.9.1
 	github.com/redhat-cop/operator-utils v1.3.8
 	github.com/stretchr/testify v1.9.0
@@ -21,8 +21,6 @@ require (
 )
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20241119094246-f6581d52dc80
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20241128143121-e2e3546a35e9
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.18.0
 	k8s.io/apiextensions-apiserver v0.29.2
@@ -85,12 +83,12 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.starlark.net v0.0.0-20230525235612-a134d8f9ddca // indirect
-	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/oauth2 v0.7.0 // indirect
-  golang.org/x/sync v0.5.0 // indirect
+	golang.org/x/oauth2 v0.12.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
 	golang.org/x/text v0.21.0 // indirect

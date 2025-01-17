@@ -3,7 +3,6 @@ package nstemplateset
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -79,7 +78,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 			sr, err := json.Marshal(nsTmplSet.Spec.SpaceRoles)
 			if err != nil {
 				return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusProvisionFailed, err,
-					fmt.Sprintf("failed to marshal space roles to update '%s' annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
+					"failed to marshal space roles to update '%s' annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey)
 			}
 			if ns.Annotations == nil {
 				ns.Annotations = map[string]string{}
@@ -87,7 +86,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 			ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey] = string(sr)
 			if err := r.Client.Update(ctx, &ns); err != nil {
 				return false, r.wrapErrorWithStatusUpdate(lctx, nsTmplSet, r.setStatusProvisionFailed, err,
-					fmt.Sprintf("failed to update namespace with '%s' annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey))
+					"failed to update namespace with '%s' annotation", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey)
 			}
 			logger.Info("updated annotation on namespace", toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey, string(sr))
 			return true, nil

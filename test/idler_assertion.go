@@ -197,6 +197,7 @@ func (a *IdleablePayloadAssertion) DeploymentConfigScaledDown(deployment *opensh
 	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
 	require.NoError(a.t, err)
 	assert.Equal(a.t, int32(0), d.Spec.Replicas)
+	assert.False(a.t, d.Spec.Paused) // DeploymentConfig should be unpaused when scaling down so that the replicas update can be rolled out
 	return a
 }
 

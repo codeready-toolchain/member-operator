@@ -6,7 +6,6 @@ import (
 	"os"
 	goruntime "runtime"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"time"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
@@ -163,16 +162,15 @@ func main() {
 		setupLog.Error(err, "failed to create discovery client")
 		os.Exit(1)
 	}
-	webhookServer := webhook.NewServer(webhook.Options{
-		Port: 9443,
-	})
+
+	// Webhook server will be created with default values (port 9443) as per doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/manager/manager.go#L244-L247
+	// Cache Options design doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/designs/cache_options.md
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},
 		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{namespace: {}}},
-		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "2fc71baf.toolchain.member.operator",

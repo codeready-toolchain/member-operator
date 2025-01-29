@@ -136,9 +136,14 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 		logger := log.FromContext(ctx)
 		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
+			timeoutSeconds := idler.Spec.TimeoutSeconds
+			if isOwnedByVM(pod.ObjectMeta) {
+				// use 1/3rd of the timeout for VMs
+				timeoutSeconds = timeoutSeconds / 3
+			}
 			// Already tracking this pod. Check the timeout.
-			if time.Now().After(trackedPod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds) * time.Second)) {
-				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", idler.Spec.TimeoutSeconds)
+			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
+				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
 				var podreason string
 				podCondition := pod.Status.Conditions
 				for _, podCond := range podCondition {
@@ -691,4 +696,16 @@ func (r *Reconciler) wrapErrorWithStatusUpdate(ctx context.Context, idler *toolc
 		log.FromContext(ctx).Error(err, "status update failed")
 	}
 	return errs.Wrapf(err, format, args...)
+}
+
+func isOwnedByVM(meta metav1.ObjectMeta) bool {
+	owners := meta.GetOwnerReferences()
+	for _, owner := range owners {
+		if owner.Controller != nil && *owner.Controller {
+			if owner.Kind == "VirtualMachineInstance" {
+				return true
+			}
+		}
+	}
+	return false
 }

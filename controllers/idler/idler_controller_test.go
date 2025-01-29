@@ -110,7 +110,7 @@ func TestEnsureIdling(t *testing.T) {
 		}
 
 		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-		preparePayloads(t, reconciler, "another-namespace", "", time.Now()) // noise
+		preparePayloads(t, reconciler, "another-namespace", "", payloadStartTimes{time.Now(), time.Now()}) // noise
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -141,11 +141,11 @@ func TestEnsureIdling(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
-		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", halfOfIdlerTimeoutAgo)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
-		noise := preparePayloads(t, reconciler, "another-namespace", "", idlerTimeoutPlusOneSecondAgo)
+
+		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler))
+
+		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler))
+		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler))
 
 		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
 			//when
@@ -308,8 +308,7 @@ func TestEnsureIdling(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+		preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler))
 
 		// first reconcile to track pods
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -627,8 +626,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		usernames := []string{"john"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "john", "advanced", "abcde11", namespaces, usernames)
 		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
-		idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-		preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo)
+		preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler))
 
 		// when
 		// first reconcile to start tracking pods
@@ -663,7 +661,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("alex")
 	reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-	plds := preparePayloads(t, reconciler, idler.Name, "", time.Now())
+	plds := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler))
 
 	tests := map[string]struct {
 		ownerKind       string
@@ -818,7 +816,7 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
 
 			if tcs.controllerOwned {
-				preparePayloads(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...)
+				preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler), tcs.pcond...)
 			} else {
 				p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...).standalonePods[0]
 				pname = p.Name
@@ -1096,8 +1094,13 @@ type payloads struct {
 	virtualmachineinstance *unstructured.Unstructured
 }
 
-func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
-	sTime := metav1.NewTime(startTime)
+type payloadStartTimes struct {
+	defaultStartTime time.Time
+	vmStartTime      time.Time
+}
+
+func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTimes payloadStartTimes, conditions ...corev1.PodCondition) payloads {
+	sTime := metav1.NewTime(startTimes.defaultStartTime)
 	replicas := int32(3)
 
 	// Deployment
@@ -1232,6 +1235,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 
 	// VirtualMachineInstance
+	vmstartTime := metav1.NewTime(startTimes.vmStartTime)
 	vmi := &unstructured.Unstructured{}
 	err = vmi.UnmarshalJSON(virtualmachineinstanceJSON)
 	require.NoError(t, err)
@@ -1241,7 +1245,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	_, err = r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Create(context.TODO(), vmi, metav1.CreateOptions{})
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, vmi, sTime, controlledPods) // vmi controls pod
+	controlledPods = createPods(t, r, vmi, vmstartTime, controlledPods) // vmi controls pod
 
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
@@ -1407,8 +1411,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 // prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
 func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
 	reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
-	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
-	payloads := preparePayloads(t, reconciler, idler.Name, "", idlerTimeoutPlusOneSecondAgo)
+	payloads := preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(&idler))
 	//start tracking pods, so the Idler status is filled with the tracked pods
 	_, err := reconciler.Reconcile(context.TODO(), req)
 	require.NoError(t, err)
@@ -1461,6 +1464,24 @@ func newMUR(name string) *toolchainv1alpha1.MasterUserRecord {
 				Email: fmt.Sprintf("%s@test.com", name),
 			},
 		},
+	}
+}
+
+func freshStartTimes(idler *toolchainv1alpha1.Idler) payloadStartTimes {
+	halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
+	quarterOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/4) * time.Second)
+	return payloadStartTimes{
+		defaultStartTime: halfOfIdlerTimeoutAgo,
+		vmStartTime:      quarterOfIdlerTimeoutAgo, // vms are killed in 1/3 of the idler time
+	}
+}
+
+func expiredStartTimes(idler *toolchainv1alpha1.Idler) payloadStartTimes {
+	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+	halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
+	return payloadStartTimes{
+		defaultStartTime: idlerTimeoutPlusOneSecondAgo,
+		vmStartTime:      halfOfIdlerTimeoutAgo, // vms are killed in 1/3 of the idler time
 	}
 }
 

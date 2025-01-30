@@ -138,8 +138,8 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			timeoutSeconds := idler.Spec.TimeoutSeconds
 			if isOwnedByVM(pod.ObjectMeta) {
-				// use 1/3rd of the timeout for VMs
-				timeoutSeconds = timeoutSeconds / 3
+				// use 1/12th of the timeout for VMs
+				timeoutSeconds = timeoutSeconds / 12
 			}
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {

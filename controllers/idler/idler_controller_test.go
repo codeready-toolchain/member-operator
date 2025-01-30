@@ -1469,10 +1469,10 @@ func newMUR(name string) *toolchainv1alpha1.MasterUserRecord {
 
 func freshStartTimes(idler *toolchainv1alpha1.Idler) payloadStartTimes {
 	halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
-	quarterOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/4) * time.Second)
+	quarterOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/13) * time.Second) // needs to be smaller than 1/12 which is the vm idler time
 	return payloadStartTimes{
 		defaultStartTime: halfOfIdlerTimeoutAgo,
-		vmStartTime:      quarterOfIdlerTimeoutAgo, // vms are killed in 1/3 of the idler time
+		vmStartTime:      quarterOfIdlerTimeoutAgo, // vms are killed in 1/12 of the idler time
 	}
 }
 
@@ -1481,7 +1481,7 @@ func expiredStartTimes(idler *toolchainv1alpha1.Idler) payloadStartTimes {
 	halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds/2) * time.Second)
 	return payloadStartTimes{
 		defaultStartTime: idlerTimeoutPlusOneSecondAgo,
-		vmStartTime:      halfOfIdlerTimeoutAgo, // vms are killed in 1/3 of the idler time
+		vmStartTime:      halfOfIdlerTimeoutAgo, // vms are killed in 1/12 of the idler time
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	goruntime "runtime"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"time"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
@@ -162,15 +163,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Webhook server will be created with default values (port 9443) as per doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/manager/manager.go#L244-L247
+	// Cache Options design doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/designs/cache_options.md
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{namespace: {}}},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "2fc71baf.toolchain.member.operator",
-		Namespace:              namespace,
-		ClientDisableCacheFor:  []client.Object{&kmetrics.NodeMetrics{}},
+		// disable caching of Node metrics in the client to avoid getting the following error every second
+		// "failed to watch *v1beta1.NodeMetrics: the server does not allow this method on the requested resource (get nodes.metrics.k8s.io)"
+		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&kmetrics.NodeMetrics{}}}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

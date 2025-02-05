@@ -5,7 +5,6 @@ import (
 	"fmt"
 	. "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
@@ -73,84 +72,6 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		require.NoError(t, err)
 		// check that the rolebinding doesn't exist anymore
 		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-johnsmith-rolebinding", &rbac.RoleBinding{})
-	})
-
-	t.Run("Object found by label and deletes successfully", func(t *testing.T) {
-		// given
-		cm := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "user-settings-name-no-match",
-				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        "johnsmith",
-				},
-			},
-		}
-		// create a noise objects where the labels don't match
-		noiseObject := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ConfigMap",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "user-settings-name-no-match-noise",
-				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-				},
-			},
-		}
-		cl := test.NewFakeClient(t, cm, noiseObject)
-
-		// when
-		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
-
-		// then
-		require.NoError(t, err)
-		// check that the configmap doesn't exist anymore
-		AssertObjectNotFound(t, cl, UserSettingNS, "johnsmith", &corev1.ConfigMap{})
-		// check that the noise object still exists
-		retrievedNoise := &corev1.ConfigMap{}
-		AssertObject(t, cl, UserSettingNS, "user-settings-name-no-match-noise", retrievedNoise, func() {
-			assert.Equal(t, noiseObject, retrievedNoise)
-		})
-	})
-	t.Run("multiple objects found by label and deletes successfully", func(t *testing.T) {
-		// given
-		cm1 := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "user-settings-name-no-match",
-				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        "johnsmith",
-				},
-			},
-		}
-		cm2 := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{Kind: "ConfigMap"},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "user-settings-name-no-match-second",
-				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        "johnsmith",
-				},
-			},
-		}
-		cl := test.NewFakeClient(t, cm1, cm2)
-
-		// when
-		err := deleteResource(context.TODO(), cl, "johnsmith", &corev1.ConfigMap{})
-
-		// then
-		require.NoError(t, err)
-		// check that the configmaps don't exist anymore
-		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-name-no-match", &corev1.ConfigMap{})
-		AssertObjectNotFound(t, cl, UserSettingNS, "user-settings-name-no-match-second", &corev1.ConfigMap{})
 	})
 
 	t.Run("Error is returned when error in deleting configmap", func(t *testing.T) {

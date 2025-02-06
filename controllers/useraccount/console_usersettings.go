@@ -16,7 +16,7 @@ const (
 )
 
 // deleteResource deletes the specified resource associated with a user from console setting.
-// It first attempts to delete the resource by name, and if not found, it deletes all resources with matching labels.
+// It attempts to delete the resource by name, and does nothing if not found.
 //
 // userUID : The unique identifier of the user for whom the resource is being deleted.
 // Returns an error if the deletion operation fails. Returns nil if the operation is successful or there is nothing to delete.
@@ -32,10 +32,7 @@ func deleteResource(ctx context.Context, cl client.Client, userUID string, toDel
 	toDelete.SetName(name)
 	toDelete.SetNamespace(UserSettingNS)
 	if err := cl.Delete(ctx, toDelete); err != nil {
-		if errors.IsNotFound(err) {
-			labels := map[string]string{ConsoleUserSettingsIdentifier: "true", ConsoleUserSettingsUID: userUID}
-			return cl.DeleteAllOf(ctx, toDelete, client.MatchingLabels(labels), client.InNamespace(UserSettingNS))
-		} else {
+		if !errors.IsNotFound(err) {
 			return err
 		}
 	}

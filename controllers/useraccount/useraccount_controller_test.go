@@ -427,12 +427,8 @@ func TestReconcile(t *testing.T) {
 				APIVersion: "rbac.authorization.k8s.io/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName + "random",
+				Name:      resourceName + ConsoleUserSettingsRoleSuffix,
 				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-					ConsoleUserSettingsUID:        string(userUID),
-				},
 			},
 		}
 		rb := &rbac.RoleBinding{
@@ -464,9 +460,6 @@ func TestReconcile(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      noiseResourceName,
 				Namespace: UserSettingNS,
-				Labels: map[string]string{
-					ConsoleUserSettingsIdentifier: "true",
-				},
 			},
 		}
 		noiseRb := &rbac.RoleBinding{

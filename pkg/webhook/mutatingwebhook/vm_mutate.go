@@ -185,7 +185,6 @@ func addSSHKeysToUserData(userDataString string, sshKeys []string) (string, erro
 // resources and the VirtualMachine will fail to start.
 // This should be removed once https://issues.redhat.com/browse/CNV-32069 is complete.
 func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
-
 	_, domainResourcesFound, err := unstructured.NestedMap(unstructuredObj.Object, "spec", "template", "spec", "domain", "resources")
 	if err != nil {
 		vmLogger.Error(err, "unable to get resources from VirtualMachine", "VirtualMachine", unstructuredObj)

@@ -42,7 +42,6 @@ import (
 )
 
 func TestReconcile(t *testing.T) {
-
 	t.Run("No Idler resource found", func(t *testing.T) {
 		// given
 		requestName := "not-existing-name"
@@ -97,7 +96,6 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestEnsureIdling(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
 	t.Run("No pods in namespace managed by idler", func(t *testing.T) {
@@ -351,7 +349,6 @@ func TestEnsureIdling(t *testing.T) {
 }
 
 func TestEnsureIdlingFailed(t *testing.T) {
-
 	t.Run("Ignore when Idler.Spec.TimeoutSec is zero", func(t *testing.T) {
 		// given
 		idler := &toolchainv1alpha1.Idler{
@@ -646,7 +643,6 @@ func TestEnsureIdlingFailed(t *testing.T) {
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {
-
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "alex-stage",
@@ -859,7 +855,6 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 			}
 		})
 	}
-
 }
 func TestCreateNotification(t *testing.T) {
 	idler := &toolchainv1alpha1.Idler{

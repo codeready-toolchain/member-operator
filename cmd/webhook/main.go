@@ -32,7 +32,6 @@ import (
 var setupLog = ctrl.Log.WithName("setup")
 
 func main() {
-
 	opts := zap.Options{
 		Development: true,
 		Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{

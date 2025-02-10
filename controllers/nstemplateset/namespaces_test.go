@@ -25,7 +25,6 @@ import (
 )
 
 func TestFindNamespace(t *testing.T) {
-
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
 
@@ -317,7 +316,6 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 }
 
 func TestGetNamespaceName(t *testing.T) {
-
 	// given
 	namespaceName := "toolchain-member"
 
@@ -383,11 +381,9 @@ func TestGetNamespaceName(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, "", nsName)
 	})
-
 }
 
 func TestEnsureNamespacesOK(t *testing.T) {
-
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -448,7 +444,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
 			HasNoLabel(toolchainv1alpha1.TierLabelKey)
-
 	})
 
 	t.Run("inner resources created for existing namespace", func(t *testing.T) {
@@ -656,7 +651,6 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		require.Error(t, err)
 		assert.False(t, createdOrUpdated)
 	})
-
 }
 
 func TestDeleteNamespace(t *testing.T) {
@@ -732,7 +726,6 @@ func TestDeleteNamespace(t *testing.T) {
 				// then
 				require.NoError(t, err)
 				assert.True(t, allDeleted)
-
 			})
 		})
 	})
@@ -792,7 +785,6 @@ func TestDeleteNamespace(t *testing.T) {
 }
 
 func TestPromoteNamespaces(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -804,7 +796,6 @@ func TestPromoteNamespaces(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("upgrade dev to advanced tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -893,7 +884,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasNoResource("exec-pods", &rbacv1.Role{}). // role does not exist
 				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
-
 		})
 
 		t.Run("delete redundant namespace while upgrading tier", func(t *testing.T) {
@@ -923,7 +913,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 
 			t.Run("uprade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
-
 				// when - should upgrade the -dev namespace
 				updated, err := manager.ensure(ctx, nsTmplSet)
 
@@ -947,7 +936,6 @@ func TestPromoteNamespaces(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
-
 		t.Run("promotion to another tier fails because it cannot load current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"))
@@ -1010,7 +998,6 @@ func TestPromoteNamespaces(t *testing.T) {
 }
 
 func TestUpdateNamespaces(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -1022,7 +1009,6 @@ func TestUpdateNamespaces(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"))
@@ -1193,7 +1179,6 @@ func TestUpdateNamespaces(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
-
 		t.Run("update to abcde15 fails because it find the new template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde15", "dev"))
@@ -1372,7 +1357,6 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		//then
 		require.Error(t, err, "namespace doesn't have space label")
 		require.False(t, isProvisioned)
-
 	})
 
 	t.Run("containsRole returns error", func(t *testing.T) {

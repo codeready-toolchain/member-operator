@@ -313,7 +313,6 @@ func (r *Reconciler) ensureIdentity(ctx context.Context, config membercfg.Config
 
 func (r *Reconciler) loadIdentityAndEnsureMapping(ctx context.Context, config membercfg.Configuration, username string,
 	userAccount *toolchainv1alpha1.UserAccount, user *userv1.User) (*userv1.Identity, bool, error) {
-
 	ins := commonidentity.NewIdentityNamingStandard(username, config.Auth().Idp())
 
 	identity := &userv1.Identity{}
@@ -411,7 +410,6 @@ func setLabelsAndAnnotations(object metav1.Object, userAcc *toolchainv1alpha1.Us
 			annotations[toolchainv1alpha1.AccountIDUserAnnotationKey] = userAcc.Spec.PropagatedClaims.AccountID
 			object.SetAnnotations(annotations)
 			changed = true
-
 		}
 
 		// Delete the UserID and AccountID annotations if they don't exist in the UserAccount
@@ -496,7 +494,6 @@ func (r *Reconciler) deleteUser(ctx context.Context, userAcc *toolchainv1alpha1.
 // This function only looks for these resources in the namespace - openshift-console-user-settings
 // Returns an error if any of the deletion operations fail.
 func (r *Reconciler) deleteUserResources(ctx context.Context, userUID string) error {
-
 	// Users which were created in the cluster with the OCP versions which includes https://issues.redhat.com/browse/OCPBUGS-32321 fix
 	// will have a label which will help to map the User to the User settings resources.
 

@@ -35,7 +35,6 @@ func NewGetHostCluster(cl client.Client, ok bool, status v1.ConditionStatus) clu
 			},
 		}, true
 	}
-
 }
 
 // NewGetHostClusterWithProbe returns a cluster.GetHostClusterFunc function which returns a cluster.CachedToolchainCluster.
@@ -63,5 +62,4 @@ func NewGetHostClusterWithProbe(cl client.Client, ok bool, status v1.ConditionSt
 			},
 		}, true
 	}
-
 }

@@ -107,5 +107,4 @@ func TestDeleteConsoleSettingObjects(t *testing.T) {
 		// then
 		require.NoError(t, err)
 	})
-
 }

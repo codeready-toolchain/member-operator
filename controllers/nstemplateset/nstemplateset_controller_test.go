@@ -31,7 +31,6 @@ import (
 )
 
 func TestReconcileAddFinalizer(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -73,11 +72,9 @@ func TestReconcileAddFinalizer(t *testing.T) {
 				DoesNotHaveFinalizer()
 		})
 	})
-
 }
 
 func TestReconcileProvisionOK(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -563,7 +560,6 @@ func TestReconcileProvisionOK(t *testing.T) {
 }
 
 func TestProvisionTwoUsers(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "john"
@@ -820,7 +816,6 @@ func TestProvisionTwoUsers(t *testing.T) {
 }
 
 func TestReconcilePromotion(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -830,7 +825,6 @@ func TestReconcilePromotion(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("upgrade from basic to advanced tier", func(t *testing.T) {
-
 		t.Run("create ClusterResourceQuota", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -922,7 +916,6 @@ func TestReconcilePromotion(t *testing.T) {
 							WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")) // created
 
 					t.Run("delete redundant namespace", func(t *testing.T) {
-
 						// when - should delete the -stage namespace
 						_, err := r.Reconcile(context.TODO(), req)
 
@@ -1006,7 +999,6 @@ func TestReconcilePromotion(t *testing.T) {
 }
 
 func TestReconcileUpdate(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -1016,7 +1008,6 @@ func TestReconcileUpdate(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("upgrade from abcde11 to abcde12 as part of the advanced tier", func(t *testing.T) {
-
 		t.Run("update ClusterResourceQuota", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
@@ -1096,7 +1087,6 @@ func TestReconcileUpdate(t *testing.T) {
 				}
 
 				t.Run("delete redundant namespace", func(t *testing.T) {
-
 					// when - should delete the -stage namespace
 					_, err := r.Reconcile(context.TODO(), req)
 
@@ -1462,7 +1452,6 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// Check that nsTemplateSet is gone as well
 		AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
 			DoesNotExist()
-
 	})
 }
 

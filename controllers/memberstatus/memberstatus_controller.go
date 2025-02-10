@@ -148,7 +148,6 @@ func (r *Reconciler) aggregateAndUpdateStatus(ctx context.Context, memberStatus 
 // It then takes the status from the cluster object and adds it to MemberStatus. Finally, it checks its status and will return an error if
 // its status is not ready
 func (r *Reconciler) hostConnectionHandleStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
-
 	attributes := status.ToolchainClusterAttributes{
 		GetClusterFunc: r.GetHostCluster,
 		Period:         config.ToolchainCluster().HealthCheckPeriod(),
@@ -239,7 +238,6 @@ func (r *Reconciler) loadCurrentResourceUsage(ctx context.Context, memberStatus 
 	for _, nodeMetric := range nodeMetricsList.Items {
 		if memoryUsage, usageFound := nodeMetric.Usage["memory"]; usageFound {
 			if nodeInfo, nodeFound := allocatableValues[nodeMetric.Name]; nodeFound {
-
 				for _, role := range nodeInfo.roles {
 					// let's do the sum of usages and the allocatable capacity for each of the node roles
 					usagePerRole[role] += float32(memoryUsage.Value())

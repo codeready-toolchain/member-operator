@@ -94,7 +94,6 @@ func (v RoleBindingRequestValidator) validate(ctx context.Context, body []byte) 
 }
 
 func getBlockSubjectList() []rbac.Subject {
-
 	allServiceAccountsSubject := rbac.Subject{
 		Kind:     "Group",
 		Name:     "system:serviceaccounts",

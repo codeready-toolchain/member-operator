@@ -358,7 +358,6 @@ func (r *namespacesManager) isUpToDateAndProvisioned(ctx context.Context, ns *co
 	if ns.GetLabels() != nil &&
 		ns.GetLabels()[toolchainv1alpha1.TierLabelKey] == tierTemplate.tierName &&
 		ns.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey] == tierTemplate.templateRef {
-
 		newObjs, err := tierTemplate.process(r.Scheme, map[string]string{
 			Username:  ns.GetLabels()[toolchainv1alpha1.SpaceLabelKey],
 			SpaceName: ns.GetLabels()[toolchainv1alpha1.SpaceLabelKey], // both username and space name are required here, since rolebindings are still created with the USERNAME param.

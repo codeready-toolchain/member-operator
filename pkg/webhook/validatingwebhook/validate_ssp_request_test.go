@@ -86,7 +86,6 @@ func TestValidateSSPAdmissionRequest(t *testing.T) {
 		// then
 		test.VerifyRequestAllowed(t, response, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
-
 }
 
 func newSSPRequestValidator(t *testing.T, username string, isSandboxUser bool) *SSPRequestValidator {
@@ -108,7 +107,6 @@ func newSSPRequestValidator(t *testing.T, username string, isSandboxUser bool) *
 	return &SSPRequestValidator{
 		Client: cl,
 	}
-
 }
 
 func newCreateSSPAdmissionRequest(t *testing.T, params SSPAdmReviewTmplParams) []byte {

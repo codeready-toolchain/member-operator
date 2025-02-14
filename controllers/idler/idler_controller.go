@@ -181,11 +181,9 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 						} // not returning error to continue tracking remaining pods
 					}
 				}
-
 			} else {
 				newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 			}
-
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
 			podLogger.Info("New pod detected. Start tracking.")
 			newStatusPods = append(newStatusPods, toolchainv1alpha1.Pod{

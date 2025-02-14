@@ -72,7 +72,6 @@ func TestValidateRoleBindingAdmissionRequest(t *testing.T) {
 }
 
 func TestValidateRoleBindingAdmissionRequestAllowed(t *testing.T) {
-
 	t.Run("SA or kubeadmin trying to create rolebinding is allowed", func(t *testing.T) {
 		v := newRoleBindingRequestValidator(t, "system:kubeadmin", false)
 		// when user is kubeadmin
@@ -105,7 +104,6 @@ func TestValidateRoleBindingAdmissionRequestAllowed(t *testing.T) {
 		//then
 		test.VerifyRequestAllowed(t, response, "a68769e5-d817-4617-bec5-90efa2bad8g8")
 	})
-
 }
 
 func TestValidateRolebBndingAdmissionRequestFailsOnInvalidJson(t *testing.T) {

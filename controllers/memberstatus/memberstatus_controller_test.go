@@ -659,7 +659,6 @@ func TestOverallStatusCondition(t *testing.T) {
 			})
 		})
 	})
-
 }
 
 func newMemberStatus() *toolchainv1alpha1.MemberStatus {

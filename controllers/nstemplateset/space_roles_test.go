@@ -20,14 +20,12 @@ import (
 )
 
 func TestEnsureSpaceRoles(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
 	ctx := log.IntoContext(context.TODO(), logger)
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("create admin and viewer roles and rolebindings", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "appstudio",
@@ -105,12 +103,10 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				AssertThatRole(t, "oddity-appstudio", "space-viewer", memberClient).Exists()                   // unchanged
 				AssertThatRoleBinding(t, "oddity-appstudio", "user3-space-viewer", memberClient).Exists()      // unchanged
 				AssertThatRoleBinding(t, "oddity-appstudio", "user4-space-viewer", memberClient).Exists()      // unchanged
-
 			})
 		})
 
 		t.Run("update roles", func(t *testing.T) {
-
 			t.Run("add admin user", func(t *testing.T) {
 				// given
 				nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "basic",
@@ -200,11 +196,9 @@ func TestEnsureSpaceRoles(t *testing.T) {
 				AssertThatRoleBinding(t, "oddity-dev", "user2-space-admin", memberClient).Exists() // created
 			})
 		})
-
 	})
 
 	t.Run("failures", func(t *testing.T) {
-
 		t.Run("error while listing namespaces", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(commontest.MemberOperatorNs, "oddity", "basic", withNamespaces("abcde11", "basic"))
@@ -224,7 +218,6 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			// at this point, the NSTemplateSet is still in `updating` state
 			AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 				HasConditions(UnableToProvision("mock error"))
-
 		})
 
 		t.Run("tiertemplate not found", func(t *testing.T) {
@@ -244,7 +237,6 @@ func TestEnsureSpaceRoles(t *testing.T) {
 			AssertThatNSTemplateSet(t, commontest.MemberOperatorNs, "oddity", memberClient).
 				HasConditions(UpdateFailed(`unable to retrieve the TierTemplate 'admin-unknown-abcde11' from 'Host' cluster: tiertemplates.toolchain.dev.openshift.com "admin-unknown-abcde11" not found`))
 		})
-
 	})
 }
 

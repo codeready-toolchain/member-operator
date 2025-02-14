@@ -80,7 +80,6 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 
 		test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
-
 }
 
 func newVMRequestValidator(t *testing.T) *VMRequestValidator {
@@ -97,7 +96,6 @@ func newVMRequestValidator(t *testing.T) *VMRequestValidator {
 	return &VMRequestValidator{
 		Client: cl,
 	}
-
 }
 
 func newCreateVMAdmissionRequest(t *testing.T, params VMAdmReviewTmplParams, tmplJSON string) []byte {

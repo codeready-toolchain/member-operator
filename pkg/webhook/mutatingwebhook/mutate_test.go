@@ -25,7 +25,6 @@ func (b badReader) Read(_ []byte) (n int, err error) {
 
 // Test handleMutate function
 func TestHandleMutate(t *testing.T) {
-
 	t.Run("success", func(t *testing.T) {
 		// given
 		req, err := http.NewRequest("GET", "/mutate-whatever", bytes.NewBuffer(userPodsRawAdmissionReviewJSON))

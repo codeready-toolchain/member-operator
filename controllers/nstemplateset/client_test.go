@@ -183,7 +183,6 @@ func TestApplyToolchainObjects(t *testing.T) {
 				assert.Equal(t, expectedLabels, actualSA.Labels)
 				// check new annotations were applied
 			})
-
 		})
 
 		t.Run("update SA annotations", func(t *testing.T) {

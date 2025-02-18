@@ -225,7 +225,6 @@ func TestReconcile(t *testing.T) {
 	})
 
 	t.Run("create or update user failed", func(t *testing.T) {
-
 		t.Run("create", func(t *testing.T) {
 			// given
 			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc)
@@ -316,7 +315,6 @@ func TestReconcile(t *testing.T) {
 	})
 
 	t.Run("create or update identity failed", func(t *testing.T) {
-
 		t.Run("create", func(t *testing.T) {
 			// given
 			r, req, fakeClient, _ := prepareReconcile(t, username, userAcc, preexistingUser)
@@ -410,7 +408,6 @@ func TestReconcile(t *testing.T) {
 	// Delete useraccount and ensure related resources are also removed
 	// Adds check to see console settings resources are removed
 	t.Run("delete useraccount removes subsequent resources", func(t *testing.T) {
-
 		// given
 		// console settings resources
 		resourceName := ConsoleUserSettingsResourceNamePrefix + string(userUID)
@@ -961,7 +958,6 @@ func TestReconcile(t *testing.T) {
 				identity1 := assertIdentity(t, r, userAcc, config.Auth().Idp())
 
 				t.Run("create second identity", func(t *testing.T) {
-
 					r, req, _, _ := prepareReconcile(t, username, userAcc, updatedUser, identity1)
 					//when
 					res, err := r.Reconcile(context.TODO(), req)
@@ -1049,12 +1045,10 @@ func TestReconcile(t *testing.T) {
 				})
 			})
 		})
-
 	})
 
 	// Test existing User and Identity without provider label
 	t.Run("existing User without provider label has the label added", func(t *testing.T) {
-
 		t.Run("User with nil labels", func(t *testing.T) {
 			// given
 			withoutAnyLabel := preexistingUser.DeepCopy()
@@ -1117,7 +1111,6 @@ func TestReconcile(t *testing.T) {
 	})
 
 	t.Run("existing Identity without provider label has the label added", func(t *testing.T) {
-
 		t.Run("Identity with nil labels", func(t *testing.T) {
 			// given
 			withoutLabel := preexistingIdentity.DeepCopy()

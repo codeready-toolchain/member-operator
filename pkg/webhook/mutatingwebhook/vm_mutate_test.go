@@ -62,7 +62,6 @@ func TestVMMutator(t *testing.T) {
 }
 
 func TestEnsureLimits(t *testing.T) {
-
 	t.Run("no requests set", func(t *testing.T) {
 		// given
 		vmAdmReviewRequest := vmAdmReviewRequestObject(t)
@@ -308,7 +307,6 @@ func TestEnsureVolumeConfig(t *testing.T) {
 	})
 
 	t.Run("fail", func(t *testing.T) {
-
 		t.Run("decode failure", func(t *testing.T) {
 			// given
 			unstructuredRequestObj := &unstructured.Unstructured{
@@ -402,7 +400,6 @@ func TestAddSSHKeyToUserData(t *testing.T) {
 }
 
 func TestEnsureTolerations(t *testing.T) {
-
 	t.Run("success", func(t *testing.T) {
 		t.Run("no existing tolerations", func(t *testing.T) {
 			// given

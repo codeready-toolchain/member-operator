@@ -89,7 +89,6 @@ parameters:
 }
 
 func TestGetTierTemplate(t *testing.T) {
-
 	// given
 	// Setup Scheme for all resources (required before adding objects in the fake client)
 	err := apis.AddToScheme(scheme.Scheme)
@@ -154,7 +153,6 @@ func TestGetTierTemplate(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("return cached TierTemplate even when for the second call doesn't exist", func(t *testing.T) {
-
 			emptyHost := test.NewGetHostCluster(testcommon.NewFakeClient(t), true, apiv1.ConditionTrue)
 
 			// when

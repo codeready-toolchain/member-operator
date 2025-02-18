@@ -328,7 +328,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-
 }
 
 // newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.

@@ -21,7 +21,6 @@ const (
 // userUID : The unique identifier of the user for whom the resource is being deleted.
 // Returns an error if the deletion operation fails. Returns nil if the operation is successful or there is nothing to delete.
 func deleteResource(ctx context.Context, cl client.Client, userUID string, toDelete client.Object) error {
-
 	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	if toDelete.GetObjectKind().GroupVersionKind().Kind == "Role" {
 		name = name + ConsoleUserSettingsRoleSuffix

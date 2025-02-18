@@ -157,7 +157,6 @@ func TestUpdateStatus(t *testing.T) {
 	})
 
 	t.Run("status update failures", func(t *testing.T) {
-
 		t.Run("failed to update status during deletion", func(t *testing.T) {
 			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))

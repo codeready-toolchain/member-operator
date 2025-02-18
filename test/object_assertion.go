@@ -22,5 +22,4 @@ func AssertObjectNotFound(t *testing.T, fakeClient *test.FakeClient, namespace, 
 	err := fakeClient.Get(context.TODO(), test.NamespacedName(namespace, name), actualResource)
 	require.Error(t, err)
 	assert.True(t, errors.IsNotFound(err))
-
 }

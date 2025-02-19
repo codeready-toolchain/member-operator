@@ -288,7 +288,7 @@ func TestGetTierTemplate(t *testing.T) {
 					retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
 
 					// then
-					require.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
+					assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
 					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
 				}(tierTemplate)
 			}

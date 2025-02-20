@@ -117,10 +117,10 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// no pods found - the controller will requeue after the idler's timeout
+		// no pods found - the controller will requeue after 5 mins
 		assert.Equal(t, reconcile.Result{
 			Requeue:      true,
-			RequeueAfter: 30 * time.Second,
+			RequeueAfter: RequeueTimeThreshold * time.Second,
 		}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
@@ -143,8 +143,9 @@ func TestEnsureIdling(t *testing.T) {
 		reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler))
-
+		podCrashLooping := preparePayloadCrashloopingPod(t, reconciler, idler.Name, "restartCount-")
 		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler))
+
 		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler))
 
 		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
@@ -158,6 +159,7 @@ func TestEnsureIdling(t *testing.T) {
 				PodsExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
+				PodsExist(podCrashLooping.standalonePods).
 				DaemonSetExists(podsRunningForTooLong.daemonSet).
 				DaemonSetExists(podsTooEarlyToKill.daemonSet).
 				DaemonSetExists(noise.daemonSet).
@@ -191,24 +193,26 @@ func TestEnsureIdling(t *testing.T) {
 
 			// Tracked pods
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...)).
+				TracksPods(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...), podCrashLooping.allPods...)).
 				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
 			assert.Equal(t, 0, int(res.RequeueAfter)) // pods running for too long should be killed immediately
 
-			t.Run("Second Reconcile. Delete long running pods.", func(t *testing.T) {
+			t.Run("Second Reconcile. Delete long running and crashlooping pods.", func(t *testing.T) {
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
 				// Too long running pods are gone. All long running controllers are scaled down.
+				// Crashlooping pods are gone.
 				// The rest of the pods are still there and controllers are scaled up.
 				memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
 					PodsDoNotExist(podsRunningForTooLong.standalonePods).
 					PodsExist(podsTooEarlyToKill.standalonePods).
 					PodsExist(noise.standalonePods).
+					PodsDoNotExist(podCrashLooping.standalonePods).
 					DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
 					DaemonSetExists(podsTooEarlyToKill.daemonSet).
 					DaemonSetExists(noise.daemonSet).
@@ -284,7 +288,7 @@ func TestEnsureIdling(t *testing.T) {
 						// requeue after the idler timeout
 						assert.Equal(t, reconcile.Result{
 							Requeue:      true,
-							RequeueAfter: 60 * time.Second,
+							RequeueAfter: RequeueTimeThreshold * time.Second,
 						}, res)
 					})
 				})
@@ -522,7 +526,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				require.NoError(t, err) // 'NotFound' errors are ignored!
 				assert.Equal(t, reconcile.Result{
 					Requeue:      true,
-					RequeueAfter: 60 * time.Second,
+					RequeueAfter: RequeueTimeThreshold * time.Second,
 				}, res)
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
 			}
@@ -1314,6 +1318,29 @@ func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix
 	}
 	return payloads{
 		standalonePods: standalonePods,
+	}
+}
+
+func preparePayloadCrashloopingPod(t *testing.T, r *Reconciler, namespace, namePrefix string) payloads {
+	standalonePods := make([]*corev1.Pod, 0, 1)
+	startTime := metav1.Now()
+	// Create a standalone pod with no owner which has restart count sum > 50
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s%s-pod-fail", namePrefix, namespace),
+			Namespace: namespace,
+		},
+		Status: corev1.PodStatus{StartTime: &startTime, ContainerStatuses: []corev1.ContainerStatus{
+			{RestartCount: 30},
+			{RestartCount: 24},
+		}},
+	}
+	err := r.AllNamespacesClient.Create(context.TODO(), pod)
+	require.NoError(t, err)
+	standalonePods = append(standalonePods, pod)
+	return payloads{
+		standalonePods: standalonePods,
+		allPods:        standalonePods,
 	}
 }
 

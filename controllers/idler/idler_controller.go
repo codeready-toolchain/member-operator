@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	RestartThreshold     = 50
-	RequeueTimeThreshold = 300
+	RestartThreshold            = 50
+	RequeueTimeThresholdSeconds = 300
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -114,8 +114,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 	// Find the earlier pod to kill and requeue. Otherwise, use the idler timeoutSeconds to requeue.
 	nextTime := nextPodToBeKilledAfter(logger, idler)
-	if nextTime == nil {
-		after := time.Duration(RequeueTimeThreshold) * time.Second
+	after := time.Duration(RequeueTimeThresholdSeconds) * time.Second
+	if nextTime == nil || *nextTime > after {
 		logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
 		return reconcile.Result{
 			Requeue:      true,

@@ -115,7 +115,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	// Find the earlier pod to kill and requeue. Otherwise, use the idler timeoutSeconds to requeue.
 	nextTime := nextPodToBeKilledAfter(logger, idler)
 	after := time.Duration(RequeueTimeThresholdSeconds) * time.Second
-	if nextTime == nil || *nextTime > after {
+	if nextTime == nil || (nextTime != nil && *nextTime > after) {
 		logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
 		return reconcile.Result{
 			Requeue:      true,

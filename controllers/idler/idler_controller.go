@@ -35,11 +35,8 @@ import (
 )
 
 const (
-	RestartThreshold                      = 50
-	RequeueTimeThresholdSeconds           = 300
-	RestartCountWithinThresholdContainer1 = 30
-	RestartCountWithinThresholdContainer2 = 24
-	RestartCountOverThreshold             = 52
+	RestartThreshold            = 50
+	RequeueTimeThresholdSeconds = 300
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{

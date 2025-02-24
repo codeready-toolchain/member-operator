@@ -41,6 +41,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	RestartCountWithinThresholdContainer1 = 30
+	RestartCountWithinThresholdContainer2 = 24
+	RestartCountOverThreshold             = 52
+)
+
 func TestReconcile(t *testing.T) {
 
 	t.Run("No Idler resource found", func(t *testing.T) {

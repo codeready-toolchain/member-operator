@@ -250,7 +250,7 @@ func TestEnsureIdling(t *testing.T) {
 					VMRunning(podsTooEarlyToKill.virtualmachine).
 					VMRunning(noise.virtualmachine)
 
-				// Only tracks pods that have not been processed in this reconcile
+				// Only tracks pods that have not been deleted
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 					TracksPods(append(podsTooEarlyToKill.allPods, podsCrashLoopingWithinThreshold.allPods...)).
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
@@ -266,7 +266,7 @@ func TestEnsureIdling(t *testing.T) {
 					require.NoError(t, err)
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)).
+						TracksPods(append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)). // controlledPods are being tracked again because in unit tests scaling down doesn't delete pods
 						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 					assert.True(t, res.Requeue)
@@ -1338,8 +1338,8 @@ func preparePayloadCrashloopingPod(t *testing.T, r *Reconciler, namespace, nameP
 			Namespace: namespace,
 		},
 		Status: corev1.PodStatus{StartTime: &startTime, ContainerStatuses: []corev1.ContainerStatus{
-			{RestartCount: 52},
-			{RestartCount: 24},
+			{RestartCount: RestartCountOverThreshold},
+			{RestartCount: RestartCountWithinThresholdContainer2},
 		}},
 	}
 	err := r.AllNamespacesClient.Create(context.TODO(), pod)
@@ -1386,8 +1386,8 @@ func preparePayloadCrashloopingPodsWithinThreshold(t *testing.T, r *Reconciler, 
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", sts.Name, i), Namespace: sts.Namespace},
 			Status: corev1.PodStatus{StartTime: &startTime, ContainerStatuses: []corev1.ContainerStatus{
-				{RestartCount: 30},
-				{RestartCount: 24},
+				{RestartCount: RestartCountWithinThresholdContainer1},
+				{RestartCount: RestartCountWithinThresholdContainer2},
 			}},
 		}
 		err := controllerutil.SetControllerReference(sts, pod, r.Scheme)

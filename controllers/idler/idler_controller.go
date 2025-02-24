@@ -226,7 +226,9 @@ func deletePodsAndCreateNotification(ctx context.Context, podLogger logr.Logger,
 func isRestartingOften(podstatus corev1.PodStatus) (bool, int32) {
 	var restartCount int32
 	for _, status := range podstatus.ContainerStatuses {
-		restartCount += status.RestartCount
+		if restartCount < status.RestartCount {
+			restartCount = status.RestartCount
+		}
 	}
 	return restartCount > RestartThreshold, restartCount
 }

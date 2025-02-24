@@ -143,7 +143,8 @@ func TestEnsureIdling(t *testing.T) {
 		reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler))
-		podCrashLooping := preparePayloadCrashloopingPod(t, reconciler, idler.Name, "restartCount-")
+		podsCrashLoopingWithinThreshold := preparePayloadCrashloopingPodsWithinThreshold(t, reconciler, idler.Name, "inThreshRestarts-", freshStartTimes(idler))
+		podsCrashLooping := preparePayloadCrashloopingPod(t, reconciler, idler.Name, "restartCount-")
 		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler))
 
 		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler))
@@ -159,7 +160,7 @@ func TestEnsureIdling(t *testing.T) {
 				PodsExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
-				PodsExist(podCrashLooping.standalonePods).
+				PodsExist(podsCrashLooping.standalonePods).
 				DaemonSetExists(podsRunningForTooLong.daemonSet).
 				DaemonSetExists(podsTooEarlyToKill.daemonSet).
 				DaemonSetExists(noise.daemonSet).
@@ -175,6 +176,7 @@ func TestEnsureIdling(t *testing.T) {
 				DeploymentScaledUp(noise.deployment).
 				DeploymentScaledUp(noise.integration).
 				DeploymentScaledUp(noise.kameletBinding).
+				DeploymentScaledUp(podsCrashLooping.deployment).
 				ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
 				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 				ReplicaSetScaledUp(noise.replicaSet).
@@ -187,13 +189,15 @@ func TestEnsureIdling(t *testing.T) {
 				StatefulSetScaledUp(podsRunningForTooLong.statefulSet).
 				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
 				StatefulSetScaledUp(noise.statefulSet).
+				StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
 				VMRunning(podsRunningForTooLong.virtualmachine).
 				VMRunning(podsTooEarlyToKill.virtualmachine).
 				VMRunning(noise.virtualmachine)
 
+			// after golang 1.22 upgrade can use slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods, podsCrashLooping.allPods, podsCrashLoopingWithinThreshold.allPods)
 			// Tracked pods
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...), podCrashLooping.allPods...)).
+				TracksPods(append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...), podsCrashLooping.allPods...), podsCrashLoopingWithinThreshold.allPods...)).
 				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
@@ -212,7 +216,7 @@ func TestEnsureIdling(t *testing.T) {
 					PodsDoNotExist(podsRunningForTooLong.standalonePods).
 					PodsExist(podsTooEarlyToKill.standalonePods).
 					PodsExist(noise.standalonePods).
-					PodsDoNotExist(podCrashLooping.standalonePods).
+					PodsDoNotExist(podsCrashLooping.standalonePods).
 					DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
 					DaemonSetExists(podsTooEarlyToKill.daemonSet).
 					DaemonSetExists(noise.daemonSet).
@@ -222,6 +226,7 @@ func TestEnsureIdling(t *testing.T) {
 					DeploymentScaledDown(podsRunningForTooLong.deployment).
 					DeploymentScaledDown(podsRunningForTooLong.integration).
 					DeploymentScaledDown(podsRunningForTooLong.kameletBinding).
+					DeploymentScaledDown(podsCrashLooping.deployment).
 					DeploymentScaledUp(podsTooEarlyToKill.deployment).
 					DeploymentScaledUp(podsTooEarlyToKill.integration).
 					DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
@@ -240,13 +245,14 @@ func TestEnsureIdling(t *testing.T) {
 					StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
 					StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
 					StatefulSetScaledUp(noise.statefulSet).
+					StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
 					VMStopped(podsRunningForTooLong.virtualmachine).
 					VMRunning(podsTooEarlyToKill.virtualmachine).
 					VMRunning(noise.virtualmachine)
 
-				// Still tracking all pods. Even deleted ones.
+				// Only tracks pods that have not been processed in this reconcile
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					TracksPods(podsTooEarlyToKill.allPods).
+					TracksPods(append(podsTooEarlyToKill.allPods, podsCrashLoopingWithinThreshold.allPods...)).
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 				assert.True(t, res.Requeue)
@@ -260,7 +266,7 @@ func TestEnsureIdling(t *testing.T) {
 					require.NoError(t, err)
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)).
+						TracksPods(append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)).
 						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 					assert.True(t, res.Requeue)
@@ -269,7 +275,7 @@ func TestEnsureIdling(t *testing.T) {
 					t.Run("No pods. No requeue.", func(t *testing.T) {
 						//given
 						// cleanup remaining pods
-						pods := append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...)
+						pods := append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)
 						for _, pod := range pods {
 							err := allCl.Delete(context.TODO(), pod)
 							require.NoError(t, err)
@@ -1122,7 +1128,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.AllNamespacesClient.Create(context.TODO(), rs)
 	require.NoError(t, err)
-	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3), conditions...)
+	controlledPods := createPods(t, r, rs, sTime, make([]*corev1.Pod, 0, 3), false, conditions...)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	integration := &appsv1.Deployment{
@@ -1149,7 +1155,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.AllNamespacesClient.Create(context.TODO(), integrationRS)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, integrationRS, sTime, controlledPods)
+	controlledPods = createPods(t, r, integrationRS, sTime, controlledPods, false)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	binding := &appsv1.Deployment{
@@ -1176,7 +1182,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.AllNamespacesClient.Create(context.TODO(), bindingRS)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, bindingRS, sTime, controlledPods)
+	controlledPods = createPods(t, r, bindingRS, sTime, controlledPods, false)
 
 	// Standalone ReplicaSet
 	standaloneRs := &appsv1.ReplicaSet{
@@ -1185,7 +1191,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 	err = r.AllNamespacesClient.Create(context.TODO(), standaloneRs)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, standaloneRs, sTime, controlledPods)
+	controlledPods = createPods(t, r, standaloneRs, sTime, controlledPods, false)
 
 	// DaemonSet
 	ds := &appsv1.DaemonSet{
@@ -1193,7 +1199,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 	err = r.AllNamespacesClient.Create(context.TODO(), ds)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, ds, sTime, controlledPods)
+	controlledPods = createPods(t, r, ds, sTime, controlledPods, false)
 
 	// Job
 	job := &batchv1.Job{
@@ -1201,7 +1207,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 	err = r.AllNamespacesClient.Create(context.TODO(), job)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, job, sTime, controlledPods)
+	controlledPods = createPods(t, r, job, sTime, controlledPods, false)
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
@@ -1210,7 +1216,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 	err = r.AllNamespacesClient.Create(context.TODO(), sts)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, sts, sTime, controlledPods)
+	controlledPods = createPods(t, r, sts, sTime, controlledPods, false)
 
 	// DeploymentConfig
 	dc := &openshiftappsv1.DeploymentConfig{
@@ -1227,7 +1233,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	err = r.AllNamespacesClient.Create(context.TODO(), rc)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, rc, sTime, controlledPods)
+	controlledPods = createPods(t, r, rc, sTime, controlledPods, false)
 
 	// VirtualMachine
 	vm := &unstructured.Unstructured{}
@@ -1249,7 +1255,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	require.NoError(t, err)
 	_, err = r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Create(context.TODO(), vmi, metav1.CreateOptions{})
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, vmi, vmstartTime, controlledPods) // vmi controls pod
+	controlledPods = createPods(t, r, vmi, vmstartTime, controlledPods, false) // vmi controls pod
 
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
@@ -1258,7 +1264,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	}
 	err = r.AllNamespacesClient.Create(context.TODO(), standaloneRC)
 	require.NoError(t, err)
-	controlledPods = createPods(t, r, standaloneRC, sTime, controlledPods)
+	controlledPods = createPods(t, r, standaloneRC, sTime, controlledPods, false)
 
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
@@ -1270,7 +1276,7 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 	}
-	standalonePods := createPods(t, r, idler, sTime, make([]*corev1.Pod, 0, 3))
+	standalonePods := createPods(t, r, idler, sTime, make([]*corev1.Pod, 0, 3), false)
 
 	// Pods with no owner.
 	for i := 0; i < 3; i++ {
@@ -1324,6 +1330,7 @@ func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix
 func preparePayloadCrashloopingPod(t *testing.T, r *Reconciler, namespace, namePrefix string) payloads {
 	standalonePods := make([]*corev1.Pod, 0, 1)
 	startTime := metav1.Now()
+	replicas := int32(3)
 	// Create a standalone pod with no owner which has restart count sum > 50
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1331,24 +1338,82 @@ func preparePayloadCrashloopingPod(t *testing.T, r *Reconciler, namespace, nameP
 			Namespace: namespace,
 		},
 		Status: corev1.PodStatus{StartTime: &startTime, ContainerStatuses: []corev1.ContainerStatus{
-			{RestartCount: 30},
+			{RestartCount: 52},
 			{RestartCount: 24},
 		}},
 	}
 	err := r.AllNamespacesClient.Create(context.TODO(), pod)
 	require.NoError(t, err)
 	standalonePods = append(standalonePods, pod)
+	// Deployment
+	d := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deployment", namePrefix, namespace), Namespace: namespace},
+		Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
+	}
+	err = r.AllNamespacesClient.Create(context.TODO(), d)
+	require.NoError(t, err)
+	rs := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", d.Name), Namespace: namespace},
+		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
+	}
+	err = controllerutil.SetControllerReference(d, rs, r.Scheme)
+	require.NoError(t, err)
+	err = r.AllNamespacesClient.Create(context.TODO(), rs)
+	require.NoError(t, err)
+	controlledPods := createPods(t, r, rs, startTime, make([]*corev1.Pod, 0, 3), true)
+
+	allPods := append(standalonePods, controlledPods...)
 	return payloads{
 		standalonePods: standalonePods,
-		allPods:        standalonePods,
+		allPods:        allPods,
+		controlledPods: controlledPods,
+		deployment:     d,
 	}
 }
 
-func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod, conditions ...corev1.PodCondition) []*corev1.Pod {
+func preparePayloadCrashloopingPodsWithinThreshold(t *testing.T, r *Reconciler, namespace, namePrefix string, times payloadStartTimes) payloads {
+	startTime := metav1.NewTime(times.defaultStartTime)
+	replicas := int32(3)
+	controlledPods := make([]*corev1.Pod, 0, 3)
+	// Create a StatefulSet with Crashlooping pods less than threshold
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-statefulset", namePrefix, namespace), Namespace: namespace},
+		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
+	}
+	err := r.AllNamespacesClient.Create(context.TODO(), sts)
+	require.NoError(t, err)
+	for i := 0; i < int(replicas); i++ {
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", sts.Name, i), Namespace: sts.Namespace},
+			Status: corev1.PodStatus{StartTime: &startTime, ContainerStatuses: []corev1.ContainerStatus{
+				{RestartCount: 30},
+				{RestartCount: 24},
+			}},
+		}
+		err := controllerutil.SetControllerReference(sts, pod, r.Scheme)
+		require.NoError(t, err)
+		controlledPods = append(controlledPods, pod)
+		err = r.AllNamespacesClient.Create(context.TODO(), pod)
+		require.NoError(t, err)
+	}
+	return payloads{
+		controlledPods: controlledPods,
+		statefulSet:    sts,
+		allPods:        controlledPods,
+	}
+}
+
+func createPods(t *testing.T, r *Reconciler, owner metav1.Object, startTime metav1.Time, podsToTrack []*corev1.Pod, isCrashlooping bool, conditions ...corev1.PodCondition) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
 			Status:     corev1.PodStatus{StartTime: &startTime, Conditions: conditions},
+		}
+		if isCrashlooping {
+			pod.Status = corev1.PodStatus{StartTime: &startTime, Conditions: conditions, ContainerStatuses: []corev1.ContainerStatus{
+				{RestartCount: 52},
+				{RestartCount: 24},
+			}}
 		}
 		err := controllerutil.SetControllerReference(owner, pod, r.Scheme)
 		require.NoError(t, err)

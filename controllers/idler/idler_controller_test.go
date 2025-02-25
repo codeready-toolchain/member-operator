@@ -150,7 +150,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler))
 		podsCrashLoopingWithinThreshold := preparePayloadCrashloopingPodsWithinThreshold(t, reconciler, idler.Name, "inThreshRestarts-", freshStartTimes(idler))
-		podsCrashLooping := preparePayloadCrashloopingPod(t, reconciler, idler.Name, "restartCount-")
+		podsCrashLooping := preparePayloadCrashloopingAboveThreshold(t, reconciler, idler.Name, "restartCount-")
 		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler))
 
 		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler))
@@ -1333,11 +1333,11 @@ func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix
 	}
 }
 
-func preparePayloadCrashloopingPod(t *testing.T, r *Reconciler, namespace, namePrefix string) payloads {
+func preparePayloadCrashloopingAboveThreshold(t *testing.T, r *Reconciler, namespace, namePrefix string) payloads {
 	standalonePods := make([]*corev1.Pod, 0, 1)
 	startTime := metav1.Now()
 	replicas := int32(3)
-	// Create a standalone pod with no owner which has restart count sum > 50
+	// Create a standalone pod with no owner which has at least one container with restart count > 50
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-pod-fail", namePrefix, namespace),

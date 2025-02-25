@@ -141,11 +141,12 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// check the restart count for the trackedPod
-			crashlooping, restartCount := isRestartingOften(pod.Status)
-			if crashlooping {
+			restartCount := getHighestRestartCount(pod.Status)
+			if restartCount > RestartThreshold {
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
+				lctx := log.IntoContext(ctx, podLogger)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				err := deletePodsAndCreateNotification(ctx, podLogger, pod, r, idler)
+				err := deletePodsAndCreateNotification(ctx, lctx, pod, r, idler)
 				if err != nil {
 					return err
 				}
@@ -159,8 +160,9 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
+				lctx := log.IntoContext(ctx, podLogger)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				err := deletePodsAndCreateNotification(ctx, podLogger, pod, r, idler)
+				err := deletePodsAndCreateNotification(ctx, lctx, pod, r, idler)
 				if err != nil {
 					return err
 				}
@@ -184,14 +186,13 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 // Check if the pod belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 // if it is a standalone pod, delete it.
 // Send notification if the deleted pod was managed by a controller, was a standalone pod that was not completed or was crashlooping
-func deletePodsAndCreateNotification(ctx context.Context, podLogger logr.Logger, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
-	lctx := log.IntoContext(ctx, podLogger)
+func deletePodsAndCreateNotification(ctx context.Context, lctx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
 	logger := log.FromContext(ctx)
-	var podreason string
+	var podReason string
 	podCondition := pod.Status.Conditions
 	for _, podCond := range podCondition {
 		if podCond.Type == "Ready" {
-			podreason = podCond.Reason
+			podReason = podCond.Reason
 		}
 	}
 	appType, appName, deletedByController, err := r.scaleControllerToZero(lctx, pod.ObjectMeta)
@@ -199,11 +200,11 @@ func deletePodsAndCreateNotification(ctx context.Context, podLogger logr.Logger,
 		return err
 	}
 	if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
-		log.FromContext(ctx).Info("Deleting pod without controller")
+		logger.Info("Deleting pod without controller")
 		if err := r.AllNamespacesClient.Delete(ctx, &pod); err != nil {
 			return err
 		}
-		podLogger.Info("Pod deleted")
+		logger.Info("Pod deleted")
 	}
 	if appName == "" {
 		appName = pod.Name
@@ -211,7 +212,7 @@ func deletePodsAndCreateNotification(ctx context.Context, podLogger logr.Logger,
 	}
 
 	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
-	if podreason != "PodCompleted" || deletedByController {
+	if podReason != "PodCompleted" || deletedByController {
 		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
 		if err := r.createNotification(ctx, idler, appName, appType); err != nil {
 			logger.Error(err, "failed to create Notification")
@@ -223,14 +224,14 @@ func deletePodsAndCreateNotification(ctx context.Context, podLogger logr.Logger,
 	return nil
 }
 
-func isRestartingOften(podstatus corev1.PodStatus) (bool, int32) {
+func getHighestRestartCount(podstatus corev1.PodStatus) int32 {
 	var restartCount int32
 	for _, status := range podstatus.ContainerStatuses {
 		if restartCount < status.RestartCount {
 			restartCount = status.RestartCount
 		}
 	}
-	return restartCount > RestartThreshold, restartCount
+	return restartCount
 }
 
 func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) error {

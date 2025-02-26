@@ -127,7 +127,7 @@ func TestEnsureIdling(t *testing.T) {
 		// no pods found - the controller will requeue after 5 mins
 		assert.Equal(t, reconcile.Result{
 			Requeue:      true,
-			RequeueAfter: RequeueTimeThresholdSeconds * time.Second,
+			RequeueAfter: RequeueTimeThreshold,
 		}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
@@ -301,7 +301,7 @@ func TestEnsureIdling(t *testing.T) {
 						// requeue after the idler timeout
 						assert.Equal(t, reconcile.Result{
 							Requeue:      true,
-							RequeueAfter: RequeueTimeThresholdSeconds * time.Second,
+							RequeueAfter: RequeueTimeThreshold,
 						}, res)
 					})
 				})
@@ -539,7 +539,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				require.NoError(t, err) // 'NotFound' errors are ignored!
 				assert.Equal(t, reconcile.Result{
 					Requeue:      true,
-					RequeueAfter: RequeueTimeThresholdSeconds * time.Second,
+					RequeueAfter: RequeueTimeThreshold,
 				}, res)
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
 			}

@@ -112,20 +112,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill and requeue. Otherwise, use the RequeueTimeThresholdSeconds to requeue.
-	nextTime := nextPodToBeKilledAfter(logger, idler)
-	after := time.Duration(RequeueTimeThresholdSeconds) * time.Second
-	if nextTime == nil || *nextTime > after {
-		logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
-		return reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: after,
-		}, r.setStatusReady(ctx, idler)
-	}
-	logger.Info("requeueing for next pod to kill", "after_seconds", nextTime.Seconds())
+	// Requeue in idler.Spec.TimeoutSeconds or RequeueTimeThresholdSeconds, whichever is sooner.
+	nextPodToKillAfter := nextPodToBeKilledAfter(logger, idler)
+	maxRequeDuration := time.Duration(RequeueTimeThresholdSeconds) * time.Second
+	idlerTimeoutDuration := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
+	after := findShortestDuration(nextPodToKillAfter, &maxRequeDuration, &idlerTimeoutDuration)
+
+	logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
 	return reconcile.Result{
 		Requeue:      true,
-		RequeueAfter: *nextTime,
+		RequeueAfter: *after,
 	}, r.setStatusReady(ctx, idler)
 }
 
@@ -633,6 +629,19 @@ func nextPodToBeKilledAfter(log logr.Logger, idler *toolchainv1alpha1.Idler) *ti
 	}
 	log.Info("next pod to kill", "after", d)
 	return &d
+}
+
+// findShortestDuration finds the shortest duration the given durations
+func findShortestDuration(durations ...*time.Duration) *time.Duration {
+	var shortest *time.Duration
+	for _, d := range durations {
+		if d != nil {
+			if shortest == nil || *d < *shortest {
+				shortest = d
+			}
+		}
+	}
+	return shortest
 }
 
 // updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.

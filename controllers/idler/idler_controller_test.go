@@ -45,6 +45,7 @@ const (
 	RestartCountWithinThresholdContainer1 = 30
 	RestartCountWithinThresholdContainer2 = 24
 	RestartCountOverThreshold             = 52
+	TestIdlerTimeOutSeconds               = 540
 )
 
 func TestReconcile(t *testing.T) {
@@ -112,7 +113,7 @@ func TestEnsureIdling(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "john-dev",
 			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 
 		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
@@ -140,7 +141,7 @@ func TestEnsureIdling(t *testing.T) {
 					toolchainv1alpha1.SpaceLabelKey: "alex",
 				},
 			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
@@ -317,7 +318,7 @@ func TestEnsureIdling(t *testing.T) {
 					toolchainv1alpha1.SpaceLabelKey: "alex",
 				},
 			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
@@ -442,7 +443,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "alex-stage",
 			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 
 		vm := &unstructured.Unstructured{}

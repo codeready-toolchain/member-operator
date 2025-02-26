@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/utils/strings/slices"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/utils/strings/slices"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
@@ -388,7 +389,6 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 }
 
 func TestEnsureClusterResourcesFail(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -451,12 +451,11 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionClusterResources(
-				"failed to apply cluster resource of type 'quota.openshift.io/v1, Kind=ClusterResourceQuota': unable to create resource of kind: ClusterResourceQuota, version: v1: unable to create resource of kind: ClusterResourceQuota, version: v1: some error"))
+				"failed to apply cluster resource of type 'quota.openshift.io/v1, Kind=ClusterResourceQuota': unable to patch 'quota.openshift.io/v1, Kind=ClusterResourceQuota' called 'for-johnsmith-space' in namespace '': some error"))
 	})
 }
 
 func TestDeleteClusterResources(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -606,7 +605,6 @@ func TestDeleteClusterResources(t *testing.T) {
 }
 
 func TestPromoteClusterResources(t *testing.T) {
-
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -619,7 +617,6 @@ func TestPromoteClusterResources(t *testing.T) {
 	crb := newTektonClusterRoleBinding(spacename, "advanced")
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("upgrade from advanced to team tier by changing only the CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "team", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -735,7 +732,6 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{},
 						WithLabel("toolchain.dev.openshift.com/templateref", "withemptycrq-clusterresources-abcde11"),
 						WithLabel("toolchain.dev.openshift.com/tier", "withemptycrq"))
-
 			})
 		})
 
@@ -962,7 +958,6 @@ func TestPromoteClusterResources(t *testing.T) {
 					HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 					HasResource("for-another-user", &quotav1.ClusterResourceQuota{}).
 					HasResource("another-tekton-view", &rbacv1.ClusterRoleBinding{})
-
 			})
 		})
 
@@ -1024,7 +1019,6 @@ func TestPromoteClusterResources(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
-
 		t.Run("promotion to another tier fails because it cannot list current resources", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"), withConditions(Updating()))
@@ -1083,7 +1077,6 @@ func TestPromoteClusterResources(t *testing.T) {
 }
 
 func TestUpdateClusterResources(t *testing.T) {
-
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -1097,7 +1090,6 @@ func TestUpdateClusterResources(t *testing.T) {
 	crq := newClusterResourceQuota(spacename, "advanced")
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
@@ -1219,7 +1211,6 @@ func TestUpdateClusterResources(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
-
 		t.Run("update to abcde11 fails because it cannot list current resources", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withClusterResources("abcde11"), withConditions(Updating()))
@@ -1303,23 +1294,27 @@ func TestRetainObjectsOfSameGVK(t *testing.T) {
 		Object: map[string]interface{}{
 			"kind":       "ClusterRole",
 			"apiVersion": "rbac.authorization.k8s.io/v1",
-		}}}
+		},
+	}}
 
 	namespace := runtime.RawExtension{Object: &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"kind":       "Namespace",
 			"apiVersion": "v1",
-		}}}
+		},
+	}}
 	clusterResQuota := runtime.RawExtension{Object: &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"kind":       "ClusterResourceQuota",
 			"apiVersion": "quota.openshift.io/v1",
-		}}}
+		},
+	}}
 	clusterRoleBinding := runtime.RawExtension{Object: &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"kind":       "ClusterRoleBinding",
 			"apiVersion": "rbac.authorization.k8s.io/v1",
-		}}}
+		},
+	}}
 
 	t.Run("verify retainObjectsOfSameGVK function for ClusterRole", func(t *testing.T) {
 		// given
@@ -1338,7 +1333,6 @@ func TestRetainObjectsOfSameGVK(t *testing.T) {
 		})
 
 		t.Run("should return true since the GVK matches", func(t *testing.T) {
-
 			// when
 			ok := retain(clusterRole)
 

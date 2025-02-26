@@ -25,7 +25,6 @@ import (
 )
 
 func TestFindNamespace(t *testing.T) {
-
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
 
@@ -317,7 +316,6 @@ func TestNextNamespaceToDeprovision(t *testing.T) {
 }
 
 func TestGetNamespaceName(t *testing.T) {
-
 	// given
 	namespaceName := "toolchain-member"
 
@@ -383,11 +381,9 @@ func TestGetNamespaceName(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, "", nsName)
 	})
-
 }
 
 func TestEnsureNamespacesOK(t *testing.T) {
-
 	restore := test.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
 	t.Cleanup(restore)
 
@@ -448,7 +444,6 @@ func TestEnsureNamespacesOK(t *testing.T) {
 			HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue).
 			HasNoLabel(toolchainv1alpha1.TemplateRefLabelKey).
 			HasNoLabel(toolchainv1alpha1.TierLabelKey)
-
 	})
 
 	t.Run("inner resources created for existing namespace", func(t *testing.T) {
@@ -535,7 +530,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		assert.Contains(t, err.Error(), "unable to create namespace")
 		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
-			HasConditions(UnableToProvisionNamespace("unable to create resource of kind: Namespace, version: v1: unable to create resource of kind: Namespace, version: v1: unable to create namespace"))
+			HasConditions(UnableToProvisionNamespace("unable to patch '/v1, Kind=Namespace' called 'johnsmith-dev' in namespace '': unable to create namespace"))
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).DoesNotExist()
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).DoesNotExist()
 	})
@@ -579,7 +574,7 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionNamespace(
-				"unable to create resource of kind: RoleBinding, version: v1: unable to create resource of kind: RoleBinding, version: v1: unable to create some object"))
+				"unable to patch 'rbac.authorization.k8s.io/v1, Kind=RoleBinding' called 'crtadmin-pods' in namespace 'johnsmith-dev': unable to create some object"))
 		AssertThatNamespace(t, spacename+"-dev", fakeClient).
 			HasNoResource("crtadmin-pods", &rbacv1.RoleBinding{})
 	})
@@ -652,11 +647,10 @@ func TestEnsureNamespacesFail(t *testing.T) {
 		}
 		// when
 		createdOrUpdated, err := manager.ensure(ctx, nsTmplSet)
-		//then
+		// then
 		require.Error(t, err)
 		assert.False(t, createdOrUpdated)
 	})
-
 }
 
 func TestDeleteNamespace(t *testing.T) {
@@ -732,7 +726,6 @@ func TestDeleteNamespace(t *testing.T) {
 				// then
 				require.NoError(t, err)
 				assert.True(t, allDeleted)
-
 			})
 		})
 	})
@@ -792,7 +785,6 @@ func TestDeleteNamespace(t *testing.T) {
 }
 
 func TestPromoteNamespaces(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -804,7 +796,6 @@ func TestPromoteNamespaces(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("upgrade dev to advanced tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -893,7 +884,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 				HasNoResource("exec-pods", &rbacv1.Role{}). // role does not exist
 				HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
-
 		})
 
 		t.Run("delete redundant namespace while upgrading tier", func(t *testing.T) {
@@ -923,7 +913,6 @@ func TestPromoteNamespaces(t *testing.T) {
 				HasLabel(toolchainv1alpha1.TierLabelKey, "basic")
 
 			t.Run("uprade dev namespace when there is no other namespace to be deleted", func(t *testing.T) {
-
 				// when - should upgrade the -dev namespace
 				updated, err := manager.ensure(ctx, nsTmplSet)
 
@@ -947,7 +936,6 @@ func TestPromoteNamespaces(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
-
 		t.Run("promotion to another tier fails because it cannot load current template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde11", "dev"))
@@ -1010,7 +998,6 @@ func TestPromoteNamespaces(t *testing.T) {
 }
 
 func TestUpdateNamespaces(t *testing.T) {
-
 	// given
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -1022,7 +1009,6 @@ func TestUpdateNamespaces(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("success", func(t *testing.T) {
-
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"))
@@ -1193,7 +1179,6 @@ func TestUpdateNamespaces(t *testing.T) {
 	})
 
 	t.Run("failure", func(t *testing.T) {
-
 		t.Run("update to abcde15 fails because it find the new template", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withNamespaces("abcde15", "dev"))
@@ -1256,7 +1241,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 	manager, _ := prepareNamespacesManager(t, nsTmplSet)
 
 	t.Run("namespace doesn't have the type and templateref label", func(t *testing.T) {
-		//given
+		// given
 		devNS := corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev",
@@ -1268,13 +1253,13 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		require.NoError(t, err)
 		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
-		//then
+		// then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("namespace doesn't have the required role", func(t *testing.T) {
-		//given namespace doesnt have role
+		// given namespace doesnt have role
 		devNS := corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "johnsmith-dev",
@@ -1292,30 +1277,30 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
-		//when
+		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
-		//then
+		// then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("namespace doesn't have the required rolebinding", func(t *testing.T) {
-		//given
+		// given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		role := newRole(devNS.Name, "exec-pods", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
-		//when
+		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
-		//then
+		// then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("role doesn't have the owner label", func(t *testing.T) {
-		//given
+		// given
 		devNS := newNamespace("advanced", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", "johnsmith")
@@ -1331,15 +1316,15 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
 		require.NoError(t, err)
-		//when
+		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
-		//then
+		// then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("rolebinding doesn't have the owner label", func(t *testing.T) {
-		//given
+		// given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		rb := &rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
@@ -1353,26 +1338,25 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
-		//when
+		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
-		//then
+		// then
 		require.NoError(t, err)
 		require.False(t, isProvisioned)
 	})
 
 	t.Run("namespace doesn't have space Label", func(t *testing.T) {
-		//given
+		// given
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		delete(devNS.Labels, toolchainv1alpha1.SpaceLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
 		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
 		require.NoError(t, err)
-		//when
+		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
-		//then
+		// then
 		require.Error(t, err, "namespace doesn't have space label")
 		require.False(t, isProvisioned)
-
 	})
 
 	t.Run("containsRole returns error", func(t *testing.T) {

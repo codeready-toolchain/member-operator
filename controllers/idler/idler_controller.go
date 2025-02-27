@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/go-logr/logr"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
@@ -32,6 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
+
+const (
+	RestartThreshold     = 50
+	RequeueTimeThreshold = 300 * time.Second
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -107,20 +111,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Find the earlier pod to kill and requeue. Otherwise, use the idler timeoutSeconds to requeue.
-	nextTime := nextPodToBeKilledAfter(logger, idler)
-	if nextTime == nil {
-		after := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
-		logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
-		return reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: after,
-		}, r.setStatusReady(ctx, idler)
-	}
-	logger.Info("requeueing for next pod to kill", "after_seconds", nextTime.Seconds())
+	// Requeue in shortest of the following values idler.Spec.TimeoutSeconds or RequeueTimeThreshold or nextPodToBeKilledAfter
+	after := findShortestRequeueDuration(idler)
+	logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
 	return reconcile.Result{
 		Requeue:      true,
-		RequeueAfter: *nextTime,
+		RequeueAfter: after,
 	}, r.setStatusReady(ctx, idler)
 }
 
@@ -133,9 +129,20 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
 		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
-		logger := log.FromContext(ctx)
-		podLogger := logger.WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
+		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
+		podCtx := log.IntoContext(ctx, podLogger)
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
+			// check the restart count for the trackedPod
+			restartCount := getHighestRestartCount(pod.Status)
+			if restartCount > RestartThreshold {
+				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
+				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
+				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
+				if err != nil {
+					return err
+				}
+				continue
+			}
 			timeoutSeconds := idler.Spec.TimeoutSeconds
 			if isOwnedByVM(pod.ObjectMeta) {
 				// use 1/12th of the timeout for VMs
@@ -144,42 +151,10 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
-				var podreason string
-				podCondition := pod.Status.Conditions
-				for _, podCond := range podCondition {
-					if podCond.Type == "Ready" {
-						podreason = podCond.Reason
-					}
-				}
-
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				lctx := log.IntoContext(ctx, podLogger)
-				appType, appName, deletedByController, err := r.scaleControllerToZero(lctx, pod.ObjectMeta)
+				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
 				if err != nil {
 					return err
-				}
-				if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
-					logger.Info("Deleting pod without controller")
-					if err := r.AllNamespacesClient.Delete(ctx, &pod); err != nil {
-						return err
-					}
-					podLogger.Info("Pod deleted")
-				}
-
-				if appName == "" {
-					appName = pod.Name
-					appType = "Pod"
-				}
-				// Send notification if the deleted pod was managed by a controller or was a standalone pod that was not completed
-				// eg. If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
-				if podreason != "PodCompleted" || deletedByController {
-					// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-					if err := r.createNotification(ctx, idler, appName, appType); err != nil {
-						logger.Error(err, "failed to create Notification")
-						if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
-							logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-						} // not returning error to continue tracking remaining pods
-					}
 				}
 
 			} else {
@@ -196,6 +171,57 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	}
 
 	return r.updateStatusPods(ctx, idler, newStatusPods)
+}
+
+// Check if the pod belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
+// if it is a standalone pod, delete it.
+// Send notification if the deleted pod was managed by a controller, was a standalone pod that was not completed or was crashlooping
+func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
+	logger := log.FromContext(podCtx)
+	var podReason string
+	podCondition := pod.Status.Conditions
+	for _, podCond := range podCondition {
+		if podCond.Type == "Ready" {
+			podReason = podCond.Reason
+		}
+	}
+	appType, appName, deletedByController, err := r.scaleControllerToZero(podCtx, pod.ObjectMeta)
+	if err != nil {
+		return err
+	}
+	if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
+		logger.Info("Deleting pod without controller")
+		if err := r.AllNamespacesClient.Delete(podCtx, &pod); err != nil {
+			return err
+		}
+		logger.Info("Pod deleted")
+	}
+	if appName == "" {
+		appName = pod.Name
+		appType = "Pod"
+	}
+
+	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
+	if podReason != "PodCompleted" || deletedByController {
+		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
+		if err := r.createNotification(podCtx, idler, appName, appType); err != nil {
+			logger.Error(err, "failed to create Notification")
+			if err = r.setStatusIdlerNotificationCreationFailed(podCtx, idler, err.Error()); err != nil {
+				logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
+			} // not returning error to continue tracking remaining pods
+		}
+	}
+	return nil
+}
+
+func getHighestRestartCount(podstatus corev1.PodStatus) int32 {
+	var restartCount int32
+	for _, status := range podstatus.ContainerStatuses {
+		if restartCount < status.RestartCount {
+			restartCount = status.RestartCount
+		}
+	}
+	return restartCount
 }
 
 func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) error {
@@ -579,7 +605,7 @@ func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alph
 // nextPodToBeKilledAfter checks the start times of all the tracked pods in the Idler and the timeout left
 // for the next pod to be killed.
 // If there is no pod to kill, the func returns `nil`
-func nextPodToBeKilledAfter(log logr.Logger, idler *toolchainv1alpha1.Idler) *time.Duration {
+func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
 	if len(idler.Status.Pods) == 0 {
 		// no pod tracked, so nothing to kill
 		return nil
@@ -595,8 +621,26 @@ func nextPodToBeKilledAfter(log logr.Logger, idler *toolchainv1alpha1.Idler) *ti
 	if d < 0 {
 		d = 0
 	}
-	log.Info("next pod to kill", "after", d)
 	return &d
+}
+
+// findShortestRequeueDuration finds the shortest duration the given durations
+// returns the shortest duration to requeue after for idler
+func findShortestRequeueDuration(idler *toolchainv1alpha1.Idler) time.Duration {
+	durations := make([]*time.Duration, 0, 3)
+	nextPodToKillAfter := nextPodToBeKilledAfter(idler)
+	maxRequeueDuration := RequeueTimeThreshold
+	idlerTimeoutDuration := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
+	durations = append(durations, nextPodToKillAfter, &maxRequeueDuration, &idlerTimeoutDuration)
+	var shortest *time.Duration
+	for _, d := range durations {
+		if d != nil {
+			if shortest == nil || *d < *shortest {
+				shortest = d
+			}
+		}
+	}
+	return *shortest
 }
 
 // updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.

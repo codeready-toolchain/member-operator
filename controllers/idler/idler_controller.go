@@ -137,7 +137,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			if restartCount > RestartThreshold {
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				err := deletePodsAndCreateNotification(ctx, podCtx, pod, r, idler)
+				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
 				if err != nil {
 					return err
 				}
@@ -152,7 +152,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				err := deletePodsAndCreateNotification(ctx, podCtx, pod, r, idler)
+				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
 				if err != nil {
 					return err
 				}
@@ -176,8 +176,8 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 // Check if the pod belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 // if it is a standalone pod, delete it.
 // Send notification if the deleted pod was managed by a controller, was a standalone pod that was not completed or was crashlooping
-func deletePodsAndCreateNotification(ctx context.Context, podCtx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
-	logger := log.FromContext(ctx)
+func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
+	logger := log.FromContext(podCtx)
 	var podReason string
 	podCondition := pod.Status.Conditions
 	for _, podCond := range podCondition {
@@ -191,7 +191,7 @@ func deletePodsAndCreateNotification(ctx context.Context, podCtx context.Context
 	}
 	if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
 		logger.Info("Deleting pod without controller")
-		if err := r.AllNamespacesClient.Delete(ctx, &pod); err != nil {
+		if err := r.AllNamespacesClient.Delete(podCtx, &pod); err != nil {
 			return err
 		}
 		logger.Info("Pod deleted")
@@ -204,9 +204,9 @@ func deletePodsAndCreateNotification(ctx context.Context, podCtx context.Context
 	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
 	if podReason != "PodCompleted" || deletedByController {
 		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-		if err := r.createNotification(ctx, idler, appName, appType); err != nil {
+		if err := r.createNotification(podCtx, idler, appName, appType); err != nil {
 			logger.Error(err, "failed to create Notification")
-			if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
+			if err = r.setStatusIdlerNotificationCreationFailed(podCtx, idler, err.Error()); err != nil {
 				logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
 			} // not returning error to continue tracking remaining pods
 		}

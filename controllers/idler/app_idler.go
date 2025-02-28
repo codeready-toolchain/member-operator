@@ -50,7 +50,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 		restartCount := getHighestRestartCount(pod.Status)
 		if restartCount > AAPRestartThreshold {
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
-			aapName, err = r.ensureAAPIdled(podCtx, pod, idler)
+			aapName, err = r.ensureAAPIdled(podCtx, pod)
 			if err != nil {
 				return err
 			}
@@ -59,7 +59,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 			timeoutSeconds := r.aapTimeoutSeconds(idler)
 			if pod.Status.StartTime != nil && time.Now().After(pod.Status.StartTime.Add(time.Duration(timeoutSeconds)*time.Second)) {
 				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.", "start_time", pod.Status.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
-				aapName, err = r.ensureAAPIdled(podCtx, pod, idler)
+				aapName, err = r.ensureAAPIdled(podCtx, pod)
 				if err != nil {
 					return err
 				}
@@ -93,12 +93,16 @@ func checkIfAllAAPsIdled(allAAPs *unstructured.UnstructuredList, idledAAPs []str
 		return false
 	}
 	for _, aap := range allAAPs.Items {
+		found := false
 		for _, idledAAP := range idledAAPs {
 			if aap.GetName() == idledAAP {
+				found = true
 				break
 			}
 		}
-		return false
+		if !found {
+			return false
+		}
 	}
 	return true
 }
@@ -120,7 +124,7 @@ func (r *Reconciler) aapTimeoutSeconds(idler *toolchainv1alpha1.Idler) int32 {
 
 // ensureAAPIdled checks if the long-running or crashlooping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
 // Returns the AAP resource name in case it was idled, or an empty string if it was not idled.
-func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, idler *toolchainv1alpha1.Idler) (string, error) {
+func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod) (string, error) {
 	podCondition := pod.Status.Conditions
 	for _, podCond := range podCondition {
 		if podCond.Type == "PodCompleted" {
@@ -191,7 +195,7 @@ func gvrForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList
 	// Parse the group and version from the APIVersion (e.g., "apps/v1" -> group: "apps", version: "v1")
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
-		return schema.GroupVersionResource{}, fmt.Errorf("failed to parse APIVersion %s: %v", apiVersion, err)
+		return schema.GroupVersionResource{}, fmt.Errorf("failed to parse APIVersion %s: %w", apiVersion, err)
 	}
 
 	// Look for a matching resource

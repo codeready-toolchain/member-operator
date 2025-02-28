@@ -114,6 +114,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
+	if err := r.ensureAnsiblePlatformIdling(ctx, idler); err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
+			"failed to ensure aap idling '%s'", idler.Name)
+	}
 	// Requeue in shortest of the following values idler.Spec.TimeoutSeconds or RequeueTimeThreshold or nextPodToBeKilledAfter
 	after := findShortestRequeueDuration(idler)
 	logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())

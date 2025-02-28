@@ -3,6 +3,7 @@ package idler
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/discovery"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -35,6 +36,7 @@ import (
 
 const (
 	RestartThreshold     = 50
+	AAPRestartThreshold  = 30 // Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
 	RequeueTimeThreshold = 300 * time.Second
 )
 
@@ -60,6 +62,7 @@ type Reconciler struct {
 	AllNamespacesClient client.Client
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
+	DiscoveryClient     *discovery.DiscoveryClient
 	GetHostCluster      cluster.GetHostClusterFunc
 	Namespace           string
 }
@@ -311,7 +314,7 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
-// Otherwise returns "false".
+// Otherwise, returns "false".
 // It also returns the parent controller type and name or empty strings if there is no parent controller.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.ObjectMeta) (string, string, bool, error) {
 	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.Name)

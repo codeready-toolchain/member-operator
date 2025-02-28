@@ -50,7 +50,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 		restartCount := getHighestRestartCount(pod.Status)
 		if restartCount > AAPRestartThreshold {
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
-			aapName, err = ensureAAPIdled(podCtx, pod, r, idler)
+			aapName, err = r.ensureAAPIdled(podCtx, pod, idler)
 			if err != nil {
 				return err
 			}
@@ -59,7 +59,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 			timeoutSeconds := r.aapTimeoutSeconds(idler)
 			if pod.Status.StartTime != nil && time.Now().After(pod.Status.StartTime.Add(time.Duration(timeoutSeconds)*time.Second)) {
 				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.", "start_time", pod.Status.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
-				aapName, err = ensureAAPIdled(podCtx, pod, r, idler)
+				aapName, err = r.ensureAAPIdled(podCtx, pod, idler)
 				if err != nil {
 					return err
 				}
@@ -120,7 +120,7 @@ func (r *Reconciler) aapTimeoutSeconds(idler *toolchainv1alpha1.Idler) int32 {
 
 // ensureAAPIdled checks if the long-running or crashlooping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
 // Returns the AAP resource name in case it was idled, or an empty string if it was not idled.
-func ensureAAPIdled(ctx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) (string, error) {
+func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, idler *toolchainv1alpha1.Idler) (string, error) {
 	podCondition := pod.Status.Conditions
 	for _, podCond := range podCondition {
 		if podCond.Type == "PodCompleted" {

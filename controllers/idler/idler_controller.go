@@ -15,8 +15,11 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	errs "github.com/pkg/errors"
@@ -34,8 +37,7 @@ import (
 )
 
 const (
-	RestartThreshold     = 50
-	RequeueTimeThreshold = 6 * time.Hour
+	RestartThreshold = 50
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -47,9 +49,11 @@ var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Res
 var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstances"}
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.Idler{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &corev1.Pod{}),
+			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), builder.WithPredicates(PodIdlerPredicate{})).
 		Complete(r)
 }
 
@@ -112,12 +116,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Requeue in shortest of the following values idler.Spec.TimeoutSeconds or RequeueTimeThreshold or nextPodToBeKilledAfter
-	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
-	return reconcile.Result{
-		Requeue:      true,
-		RequeueAfter: requeueAfter,
-	}, r.setStatusReady(ctx, idler)
+	result := reconcile.Result{}
+	if len(idler.Status.Pods) > 0 { // schedule the next requeue only if something is being tracked
+		logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
+		result = reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfter,
+		}
+	} else {
+		// if nothing is being tracked then only wait for the next reconcile triggered
+		// by the pod creation event
+		logger.Info("no pods being tracked")
+	}
+
+	return result, r.setStatusReady(ctx, idler)
 }
 
 func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
@@ -126,7 +138,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
 		return 0, err
 	}
-	requeueAfter := shorterDuration(RequeueTimeThreshold, time.Duration(idler.Spec.TimeoutSeconds)*time.Second)
+	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
 		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
@@ -134,7 +146,8 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 		podCtx := log.IntoContext(ctx, podLogger)
 		timeoutSeconds := idler.Spec.TimeoutSeconds
 		if isOwnedByVM(pod.ObjectMeta) {
-			// use 1/12th of the timeout for VMs
+			// use 1/12th of the timeout for VMs to have more aggressive idling to decrease
+			// the infra costs because VMs consume much more resources
 			timeoutSeconds = timeoutSeconds / 12
 		}
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {

@@ -124,11 +124,8 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// no pods found - the controller will requeue after 6 hours
-		assert.Equal(t, reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: RequeueTimeThreshold,
-		}, res)
+		// no pods found - the controller won't schedule requeue
+		assert.Equal(t, reconcile.Result{}, res)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
 
@@ -298,11 +295,8 @@ func TestEnsureIdling(t *testing.T) {
 							TracksPods([]*corev1.Pod{}).
 							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
-						// requeue after the idler timeout
-						assert.Equal(t, reconcile.Result{
-							Requeue:      true,
-							RequeueAfter: TestIdlerTimeOutSeconds * time.Second,
-						}, res)
+						// no pods being tracked -> no scheduled requeue
+						assert.Equal(t, reconcile.Result{}, res)
 					})
 				})
 			})
@@ -584,11 +578,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
-				require.NoError(t, err) // 'NotFound' errors are ignored!
-				assert.Equal(t, reconcile.Result{
-					Requeue:      true,
-					RequeueAfter: TestIdlerTimeOutSeconds * time.Second,
-				}, res)
+				require.NoError(t, err)                  // 'NotFound' errors are ignored!
+				assert.Equal(t, reconcile.Result{}, res) // no other pods being tracked
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
 			}
 

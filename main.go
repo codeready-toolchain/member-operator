@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 	goruntime "runtime"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"time"
+
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
 	membercfgctrl "github.com/codeready-toolchain/member-operator/controllers/memberoperatorconfig"
@@ -248,7 +249,7 @@ func main() {
 		DynamicClient:       dynamicClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, allNamespacesCluster); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Idler")
 		os.Exit(1)
 	}

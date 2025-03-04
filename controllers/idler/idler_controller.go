@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	RestartThreshold = 50
+	restartThreshold = 50
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -125,7 +125,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		}
 	} else {
 		// if nothing is being tracked then only wait for the next reconcile triggered
-		// by starting (or crashlooping) the pod
+		// by starting the pod
 		logger.Info("no pods being tracked")
 	}
 
@@ -153,7 +153,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// check the restart count for the trackedPod
 			restartCount := getHighestRestartCount(pod.Status)
-			if restartCount > RestartThreshold {
+			if restartCount > restartThreshold {
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)

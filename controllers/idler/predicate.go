@@ -11,14 +11,18 @@ type PodIdlerPredicate struct {
 }
 
 // Update triggers reconcile if the pod runs in users namespace
-// and if the highest restart count is higher than the threshold
+// and if either the highest restart count is higher than the threshold
+// or the startTime was newly set in the new version of the pod
 func (p PodIdlerPredicate) Update(event runtimeevent.UpdateEvent) bool {
-	isUserPod, pod := isUserPod(event.ObjectNew)
+	isUserPod, newPod := isUserPod(event.ObjectNew)
 	if !isUserPod {
 		return false
 	}
-
-	return getHighestRestartCount(pod.Status) > RestartThreshold
+	if oldPod, ok := event.ObjectOld.(*corev1.Pod); ok {
+		startTimeNewlySet := oldPod.Status.StartTime == nil && newPod.Status.StartTime != nil
+		return startTimeNewlySet || getHighestRestartCount(newPod.Status) > RestartThreshold
+	}
+	return false
 }
 
 // Create triggers reconcile only if the pod runs in users namespace

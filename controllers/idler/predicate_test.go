@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -39,28 +40,49 @@ func TestPredicate(t *testing.T) {
 			assert.Equal(t, data.expectedResult, predicate.Create(event.CreateEvent{Object: data.pod}))
 			assert.False(t, predicate.Generic(event.GenericEvent{Object: data.pod}))
 			assert.False(t, predicate.Delete(event.DeleteEvent{Object: data.pod}))
+			startTime := metav1.Now()
 
 			updateTestData := map[string]struct {
-				podStatus corev1.PodStatus
-				expected  bool
+				oldPod       *corev1.Pod
+				newPodStatus corev1.PodStatus
+				expected     bool
 			}{
 				"with container above threshold": {
-					podStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+					oldPod: &corev1.Pod{},
+					newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
 						{RestartCount: 51},
 						{RestartCount: 49},
 					}},
 					expected: true,
 				},
 				"with containers under threshold": {
-					podStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+					oldPod: &corev1.Pod{},
+					newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
 						{RestartCount: 0},
 						{RestartCount: 49},
 					}},
 					expected: false,
 				},
 				"without container statuses": {
-					podStatus: corev1.PodStatus{},
-					expected:  false,
+					oldPod:       &corev1.Pod{},
+					newPodStatus: corev1.PodStatus{},
+					expected:     false,
+				},
+				"with add startTime": {
+					oldPod: &corev1.Pod{},
+					newPodStatus: corev1.PodStatus{
+						StartTime: &startTime,
+					},
+					expected: true,
+				},
+				"with startTime already present": {
+					oldPod: &corev1.Pod{Status: corev1.PodStatus{
+						StartTime: &startTime,
+					}},
+					newPodStatus: corev1.PodStatus{
+						StartTime: &startTime,
+					},
+					expected: false,
 				},
 			}
 			t.Run("for update", func(t *testing.T) {
@@ -68,11 +90,14 @@ func TestPredicate(t *testing.T) {
 					t.Run(updateTestName, func(t *testing.T) {
 						// given
 						pod := data.pod.DeepCopy()
-						pod.Status = updateData.podStatus
+						pod.Status = updateData.newPodStatus
 						expectedResult := data.expectedResult && updateData.expected
 
 						// when & then
-						assert.Equal(t, expectedResult, predicate.Update(event.UpdateEvent{ObjectNew: pod}))
+						assert.Equal(t, expectedResult, predicate.Update(event.UpdateEvent{
+							ObjectOld: updateData.oldPod,
+							ObjectNew: pod,
+						}))
 					})
 				}
 			})

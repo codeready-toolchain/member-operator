@@ -17,16 +17,44 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var aapGVR = schema.GroupVersionResource{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatforms"}
+const (
+	aapKind       = "AnsibleAutomationPlatform"
+	aapAPIVersion = "aap.ansible.com/v1alpha1"
+)
+
+type aapAPI struct {
+	GVR           schema.GroupVersionResource // AAP GVR
+	ResourceLists []*metav1.APIResourceList   // All available API in the cluster
+}
 
 // ensureAnsiblePlatformIdling checks if there is any long-running pod belonging to an AAP resource and if yes, then it idles the AAP
 // and sends a notification to the user.
 func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) error {
 
-	idledAAPs := []string{}
+	// Get all API resources from the cluster using the discovery client. We need it for constructing GVRs for unstructured objects.
+	// Do it here once, so we do not have to list it multiple times before listing/getting every unstructured resource.
+	resourceLists, err := r.DiscoveryClient.ServerPreferredResources()
+	if err != nil {
+		return err
+	}
+
+	// Check if the AAP API is even available/installed
+	aapGVR, err := findGVRForKind(aapKind, aapAPIVersion, resourceLists)
+	if err != nil {
+		return err
+	}
+	if aapGVR == nil {
+		// AAP API is not available/installed. Skipping.
+		return nil
+	}
+	aapAPI := aapAPI{
+		ResourceLists: resourceLists,
+		GVR:           *aapGVR,
+	}
 
 	// Check if there is any AAP CRs in the namespace
-	aapList, err := r.DynamicClient.Resource(aapGVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
+	idledAAPs := []string{}
+	aapList, err := r.DynamicClient.Resource(aapAPI.GVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -50,7 +78,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 		restartCount := getHighestRestartCount(pod.Status)
 		if restartCount > AAPRestartThreshold {
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
-			aapName, err = r.ensureAAPIdled(podCtx, pod)
+			aapName, err = r.ensureAAPIdled(podCtx, pod, aapAPI)
 			if err != nil {
 				return err
 			}
@@ -59,7 +87,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 			timeoutSeconds := r.aapTimeoutSeconds(idler)
 			if pod.Status.StartTime != nil && time.Now().After(pod.Status.StartTime.Add(time.Duration(timeoutSeconds)*time.Second)) {
 				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.", "start_time", pod.Status.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
-				aapName, err = r.ensureAAPIdled(podCtx, pod)
+				aapName, err = r.ensureAAPIdled(podCtx, pod, aapAPI)
 				if err != nil {
 					return err
 				}
@@ -122,9 +150,9 @@ func (r *Reconciler) aapTimeoutSeconds(idler *toolchainv1alpha1.Idler) int32 {
 	return timeoutSeconds
 }
 
-// ensureAAPIdled checks if the long-running or crashlooping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
+// ensureAAPIdled checks if the long-running or crash-looping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
 // Returns the AAP resource name in case it was idled, or an empty string if it was not idled.
-func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod) (string, error) {
+func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, aapAPI aapAPI) (string, error) {
 	podCondition := pod.Status.Conditions
 	for _, podCond := range podCondition {
 		if podCond.Type == "PodCompleted" {
@@ -133,13 +161,7 @@ func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod) (string
 		}
 	}
 
-	// Get all API resources from the cluster using the discovery client. We need it for constructing GVRs for unstructured objects.
-	// Do it here so we do not list it multiple times inside the getAAPOwner function, since it can be called recursively.
-	resourceLists, err := r.DiscoveryClient.ServerPreferredResources()
-	if err != nil {
-		return "", err
-	}
-	aap, err := r.getAAPOwner(ctx, &pod, resourceLists)
+	aap, err := r.getAAPOwner(ctx, &pod, aapAPI)
 	if err != nil {
 		return "", err
 	}
@@ -149,7 +171,7 @@ func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod) (string
 
 	// Patch the aap resource by setting spec.idle_aap to true in order to idle it
 	patch := []byte(`{"spec":{"idle_aap":true}}`)
-	_, err = r.DynamicClient.Resource(aapGVR).Namespace(pod.Namespace).Patch(ctx, aap.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	_, err = r.DynamicClient.Resource(aapAPI.GVR).Namespace(pod.Namespace).Patch(ctx, aap.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +182,7 @@ func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod) (string
 }
 
 // getAAPOwner returns the top level owner of the given object if it is an AAP instance.
-func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, resourceLists []*metav1.APIResourceList) (metav1.Object, error) {
+func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, aapAPI aapAPI) (metav1.Object, error) {
 	owners := obj.GetOwnerReferences()
 	var owner metav1.OwnerReference
 	if len(owners) == 0 {
@@ -171,12 +193,12 @@ func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, resourc
 	}
 	logger := log.FromContext(ctx)
 	// Get the GVR for the owner
-	gvr, err := gvrForKind(owner.Kind, owner.APIVersion, resourceLists)
+	gvr, err := gvrForKind(owner.Kind, owner.APIVersion, aapAPI)
 	if err != nil {
 		return nil, err
 	}
 	// Get the owner object
-	ownerObject, err := r.DynamicClient.Resource(gvr).Namespace(obj.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
+	ownerObject, err := r.DynamicClient.Resource(*gvr).Namespace(obj.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 		logger.Info("Owner not found", "kind", owner.Kind, "name", owner.Name)
 		return nil, nil
@@ -187,15 +209,27 @@ func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, resourc
 	}
 
 	// Recursively try to find the top AAP owner
-	return r.getAAPOwner(ctx, ownerObject, resourceLists)
+	return r.getAAPOwner(ctx, ownerObject, aapAPI)
 }
 
-// gvrForKind returns GVR for the kind, if it's found in the provided resource list
-func gvrForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList) (schema.GroupVersionResource, error) {
+// gvrForKind returns GVR for the kind, if it's found in the available API list in the cluster
+// returns an error if not found or failed to parse the API version
+func gvrForKind(kind, apiVersion string, aapAPI aapAPI) (*schema.GroupVersionResource, error) {
+	gvr, err := findGVRForKind(kind, apiVersion, aapAPI.ResourceLists)
+	if gvr == nil && err == nil {
+		return nil, fmt.Errorf("no resource found for kind %s in %s", kind, apiVersion)
+	}
+	return gvr, err
+}
+
+// findGVRForKind returns GVR for the kind, if it's found in the available API list in the cluster
+// if not found then returns nil, nil
+// returns nil, error if failed to parse the API version
+func findGVRForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList) (*schema.GroupVersionResource, error) {
 	// Parse the group and version from the APIVersion (e.g., "apps/v1" -> group: "apps", version: "v1")
 	gv, err := schema.ParseGroupVersion(apiVersion)
 	if err != nil {
-		return schema.GroupVersionResource{}, fmt.Errorf("failed to parse APIVersion %s: %w", apiVersion, err)
+		return nil, fmt.Errorf("failed to parse APIVersion %s: %w", apiVersion, err)
 	}
 
 	// Look for a matching resource
@@ -204,7 +238,7 @@ func gvrForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList
 			for _, apiResource := range resourceList.APIResources {
 				if apiResource.Kind == kind {
 					// Construct the GVR
-					return schema.GroupVersionResource{
+					return &schema.GroupVersionResource{
 						Group:    gv.Group,
 						Version:  gv.Version,
 						Resource: apiResource.Name,
@@ -214,5 +248,5 @@ func gvrForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList
 		}
 	}
 
-	return schema.GroupVersionResource{}, fmt.Errorf("no resource found for kind %s in %s", kind, apiVersion)
+	return nil, nil
 }

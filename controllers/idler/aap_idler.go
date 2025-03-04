@@ -203,7 +203,7 @@ func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, aapAPI 
 		logger.Info("Owner not found", "kind", owner.Kind, "name", owner.Name)
 		return nil, nil
 	}
-	if ownerObject.GetKind() == "AnsibleAutomationPlatform" {
+	if ownerObject.GetKind() == aapKind {
 		// Found the top AAP owner. Return it.
 		return obj, nil
 	}

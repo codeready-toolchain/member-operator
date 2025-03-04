@@ -11,7 +11,8 @@ import (
 
 func TestPredicate(t *testing.T) {
 	// given
-	testData := map[string]struct {
+	predicate := PodIdlerPredicate{}
+	testPriorityClassData := map[string]struct {
 		pod            *corev1.Pod
 		expectedResult bool
 	}{
@@ -32,75 +33,81 @@ func TestPredicate(t *testing.T) {
 			expectedResult: false,
 		},
 	}
-	predicate := PodIdlerPredicate{}
 
-	for testName, data := range testData {
-		t.Run(testName, func(t *testing.T) {
-			// when & then
-			assert.Equal(t, data.expectedResult, predicate.Create(event.CreateEvent{Object: data.pod}))
-			assert.False(t, predicate.Generic(event.GenericEvent{Object: data.pod}))
-			assert.False(t, predicate.Delete(event.DeleteEvent{Object: data.pod}))
-			startTime := metav1.Now()
+	testRestartData := map[string]struct {
+		newPodStatus corev1.PodStatus
+		expected     bool
+	}{
+		"with container above threshold": {
+			newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+				{RestartCount: 51},
+				{RestartCount: 49},
+			}},
+			expected: true,
+		},
+		"with containers under threshold": {
+			newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+				{RestartCount: 0},
+				{RestartCount: 49},
+			}},
+			expected: false,
+		},
+		"without container statuses": {
+			newPodStatus: corev1.PodStatus{},
+			expected:     false,
+		},
+	}
 
-			updateTestData := map[string]struct {
-				oldPod       *corev1.Pod
-				newPodStatus corev1.PodStatus
-				expected     bool
-			}{
-				"with container above threshold": {
-					oldPod: &corev1.Pod{},
-					newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
-						{RestartCount: 51},
-						{RestartCount: 49},
-					}},
-					expected: true,
-				},
-				"with containers under threshold": {
-					oldPod: &corev1.Pod{},
-					newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
-						{RestartCount: 0},
-						{RestartCount: 49},
-					}},
-					expected: false,
-				},
-				"without container statuses": {
-					oldPod:       &corev1.Pod{},
-					newPodStatus: corev1.PodStatus{},
-					expected:     false,
-				},
-				"with add startTime": {
-					oldPod: &corev1.Pod{},
-					newPodStatus: corev1.PodStatus{
-						StartTime: &startTime,
-					},
-					expected: true,
-				},
-				"with startTime already present": {
-					oldPod: &corev1.Pod{Status: corev1.PodStatus{
-						StartTime: &startTime,
-					}},
-					newPodStatus: corev1.PodStatus{
-						StartTime: &startTime,
-					},
-					expected: false,
-				},
+	startTime := metav1.Now()
+	testStartTimeData := map[string]struct {
+		oldPod    *corev1.Pod
+		startTime *metav1.Time
+		expected  bool
+	}{
+		"without startTime": {
+			oldPod:    &corev1.Pod{},
+			startTime: nil,
+			expected:  false,
+		},
+		"with added startTime": {
+			oldPod:    &corev1.Pod{},
+			startTime: &startTime,
+			expected:  true,
+		},
+		"with startTime already present": {
+			oldPod: &corev1.Pod{Status: corev1.PodStatus{
+				StartTime: &startTime,
+			}},
+			startTime: &startTime,
+			expected:  false,
+		},
+	}
+
+	for classTestName, classTestData := range testPriorityClassData {
+		t.Run(classTestName, func(t *testing.T) {
+			for subTestName, restartData := range testRestartData {
+				t.Run(subTestName, func(t *testing.T) {
+					for subSubTestName, startTimeData := range testStartTimeData {
+						t.Run(subSubTestName, func(t *testing.T) {
+							// given
+							pod := classTestData.pod.DeepCopy()
+							pod.Status = restartData.newPodStatus
+							pod.Status.StartTime = startTimeData.startTime
+							expectedResult := classTestData.expectedResult && (restartData.expected || startTimeData.expected)
+
+							// when & then
+							assert.Equal(t, expectedResult, predicate.Update(event.UpdateEvent{
+								ObjectOld: startTimeData.oldPod,
+								ObjectNew: pod,
+							}))
+
+							assert.False(t, predicate.Create(event.CreateEvent{Object: classTestData.pod}))
+							assert.False(t, predicate.Generic(event.GenericEvent{Object: classTestData.pod}))
+							assert.False(t, predicate.Delete(event.DeleteEvent{Object: classTestData.pod}))
+						})
+					}
+				})
 			}
-			t.Run("for update", func(t *testing.T) {
-				for updateTestName, updateData := range updateTestData {
-					t.Run(updateTestName, func(t *testing.T) {
-						// given
-						pod := data.pod.DeepCopy()
-						pod.Status = updateData.newPodStatus
-						expectedResult := data.expectedResult && updateData.expected
-
-						// when & then
-						assert.Equal(t, expectedResult, predicate.Update(event.UpdateEvent{
-							ObjectOld: updateData.oldPod,
-							ObjectNew: pod,
-						}))
-					})
-				}
-			})
 		})
 	}
 }

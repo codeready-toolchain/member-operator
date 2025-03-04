@@ -125,7 +125,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		}
 	} else {
 		// if nothing is being tracked then only wait for the next reconcile triggered
-		// by the pod creation event
+		// by starting (or crashlooping) the pod
 		logger.Info("no pods being tracked")
 	}
 

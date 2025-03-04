@@ -246,6 +246,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
 		DynamicClient:       dynamicClient,
+		DiscoveryClient:     discoveryClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr); err != nil {

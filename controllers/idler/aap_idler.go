@@ -153,8 +153,7 @@ func (r *Reconciler) aapTimeoutSeconds(idler *toolchainv1alpha1.Idler) int32 {
 // ensureAAPIdled checks if the long-running or crash-looping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
 // Returns the AAP resource name in case it was idled, or an empty string if it was not idled.
 func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, aapAPI aapAPI) (string, error) {
-	podCondition := pod.Status.Conditions
-	for _, podCond := range podCondition {
+	for _, podCond := range pod.Status.Conditions {
 		if podCond.Type == "PodCompleted" {
 			// Pod is in the completed state, no need to idle
 			return "", nil

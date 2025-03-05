@@ -57,10 +57,10 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 
 	mapToOwnerByLabel := handler.EnqueueRequestsFromMapFunc(commoncontroller.MapToOwnerByLabel("", toolchainv1alpha1.SpaceLabelKey))
 	build := ctrl.NewControllerManagedBy(mgr).
-		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
+		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.Or[runtimeclient.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
 		Watches(&corev1.Namespace{}, mapToOwnerByLabel).
-		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &rbac.Role{}), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{})).
-		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &rbac.RoleBinding{}), mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
+		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.Role{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{})).
+		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.RoleBinding{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{}))
 	// watch for all cluster resource kinds associated with an NSTemplateSet
 	for _, clusterResource := range clusterResourceKinds {
 		// only reconcile generation changes for cluster resources and only when the API group is present in the cluster

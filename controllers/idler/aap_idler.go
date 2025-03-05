@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"time"
@@ -53,7 +52,7 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 	}
 
 	// Check if there is any AAP CRs in the namespace
-	idledAAPs := []string{}
+	idledAAPs := make(map[string]string)
 	aapList, err := r.DynamicClient.Resource(aapAPI.GVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
@@ -105,8 +104,8 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 				} // not returning error to continue tracking remaining pods
 			}
 
-			idledAAPs = append(idledAAPs, aapName)
-			if checkIfAllAAPsIdled(aapList, idledAAPs) {
+			idledAAPs[aapName] = aapName
+			if len(idledAAPs) == len(aapList.Items) {
 				// All AAPs are idled, no need to check the rest of the pods
 				return nil
 			}
@@ -114,25 +113,6 @@ func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *too
 	}
 
 	return nil
-}
-
-func checkIfAllAAPsIdled(allAAPs *unstructured.UnstructuredList, idledAAPs []string) bool {
-	if len(allAAPs.Items) != len(idledAAPs) {
-		return false
-	}
-	for _, aap := range allAAPs.Items {
-		found := false
-		for _, idledAAP := range idledAAPs {
-			if aap.GetName() == idledAAP {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	return true
 }
 
 const oneHour = 60 * 60 // in seconds

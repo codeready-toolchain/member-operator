@@ -184,7 +184,7 @@ func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, aapAPI 
 	}
 	if ownerObject.GetKind() == aapKind {
 		// Found the top AAP owner. Return it.
-		return obj, nil
+		return ownerObject, nil
 	}
 
 	// Recursively try to find the top AAP owner

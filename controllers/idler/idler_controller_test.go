@@ -107,7 +107,7 @@ func TestEnsureIdling(t *testing.T) {
 
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	t.Run("No pods in namespace managed by idler, idler timeout is longer than requeue-time-threshold", func(t *testing.T) {
+	t.Run("No pods in namespace managed by idler, no requeue time", func(t *testing.T) {
 		// given
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{

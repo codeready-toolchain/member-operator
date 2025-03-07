@@ -15,8 +15,11 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	errs "github.com/pkg/errors"
@@ -34,8 +37,7 @@ import (
 )
 
 const (
-	RestartThreshold     = 50
-	RequeueTimeThreshold = 300 * time.Second
+	restartThreshold = 50
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -47,9 +49,11 @@ var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Res
 var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstances"}
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *Reconciler) SetupWithManager(mgr manager.Manager) error {
+func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.Idler{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &corev1.Pod{}),
+			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), builder.WithPredicates(PodIdlerPredicate{})).
 		Complete(r)
 }
 
@@ -107,46 +111,56 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to ensure idling")
 		return reconcile.Result{}, r.setStatusFailed(ctx, idler, err.Error())
 	}
-	if err := r.ensureIdling(ctx, idler); err != nil {
+	requeueAfter, err := r.ensureIdling(ctx, idler)
+	if err != nil {
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	// Requeue in shortest of the following values idler.Spec.TimeoutSeconds or RequeueTimeThreshold or nextPodToBeKilledAfter
-	after := findShortestRequeueDuration(idler)
-	logger.Info("requeueing for next pod to check", "after_seconds", after.Seconds())
-	return reconcile.Result{
-		Requeue:      true,
-		RequeueAfter: after,
-	}, r.setStatusReady(ctx, idler)
+	result := reconcile.Result{}
+	if len(idler.Status.Pods) > 0 { // schedule the next requeue only if something is being tracked
+		logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
+		result = reconcile.Result{
+			Requeue:      true,
+			RequeueAfter: requeueAfter,
+		}
+	} else {
+		// if nothing is being tracked then only wait for the next reconcile triggered
+		// by a pod starting
+		logger.Info("no pods being tracked")
+	}
+
+	return result, r.setStatusReady(ctx, idler)
 }
 
-func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
 	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
-		return err
+		return 0, err
 	}
+	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
 		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		podCtx := log.IntoContext(ctx, podLogger)
+		timeoutSeconds := idler.Spec.TimeoutSeconds
+		if isOwnedByVM(pod.ObjectMeta) {
+			// use 1/12th of the timeout for VMs to have more aggressive idling to decrease
+			// the infra costs because VMs consume much more resources
+			timeoutSeconds = timeoutSeconds / 12
+		}
 		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
 			// check the restart count for the trackedPod
 			restartCount := getHighestRestartCount(pod.Status)
-			if restartCount > RestartThreshold {
+			if restartCount > restartThreshold {
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
 				if err != nil {
-					return err
+					return 0, err
 				}
 				continue
-			}
-			timeoutSeconds := idler.Spec.TimeoutSeconds
-			if isOwnedByVM(pod.ObjectMeta) {
-				// use 1/12th of the timeout for VMs
-				timeoutSeconds = timeoutSeconds / 12
 			}
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
@@ -154,12 +168,11 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
 				if err != nil {
-					return err
+					return 0, err
 				}
-
-			} else {
-				newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
+				continue
 			}
+			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 
 		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
 			podLogger.Info("New pod detected. Start tracking.")
@@ -168,9 +181,23 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				StartTime: *pod.Status.StartTime,
 			})
 		}
+		killAfter := time.Until(pod.Status.StartTime.Add(time.Duration(timeoutSeconds+1) * time.Second))
+		requeueAfter = shorterDuration(requeueAfter, killAfter)
 	}
 
-	return r.updateStatusPods(ctx, idler, newStatusPods)
+	return requeueAfter, r.updateStatusPods(ctx, idler, newStatusPods)
+}
+
+func shorterDuration(first, second time.Duration) time.Duration {
+	shorter := first
+	if first > second {
+		shorter = second
+	}
+	// do not allow negative durations: if a pod has timed out, then it should be killed immediately
+	if shorter < 0 {
+		shorter = 0
+	}
+	return shorter
 }
 
 // Check if the pod belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
@@ -600,47 +627,6 @@ func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alph
 		}
 	}
 	return nil
-}
-
-// nextPodToBeKilledAfter checks the start times of all the tracked pods in the Idler and the timeout left
-// for the next pod to be killed.
-// If there is no pod to kill, the func returns `nil`
-func nextPodToBeKilledAfter(idler *toolchainv1alpha1.Idler) *time.Duration {
-	if len(idler.Status.Pods) == 0 {
-		// no pod tracked, so nothing to kill
-		return nil
-	}
-	var d time.Duration
-	for _, pod := range idler.Status.Pods {
-		killAfter := time.Until(pod.StartTime.Add(time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second))
-		if d == 0 || killAfter < d {
-			d = killAfter
-		}
-	}
-	// do not allow negative durations: if a pod has timed out, then it should be killed immediately
-	if d < 0 {
-		d = 0
-	}
-	return &d
-}
-
-// findShortestRequeueDuration finds the shortest duration the given durations
-// returns the shortest duration to requeue after for idler
-func findShortestRequeueDuration(idler *toolchainv1alpha1.Idler) time.Duration {
-	durations := make([]*time.Duration, 0, 3)
-	nextPodToKillAfter := nextPodToBeKilledAfter(idler)
-	maxRequeueDuration := RequeueTimeThreshold
-	idlerTimeoutDuration := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
-	durations = append(durations, nextPodToKillAfter, &maxRequeueDuration, &idlerTimeoutDuration)
-	var shortest *time.Duration
-	for _, d := range durations {
-		if d != nil {
-			if shortest == nil || *d < *shortest {
-				shortest = d
-			}
-		}
-	}
-	return *shortest
 }
 
 // updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.

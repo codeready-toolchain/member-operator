@@ -247,7 +247,7 @@ func main() {
 		DynamicClient:       dynamicClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, allNamespacesCluster); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Idler")
 		os.Exit(1)
 	}

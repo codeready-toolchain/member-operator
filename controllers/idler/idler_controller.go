@@ -181,8 +181,10 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				StartTime: *pod.Status.StartTime,
 			})
 		}
-		killAfter := time.Until(pod.Status.StartTime.Add(time.Duration(timeoutSeconds+1) * time.Second))
-		requeueAfter = shorterDuration(requeueAfter, killAfter)
+		if pod.Status.StartTime != nil {
+			killAfter := time.Until(pod.Status.StartTime.Add(time.Duration(timeoutSeconds+1) * time.Second))
+			requeueAfter = shorterDuration(requeueAfter, killAfter)
+		}
 	}
 
 	return requeueAfter, r.updateStatusPods(ctx, idler, newStatusPods)

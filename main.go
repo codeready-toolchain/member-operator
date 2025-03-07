@@ -158,7 +158,7 @@ func main() {
 	}
 	crtConfig.Print()
 
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(ctrl.GetConfigOrDie())
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		setupLog.Error(err, "failed to create discovery client")
 		os.Exit(1)
@@ -166,7 +166,7 @@ func main() {
 
 	// Webhook server will be created with default values (port 9443) as per doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/manager/manager.go#L244-L247
 	// Cache Options design doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/designs/cache_options.md
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
@@ -188,7 +188,7 @@ func main() {
 	// This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one.
 	// This will help keeping a reasonable memory usage for this operator since the cache won't store all other namespace scoped
 	// resources (secrets, etc.).
-	allNamespacesCluster, err := runtimecluster.New(ctrl.GetConfigOrDie(), func(options *runtimecluster.Options) {
+	allNamespacesCluster, err := runtimecluster.New(cfg, func(options *runtimecluster.Options) {
 		options.Scheme = scheme
 	})
 	if err != nil {

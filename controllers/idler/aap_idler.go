@@ -3,11 +3,12 @@ package idler
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -21,98 +22,107 @@ const (
 	aapAPIVersion = "aap.ansible.com/v1alpha1"
 )
 
-type aapAPI struct {
-	GVR           schema.GroupVersionResource // AAP GVR
-	ResourceLists []*metav1.APIResourceList   // All available API in the cluster
+type apiInfo struct {
+	aapGVR        schema.GroupVersionResource // AAP GVR
+	resourceLists []*metav1.APIResourceList   // All available API in the cluster
 }
 
 // ensureAnsiblePlatformIdling checks if there is any long-running pod belonging to an AAP resource and if yes, then it idles the AAP
 // and sends a notification to the user.
-func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
 
 	// Get all API resources from the cluster using the discovery client. We need it for constructing GVRs for unstructured objects.
 	// Do it here once, so we do not have to list it multiple times before listing/getting every unstructured resource.
 	resourceLists, err := r.DiscoveryClient.ServerPreferredResources()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Check if the AAP API is even available/installed
 	aapGVR, err := findGVRForKind(aapKind, aapAPIVersion, resourceLists)
-	if err != nil {
-		return err
+	if err != nil || aapGVR == nil {
+		return 0, err
 	}
-	if aapGVR == nil {
-		// AAP API is not available/installed. Skipping.
-		return nil
-	}
-	aapAPI := aapAPI{
-		ResourceLists: resourceLists,
-		GVR:           *aapGVR,
+	apiInfo := apiInfo{
+		resourceLists: resourceLists,
+		aapGVR:        *aapGVR,
 	}
 
 	// Check if there is any AAP CRs in the namespace
 	idledAAPs := make(map[string]string)
-	aapList, err := r.DynamicClient.Resource(aapAPI.GVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
+	aapList, err := r.DynamicClient.Resource(apiInfo.aapGVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if len(aapList.Items) == 0 {
 		// No AAP resources found. Nothing to idle.
-		return nil
+		return 0, nil
 	}
 
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
 	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
-		return err
+		return 0, err
 	}
+	timeoutSeconds := r.aapTimeoutSeconds(idler)
+	requeueAfter := time.Duration(timeoutSeconds) * time.Second
 	for _, pod := range podList.Items {
-		var aapName string
+		startTime := pod.Status.StartTime
+		if startTime == nil {
+			continue
+		}
+		var idledAAPName string
 		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		podCtx := log.IntoContext(ctx, podLogger)
 
 		// check the restart count for the pod
 		restartCount := getHighestRestartCount(pod.Status)
-		if restartCount > AAPRestartThreshold {
+		if restartCount > aaPRestartThreshold {
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
-			aapName, err = r.ensureAAPIdled(podCtx, pod, aapAPI)
+			idledAAPName, err = r.ensureAAPIdled(podCtx, pod, apiInfo)
 			if err != nil {
-				return err
+				return 0, err
 			}
 		} else {
 			// Check if running for longer then the AAP idler timeout
-			timeoutSeconds := r.aapTimeoutSeconds(idler)
-			if pod.Status.StartTime != nil && time.Now().After(pod.Status.StartTime.Add(time.Duration(timeoutSeconds)*time.Second)) {
-				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.", "start_time", pod.Status.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
-				aapName, err = r.ensureAAPIdled(podCtx, pod, aapAPI)
+			if time.Now().After(startTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
+				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.",
+					"start_time", startTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
+				idledAAPName, err = r.ensureAAPIdled(podCtx, pod, apiInfo)
 				if err != nil {
-					return err
+					return 0, err
 				}
+			} else {
+				// we don't know if it's an aap pod or not, let's schedule the next reconcile like assuming it is an aap pod to make sure
+				// that it would be killed after the timeout
+				killAfter := time.Until(startTime.Add(time.Duration(timeoutSeconds+1) * time.Second))
+				requeueAfter = shorterDuration(requeueAfter, killAfter)
 			}
 		}
 
 		// Check if we need to send a notification and proceed with the next pod
-		if aapName != "" {
+		if idledAAPName != "" {
 			// The AAP has been Idled
 			// A notification should be sent
-			if err := r.createNotification(podCtx, idler, aapName, "Ansible Automation Platform"); err != nil {
+			if err := r.createNotification(podCtx, idler, idledAAPName, "Ansible Automation Platform"); err != nil {
 				podLogger.Error(err, "failed to create Notification")
 				if err = r.setStatusIdlerNotificationCreationFailed(podCtx, idler, err.Error()); err != nil {
 					podLogger.Error(err, "failed to set status IdlerNotificationCreationFailed")
 				} // not returning error to continue tracking remaining pods
 			}
 
-			idledAAPs[aapName] = aapName
+			idledAAPs[idledAAPName] = idledAAPName
 			if len(idledAAPs) == len(aapList.Items) {
 				// All AAPs are idled, no need to check the rest of the pods
-				return nil
+				// no need to schedule any aap-specific requeue
+				return 0, nil
 			}
 		}
 	}
 
-	return nil
+	// there is at least one aap instance, schedule the next reconcile
+	return requeueAfter, nil
 }
 
 const oneHour = 60 * 60 // in seconds
@@ -132,25 +142,15 @@ func (r *Reconciler) aapTimeoutSeconds(idler *toolchainv1alpha1.Idler) int32 {
 
 // ensureAAPIdled checks if the long-running or crash-looping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
 // Returns the AAP resource name in case it was idled, or an empty string if it was not idled.
-func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, aapAPI aapAPI) (string, error) {
-	for _, podCond := range pod.Status.Conditions {
-		if podCond.Type == "PodCompleted" {
-			// Pod is in the completed state, no need to idle
-			return "", nil
-		}
-	}
-
-	aap, err := r.getAAPOwner(ctx, &pod, aapAPI)
-	if err != nil {
-		return "", err
-	}
-	if aap == nil {
-		return "", nil // No AAP owner found
+func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, apiInfo apiInfo) (string, error) {
+	aap, err := r.getAAPOwner(ctx, &pod, apiInfo)
+	if err != nil || aap == nil {
+		return "", err // either error or no AAP owner found
 	}
 
 	// Patch the aap resource by setting spec.idle_aap to true in order to idle it
 	patch := []byte(`{"spec":{"idle_aap":true}}`)
-	_, err = r.DynamicClient.Resource(aapAPI.GVR).Namespace(pod.Namespace).Patch(ctx, aap.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	_, err = r.DynamicClient.Resource(apiInfo.aapGVR).Namespace(pod.Namespace).Patch(ctx, aap.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -161,7 +161,7 @@ func (r *Reconciler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, aapAPI 
 }
 
 // getAAPOwner returns the top level owner of the given object if it is an AAP instance.
-func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, aapAPI aapAPI) (metav1.Object, error) {
+func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, aapAPI apiInfo) (metav1.Object, error) {
 	owners := obj.GetOwnerReferences()
 	var owner metav1.OwnerReference
 	if len(owners) == 0 {
@@ -193,8 +193,8 @@ func (r *Reconciler) getAAPOwner(ctx context.Context, obj metav1.Object, aapAPI 
 
 // gvrForKind returns GVR for the kind, if it's found in the available API list in the cluster
 // returns an error if not found or failed to parse the API version
-func gvrForKind(kind, apiVersion string, aapAPI aapAPI) (*schema.GroupVersionResource, error) {
-	gvr, err := findGVRForKind(kind, apiVersion, aapAPI.ResourceLists)
+func gvrForKind(kind, apiVersion string, apiInfo apiInfo) (*schema.GroupVersionResource, error) {
+	gvr, err := findGVRForKind(kind, apiVersion, apiInfo.resourceLists)
 	if gvr == nil && err == nil {
 		return nil, fmt.Errorf("no resource found for kind %s in %s", kind, apiVersion)
 	}

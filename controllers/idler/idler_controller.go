@@ -3,8 +3,9 @@ package idler
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/discovery"
 	"time"
+
+	"k8s.io/client-go/discovery"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
@@ -38,9 +39,9 @@ import (
 )
 
 const (
-	restartThreshold     = 50
-	AAPRestartThreshold  = 30 // Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
-	RequeueTimeThreshold = 300 * time.Second
+	restartThreshold = 50
+	// Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
+	aaPRestartThreshold = restartThreshold - 1
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -120,9 +121,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	if err := r.ensureAnsiblePlatformIdling(ctx, idler); err != nil {
+	aapRequeueAfter, err := r.ensureAnsiblePlatformIdling(ctx, idler)
+	if err != nil {
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure aap idling '%s'", idler.Name)
+	}
+	if aapRequeueAfter != 0 {
+		requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
 	}
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{

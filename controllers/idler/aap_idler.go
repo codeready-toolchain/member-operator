@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
@@ -65,12 +66,24 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 
 	// Check if there is any AAP CRs in the namespace
 	idledAAPs := make(map[string]string)
+
 	aapList, err := i.dynamicClient.Resource(*i.aapGVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return 0, err
 	}
-	if len(aapList.Items) == 0 {
-		// No AAP resources found. Nothing to idle.
+	running := make([]string, 0, len(aapList.Items))
+	for _, aap := range aapList.Items {
+		idled, _, err := unstructured.NestedBool(aap.UnstructuredContent(), "spec", "idle_aap")
+		if err != nil {
+			return 0, err
+		}
+		if !idled {
+			running = append(running, aap.GetName())
+		}
+	}
+
+	if len(running) == 0 {
+		// No running AAP resource found. Nothing to idle.
 		return 0, nil
 	}
 
@@ -123,7 +136,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 			i.notifyUser(podCtx, idler, idledAAPName, "Ansible Automation Platform")
 
 			idledAAPs[idledAAPName] = idledAAPName
-			if len(idledAAPs) == len(aapList.Items) {
+			if len(idledAAPs) == len(running) {
 				// All AAPs are idled, no need to check the rest of the pods
 				// no need to schedule any aap-specific requeue
 				return 0, nil

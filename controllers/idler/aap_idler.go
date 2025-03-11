@@ -73,6 +73,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 	}
 	running := make([]string, 0, len(aapList.Items))
 	for _, aap := range aapList.Items {
+		// we don't need to check if the field was found - if not found, then the value is "false" (not idled)
 		idled, _, err := unstructured.NestedBool(aap.UnstructuredContent(), "spec", "idle_aap")
 		if err != nil {
 			return 0, err
@@ -92,7 +93,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 	if err := i.allNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
 		return 0, err
 	}
-	timeoutSeconds := i.aapTimeoutSeconds(idler)
+	timeoutSeconds := aapTimeoutSeconds(idler.Spec.TimeoutSeconds)
 	requeueAfter := time.Duration(timeoutSeconds) * time.Second
 	for _, pod := range podList.Items {
 		startTime := pod.Status.StartTime
@@ -148,17 +149,17 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 	return requeueAfter, nil
 }
 
-const oneHour = 60 * 60 // in seconds
+const twoHours = 2 * 60 * 60 // in seconds
 
-func (i *aapIdler) aapTimeoutSeconds(idler *toolchainv1alpha1.Idler) int32 {
-	// Check if the idler timeout is less than one hour and if so, set it to half of the timeout.
+func aapTimeoutSeconds(idlerTimeout int32) int32 {
+	// Check if the idler timeout is less than two hours and if so, set it to half of the timeout.
 	// Otherwise, subtract one hour from the timeout.
 	// This is to ensure that the AAP idler kicks in before the main idler.
-	timeoutSeconds := idler.Spec.TimeoutSeconds
-	if timeoutSeconds <= oneHour {
+	timeoutSeconds := idlerTimeout
+	if timeoutSeconds <= twoHours {
 		timeoutSeconds = timeoutSeconds / 2
 	} else {
-		timeoutSeconds = timeoutSeconds - oneHour
+		timeoutSeconds = timeoutSeconds - twoHours/2
 	}
 	return timeoutSeconds
 }

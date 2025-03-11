@@ -116,19 +116,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	result := reconcile.Result{}
-	if len(idler.Status.Pods) > 0 { // schedule the next requeue only if something is being tracked
-		logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
-		result = reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: requeueAfter,
-		}
-	} else {
-		// if nothing is being tracked then only wait for the next reconcile triggered
-		// by a pod starting
-		logger.Info("no pods being tracked")
+	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
+	result := reconcile.Result{
+		Requeue:      true,
+		RequeueAfter: requeueAfter,
 	}
-
 	return result, r.setStatusReady(ctx, idler)
 }
 
@@ -181,9 +173,14 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				StartTime: *pod.Status.StartTime,
 			})
 		}
+		// calculate the next reconcile
 		if pod.Status.StartTime != nil {
 			killAfter := time.Until(pod.Status.StartTime.Add(time.Duration(timeoutSeconds+1) * time.Second))
 			requeueAfter = shorterDuration(requeueAfter, killAfter)
+		} else {
+			// if the pod doesn't contain startTime, then schedule the next reconcile to the timeout
+			// if not already scheduled to an earlier time
+			requeueAfter = shorterDuration(requeueAfter, time.Duration(timeoutSeconds)*time.Second)
 		}
 	}
 

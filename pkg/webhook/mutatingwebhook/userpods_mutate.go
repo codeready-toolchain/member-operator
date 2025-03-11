@@ -18,7 +18,7 @@ var (
 		{
 			"op":    "replace",
 			"path":  "/spec/priorityClassName",
-			"value": priorityClassName,
+			"value": PriorityClassName,
 		},
 		{
 			"op":    "replace",
@@ -32,7 +32,7 @@ var (
 
 const (
 	priority          = int32(-3)
-	priorityClassName = "sandbox-users-pods"
+	PriorityClassName = "sandbox-users-pods"
 )
 
 func init() {

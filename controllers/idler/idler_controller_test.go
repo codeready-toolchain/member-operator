@@ -1570,11 +1570,11 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		DynamicClient:       dynamicClient,
+		DiscoveryClient:     fakeDiscovery,
 		ScalesClient:        &scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		Namespace:           test.MemberOperatorNs,
-		DiscoveryClient:     fakeDiscovery,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient, dynamicClient
 }

@@ -121,7 +121,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	aapRequeueAfter, err := r.ensureAnsiblePlatformIdling(ctx, idler)
+	aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify)
+	if err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
+			"failed to init aap idler '%s'", idler.Name)
+	}
+	aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
 	if err != nil {
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure aap idling '%s'", idler.Name)
@@ -243,12 +248,7 @@ func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *
 	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
 	if podReason != "PodCompleted" || deletedByController {
 		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-		if err := r.createNotification(podCtx, idler, appName, appType); err != nil {
-			logger.Error(err, "failed to create Notification")
-			if err = r.setStatusIdlerNotificationCreationFailed(podCtx, idler, err.Error()); err != nil {
-				logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-			} // not returning error to continue tracking remaining pods
-		}
+		r.notify(podCtx, idler, appName, appType)
 	}
 	return nil
 }
@@ -263,8 +263,18 @@ func getHighestRestartCount(podstatus corev1.PodStatus) int32 {
 	return restartCount
 }
 
+func (r *Reconciler) notify(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) {
+	logger := log.FromContext(ctx)
+	logger.Info("Creating Notification")
+	if err := r.createNotification(ctx, idler, appName, appType); err != nil {
+		logger.Error(err, "failed to create Notification")
+		if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
+			logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
+		} // not returning error to continue tracking remaining pods
+	}
+}
+
 func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) error {
-	log.FromContext(ctx).Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {

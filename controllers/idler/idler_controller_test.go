@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
+	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	fakescale "k8s.io/client-go/scale/fake"
 	clienttest "k8s.io/client-go/testing"
@@ -1508,6 +1509,8 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 	allNamespacesClient := test.NewFakeClient(t)
 	dynamicClient := fakedynamic.NewSimpleDynamicClient(s)
 
+	fakeDiscovery := fakeclientset.NewSimpleClientset().Discovery()
+
 	scalesClient := fakescale.FakeScaleClient{}
 	scalesClient.AddReactor("update", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
 		action := rawAction.(clienttest.UpdateAction)    // nolint: forcetypeassert
@@ -1571,6 +1574,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		Namespace:           test.MemberOperatorNs,
+		DiscoveryClient:     fakeDiscovery,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient, dynamicClient
 }

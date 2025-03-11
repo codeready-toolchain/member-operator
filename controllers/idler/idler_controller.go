@@ -68,7 +68,7 @@ type Reconciler struct {
 	AllNamespacesClient client.Client
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
-	DiscoveryClient     *discovery.DiscoveryClient
+	DiscoveryClient     discovery.ServerResourcesInterface
 	GetHostCluster      cluster.GetHostClusterFunc
 	Namespace           string
 }

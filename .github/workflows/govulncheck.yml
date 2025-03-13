@@ -18,6 +18,12 @@ jobs:
       with:
         go-version-file: go.mod
 
+    - name: Force Clean Go Modules
+      run: |
+        rm -rf $(go env GOPATH)/pkg/mod
+        go mod tidy
+        go mod download
+
     - name: Generate Assets
       run: |
         make generate-assets

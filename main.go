@@ -320,7 +320,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-
 }
 
 func newScalesClient(config *rest.Config) (scale.ScalesGetter, error) {

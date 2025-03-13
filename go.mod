@@ -1,7 +1,7 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20250227073728-5999971adb48
+	github.com/codeready-toolchain/api v0.0.0-20250313170542-4e3c4147cb80
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20250303095208-d379ee86d136
 	github.com/go-logr/logr v1.4.1
 	github.com/google/go-cmp v0.6.0
@@ -73,6 +73,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/onsi/gomega v1.33.0 // indirect
 	github.com/openshift/library-go v0.0.0-20241118144106-bfd968d8eef4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
@@ -110,9 +111,3 @@ require (
 go 1.22.0
 
 toolchain go1.22.12
-
-replace (
-	github.com/codeready-toolchain/api => github.com/rsoaresd/api v0.0.0-20250304130858-a7bdb1d138cc
-
-	github.com/codeready-toolchain/toolchain-common => github.com/rsoaresd/toolchain-common v0.0.0-20250310105006-c636fa25fa34
-)

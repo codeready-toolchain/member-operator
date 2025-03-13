@@ -20,7 +20,6 @@ jobs:
 
     - name: Force Clean Go Modules
       run: |
-        rm -rf $(go env GOPATH)/pkg/mod
         go mod tidy
         go mod download
 

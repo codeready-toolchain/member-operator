@@ -20,14 +20,11 @@ jobs:
 
     - name: Generate Assets
       run: |
-        make build
-
-    - name: Debug
-      run: |
-        ls -R pkg/autoscaler
+        make generate-assets
 
     - name: Run govulncheck
       uses: golang/govulncheck-action@v1
       with:
-        go-version-input: 1.22.12
+        go-version-input: go.mod
         go-package: ./...
+        repo-checkout: false

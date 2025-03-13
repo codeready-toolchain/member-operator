@@ -3,7 +3,6 @@ package idler
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
@@ -320,7 +319,7 @@ func TestAAPIdler(t *testing.T) {
 
 			t.Run("with not found for deployment owner", func(t *testing.T) {
 				dynamicCl.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, fmt.Errorf("wrapping: %w", &errors.StatusError{ErrStatus: metav1.Status{Code: http.StatusNotFound}})
+					return true, nil, errors.NewNotFound(schema.GroupResource{}, "Deployment")
 				})
 
 				// when

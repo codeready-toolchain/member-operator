@@ -20,7 +20,7 @@ jobs:
 
     - name: Generate Assets
       run: |
-        make generate-assets
+        make build
 
     - name: Debug
       run: |

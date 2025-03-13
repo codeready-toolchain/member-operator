@@ -18,6 +18,10 @@ jobs:
       with:
         go-version-file: go.mod
 
+    - name: try
+      run: |
+        cd $GITHUB_WORKSPACE
+
     - name: Generate Assets
       run: |
         make generate-assets

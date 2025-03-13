@@ -18,11 +18,6 @@ jobs:
       with:
         go-version-file: go.mod
 
-    - name: Force Clean Go Modules
-      run: |
-        go mod tidy
-        go mod download
-
     - name: Generate Assets
       run: |
         make generate-assets

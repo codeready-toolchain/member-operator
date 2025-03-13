@@ -26,14 +26,8 @@ jobs:
       run: |
         ls -R pkg/autoscaler
 
-    - name: Ensure Go modules are up-to-date
-      run: |
-        go mod tidy
-        go get
-        go build ./...
-
     - name: Run govulncheck
       uses: golang/govulncheck-action@v1
       with:
-        go-version-input: ${{ steps.install-go.outputs.go-version }}
+        go-version-input: 1.22.0
         go-package: ./...

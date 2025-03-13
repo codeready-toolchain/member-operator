@@ -64,29 +64,13 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 		return 0, nil // aap api is not available
 	}
 
-	// Check if there is any AAP CRs in the namespace
-	idledAAPs := make(map[string]string)
-
-	aapList, err := i.dynamicClient.Resource(*i.aapGVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
-	if err != nil {
+	running, err := i.getRunningAAPs(ctx, idler)
+	if err != nil || len(running) == 0 {
+		// either error or no running AAP resource found. Nothing to idle.
 		return 0, err
 	}
-	running := make([]string, 0, len(aapList.Items))
-	for _, aap := range aapList.Items {
-		// we don't need to check if the field was found - if not found, then the value is "false" (not idled)
-		idled, _, err := unstructured.NestedBool(aap.UnstructuredContent(), "spec", "idle_aap")
-		if err != nil {
-			return 0, err
-		}
-		if !idled {
-			running = append(running, aap.GetName())
-		}
-	}
 
-	if len(running) == 0 {
-		// No running AAP resource found. Nothing to idle.
-		return 0, nil
-	}
+	idledAAPs := make([]string, 0, len(running))
 
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
@@ -109,7 +93,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 		restartCount := getHighestRestartCount(pod.Status)
 		if restartCount > aaPRestartThreshold {
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
-			idledAAPName, err = i.ensureAAPIdled(podCtx, pod)
+			idledAAPName, err = i.ensureAAPIdled(podCtx, pod, idledAAPs)
 			if err != nil {
 				return 0, err
 			}
@@ -118,7 +102,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 			if time.Now().After(startTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.",
 					"start_time", startTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
-				idledAAPName, err = i.ensureAAPIdled(podCtx, pod)
+				idledAAPName, err = i.ensureAAPIdled(podCtx, pod, idledAAPs)
 				if err != nil {
 					return 0, err
 				}
@@ -136,7 +120,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 			// A notification should be sent
 			i.notifyUser(podCtx, idler, idledAAPName, "Ansible Automation Platform")
 
-			idledAAPs[idledAAPName] = idledAAPName
+			idledAAPs = append(idledAAPs, idledAAPName)
 			if len(idledAAPs) == len(running) {
 				// All AAPs are idled, no need to check the rest of the pods
 				// no need to schedule any aap-specific requeue
@@ -147,6 +131,27 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 
 	// there is at least one aap instance, schedule the next reconcile
 	return requeueAfter, nil
+}
+
+// getRunningAAPs returns the list of all AAP CRs that are not idled from the namespace the idler was created for
+func (i *aapIdler) getRunningAAPs(ctx context.Context, idler *toolchainv1alpha1.Idler) ([]unstructured.Unstructured, error) {
+	// Check if there is any AAP CRs in the namespace
+	aapList, err := i.dynamicClient.Resource(*i.aapGVR).Namespace(idler.Name).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	running := make([]unstructured.Unstructured, 0, len(aapList.Items))
+	for _, aap := range aapList.Items {
+		// we don't need to check if the field was found - if not found, then the value is "false" (not idled)
+		idled, _, err := unstructured.NestedBool(aap.UnstructuredContent(), "spec", "idle_aap")
+		if err != nil {
+			return nil, err
+		}
+		if !idled {
+			running = append(running, aap)
+		}
+	}
+	return running, nil
 }
 
 const twoHours = 2 * 60 * 60 // in seconds
@@ -166,10 +171,16 @@ func aapTimeoutSeconds(idlerTimeout int32) int32 {
 
 // ensureAAPIdled checks if the long-running or crash-looping pod belongs to an AAP instance and if so, ensures that the AAP is idled.
 // Returns the AAP resource name in case it was idled, or an empty string if it was not idled.
-func (i *aapIdler) ensureAAPIdled(ctx context.Context, pod corev1.Pod) (string, error) {
+func (i *aapIdler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, alreadyIdled []string) (string, error) {
 	aap, err := i.getAAPOwner(ctx, &pod)
 	if err != nil || aap == nil {
 		return "", err // either error or no AAP owner found
+	}
+	for _, idled := range alreadyIdled {
+		if aap.GetName() == idled {
+			// it is already idled - nothing to do
+			return "", nil
+		}
 	}
 
 	// Patch the aap resource by setting spec.idle_aap to true in order to idle it
@@ -191,10 +202,7 @@ func (i *aapIdler) getAAPOwner(ctx context.Context, obj metav1.Object) (metav1.O
 	if len(owners) == 0 {
 		return nil, nil // No owner
 	}
-	if len(owners) > 1 {
-		owner = owners[0] // Multiple owners, use the first one
-	}
-	logger := log.FromContext(ctx)
+	owner = owners[0] // Multiple owners, use the first one
 	// Get the GVR for the owner
 	gvr, err := gvrForKind(owner.Kind, owner.APIVersion, i.resourceLists)
 	if err != nil {
@@ -202,9 +210,12 @@ func (i *aapIdler) getAAPOwner(ctx context.Context, obj metav1.Object) (metav1.O
 	}
 	// Get the owner object
 	ownerObject, err := i.dynamicClient.Resource(*gvr).Namespace(obj.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
-	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-		logger.Info("Owner not found", "kind", owner.Kind, "name", owner.Name)
-		return nil, nil
+	if err != nil {
+		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			log.FromContext(ctx).Info("Owner not found", "kind", owner.Kind, "name", owner.Name)
+			return nil, nil
+		}
+		return nil, err
 	}
 	if ownerObject.GetKind() == aapKind {
 		// Found the top AAP owner. Return it.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/discovery"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -39,6 +41,8 @@ import (
 
 const (
 	restartThreshold = 50
+	// Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
+	aaPRestartThreshold = restartThreshold - 1
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -65,6 +69,7 @@ type Reconciler struct {
 	AllNamespacesClient client.Client
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
+	DiscoveryClient     discovery.ServerResourcesInterface
 	GetHostCluster      cluster.GetHostClusterFunc
 	Namespace           string
 }
@@ -116,6 +121,19 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	if err != nil {
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
+	}
+	aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify)
+	if err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
+			"failed to init aap idler '%s'", idler.Name)
+	}
+	aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
+	if err != nil {
+		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
+			"failed to ensure aap idling '%s'", idler.Name)
+	}
+	if aapRequeueAfter != 0 {
+		requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
 	}
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
@@ -231,12 +249,7 @@ func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *
 	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
 	if podReason != "PodCompleted" || deletedByController {
 		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-		if err := r.createNotification(podCtx, idler, appName, appType); err != nil {
-			logger.Error(err, "failed to create Notification")
-			if err = r.setStatusIdlerNotificationCreationFailed(podCtx, idler, err.Error()); err != nil {
-				logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-			} // not returning error to continue tracking remaining pods
-		}
+		r.notify(podCtx, idler, appName, appType)
 	}
 	return nil
 }
@@ -251,8 +264,18 @@ func getHighestRestartCount(podstatus corev1.PodStatus) int32 {
 	return restartCount
 }
 
+func (r *Reconciler) notify(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) {
+	logger := log.FromContext(ctx)
+	logger.Info("Creating Notification")
+	if err := r.createNotification(ctx, idler, appName, appType); err != nil {
+		logger.Error(err, "failed to create Notification")
+		if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
+			logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
+		} // not returning error to continue tracking remaining pods
+	}
+}
+
 func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) error {
-	log.FromContext(ctx).Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {
@@ -338,7 +361,7 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
-// Otherwise returns "false".
+// Otherwise, returns "false".
 // It also returns the parent controller type and name or empty strings if there is no parent controller.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.ObjectMeta) (string, string, bool, error) {
 	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.Name)

@@ -40,8 +40,8 @@ func TestPredicate(t *testing.T) {
 	}{
 		"with container above threshold": {
 			newPodStatus: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
-				{RestartCount: 51},
-				{RestartCount: 49},
+				{RestartCount: 50},
+				{RestartCount: 48},
 			}},
 			expected: true,
 		},
@@ -103,7 +103,7 @@ func TestPredicate(t *testing.T) {
 
 							assert.False(t, predicate.Create(event.CreateEvent{Object: classTestData.pod}))
 							assert.False(t, predicate.Generic(event.GenericEvent{Object: classTestData.pod}))
-							assert.False(t, predicate.Delete(event.DeleteEvent{Object: classTestData.pod}))
+							assert.True(t, predicate.Delete(event.DeleteEvent{Object: classTestData.pod}))
 						})
 					}
 				})

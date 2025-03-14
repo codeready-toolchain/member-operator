@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -52,8 +53,8 @@ var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.Idler{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &corev1.Pod{}),
-			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), builder.WithPredicates(PodIdlerPredicate{})).
+		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &corev1.Pod{},
+			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), PodIdlerPredicate{})).
 		Complete(r)
 }
 

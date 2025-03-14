@@ -85,7 +85,6 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 			continue
 		}
 		var idledAAPName string
-		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		podCtx := log.IntoContext(ctx, podLogger)
 

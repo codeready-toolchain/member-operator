@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -159,14 +160,6 @@ func TestApplyToolchainObjects(t *testing.T) {
 			originalSA := sa.DeepCopy()
 			client.MergeLabels(originalSA, additionalLabel)
 			apiClient, fakeClient := prepareAPIClient(t, originalSA)
-			called := false
-			fakeClient.MockGet = func(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
-				if key.Name == "appstudio-user-sa" {
-					require.False(t, called, "should be called only once for SA")
-					called = true
-				}
-				return fakeClient.Client.Get(ctx, key, obj, opts...)
-			}
 
 			// when
 			changed, err := apiClient.ApplyToolchainObjects(ctx, copyObjects(newSaObject), newlabels)
@@ -183,7 +176,6 @@ func TestApplyToolchainObjects(t *testing.T) {
 				assert.Equal(t, expectedLabels, actualSA.Labels)
 				// check new annotations were applied
 			})
-
 		})
 
 		t.Run("update SA annotations", func(t *testing.T) {
@@ -365,6 +357,33 @@ func prepareAPIClient(t *testing.T, initObjs ...runtimeclient.Object) (*APIClien
 		obj.SetGeneration(o.GetGeneration())
 		return nil
 	}
+
+	fakeClient.MockPatch = func(ctx context.Context, obj runtimeclient.Object, patch runtimeclient.Patch, opts ...runtimeclient.PatchOption) error {
+		// fake client doesn't support SSA yet, so we have to be creative here and try to mock it out. Hopefully, SSA will be merged soon and we will
+		// be able to remove this.
+		//
+		// NOTE: this doesn't really implement SSA in any sense. It is just here so that the existing tests pass.
+
+		// A non-SSA patch assumes the object must already exist and should break if it doesn't. The SSA patch, on the other hand, creates the object
+		// if it doesn't exist.
+
+		if patch == runtimeclient.Apply {
+			copy := obj.DeepCopyObject().(runtimeclient.Object)
+			if err := fakeClient.Get(ctx, runtimeclient.ObjectKeyFromObject(copy), copy); err != nil {
+				if !errors.IsNotFound(err) {
+					return err
+				}
+				if err = fakeClient.Create(ctx, copy); err != nil {
+					return err
+				}
+			}
+			// the fake client actively complains if it sees an SSA patch...
+			patch = runtimeclient.Merge
+		}
+
+		return fakeClient.Client.Patch(ctx, obj, patch, opts...)
+	}
+
 	return &APIClient{
 		AllNamespacesClient: fakeClient,
 		Client:              fakeClient,

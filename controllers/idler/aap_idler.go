@@ -58,7 +58,7 @@ func newAAPIdler(allNamespacesClient client.Client, dynamicClient dynamic.Interf
 }
 
 // ensureAnsiblePlatformIdling checks if there is any long-running pod belonging to an AAP resource and if yes, then it idles the AAP
-// and sends a notification to the user.
+// and sends a notification to the user. Returns the requeue duration to check the AAP pods again.
 func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
 	if i.aapGVR == nil {
 		return 0, nil // aap api is not available

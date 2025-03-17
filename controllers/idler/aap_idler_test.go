@@ -276,8 +276,9 @@ func TestAAPIdler(t *testing.T) {
 				requeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(context.TODO(), idler)
 
 				// then
-				require.EqualError(t, err, "some get error")
-				assert.Empty(t, requeueAfter)
+				require.ErrorContains(t, err, "some get error")
+				assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
+				assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
 				interceptedNotify.assertThatCalled(t)
 				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 			})
@@ -302,19 +303,35 @@ func TestAAPIdler(t *testing.T) {
 
 			t.Run("patch AAP fails", func(t *testing.T) {
 				// given
-				dynamicCl.Fake.ReactionChain = originalReactions
+				aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
+				preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
+					if kind.Kind == "Deployment" {
+						require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+					}
+				}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
+
+				// there will be multiple pods/deployments owned by the AAP, but let's return an error only once
+				errReturned := false
+				dynamicCl := aapIdler.dynamicClient.(*fakedynamic.FakeDynamicClient)
 				dynamicCl.PrependReactor("patch", "ansibleautomationplatforms", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, fmt.Errorf("some patch error")
+					if !errReturned {
+						errReturned = true
+						return true, nil, fmt.Errorf("some patch error")
+					}
+					return false, nil, nil
 				})
 
 				// when
 				requeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(context.TODO(), idler)
 
 				// then
+				// the dynamic client returned an error only once, but since the AAP instance owned several deployments,
+				// then the AAP was idled and the user was also notified
 				require.EqualError(t, err, "some patch error")
-				assert.Empty(t, requeueAfter)
-				interceptedNotify.assertThatCalled(t)
-				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
+				assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
+				assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+				interceptedNotify.assertThatCalled(t, runningAAP.GetName())
+				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName(), runningAAP.GetName())
 			})
 
 			t.Run("with not found for deployment owner", func(t *testing.T) {

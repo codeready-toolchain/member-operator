@@ -800,6 +800,55 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		// since no mur, error should have been wrapped as status update, but status update fails
 		require.EqualError(t, err, "failed to ensure idling 'john-dev': cannot set status to fail")
 	})
+
+	t.Run("aap idler failures", func(t *testing.T) {
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "john-dev",
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds * 100},
+		}
+
+		t.Run("aap idler init failed", func(t *testing.T) {
+			// given
+			reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+			fakeDiscovery := newFakeDiscoveryClient(noAAPResourceList(t)...)
+			fakeDiscovery.ServerPreferredResourcesError = fmt.Errorf("some error")
+			reconciler.DiscoveryClient = fakeDiscovery
+
+			// when
+			res, err := reconciler.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, res.Requeue)
+			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				HasConditions(memberoperatortest.FailedToIdle("failed to init aap idler 'john-dev': some error"))
+		})
+
+		t.Run("aap idler execution failed", func(t *testing.T) {
+			// given
+			reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+			dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, aapGVK)
+			dynamicClient.PrependReactor("list", "ansibleautomationplatforms", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, fmt.Errorf("some list error")
+			})
+			fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+			reconciler.DynamicClient = dynamicClient
+			reconciler.DiscoveryClient = fakeDiscovery
+
+			// when
+			res, err := reconciler.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			assert.True(t, res.Requeue)
+			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				HasConditions(memberoperatortest.FailedToIdle("failed to ensure aap idling 'john-dev': some list error"))
+		})
+	})
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {

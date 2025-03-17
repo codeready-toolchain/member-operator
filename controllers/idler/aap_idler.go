@@ -2,6 +2,7 @@ package idler
 
 import (
 	"context"
+	errs "errors"
 	"fmt"
 	"time"
 
@@ -79,6 +80,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 	}
 	timeoutSeconds := aapTimeoutSeconds(idler.Spec.TimeoutSeconds)
 	requeueAfter := time.Duration(timeoutSeconds) * time.Second
+	var idleErrors []error
 	for _, pod := range podList.Items {
 		startTime := pod.Status.StartTime
 		if startTime == nil {
@@ -94,7 +96,8 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
 			idledAAPName, err = i.ensureAAPIdled(podCtx, pod, idledAAPs)
 			if err != nil {
-				return 0, err
+				// do not return to try to idle the other AAP instances
+				idleErrors = append(idleErrors, err)
 			}
 		} else {
 			// Check if running for longer than the AAP idler timeout
@@ -103,7 +106,8 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 					"start_time", startTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
 				idledAAPName, err = i.ensureAAPIdled(podCtx, pod, idledAAPs)
 				if err != nil {
-					return 0, err
+					// do not return to try to idle the other AAP instances
+					idleErrors = append(idleErrors, err)
 				}
 			} else {
 				// we don't know if it's an aap pod or not, let's schedule the next reconcile like assuming it is an aap pod to make sure
@@ -129,7 +133,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 	}
 
 	// there is at least one aap instance, schedule the next reconcile
-	return requeueAfter, nil
+	return requeueAfter, errs.Join(idleErrors...)
 }
 
 // getRunningAAPs returns the list of all AAP CRs that are not idled from the namespace the idler was created for

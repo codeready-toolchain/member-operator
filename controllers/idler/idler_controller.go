@@ -122,23 +122,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify)
-	if err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
-			"failed to init aap idler '%s'", idler.Name)
+	aapIdlerFailed := false
+	if aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify); err != nil {
+		err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to init aap idler '%s': %w", idler.Name, err), "")
+		logger.Error(err, "init AAP idler failed")
+		aapIdlerFailed = true
+	} else {
+		aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
+		if err != nil {
+			err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to ensure aap idling '%s': %w", idler.Name, err), "")
+			logger.Error(err, "AAP idler execution failed")
+			aapIdlerFailed = true
+		}
+		if aapRequeueAfter != 0 {
+			requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
+		}
 	}
-	aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
-	if err != nil {
-		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
-			"failed to ensure aap idling '%s'", idler.Name)
-	}
-	if aapRequeueAfter != 0 {
-		requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
-	}
+
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
 		Requeue:      true,
 		RequeueAfter: requeueAfter,
+	}
+	if aapIdlerFailed {
+		return result, nil
 	}
 	return result, r.setStatusReady(ctx, idler)
 }

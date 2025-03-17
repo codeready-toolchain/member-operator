@@ -1513,7 +1513,7 @@ func preparePayloadCrashloopingAboveThreshold(t *testing.T, clientSet clientSet,
 			{RestartCount: RestartCountWithinThresholdContainer2},
 		}},
 	}
-	err := clientSet.createOwnerObjects(context.TODO(), pod)
+	err := clientSet.allNamespacesClient.Create(context.TODO(), pod)
 	require.NoError(t, err)
 	standalonePods = append(standalonePods, pod)
 	// Deployment

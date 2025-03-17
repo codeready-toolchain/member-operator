@@ -203,7 +203,7 @@ func TestAAPIdler(t *testing.T) {
 
 	t.Run("all idled", func(t *testing.T) {
 		// given
-		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, noiseAAP)
+		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, noiseAAP, runningNoSpecAAP)
 		isOwningSomething := false
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "Deployment" {
@@ -224,8 +224,8 @@ func TestAAPIdler(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Empty(t, requeueAfter)
-		interceptedNotify.assertThatCalled(t, runningAAP.GetName())
-		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName(), runningAAP.GetName())
+		interceptedNotify.assertThatCalled(t, runningAAP.GetName(), runningNoSpecAAP.GetName())
+		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName(), runningAAP.GetName(), runningNoSpecAAP.GetName())
 	})
 
 	t.Run("failures", func(t *testing.T) {
@@ -352,15 +352,15 @@ func assertAAPsIdled(t *testing.T, aapIdler *aapIdler, namespace string, names .
 	aapList, err := aapIdler.dynamicClient.Resource(*aapIdler.aapGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
 	require.NoError(t, err)
 
+	var idledAAPs []string
 	for _, aap := range aapList.Items {
 		idled, _, err := unstructured.NestedBool(aap.UnstructuredContent(), "spec", "idle_aap")
 		require.NoError(t, err)
 		if idled {
-			assert.Contains(t, names, aap.GetName())
-		} else {
-			assert.NotContains(t, names, aap.GetName())
+			idledAAPs = append(idledAAPs, aap.GetName())
 		}
 	}
+	assert.ElementsMatch(t, names, idledAAPs)
 }
 
 type notifyUserInterceptor struct {

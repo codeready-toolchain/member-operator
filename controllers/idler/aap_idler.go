@@ -97,7 +97,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 				return 0, err
 			}
 		} else {
-			// Check if running for longer then the AAP idler timeout
+			// Check if running for longer than the AAP idler timeout
 			if time.Now().After(startTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod is running for too long for an AAP pod. Checking if it belongs to AAP and if so then idle the aap.",
 					"start_time", startTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)

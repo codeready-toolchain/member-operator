@@ -201,7 +201,7 @@ func (i *aapIdler) getAAPOwner(ctx context.Context, obj metav1.Object) (metav1.O
 	if len(owners) == 0 {
 		return nil, nil // No owner
 	}
-	owner = owners[0] // Multiple owners, use the first one
+	owner = owners[0] // In case of multiple owners, use the first one
 	// Get the GVR for the owner
 	gvr, err := gvrForKind(owner.Kind, owner.APIVersion, i.resourceLists)
 	if err != nil {

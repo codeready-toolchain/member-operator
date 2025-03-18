@@ -145,6 +145,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		RequeueAfter: requeueAfter,
 	}
 	if aapIdlerFailed {
+		// Do not return any errors if the AAP idler failed. We just log the error (above), update the Idler CR status and move on.
 		return result, nil
 	}
 	return result, r.setStatusReady(ctx, idler)

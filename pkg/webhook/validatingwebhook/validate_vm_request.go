@@ -11,6 +11,8 @@ import (
 	runtimeClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const manualRunStrategy = "Manual"
+
 type VMRequestValidator struct {
 	Client runtimeClient.Client
 }
@@ -53,24 +55,15 @@ func (v VMRequestValidator) validate(body []byte) []byte {
 		return denyAdmissionRequest(admReview, errors.New("failed to validate VirtualMachine request"))
 	}
 
-	hasRunStrategy, err := hasRunningStrategy(unstructuredRequestObj)
+	runStrategy, hasRunStrategy, err := unstructured.NestedString(unstructuredRequestObj.Object, "spec", "runStrategy")
 	if err != nil {
 		log.Error(err, "failed to unmarshal VirtualMachine json object", "AdmissionReview", admReview)
 		return denyAdmissionRequest(admReview, errors.New("failed to validate VirtualMachine request"))
 	}
-	if hasRunStrategy {
-		log.Info("sandbox user is trying to create a VM with RunStrategy configured", "AdmissionReview", admReview) // not allowed because it interferes with the Dev Sandbox Idler
-		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed"))
+	if hasRunStrategy && runStrategy != manualRunStrategy {
+		log.Info("sandbox user is trying to configure a VM with RunStrategy set to a value other than Manual", "AdmissionReview", admReview) // other run strategies are not allowed because it conflicts with the Dev Sandbox Idler
+		return denyAdmissionRequest(admReview, errors.New("this is a Dev Sandbox enforced restriction. Only 'Manual' RunStrategy is permitted"))
 	}
-	// the user is not creating a VM with the 'runStrategy' configured, allowing the request.
+	// the user is configuring a VM without the 'runStrategy' configured or with it configured to Manual, allowing the request.
 	return allowAdmissionRequest(admReview)
-}
-
-func hasRunningStrategy(unstructuredObj *unstructured.Unstructured) (bool, error) {
-	_, runStrategyFound, err := unstructured.NestedString(unstructuredObj.Object, "spec", "runStrategy")
-	if err != nil {
-		return runStrategyFound, err
-	}
-
-	return runStrategyFound, nil
 }

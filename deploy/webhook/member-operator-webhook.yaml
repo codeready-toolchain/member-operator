@@ -293,7 +293,7 @@ objects:
           port: 443
       matchPolicy: Equivalent
       rules:
-        - operations: ["CREATE", "UPDATE"]
+        - operations: ["UPDATE"]
           apiGroups: ["kubevirt.io"]
           apiVersions: ["*"]
           resources: ["virtualmachines"]

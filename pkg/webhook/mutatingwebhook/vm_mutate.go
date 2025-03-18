@@ -26,6 +26,8 @@ var sandboxToleration = map[string]interface{}{
 	"operator": "Exists",
 }
 
+const manualRunStrategy = "Manual"
+
 func HandleMutateVirtualMachines(w http.ResponseWriter, r *http.Request) {
 	handleMutate(vmLogger, w, r, vmMutator)
 }
@@ -49,6 +51,9 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 
 	// instead of changing the object we need to tell K8s how to change the object via patch
 	vmPatchItems := []map[string]interface{}{}
+
+	// ensure runStrategy is set to Manual, see https://docs.redhat.com/en/documentation/openshift_container_platform/4.11/html/virtualization/virtual-machines#virt-about-runstrategies-vms_virt-create-vms
+	vmPatchItems = ensureManualRunStrategy(unstructuredRequestObj, vmPatchItems)
 
 	// ensure limits are set in a best effort approach, if the limits are not set for any reason the request will still be allowed
 	vmPatchItems = ensureLimits(unstructuredRequestObj, vmPatchItems)
@@ -254,6 +259,22 @@ func ensureLimits(unstructuredObj *unstructured.Unstructured, patchItems []map[s
 	return patchItems
 }
 
+// ensureManualRunStrategy ensures the VM's RunStrategy is set to Manual
+func ensureManualRunStrategy(unstructuredRequestObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
+	// get existing runStrategy, if any
+	runStrategy, _, err := unstructured.NestedString(unstructuredRequestObj.Object, "spec", "runStrategy")
+	if err != nil {
+		vmLogger.Error(err, "unable to get runStrategy from VirtualMachine", "VirtualMachine", unstructuredRequestObj)
+		return patchItems
+	}
+
+	if runStrategy != manualRunStrategy {
+		patchItems = append(patchItems, addManualRunStrategy())
+	}
+
+	return patchItems
+}
+
 // ensureTolerations ensures tolerations are set on the VirtualMachine
 func ensureTolerations(unstructuredRequestObj *unstructured.Unstructured, patchItems []map[string]interface{}) []map[string]interface{} {
 	// get existing tolerations, if any
@@ -307,5 +328,13 @@ func addTolerations(tolerations []interface{}) map[string]interface{} {
 		"op":    "add",
 		"path":  "/spec/template/spec/tolerations",
 		"value": tolerations,
+	}
+}
+
+func addManualRunStrategy() map[string]interface{} {
+	return map[string]interface{}{
+		"op":    "add",
+		"path":  "/spec/runStrategy",
+		"value": manualRunStrategy,
 	}
 }

@@ -2,6 +2,7 @@ package validatingwebhook
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,9 +24,9 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(v.HandleValidate))
 	defer ts.Close()
 
-	t.Run("sandbox user trying to create a VM resource with RunStrategy is denied", func(t *testing.T) {
+	t.Run("sandbox user trying to update a VM resource with RunStrategy other than 'Manual' is denied", func(t *testing.T) {
 		// when
-		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)))
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl("Always"))))
 
 		// then
 		require.NoError(t, err)
@@ -34,12 +35,12 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 			require.NoError(t, resp.Body.Close())
 		}()
 		require.NoError(t, err)
-		test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. Only 'Manual' RunStrategy is permitted", "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
-	t.Run("sandbox user trying to update a VM resource with RunStrategy is denied", func(t *testing.T) {
+	t.Run("sandbox user trying to update a VM resource with RunStrategy 'Manual' is allowed", func(t *testing.T) {
 		// when
-		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl)))
+		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithRunStrategyJSONTmpl("Manual"))))
 
 		// then
 		require.NoError(t, err)
@@ -48,25 +49,10 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 			require.NoError(t, resp.Body.Close())
 		}()
 		require.NoError(t, err)
-		test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. Configuring RunStrategy is not allowed", "b6ae2ab4-782b-11ee-b962-0242ac120002")
-	})
-
-	t.Run("sandbox user trying to create a VM resource without RunStrategy is allowed", func(t *testing.T) {
-		// when
-		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)))
-
-		// then
-		require.NoError(t, err)
-		body, err := io.ReadAll(resp.Body)
-		defer func() {
-			require.NoError(t, resp.Body.Close())
-		}()
-		require.NoError(t, err)
-
 		test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
-	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) {
+	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) { // note: RunStrategy can be removed as it's not needed (it's automatically set upon creation)
 		// when
 		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)))
 
@@ -80,7 +66,6 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 
 		test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
-
 }
 
 func newVMRequestValidator(t *testing.T) *VMRequestValidator {
@@ -114,7 +99,8 @@ type VMAdmReviewTmplParams struct {
 	Username string
 }
 
-var createVMWithRunStrategyJSONTmpl = `{
+func createVMWithRunStrategyJSONTmpl(runStrategy string) string {
+	return fmt.Sprintf(`{
     "kind": "AdmissionReview",
     "apiVersion": "admission.k8s.io/v1",
     "request": {
@@ -156,7 +142,7 @@ var createVMWithRunStrategyJSONTmpl = `{
                 "namespace": "{{.Username}}-dev"
             },
             "spec": {
-                "runStrategy": "Always"
+                "runStrategy": "%s"
             }
         },
         "oldObject": null,
@@ -168,7 +154,8 @@ var createVMWithRunStrategyJSONTmpl = `{
             "fieldValidation": "Ignore"
         }
     }
-}`
+}`, runStrategy)
+}
 
 var createVMWithoutRunStrategyJSONTmpl = `{
     "kind": "AdmissionReview",

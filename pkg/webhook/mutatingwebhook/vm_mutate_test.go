@@ -38,12 +38,12 @@ func TestVMMutator(t *testing.T) {
 		actualResponse := vmMutator(admReview)
 
 		// then
-		expectedPatches := []map[string]interface{}{expectedTolerationsPatch, expectedVolumesPatch}
+		expectedPatches := []map[string]interface{}{addManualRunStrategy(), expectedTolerationsPatch, expectedVolumesPatch}
 		actualPatchContent := actualResponse.Patch
 		expectedPatchContent, err := json.Marshal(expectedPatches)
 		require.NoError(t, err)
 		require.Equal(t, string(expectedPatchContent), string(actualPatchContent))
-		assert.Equal(t, expectedVMMutateRespSuccess(t, expectedTolerationsPatch, expectedVolumesPatch), *actualResponse)
+		assert.Equal(t, expectedVMMutateRespSuccess(t, addManualRunStrategy(), expectedTolerationsPatch, expectedVolumesPatch), *actualResponse)
 	})
 
 	t.Run("fail", func(t *testing.T) {
@@ -454,6 +454,36 @@ func TestEnsureTolerations(t *testing.T) {
 	})
 }
 
+func TestEnsureManualRunStrategy(t *testing.T) {
+
+	t.Run("success", func(t *testing.T) {
+		t.Run("no existing runStrategy", func(t *testing.T) {
+			// given
+			vmAdmReviewRequestObj := vmAdmReviewRequestObject(t)
+			// expect only sandbox toleration
+			expectedPatchItems := []map[string]interface{}{addManualRunStrategy()}
+
+			// when
+			actualPatchItems := ensureManualRunStrategy(vmAdmReviewRequestObj, []map[string]interface{}{})
+
+			// then
+			assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+		})
+
+		t.Run("runStrategy already set", func(t *testing.T) {
+			// given
+			vmAdmReviewRequestObj := vmAdmReviewRequestObject(t, setRunStrategy("Always")) // it doesn't matter what runStrategy is set, the patch is always applied since it's an 'add' JSON patch
+			expectedPatchItems := []map[string]interface{}{addManualRunStrategy()}
+
+			// when
+			actualPatchItems := ensureManualRunStrategy(vmAdmReviewRequestObj, []map[string]interface{}{})
+
+			// then
+			assertPatchesEqual(t, expectedPatchItems, actualPatchItems)
+		})
+	})
+}
+
 type admissionReviewOption func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured)
 
 func setDomainResourcesRequests(requests map[string]string) admissionReviewOption {
@@ -546,6 +576,13 @@ func cloudInitVolume(cicType cloudInitConfigType, userData string) map[string]in
 	}
 
 	return volume
+}
+
+func setRunStrategy(runStrategy string) admissionReviewOption {
+	return func(t *testing.T, unstructuredAdmReview *unstructured.Unstructured) {
+		err := unstructured.SetNestedField(unstructuredAdmReview.Object, runStrategy, "request", "object", "spec", "runStrategy")
+		require.NoError(t, err)
+	}
 }
 
 func vmAdmReviewRequestObject(t *testing.T, options ...admissionReviewOption) *unstructured.Unstructured {

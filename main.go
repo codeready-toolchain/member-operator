@@ -207,6 +207,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	restClient, err := newRestClient(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to create scales client")
+		os.Exit(1)
+	}
+
 	dynamicClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		setupLog.Error(err, "unable to create dynamic client")
@@ -245,6 +251,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
 		DynamicClient:       dynamicClient,
+		RestClient:          restClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr, allNamespacesCluster); err != nil {
@@ -321,6 +328,15 @@ func main() {
 		os.Exit(1)
 	}
 
+}
+
+func newRestClient(config *rest.Config) (*rest.RESTClient, error) {
+	httpClient, err := rest.HTTPClientFor(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return rest.RESTClientForConfigAndClient(config, httpClient)
 }
 
 func newScalesClient(config *rest.Config) (scale.ScalesGetter, error) {

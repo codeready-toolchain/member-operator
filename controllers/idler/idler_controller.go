@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,7 +39,8 @@ import (
 )
 
 const (
-	restartThreshold = 50
+	restartThreshold    = 50
+	vmSubresourceURLFmt = "/apis/subresources.kubevirt.io/%s"
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -63,6 +65,7 @@ type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
+	RestClient          rest.Interface
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
 	GetHostCluster      cluster.GetHostClusterFunc
@@ -78,6 +81,10 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances,verbs=get;list;watch;create;update;patch;delete
+
+// needed to stop the VMs - we need to make a PUT request for the "stop" subresource. Kubernetes internally classifies these as either create or update
+// based on the state of the existing object.
+//+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=create;update
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
@@ -338,7 +345,7 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
-// Otherwise returns "false".
+// Otherwise, returns "false".
 // It also returns the parent controller type and name or empty strings if there is no parent controller.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.ObjectMeta) (string, string, bool, error) {
 	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.Name)
@@ -609,9 +616,14 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	// patch the virtualmachine resource by setting spec.running to false in order to stop the VM
-	patch := []byte(`{"spec":{"running":false}}`)
-	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Patch(ctx, vm.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	err = r.RestClient.Put().
+		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
+		Namespace(vm.GetNamespace()).
+		Resource("virtualmachines").
+		Name(vm.GetName()).
+		SubResource("stop").
+		Do(ctx).
+		Error()
 	if err != nil {
 		return "", "", false, err
 	}

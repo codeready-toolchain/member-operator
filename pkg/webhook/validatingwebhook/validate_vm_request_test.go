@@ -52,7 +52,7 @@ func TestHandleValidateVMAdmissionRequestBlocked(t *testing.T) {
 		test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 	})
 
-	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) { // note: RunStrategy is actually required by OpenShift Virtualization >=4.18 but the sandbox webhook doesn't need to require it
+	t.Run("sandbox user trying to update a VM resource without RunStrategy is allowed", func(t *testing.T) { // note: RunStrategy can be removed as it's not needed (it's automatically set upon creation)
 		// when
 		resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMWithoutRunStrategyJSONTmpl)))
 

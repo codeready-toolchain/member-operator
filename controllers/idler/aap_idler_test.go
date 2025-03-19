@@ -148,8 +148,8 @@ func TestAAPIdler(t *testing.T) {
 		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 
 		isOwningSomething := false
-		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
-			if kind.Kind == "Deployment" {
+		preparePayloadsForAAPIdler(t, aapIdler, func(gvk schema.GroupVersionKind, object client.Object) {
+			if gvk.Kind == "Deployment" {
 				if !isOwningSomething {
 					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true

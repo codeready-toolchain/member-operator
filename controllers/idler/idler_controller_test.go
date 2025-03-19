@@ -1567,6 +1567,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		DynamicClient:       dynamicClient,
+		RestClient:          &FakeRestClient{},
 		ScalesClient:        &scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),

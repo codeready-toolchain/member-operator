@@ -42,7 +42,7 @@ import (
 const (
 	restartThreshold = 50
 	// Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
-	aaPRestartThreshold = restartThreshold - 1
+	aapRestartThreshold = restartThreshold - 1
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{

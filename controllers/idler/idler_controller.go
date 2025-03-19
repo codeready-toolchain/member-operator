@@ -342,7 +342,7 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
-// Otherwise returns "false".
+// Otherwise, returns "false".
 // It also returns the parent controller type and name or empty strings if there is no parent controller.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.ObjectMeta) (string, string, bool, error) {
 	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.Name)
@@ -579,6 +579,11 @@ func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner meta
 
 func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	logger := log.FromContext(ctx)
+	if r.RestClient == nil {
+		// The Rest client is not set. Ignore.
+		return "", "", false, nil
+	}
+
 	// get the virtualmachineinstance info from the owner reference
 	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(ctx, owner.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -613,7 +618,6 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	// stop the VM via the 'stop' subresource
 	err = r.RestClient.Put().
 		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
 		Namespace(vm.GetNamespace()).

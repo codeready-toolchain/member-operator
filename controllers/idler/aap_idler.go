@@ -92,7 +92,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 
 		// check the restart count for the pod
 		restartCount := getHighestRestartCount(pod.Status)
-		if restartCount > aaPRestartThreshold {
+		if restartCount > aapRestartThreshold {
 			podLogger.Info("Pod is restarting too often for an AAP pod. Checking if it belongs to AAP and if so then idle the aap", "restart_count", restartCount)
 			idledAAPName, err = i.ensureAAPIdled(podCtx, pod, idledAAPs)
 			if err != nil {

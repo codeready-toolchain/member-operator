@@ -17,14 +17,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
 
 type IdlerAssertion struct {
 	idler          *toolchainv1alpha1.Idler
@@ -275,20 +271,12 @@ func (a *IdleablePayloadAssertion) StatefulSetScaledUp(statefulSet *appsv1.State
 	return a
 }
 
-func (a *IdleablePayloadAssertion) VMRunning(vm *unstructured.Unstructured) *IdleablePayloadAssertion {
-	return a.vmRunning(vm, true)
+func (a *IdleablePayloadAssertion) VMRunning(vmStopCallCounter *int) *IdleablePayloadAssertion {
+	assert.Empty(a.t, *vmStopCallCounter)
+	return a
 }
 
-func (a *IdleablePayloadAssertion) VMStopped(vm *unstructured.Unstructured) *IdleablePayloadAssertion {
-	return a.vmRunning(vm, false)
-}
-
-func (a *IdleablePayloadAssertion) vmRunning(vm *unstructured.Unstructured, running bool) *IdleablePayloadAssertion {
-	// vm, err := a.dynamicClient.Resource(vmGVR).Namespace(vm.GetNamespace()).Get(context.TODO(), vm.GetName(), metav1.GetOptions{})
-	// require.NoError(a.t, err)
-	// val, found, err := unstructured.NestedBool(vm.Object, "spec", "running")
-	// require.NoError(a.t, err)
-	// assert.True(a.t, found)
-	// assert.Equal(a.t, running, val)
+func (a *IdleablePayloadAssertion) VMStopped(vmStopCallCounter *int) *IdleablePayloadAssertion {
+	assert.NotEmpty(a.t, *vmStopCallCounter)
 	return a
 }

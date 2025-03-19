@@ -81,7 +81,10 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=update
+
+// needed to stop the VMs - we need to make a PUT request for the "stop" subresource. Kubernetes internally classifies these as either create or update
+// based on the state of the existing object.
+//+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=create;update
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
@@ -579,11 +582,6 @@ func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner meta
 
 func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
 	logger := log.FromContext(ctx)
-	if r.RestClient == nil {
-		// The Rest client is not set. Ignore.
-		return "", "", false, nil
-	}
-
 	// get the virtualmachineinstance info from the owner reference
 	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(ctx, owner.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.

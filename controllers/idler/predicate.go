@@ -25,7 +25,7 @@ func (p PodIdlerPredicate) Update(event runtimeevent.UpdateEvent) bool {
 	}
 	if oldPod, ok := event.ObjectOld.(*corev1.Pod); ok {
 		startTimeNewlySet := oldPod.Status.StartTime == nil && newPod.Status.StartTime != nil
-		return startTimeNewlySet || getHighestRestartCount(newPod.Status) > aaPRestartThreshold
+		return startTimeNewlySet || getHighestRestartCount(newPod.Status) > aapRestartThreshold
 	}
 	return false
 }

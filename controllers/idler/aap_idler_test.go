@@ -188,7 +188,7 @@ func TestAAPIdler(t *testing.T) {
 			if kind.Kind == "ReplicaSet" && len(object.GetOwnerReferences()) == 0 {
 				require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
 			}
-		}, idler.Name, "crashlooping-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
+		}, idler.Name, "short-running-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		// when
 		requeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(context.TODO(), idler)

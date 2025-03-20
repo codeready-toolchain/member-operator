@@ -150,6 +150,7 @@ func TestAAPIdler(t *testing.T) {
 		isOwningSomething := false
 		preparePayloadsForAAPIdler(t, aapIdler, func(gvk schema.GroupVersionKind, object client.Object) {
 			if gvk.Kind == "Deployment" {
+				// we want the AAP instance to own only one Deployment - that would be enough to idle it
 				if !isOwningSomething {
 					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true
@@ -178,6 +179,7 @@ func TestAAPIdler(t *testing.T) {
 		isOwningSomething := false
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "Deployment" {
+				// we want the AAP instance to own only one Deployment - that will be enough to idle it
 				if !isOwningSomething {
 					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true
@@ -204,13 +206,10 @@ func TestAAPIdler(t *testing.T) {
 	t.Run("all idled", func(t *testing.T) {
 		// given
 		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, noiseAAP, runningNoSpecAAP)
-		isOwningSomething := false
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "Deployment" {
-				if !isOwningSomething {
-					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
-					isOwningSomething = true
-				}
+				// let's make the AAP owner of all Deployments, to check that everything works as expected
+				require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 			}
 		}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 

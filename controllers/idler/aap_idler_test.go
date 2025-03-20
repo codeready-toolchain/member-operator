@@ -143,7 +143,7 @@ func TestAAPIdler(t *testing.T) {
 		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 	})
 
-	t.Run("with running AAPs, nothing to idle", func(t *testing.T) {
+	t.Run("with running AAPs, nothing to idle, pods owned by AAP are short-lived", func(t *testing.T) {
 		// given
 		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 
@@ -173,7 +173,7 @@ func TestAAPIdler(t *testing.T) {
 		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 	})
 
-	t.Run("with running AAPs, one idled, second scheduled", func(t *testing.T) {
+	t.Run("with running AAPs, one (long-running) is idled, second (short-lived) is scheduled", func(t *testing.T) {
 		// given
 		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 		isOwningSomething := false
@@ -203,7 +203,7 @@ func TestAAPIdler(t *testing.T) {
 		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName(), runningAAP.GetName())
 	})
 
-	t.Run("all idled", func(t *testing.T) {
+	t.Run("both long-running and restarting APPs are idled", func(t *testing.T) {
 		// given
 		aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, noiseAAP, runningNoSpecAAP)
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {

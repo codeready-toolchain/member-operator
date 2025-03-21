@@ -134,14 +134,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
-		return reconcile.Result{}, nil // wait for cluster resources to be created
+		// set the provisioned templates in the status as refs
+		return reconcile.Result{}, r.status.updateStatusClusterResourcesRevisions(ctx, nsTmplSet) // wait for cluster resources to be created
 	}
 
 	if createdOrUpdated, err := r.namespaces.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update user namespaces")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
-		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
+		return reconcile.Result{}, r.status.updateStatusNamespacesRevisions(ctx, nsTmplSet) // something in the watched resources has changed - wait for another reconcile
 	}
 
 	// update provisioned namespace list
@@ -154,7 +155,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update roles in space")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
-		return reconcile.Result{}, nil // something in the watched resources has changed - wait for another reconcile
+		return reconcile.Result{}, r.status.updateStatusSpaceRolesRevisions(ctx, nsTmplSet) // something in the watched resources has changed - wait for another reconcile
 	}
 
 	return reconcile.Result{}, r.status.setStatusReady(ctx, nsTmplSet)

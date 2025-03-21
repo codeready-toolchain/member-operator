@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/utils"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -78,6 +79,8 @@ func (r *statusManager) updateStatusProvisionedNamespaces(ctx context.Context, n
 }
 
 func (r *statusManager) setStatusReady(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	// update also all the status revisions
+	updateRevisions(nsTmplSet)
 	return r.updateStatusConditions(
 		ctx,
 		nsTmplSet,
@@ -86,6 +89,37 @@ func (r *statusManager) setStatusReady(ctx context.Context, nsTmplSet *toolchain
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
 		})
+}
+
+func updateRevisions(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+	nsTmplSet.Status.ClusterResources = nsTmplSet.Spec.ClusterResources
+	featureAnnotation, featureAnnotationFound := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+	if featureAnnotationFound {
+		// save the feature toggles into the status
+		nsTmplSet.Status.FeatureToggles = utils.SplitCommaSeparatedList(featureAnnotation)
+	}
+	nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
+	nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
+}
+
+func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	nsTmplSet.Status.ClusterResources = nsTmplSet.Spec.ClusterResources
+	featureAnnotation, featureAnnotationFound := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+	if featureAnnotationFound {
+		// save the feature toggles into the status
+		nsTmplSet.Status.FeatureToggles = utils.SplitCommaSeparatedList(featureAnnotation)
+	}
+	return r.Client.Status().Update(ctx, nsTmplSet)
+}
+
+func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
+	return r.Client.Status().Update(ctx, nsTmplSet)
+}
+
+func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
+	return r.Client.Status().Update(ctx, nsTmplSet)
 }
 
 func (r *statusManager) setStatusProvisioningIfNotUpdating(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

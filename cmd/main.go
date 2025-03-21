@@ -158,7 +158,7 @@ func main() {
 	}
 	crtConfig.Print()
 
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(ctrl.GetConfigOrDie())
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		setupLog.Error(err, "failed to create discovery client")
 		os.Exit(1)
@@ -166,7 +166,7 @@ func main() {
 
 	// Webhook server will be created with default values (port 9443) as per doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/manager/manager.go#L244-L247
 	// Cache Options design doc - https://github.com/kubernetes-sigs/controller-runtime/blob/main/designs/cache_options.md
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
@@ -184,7 +184,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	allNamespacesCluster, err := runtimecluster.New(ctrl.GetConfigOrDie(), func(options *runtimecluster.Options) {
+	// create a new client with a cache that watches (as opposed to the standard client) resources in all namespaces.
+	// This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one.
+	// This will help keeping a reasonable memory usage for this operator since the cache won't store all other namespace scoped
+	// resources (secrets, etc.).
+	allNamespacesCluster, err := runtimecluster.New(cfg, func(options *runtimecluster.Options) {
 		options.Scheme = scheme
 	})
 	if err != nil {
@@ -197,13 +201,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	allNamespacesClient, allNamespacesCache, err := newAllNamespacesClient(cfg)
+	scalesClient, err := newScalesClient(cfg)
 	if err != nil {
-		setupLog.Error(err, "")
+		setupLog.Error(err, "unable to create scales client")
 		os.Exit(1)
 	}
 
-	scalesClient, err := newScalesClient(cfg)
+	restClient, err := newRestClient(cfg)
 	if err != nil {
 		setupLog.Error(err, "unable to create scales client")
 		os.Exit(1)
@@ -243,10 +247,11 @@ func main() {
 	}
 	if err := (&idler.Reconciler{
 		Scheme:              mgr.GetScheme(),
-		AllNamespacesClient: allNamespacesClient,
+		AllNamespacesClient: allNamespacesCluster.GetClient(),
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
 		DynamicClient:       dynamicClient,
+		RestClient:          restClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr, allNamespacesCluster); err != nil {
@@ -258,7 +263,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
-		AllNamespacesClient: allNamespacesClient,
+		AllNamespacesClient: allNamespacesCluster.GetClient(),
 		VersionCheckManager: status.VersionCheckManager{GetGithubClientFunc: commonclient.NewGitHubClient},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberStatus")
@@ -266,7 +271,7 @@ func main() {
 	}
 	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
 		Client:              mgr.GetClient(),
-		AllNamespacesClient: allNamespacesClient,
+		AllNamespacesClient: allNamespacesCluster.GetClient(),
 		Scheme:              mgr.GetScheme(),
 		GetHostCluster:      cluster.GetHostCluster,
 	})).SetupWithManager(mgr, allNamespacesCluster, discoveryClient); err != nil {
@@ -317,13 +322,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	go func() {
-		if err := allNamespacesCache.Start(stopChannel); err != nil {
-			setupLog.Error(err, "failed to start all-namespaces cache")
-			os.Exit(1)
-		}
-	}()
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(stopChannel); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -332,18 +330,13 @@ func main() {
 
 }
 
-// newAllNamespacesClient creates a new client that watches (as opposed to the standard client) resources in all namespaces.
-// This client should be used only for resources and kinds that are retrieved from other namespaces than the watched one.
-// This will help keeping a reasonable memory usage for this operator since the cache won't store all other namespace scoped
-// resources (secrets, etc.).
-func newAllNamespacesClient(config *rest.Config) (client.Client, cache.Cache, error) {
-	clusterAllNamespaces, err := runtimecluster.New(config, func(clusterOptions *runtimecluster.Options) {
-		clusterOptions.Scheme = scheme
-	})
+func newRestClient(config *rest.Config) (*rest.RESTClient, error) {
+	httpClient, err := rest.HTTPClientFor(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return clusterAllNamespaces.GetClient(), clusterAllNamespaces.GetCache(), nil
+
+	return rest.RESTClientForConfigAndClient(config, httpClient)
 }
 
 func newScalesClient(config *rest.Config) (scale.ScalesGetter, error) {

@@ -13,8 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,7 +39,8 @@ import (
 )
 
 const (
-	restartThreshold = 50
+	restartThreshold    = 50
+	vmSubresourceURLFmt = "/apis/subresources.kubevirt.io/%s"
 )
 
 var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
@@ -52,8 +55,8 @@ var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.Idler{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &corev1.Pod{}),
-			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), builder.WithPredicates(PodIdlerPredicate{})).
+		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &corev1.Pod{},
+			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), PodIdlerPredicate{})).
 		Complete(r)
 }
 
@@ -62,6 +65,7 @@ type Reconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
 	AllNamespacesClient client.Client
+	RestClient          rest.Interface
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
 	GetHostCluster      cluster.GetHostClusterFunc
@@ -77,6 +81,10 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances,verbs=get;list;watch;create;update;patch;delete
+
+// needed to stop the VMs - we need to make a PUT request for the "stop" subresource. Kubernetes internally classifies these as either create or update
+// based on the state of the existing object.
+//+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=create;update
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
@@ -116,19 +124,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	result := reconcile.Result{}
-	if len(idler.Status.Pods) > 0 { // schedule the next requeue only if something is being tracked
-		logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
-		result = reconcile.Result{
-			Requeue:      true,
-			RequeueAfter: requeueAfter,
-		}
-	} else {
-		// if nothing is being tracked then only wait for the next reconcile triggered
-		// by a pod starting
-		logger.Info("no pods being tracked")
+	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
+	result := reconcile.Result{
+		Requeue:      true,
+		RequeueAfter: requeueAfter,
 	}
-
 	return result, r.setStatusReady(ctx, idler)
 }
 
@@ -141,7 +141,6 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
 	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	for _, pod := range podList.Items {
-		pod := pod // TODO We won't need it after upgrading to go 1.22: https://go.dev/blog/loopvar-preview
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		podCtx := log.IntoContext(ctx, podLogger)
 		timeoutSeconds := idler.Spec.TimeoutSeconds
@@ -181,9 +180,14 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				StartTime: *pod.Status.StartTime,
 			})
 		}
+		// calculate the next reconcile
 		if pod.Status.StartTime != nil {
 			killAfter := time.Until(pod.Status.StartTime.Add(time.Duration(timeoutSeconds+1) * time.Second))
 			requeueAfter = shorterDuration(requeueAfter, killAfter)
+		} else {
+			// if the pod doesn't contain startTime, then schedule the next reconcile to the timeout
+			// if not already scheduled to an earlier time
+			requeueAfter = shorterDuration(requeueAfter, time.Duration(timeoutSeconds)*time.Second)
 		}
 	}
 
@@ -340,7 +344,7 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 
 // scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
 // and scales the owner down to zero and returns "true".
-// Otherwise returns "false".
+// Otherwise, returns "false".
 // It also returns the parent controller type and name or empty strings if there is no parent controller.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.ObjectMeta) (string, string, bool, error) {
 	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.Name)
@@ -611,9 +615,14 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	// patch the virtualmachine resource by setting spec.running to false in order to stop the VM
-	patch := []byte(`{"spec":{"running":false}}`)
-	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Patch(ctx, vm.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	err = r.RestClient.Put().
+		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
+		Namespace(vm.GetNamespace()).
+		Resource("virtualmachines").
+		Name(vm.GetName()).
+		SubResource("stop").
+		Do(ctx).
+		Error()
 	if err != nil {
 		return "", "", false, err
 	}

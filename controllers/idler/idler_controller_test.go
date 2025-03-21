@@ -16,6 +16,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"gopkg.in/h2non/gock.v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -46,6 +47,7 @@ const (
 	RestartCountWithinThresholdContainer2 = 24
 	RestartCountOverThreshold             = 52
 	TestIdlerTimeOutSeconds               = 540
+	apiEndpoint                           = "https://api.openshift.com:6443"
 )
 
 func TestReconcile(t *testing.T) {
@@ -107,7 +109,7 @@ func TestEnsureIdling(t *testing.T) {
 
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	t.Run("No pods in namespace managed by idler, no requeue time", func(t *testing.T) {
+	t.Run("No pods in namespace managed by idler, requeue time equal to the idler timeout", func(t *testing.T) {
 		// given
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
@@ -124,12 +126,12 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// no pods found - the controller won't schedule requeue
-		assert.Equal(t, reconcile.Result{}, res)
+		assert.True(t, res.Requeue)
+		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
 	})
 
-	t.Run("Single pod without startTime", func(t *testing.T) {
+	t.Run("pods without startTime", func(t *testing.T) {
 		// given
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
@@ -146,8 +148,9 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		// no pods found - the controller won't schedule requeue
-		assert.Equal(t, reconcile.Result{}, res)
+		assert.True(t, res.Requeue)
+		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled to the 1/12th of the timeout
+		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second/12, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running()).TracksPods(nil)
 	})
 
@@ -216,9 +219,9 @@ func TestEnsureIdling(t *testing.T) {
 				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
 				StatefulSetScaledUp(noise.statefulSet).
 				StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
-				VMRunning(podsRunningForTooLong.virtualmachine).
-				VMRunning(podsTooEarlyToKill.virtualmachine).
-				VMRunning(noise.virtualmachine)
+				VMRunning(podsRunningForTooLong.vmStopCallCounter).
+				VMRunning(podsTooEarlyToKill.vmStopCallCounter).
+				VMRunning(noise.vmStopCallCounter)
 
 			// after golang 1.22 upgrade can use slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods, podsCrashLooping.allPods, podsCrashLoopingWithinThreshold.allPods)
 			// Tracked pods
@@ -272,9 +275,9 @@ func TestEnsureIdling(t *testing.T) {
 					StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
 					StatefulSetScaledUp(noise.statefulSet).
 					StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
-					VMStopped(podsRunningForTooLong.virtualmachine).
-					VMRunning(podsTooEarlyToKill.virtualmachine).
-					VMRunning(noise.virtualmachine)
+					VMStopped(podsRunningForTooLong.vmStopCallCounter).
+					VMRunning(podsTooEarlyToKill.vmStopCallCounter).
+					VMRunning(noise.vmStopCallCounter)
 
 				// Only tracks pods that have not been deleted
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
@@ -298,7 +301,7 @@ func TestEnsureIdling(t *testing.T) {
 					assert.True(t, res.Requeue)
 					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
 
-					t.Run("No pods. No requeue.", func(t *testing.T) {
+					t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
 						//given
 						// cleanup remaining pods
 						pods := append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)
@@ -317,8 +320,9 @@ func TestEnsureIdling(t *testing.T) {
 							TracksPods([]*corev1.Pod{}).
 							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
-						// no pods being tracked -> no scheduled requeue
-						assert.Equal(t, reconcile.Result{}, res)
+						// no pods being tracked -> requeue after idler timeout
+						assert.True(t, res.Requeue)
+						assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 					})
 				})
 			})
@@ -600,8 +604,10 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
-				require.NoError(t, err)                  // 'NotFound' errors are ignored!
-				assert.Equal(t, reconcile.Result{}, res) // no other pods being tracked
+				require.NoError(t, err) // 'NotFound' errors are ignored!
+				// no other pods being tracked
+				assert.True(t, res.Requeue)
+				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
 			}
 
@@ -620,6 +626,9 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
 				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				gock.Off()
+				// mock stop call
+				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
 
 				update := allCl.MockUpdate
 				defer func() { allCl.MockUpdate = update }()
@@ -657,7 +666,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
 			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
 			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
-			assertCanNotUpdateObject(vm, "can't patch virtualmachine")
+			assertCanNotUpdateObject(vm, "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
@@ -1169,6 +1178,7 @@ type payloads struct {
 	replicationController  *corev1.ReplicationController
 	job                    *batchv1.Job
 	virtualmachine         *unstructured.Unstructured
+	vmStopCallCounter      *int
 	virtualmachineinstance *unstructured.Unstructured
 }
 
@@ -1315,6 +1325,9 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 	_, err = r.DynamicClient.Resource(vmGVR).Namespace(namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
 	require.NoError(t, err)
 
+	// mock stop call
+	stopCallCounter := mockStopVMCalls(namespace, vm.GetName(), http.StatusAccepted)
+
 	// VirtualMachineInstance
 	vmstartTime := metav1.NewTime(startTimes.vmStartTime)
 	vmi := &unstructured.Unstructured{}
@@ -1375,8 +1388,28 @@ func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, 
 		replicationController:  standaloneRC,
 		job:                    job,
 		virtualmachine:         vm,
+		vmStopCallCounter:      stopCallCounter,
 		virtualmachineinstance: vmi,
 	}
+}
+
+func mockStopVMCalls(namespace, name string, reply int) *int {
+	expPath := fmt.Sprintf("/apis/subresources.kubevirt.io/v1/namespaces/%s/virtualmachines/%s/stop", namespace, name)
+	stopCallCounter := new(int)
+	gock.New(apiEndpoint).
+		Put(expPath).
+		Persist().
+		AddMatcher(func(request *http.Request, request2 *gock.Request) (bool, error) {
+			// the matcher function is called before checking the path,
+			// so we need to verify that it's really the same VM
+			if request.URL.Path == expPath {
+				*stopCallCounter++
+			}
+			return true, nil
+		}).
+		Reply(reply).
+		BodyString("")
+	return stopCallCounter
 }
 
 func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
@@ -1559,10 +1592,18 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		return true, obj, nil
 	})
 
+	restClient, err := test.NewRESTClient("dummy-token", apiEndpoint)
+	require.NoError(t, err)
+	restClient.Client.Transport = gock.DefaultTransport
+	t.Cleanup(func() {
+		gock.OffAll()
+	})
+
 	r := &Reconciler{
 		Client:              fakeClient,
 		AllNamespacesClient: allNamespacesClient,
 		DynamicClient:       dynamicClient,
+		RestClient:          restClient,
 		ScalesClient:        &scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),

@@ -1,0 +1,6 @@
+apiVersion: toolchain.dev.openshift.com/v1alpha1
+kind: UserAccount
+metadata:
+  name: useraccount-sample
+# spec:
+  # TODO

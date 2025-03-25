@@ -25,7 +25,7 @@ func (p PodIdlerPredicate) Update(event runtimeevent.UpdateEvent) bool {
 	}
 	if oldPod, ok := event.ObjectOld.(*corev1.Pod); ok {
 		startTimeNewlySet := oldPod.Status.StartTime == nil && newPod.Status.StartTime != nil
-		return startTimeNewlySet || getHighestRestartCount(newPod.Status) > restartThreshold
+		return startTimeNewlySet || getHighestRestartCount(newPod.Status) > aapRestartThreshold
 	}
 	return false
 }
@@ -35,9 +35,9 @@ func (PodIdlerPredicate) Create(_ runtimeevent.CreateEvent) bool {
 	return false
 }
 
-// Delete doesn't trigger reconcile
+// Delete triggers reconcile to make sure that the pod is not tracked in the status
 func (PodIdlerPredicate) Delete(_ runtimeevent.DeleteEvent) bool {
-	return false
+	return true
 }
 
 // Generic doesn't trigger reconcile

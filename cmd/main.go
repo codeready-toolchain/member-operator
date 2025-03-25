@@ -209,7 +209,7 @@ func main() {
 
 	restClient, err := newRestClient(cfg)
 	if err != nil {
-		setupLog.Error(err, "unable to create scales client")
+		setupLog.Error(err, "unable to create the REST client")
 		os.Exit(1)
 	}
 
@@ -251,6 +251,7 @@ func main() {
 		Client:              mgr.GetClient(),
 		ScalesClient:        scalesClient,
 		DynamicClient:       dynamicClient,
+		DiscoveryClient:     discoveryClient,
 		RestClient:          restClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,

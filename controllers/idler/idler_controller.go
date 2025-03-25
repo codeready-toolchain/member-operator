@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/discovery"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
@@ -39,7 +41,9 @@ import (
 )
 
 const (
-	restartThreshold    = 50
+	restartThreshold = 50
+	// Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
+	aapRestartThreshold = restartThreshold - 1
 	vmSubresourceURLFmt = "/apis/subresources.kubevirt.io/%s"
 )
 
@@ -68,6 +72,7 @@ type Reconciler struct {
 	RestClient          rest.Interface
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
+	DiscoveryClient     discovery.ServerResourcesInterface
 	GetHostCluster      cluster.GetHostClusterFunc
 	Namespace           string
 }
@@ -124,10 +129,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
+	aapIdlerFailed := false
+	if aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify); err != nil {
+		err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to init aap idler '%s': %w", idler.Name, err), "")
+		logger.Error(err, "init AAP idler failed")
+		aapIdlerFailed = true
+	} else {
+		aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
+		if err != nil {
+			err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to ensure aap idling '%s': %w", idler.Name, err), "")
+			logger.Error(err, "AAP idler execution failed")
+			aapIdlerFailed = true
+		}
+		if aapRequeueAfter != 0 {
+			requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
+		}
+	}
+
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
 		Requeue:      true,
 		RequeueAfter: requeueAfter,
+	}
+	if aapIdlerFailed {
+		// Do not return any errors if the AAP idler failed. We just log the error (above), update the Idler CR status and move on.
+		return result, nil
 	}
 	return result, r.setStatusReady(ctx, idler)
 }
@@ -237,12 +263,7 @@ func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *
 	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
 	if podReason != "PodCompleted" || deletedByController {
 		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
-		if err := r.createNotification(podCtx, idler, appName, appType); err != nil {
-			logger.Error(err, "failed to create Notification")
-			if err = r.setStatusIdlerNotificationCreationFailed(podCtx, idler, err.Error()); err != nil {
-				logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-			} // not returning error to continue tracking remaining pods
-		}
+		r.notify(podCtx, idler, appName, appType)
 	}
 	return nil
 }
@@ -257,8 +278,18 @@ func getHighestRestartCount(podstatus corev1.PodStatus) int32 {
 	return restartCount
 }
 
+func (r *Reconciler) notify(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) {
+	logger := log.FromContext(ctx)
+	logger.Info("Creating Notification")
+	if err := r.createNotification(ctx, idler, appName, appType); err != nil {
+		logger.Error(err, "failed to create Notification")
+		if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
+			logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
+		} // not returning error to continue tracking remaining pods
+	}
+}
+
 func (r *Reconciler) createNotification(ctx context.Context, idler *toolchainv1alpha1.Idler, appName string, appType string) error {
-	log.FromContext(ctx).Info("Create Notification")
 	//Get the HostClient
 	hostCluster, ok := r.GetHostCluster()
 	if !ok {

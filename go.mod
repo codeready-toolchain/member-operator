@@ -11,7 +11,7 @@ require (
 	github.com/redhat-cop/operator-utils v1.3.8
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.26.0
-	gopkg.in/h2non/gock.v1 v1.0.14 // indirect
+	gopkg.in/h2non/gock.v1 v1.0.14
 	k8s.io/api v0.30.1
 	k8s.io/client-go v0.30.1
 	k8s.io/klog v1.0.0
@@ -110,3 +110,5 @@ require (
 go 1.22.0
 
 toolchain go1.22.12
+
+replace github.com/codeready-toolchain/toolchain-common => github.com/mfrancisc/toolchain-common v0.0.0-20250325110421-0c2976c7f662

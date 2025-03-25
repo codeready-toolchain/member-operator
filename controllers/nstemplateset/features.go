@@ -2,7 +2,7 @@ package nstemplateset
 
 import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/member-operator/pkg/utils"
+	"github.com/codeready-toolchain/toolchain-common/pkg/utils"
 	"k8s.io/utils/strings/slices"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )

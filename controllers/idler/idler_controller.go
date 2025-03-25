@@ -90,6 +90,8 @@ type Reconciler struct {
 // based on the state of the existing object.
 //+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=create;update
 
+//+kubebuilder:rbac:groups=aap.ansible.com,resources=ansibleautomationplatforms,verbs=get;list;watch;create;update;patch;delete
+
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
 // Note:

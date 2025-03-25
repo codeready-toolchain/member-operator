@@ -12,35 +12,31 @@ type PodIdlerPredicate struct {
 // Update triggers reconcile if the pod runs in users namespace
 // and if either the highest restart count is higher than the threshold
 // or the startTime was newly set in the new version of the pod
-func (p PodIdlerPredicate) Update(event runtimeevent.UpdateEvent) bool {
-	newPod, ok := event.ObjectNew.(*corev1.Pod) // this can be replaced by the typed-predicate in the next version of k8s
-	if !ok {
-		return false
-	}
+func (p PodIdlerPredicate) Update(event runtimeevent.TypedUpdateEvent[*corev1.Pod]) bool {
 	// all pods running in users' namespaces have the priorityClassName set, so trigger reconcile only
 	// if the pod contains the same class name to ensure that the pod runs in a user's namespace
 	// (we don't care about other pods)
-	if newPod.Spec.PriorityClassName != mutatingwebhook.PriorityClassName {
+	if event.ObjectNew.Spec.PriorityClassName != mutatingwebhook.PriorityClassName {
 		return false
 	}
-	if oldPod, ok := event.ObjectOld.(*corev1.Pod); ok {
-		startTimeNewlySet := oldPod.Status.StartTime == nil && newPod.Status.StartTime != nil
-		return startTimeNewlySet || getHighestRestartCount(newPod.Status) > aapRestartThreshold
-	}
-	return false
+	startTimeNewlySet := event.ObjectOld.Status.StartTime == nil && event.ObjectNew.Status.StartTime != nil
+	return startTimeNewlySet || getHighestRestartCount(event.ObjectNew.Status) > aapRestartThreshold
 }
 
 // Create doesn't trigger reconcile
-func (PodIdlerPredicate) Create(_ runtimeevent.CreateEvent) bool {
+func (PodIdlerPredicate) Create(_ runtimeevent.TypedCreateEvent[*corev1.Pod]) bool {
 	return false
 }
 
-// Delete triggers reconcile to make sure that the pod is not tracked in the status
-func (PodIdlerPredicate) Delete(_ runtimeevent.DeleteEvent) bool {
-	return true
+// Delete triggers reconcile for users pods to make sure that the deleted pod is not tracked in the status anymore
+func (PodIdlerPredicate) Delete(event runtimeevent.TypedDeleteEvent[*corev1.Pod]) bool {
+	// all pods running in users' namespaces have the priorityClassName set, so trigger reconcile only
+	// if the pod contains the same class name to ensure that the pod runs in a user's namespace
+	// (we don't care about other pods)
+	return event.Object.Spec.PriorityClassName == mutatingwebhook.PriorityClassName
 }
 
 // Generic doesn't trigger reconcile
-func (p PodIdlerPredicate) Generic(_ runtimeevent.GenericEvent) bool {
+func (p PodIdlerPredicate) Generic(_ runtimeevent.TypedGenericEvent[*corev1.Pod]) bool {
 	return false
 }

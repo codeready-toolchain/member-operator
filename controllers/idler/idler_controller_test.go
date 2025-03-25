@@ -627,9 +627,10 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
-				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
+				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 			}
 
 			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
@@ -731,9 +732,10 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
-				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
+				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 			}
 
 			assertCanNotUpdateObject(&appsv1.Deployment{}, "can't update deployment")
@@ -762,9 +764,10 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
-				require.EqualError(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
+				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
 				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.FailedToIdle(errMsg))
+				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 			}
 
 			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")

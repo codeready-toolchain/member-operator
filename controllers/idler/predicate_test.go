@@ -96,14 +96,15 @@ func TestPredicate(t *testing.T) {
 							expectedResult := classTestData.expectedResult && (restartData.expected || startTimeData.expected)
 
 							// when & then
-							assert.Equal(t, expectedResult, predicate.Update(event.UpdateEvent{
+							assert.Equal(t, expectedResult, predicate.Update(event.TypedUpdateEvent[*corev1.Pod]{
 								ObjectOld: startTimeData.oldPod,
 								ObjectNew: pod,
 							}))
 
-							assert.False(t, predicate.Create(event.CreateEvent{Object: classTestData.pod}))
-							assert.False(t, predicate.Generic(event.GenericEvent{Object: classTestData.pod}))
-							assert.True(t, predicate.Delete(event.DeleteEvent{Object: classTestData.pod}))
+							assert.False(t, predicate.Create(event.TypedCreateEvent[*corev1.Pod]{Object: classTestData.pod}))
+							assert.False(t, predicate.Generic(event.TypedGenericEvent[*corev1.Pod]{Object: classTestData.pod}))
+							assert.Equal(t, classTestData.expectedResult, predicate.Delete(
+								event.TypedDeleteEvent[*corev1.Pod]{Object: classTestData.pod}))
 						})
 					}
 				})

@@ -17,7 +17,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,8 +56,8 @@ var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.Idler{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &corev1.Pod{},
-			handler.EnqueueRequestsFromMapFunc(MapPodToIdler), PodIdlerPredicate{})).
+		WatchesRawSource(source.Kind(allNamespaceCluster.GetCache(), &corev1.Pod{},
+			handler.TypedEnqueueRequestsFromMapFunc(MapPodToIdler), PodIdlerPredicate{})).
 		Complete(r)
 }
 
@@ -89,6 +88,8 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=create;update
 
 //+kubebuilder:rbac:groups=aap.ansible.com,resources=ansibleautomationplatforms,verbs=get;list;watch;create;update;patch;delete
+// There are other AAP resource kinds which are involved in the Pod -> ... -> AnsibleAutomationPlatform ownership chain. We need to be able to get/list them.
+//+kubebuilder:rbac:groups=aap.ansible.com,resources=*,verbs=get;list
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec

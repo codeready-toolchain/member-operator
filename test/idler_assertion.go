@@ -157,7 +157,7 @@ func (a *IdleablePayloadAssertion) DeploymentScaledDown(deployment *appsv1.Deplo
 	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
 	require.NoError(a.t, err)
 	require.NotNil(a.t, d.Spec.Replicas)
-	assert.Equal(a.t, int32(0), *d.Spec.Replicas)
+	assert.Equal(a.t, int32(0), *d.Spec.Replicas, "namespace %s name %s", deployment.Namespace, deployment.Name)
 	return a
 }
 

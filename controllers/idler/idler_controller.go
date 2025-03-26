@@ -185,20 +185,22 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
-				if err != nil {
-					idleErrors = append(idleErrors, err)
+				if err == nil {
+					continue
 				}
-				continue
+				idleErrors = append(idleErrors, err)
+				podLogger.Error(err, "failed to kill the pod")
 			}
 			// Already tracking this pod. Check the timeout.
 			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
 				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
-				if err != nil {
-					idleErrors = append(idleErrors, err)
+				if err == nil {
+					continue
 				}
-				continue
+				idleErrors = append(idleErrors, err)
+				podLogger.Error(err, "failed to kill the pod")
 			}
 			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
 

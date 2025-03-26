@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -227,10 +228,9 @@ func TestEnsureIdling(t *testing.T) {
 				VMRunning(podsTooEarlyToKill.vmStopCallCounter).
 				VMRunning(noise.vmStopCallCounter)
 
-			// after golang 1.22 upgrade can use slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods, podsCrashLooping.allPods, podsCrashLoopingWithinThreshold.allPods)
 			// Tracked pods
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods...), podsCrashLooping.allPods...), podsCrashLoopingWithinThreshold.allPods...)).
+				TracksPods(slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods, podsCrashLooping.allPods, podsCrashLoopingWithinThreshold.allPods)).
 				HasConditions(memberoperatortest.Running())
 
 			assert.True(t, res.Requeue)
@@ -299,7 +299,7 @@ func TestEnsureIdling(t *testing.T) {
 					require.NoError(t, err)
 					// Tracking existing pods only.
 					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)). // controlledPods are being tracked again because in unit tests scaling down doesn't delete pods
+						TracksPods(slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)). // controlledPods are being tracked again because in unit tests scaling down doesn't delete pods
 						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 					assert.True(t, res.Requeue)
@@ -308,7 +308,7 @@ func TestEnsureIdling(t *testing.T) {
 					t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
 						//given
 						// cleanup remaining pods
-						pods := append(append(append(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods...), podsCrashLoopingWithinThreshold.allPods...), podsCrashLooping.controlledPods...)
+						pods := slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)
 						for _, pod := range pods {
 							err := allCl.Delete(context.TODO(), pod)
 							require.NoError(t, err)
@@ -378,6 +378,54 @@ func TestEnsureIdling(t *testing.T) {
 					assert.Less(t, int64(res.RequeueAfter), int64((TestIdlerTimeOutSeconds+1)*time.Second))
 				})
 			})
+		})
+
+		t.Run("one error won't affect other pods", func(t *testing.T) {
+			// given
+			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+			toKill := preparePayloads(t, reconciler, idler.Name, "tokill-", expiredStartTimes(idler.Spec.TimeoutSeconds))
+
+			// to start tracking
+			_, err := reconciler.Reconcile(context.TODO(), req)
+			require.NoError(t, err)
+			allCl.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				if reflect.TypeOf(obj) == reflect.TypeOf(&appsv1.ReplicaSet{}) {
+					return fmt.Errorf("some error")
+				}
+				return allCl.Client.Update(ctx, obj, opts...)
+			}
+
+			// when
+			_, err = reconciler.Reconcile(context.TODO(), req)
+
+			// then
+			require.Error(t, err)
+			memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
+				// not idled
+				ReplicaSetScaledUp(toKill.replicaSet).
+				// idled
+				PodsDoNotExist(toKill.standalonePods).
+				DaemonSetDoesNotExist(toKill.daemonSet).
+				JobDoesNotExist(toKill.job).
+				DeploymentScaledDown(toKill.deployment).
+				DeploymentScaledDown(toKill.integration).
+				DeploymentScaledDown(toKill.kameletBinding).
+				DeploymentConfigScaledDown(toKill.deploymentConfig).
+				ReplicationControllerScaledDown(toKill.replicationController).
+				StatefulSetScaledDown(toKill.statefulSet).
+				VMStopped(toKill.vmStopCallCounter)
+
+			var beingTracked []*corev1.Pod
+			for _, pod := range toKill.controlledPods {
+				if pod.OwnerReferences[0].Name == toKill.replicaSet.Name {
+					beingTracked = append(beingTracked, pod)
+				}
+			}
+
+			// Only tracks pods that have not been deleted
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				TracksPods(beingTracked).
+				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 		})
 	})
 

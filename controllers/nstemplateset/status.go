@@ -107,6 +107,8 @@ func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Contex
 	featureAnnotation, featureAnnotationFound := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 	if featureAnnotationFound {
 		// save the feature toggles into the status
+		// we updated also the featureToggles since the current the logic handles only cluster scoped resources.
+		// the logic could be refactored and transformed in something more generic, that can be reused for namespace scoped resources as well.
 		nsTmplSet.Status.FeatureToggles = utils.SplitCommaSeparatedList(featureAnnotation)
 	}
 	return r.Client.Status().Update(ctx, nsTmplSet)

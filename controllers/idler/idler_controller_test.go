@@ -16,7 +16,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
-	"gopkg.in/h2non/gock.v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -1734,13 +1733,6 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 			},
 		}
 		return true, obj, nil
-	})
-
-	restClient, err := test.NewRESTClient("dummy-token", apiEndpoint)
-	require.NoError(t, err)
-	restClient.Client.Transport = gock.DefaultTransport
-	t.Cleanup(func() {
-		gock.OffAll()
 	})
 
 	r := &Reconciler{

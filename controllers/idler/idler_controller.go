@@ -91,6 +91,8 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=subresources.kubevirt.io,resources=virtualmachines/stop,verbs=create;update
 
 //+kubebuilder:rbac:groups=aap.ansible.com,resources=ansibleautomationplatforms,verbs=get;list;watch;create;update;patch;delete
+// There are other AAP resource kinds which are involved in the Pod -> ... -> AnsibleAutomationPlatform ownership chain. We need to be able to get/list them.
+//+kubebuilder:rbac:groups=aap.ansible.com,resources=*,verbs=get;list
 
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec

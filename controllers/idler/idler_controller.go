@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +34,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -66,10 +64,9 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 
 // Reconciler reconciles an Idler object
 type Reconciler struct {
-	Client              client.Client
+	Client              runtimeclient.Client
 	Scheme              *runtime.Scheme
-	AllNamespacesClient client.Client
-	RestClient          rest.Interface
+	AllNamespacesClient runtimeclient.Client
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
 	DiscoveryClient     discovery.ServerResourcesInterface
@@ -163,7 +160,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
-	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
+	if err := r.AllNamespacesClient.List(ctx, podList, runtimeclient.InNamespace(idler.Name)); err != nil {
 		return 0, err
 	}
 	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
@@ -600,7 +597,7 @@ func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner meta
 	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
 	propagationPolicy := metav1.DeletePropagationBackground
 
-	if err := r.AllNamespacesClient.Delete(ctx, j, &client.DeleteOptions{
+	if err := r.AllNamespacesClient.Delete(ctx, j, &runtimeclient.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	}); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -648,20 +645,19 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	err = r.RestClient.Put().
-		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
-		Namespace(vm.GetNamespace()).
-		Resource("virtualmachines").
-		Name(vm.GetName()).
-		SubResource("stop").
-		Do(ctx).
-		Error()
+	// stop the virtualmachine via its stop subresource
+	// see https://github.com/kubevirt/client-go/blob/9511917986c310fd00da06ca416a5c37f0ec5ed4/kubevirt/typed/core/v1/virtualmachine_expansion.go#L101-L115
+	vmName := vm.GetName()
+	_, err = r.DynamicClient.
+		Resource(schema.GroupVersionResource{Group: "subresources.kubevirt.io", Version: "v1", Resource: "virtualmachines"}).
+		Namespace(namespace).
+		Update(ctx, vm, metav1.UpdateOptions{}, "stop")
 	if err != nil {
 		return "", "", false, err
 	}
 
-	logger.Info("VirtualMachine stopped", "name", vm.GetName())
-	return vm.GetKind(), vm.GetName(), true, nil
+	logger.Info("VirtualMachine stopped", "name", vmName)
+	return vm.GetKind(), vmName, true, nil
 }
 
 func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {

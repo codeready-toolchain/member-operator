@@ -701,9 +701,10 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject := func(inaccessible runtime.Object, errMsg string) {
 				// given
 				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
-				gock.Off()
 				// mock stop call
-				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
+				dynamicCl.PrependReactor("update", "virtualmachines/stop", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, fmt.Errorf("can't update virtualmachine")
+				})
 
 				update := allCl.MockUpdate
 				defer func() { allCl.MockUpdate = update }()
@@ -741,7 +742,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
 			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
 			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
-			assertCanNotUpdateObject(vm, "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
+			assertCanNotUpdateObject(vm, "can't update virtualmachine")
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
@@ -1470,8 +1471,21 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	_, err = clients.dynamicClient.Resource(vmGVR).Namespace(namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	// mock stop call
-	stopCallCounter := mockStopVMCalls(namespace, vm.GetName(), http.StatusAccepted)
+	// mock VM stop call
+	stopCallCounter := new(int)
+	clients.dynamicClient.(*fakedynamic.FakeDynamicClient).PrependReactor("update", "virtualmachines/stop", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+		runtimeObj := action.(clienttest.UpdateAction).GetObject()
+		objMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(runtimeObj)
+		if err != nil {
+			return false, nil, err
+		}
+		unstructuredObj := unstructured.Unstructured{Object: objMap}
+		if action.GetNamespace() == namespace && unstructuredObj.GetName() == vm.GetName() {
+			*stopCallCounter++
+			return true, nil, nil // return true only if the stop counter is incremented, otherwise false should be returned so that the next reactors can check the request
+		}
+		return false, nil, nil
+	})
 
 	// VirtualMachineInstance
 	vmstartTime := metav1.NewTime(startTimes.vmStartTime)
@@ -1536,25 +1550,6 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 		vmStopCallCounter:      stopCallCounter,
 		virtualmachineinstance: vmi,
 	}
-}
-
-func mockStopVMCalls(namespace, name string, reply int) *int {
-	expPath := fmt.Sprintf("/apis/subresources.kubevirt.io/v1/namespaces/%s/virtualmachines/%s/stop", namespace, name)
-	stopCallCounter := new(int)
-	gock.New(apiEndpoint).
-		Put(expPath).
-		Persist().
-		AddMatcher(func(request *http.Request, request2 *gock.Request) (bool, error) {
-			// the matcher function is called before checking the path,
-			// so we need to verify that it's really the same VM
-			if request.URL.Path == expPath {
-				*stopCallCounter++
-			}
-			return true, nil
-		}).
-		Reply(reply).
-		BodyString("")
-	return stopCallCounter
 }
 
 func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
@@ -1753,7 +1748,6 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		AllNamespacesClient: allNamespacesClient,
 		DynamicClient:       dynamicClient,
 		DiscoveryClient:     fakeDiscovery,
-		RestClient:          restClient,
 		ScalesClient:        &scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
@@ -1856,6 +1850,5 @@ var virtualmachineJSON = []byte(`{
 		"namespace": "another-namespace"
 	},
 	"spec": {
-		"running": true
 	}
 }`)

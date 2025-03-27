@@ -1101,7 +1101,7 @@ func TestReconcileUpdate(t *testing.T) {
 			require.NoError(t, err)
 			AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 				HasFinalizer().
-				HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource was updated
+				HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde11"}). // cluster resource still isn't fully updated
 				HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
 					{
 						TemplateRef: "advanced-dev-abcde11", // still not updated, has the old value
@@ -1146,7 +1146,7 @@ func TestReconcileUpdate(t *testing.T) {
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 					HasFinalizer().
-					HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource is unchanged
+					HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde11"}). // cluster resource isn't still fully updated
 					HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
 						{
 							TemplateRef: "advanced-dev-abcde11", // still not updated, has the old value
@@ -1164,7 +1164,7 @@ func TestReconcileUpdate(t *testing.T) {
 					HasConditions(Updating())
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-														WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+														WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"), // the templateref label is being updated on all objects
 														WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 					HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}) // deleted
 				for _, nsType := range []string{"stage", "dev"} {
@@ -1189,10 +1189,16 @@ func TestReconcileUpdate(t *testing.T) {
 					require.NoError(t, err)
 					AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 						HasFinalizer().
-						HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource is unchanged
-						HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{{
-							TemplateRef: "advanced-dev-abcde12", // namespaces were updated
-						}}).
+						HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource is updated now
+						// namespaces were not updated yet
+						HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
+							{
+								TemplateRef: "advanced-dev-abcde11",
+							},
+							{
+								TemplateRef: "advanced-stage-abcde11",
+							},
+						}).
 						HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
 							TemplateRef: "advanced-admin-abcde11",
 							Usernames:   []string{spacename}, // still not updated, has the old value
@@ -1226,9 +1232,15 @@ func TestReconcileUpdate(t *testing.T) {
 						AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 							HasFinalizer().
 							HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource remains unchanged
-							HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{{
-								TemplateRef: "advanced-dev-abcde12", // namespaces are unchanged
-							}}).
+							// namespaces were not updated yet
+							HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
+								{
+									TemplateRef: "advanced-dev-abcde11",
+								},
+								{
+									TemplateRef: "advanced-stage-abcde11",
+								},
+							}).
 							HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
 								TemplateRef: "advanced-admin-abcde11",
 								Usernames:   []string{spacename}, // still not updated, has the old value
@@ -1262,11 +1274,11 @@ func TestReconcileUpdate(t *testing.T) {
 								HasFinalizer().
 								HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource remains unchanged
 								HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{{
-									TemplateRef: "advanced-dev-abcde12", // namespaces are unchanged
+									TemplateRef: "advanced-dev-abcde12", // namespaces are updated now
 								}}).
 								HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
-									TemplateRef: "advanced-admin-abcde12",
-									Usernames:   []string{spacename}, // space roles were updated
+									TemplateRef: "advanced-admin-abcde11",
+									Usernames:   []string{spacename}, // space roles were not updated yet
 								}}).
 								HasConditions(Updating())
 
@@ -1311,7 +1323,7 @@ func TestReconcileUpdate(t *testing.T) {
 									}}).
 									HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
 										TemplateRef: "advanced-admin-abcde12",
-										Usernames:   []string{spacename}, // space roles are unchanged
+										Usernames:   []string{spacename}, // space roles are updated now
 									}}).
 									HasConditions(Provisioned())
 								AssertThatCluster(t, fakeClient).

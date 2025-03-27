@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"reflect"
 	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -79,8 +80,6 @@ func (r *statusManager) updateStatusProvisionedNamespaces(ctx context.Context, n
 }
 
 func (r *statusManager) setStatusReady(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	// update also all the status revisions
-	updateRevisions(nsTmplSet)
 	return r.updateStatusConditions(
 		ctx,
 		nsTmplSet,
@@ -91,37 +90,54 @@ func (r *statusManager) setStatusReady(ctx context.Context, nsTmplSet *toolchain
 		})
 }
 
-func updateRevisions(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
-	nsTmplSet.Status.ClusterResources = nsTmplSet.Spec.ClusterResources
-	featureAnnotation, featureAnnotationFound := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
-	if featureAnnotationFound {
-		// save the feature toggles into the status
-		nsTmplSet.Status.FeatureToggles = utils.SplitCommaSeparatedList(featureAnnotation)
-	}
-	nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
-	nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
-}
-
+// updateStatusClusterResourcesRevisions updates the cluster resources and features list in the status of the nstemplateset
 func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	nsTmplSet.Status.ClusterResources = nsTmplSet.Spec.ClusterResources
-	featureAnnotation, featureAnnotationFound := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
-	if featureAnnotationFound {
+	updateFeatureAnnotation, featureAnnotation := featureAnnotationNeedsUpdate(nsTmplSet)
+	if updateFeatureAnnotation || clusterResourcesNeedsUpdate(nsTmplSet) {
 		// save the feature toggles into the status
 		// we updated also the featureToggles since the current the logic handles only cluster scoped resources.
 		// the logic could be refactored and transformed in something more generic, that can be reused for namespace scoped resources as well.
-		nsTmplSet.Status.FeatureToggles = utils.SplitCommaSeparatedList(featureAnnotation)
+		nsTmplSet.Status.FeatureToggles = featureAnnotation
+		nsTmplSet.Status.ClusterResources = nsTmplSet.Spec.ClusterResources
+		return r.Client.Status().Update(ctx, nsTmplSet)
 	}
-	return r.Client.Status().Update(ctx, nsTmplSet)
+	return nil
+}
+
+// featureAnnotationNeedsUpdate checks if the feature annotation has changed on the nstemlpateset compared to what was last time saved in the status
+func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
+	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
+	if !reflect.DeepEqual(featureAnnotationList, nsTmplSet.Status.FeatureToggles) {
+		return true, featureAnnotationList
+	}
+	return false, featureAnnotationList
+}
+
+// clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset
+func clusterResourcesNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
+	if (nsTmplSet.Status.ClusterResources == nil && nsTmplSet.Spec.ClusterResources != nil) ||
+		(nsTmplSet.Status.ClusterResources != nil && nsTmplSet.Spec.ClusterResources == nil) ||
+		nsTmplSet.Status.ClusterResources.TemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef {
+		return true
+	}
+	return false
 }
 
 func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
-	return r.Client.Status().Update(ctx, nsTmplSet)
+	if !reflect.DeepEqual(nsTmplSet.Spec.Namespaces, nsTmplSet.Status.Namespaces) {
+		nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
+		return r.Client.Status().Update(ctx, nsTmplSet)
+	}
+	return nil
 }
 
 func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
-	return r.Client.Status().Update(ctx, nsTmplSet)
+	if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, nsTmplSet.Status.SpaceRoles) {
+		nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
+		return r.Client.Status().Update(ctx, nsTmplSet)
+	}
+	return nil
 }
 
 func (r *statusManager) setStatusProvisioningIfNotUpdating(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

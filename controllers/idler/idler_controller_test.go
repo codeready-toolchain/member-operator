@@ -707,11 +707,11 @@ func TestEnsureIdlingFailed(t *testing.T) {
 
 				update := allCl.MockUpdate
 				defer func() { allCl.MockUpdate = update }()
-				allCl.MockUpdate = func(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+				allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
 						return errors.New(errMsg)
 					}
-					return allCl.Client.Update(ctx, obj, opts...)
+					return allCl.Client.Patch(ctx, obj, patch, opts...)
 				}
 
 				// dynamic client for vms
@@ -1681,32 +1681,21 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 	fakeDiscovery := fakeclientset.NewSimpleClientset().Discovery()
 
 	scalesClient := fakescale.FakeScaleClient{}
-	scalesClient.AddReactor("update", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
-		action := rawAction.(clienttest.UpdateAction)    // nolint: forcetypeassert
-		obj := action.GetObject().(*autoscalingv1.Scale) // nolint: forcetypeassert
-		replicas := obj.Spec.Replicas
+	scalesClient.AddReactor("patch", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
+		action := rawAction.(clienttest.PatchAction) // nolint: forcetypeassert
 
 		// update owned deployment
 		d := &appsv1.Deployment{}
-		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: obj.Name + "-deployment", Namespace: obj.Namespace}, d)
+		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: action.GetName() + "-deployment", Namespace: action.GetNamespace()}, d)
 		if err != nil {
 			return false, nil, err
 		}
-		d.Spec.Replicas = &replicas
-		err = allNamespacesClient.Update(context.TODO(), d)
+		err = allNamespacesClient.Patch(context.TODO(), d, client.RawPatch(types.MergePatchType, action.GetPatch()))
 		if err != nil {
 			return false, nil, err
 		}
 
-		return true, &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      obj.Name,
-				Namespace: action.GetNamespace(),
-			},
-			Spec: autoscalingv1.ScaleSpec{
-				Replicas: replicas,
-			},
-		}, nil
+		return false, nil, nil
 	})
 
 	// Mock internal server error for Camel K integrations in order to replicate default behavior with missing spec.replicas field

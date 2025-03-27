@@ -207,15 +207,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	restClient, err := newRestClient(cfg)
+	dynamicClient, err := newDynamicClient(cfg)
 	if err != nil {
-		setupLog.Error(err, "unable to create the REST client")
-		os.Exit(1)
-	}
-
-	dynamicClient, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		setupLog.Error(err, "unable to create dynamic client")
+		setupLog.Error(err, "unable to create the dynamic client")
 		os.Exit(1)
 	}
 
@@ -252,7 +246,6 @@ func main() {
 		ScalesClient:        scalesClient,
 		DynamicClient:       dynamicClient,
 		DiscoveryClient:     discoveryClient,
-		RestClient:          restClient,
 		GetHostCluster:      cluster.GetHostCluster,
 		Namespace:           namespace,
 	}).SetupWithManager(mgr, allNamespacesCluster); err != nil {
@@ -331,13 +324,29 @@ func main() {
 
 }
 
-func newRestClient(config *rest.Config) (*rest.RESTClient, error) {
-	httpClient, err := rest.HTTPClientFor(config)
+func newDynamicClient(config *rest.Config) (*dynamic.DynamicClient, error) {
+	restCfg := rest.CopyConfig(config)
+	// Set AcceptContentTypes to "application/json, */*"" so that the client will accept non-JSON responses which is required for some APIs. See the comment regarding the VM stop API below.
+	restCfg.AcceptContentTypes = "application/json, */*"
+	httpClient, err := rest.HTTPClientFor(restCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return rest.RESTClientForConfigAndClient(config, httpClient)
+	restClient, err := rest.RESTClientForConfigAndClient(restCfg, httpClient)
+	if err != nil {
+		return nil, err
+	}
+
+	// Avoid creating the DynamicClient via dynamic.NewForConfig(cfg) because it leads to the Accept header in the requests
+	// being set to "application/json" which leads to errors for some APIs like the VM stop API used by the idler.
+	//
+	// eg. the VM stop subresource API returns the error '406: Not Acceptable\n\nAvailable representations' when the Accept header is set to "application/json"
+	//
+	// Relevant code snippets:
+	// 1. https://github.com/kubernetes/client-go/blob/169f1af1bf07d58eef1246c3b55e465275b2feb9/dynamic/simple.go#L50-L51
+	// 2. https://github.com/kubernetes/client-go/blob/169f1af1bf07d58eef1246c3b55e465275b2feb9/rest/request.go#L210-L213
+	return dynamic.New(restClient), nil
 }
 
 func newScalesClient(config *rest.Config) (scale.ScalesGetter, error) {

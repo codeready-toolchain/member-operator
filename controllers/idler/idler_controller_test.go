@@ -1481,7 +1481,9 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 		unstructuredObj := unstructured.Unstructured{Object: objMap}
 		if action.GetNamespace() == namespace && unstructuredObj.GetName() == vm.GetName() {
 			*stopCallCounter++
-			return true, nil, nil // return true only if the stop counter is incremented, otherwise false should be returned so that the next reactors can check the request
+			// the API causes an "unexpected end of JSON input" error since the VM stop subresource API doesn't return a JSON response even when successful
+			jsonErr := fmt.Errorf("unexpected end of JSON input")
+			return true, nil, jsonErr // return true only if the stop counter is incremented, otherwise false should be returned so that the next reactors can check the request
 		}
 		return false, nil, nil
 	})

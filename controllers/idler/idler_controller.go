@@ -635,7 +635,8 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		Resource(schema.GroupVersionResource{Group: "subresources.kubevirt.io", Version: "v1", Resource: "virtualmachines"}).
 		Namespace(namespace).
 		Update(ctx, vm, metav1.UpdateOptions{}, "stop")
-	if err != nil {
+	// if it results in "unexpected end of JSON input" error then it's expected but the attempt to stop the VM is successful
+	if err != nil && err.Error() != "unexpected end of JSON input" {
 		return "", "", false, err
 	}
 

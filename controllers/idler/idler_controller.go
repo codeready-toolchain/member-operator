@@ -12,7 +12,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -424,46 +423,24 @@ func (r *Reconciler) scaleDeploymentToZero(ctx context.Context, namespace string
 		return "", "", false, err
 	}
 	zero := int32(0)
-
 	for _, deploymentOwner := range d.OwnerReferences {
 		if supportedScaleResource := getSupportedScaleResource(deploymentOwner); supportedScaleResource != nil {
-			// check for owner with scale sub resource
-			if scaleResource, err := r.ScalesClient.Scales(d.Namespace).Get(ctx, supportedScaleResource.GroupResource(), deploymentOwner.Name, metav1.GetOptions{}); err == nil {
-				scaleResource.Spec.Replicas = zero
-				_, err = r.ScalesClient.Scales(d.Namespace).Update(ctx, supportedScaleResource.GroupResource(), scaleResource, metav1.UpdateOptions{})
-
-				if err == nil {
-					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
-					return owner.Kind, owner.Name, true, nil
+			patch := []byte(`{"spec":{"replicas":0}}`)
+			_, err := r.ScalesClient.Scales(d.Namespace).Patch(ctx, *supportedScaleResource, deploymentOwner.Name, types.MergePatchType, patch, metav1.PatchOptions{})
+			if err != nil {
+				if !apierrors.IsNotFound(err) {
+					return "", "", false, err
 				}
-
-				return "", "", false, err
-			} else if apierrors.IsInternalError(err) { // Internal error indicates that the specReplicasPath is not set on the custom resource - just update the scale resource
-				scale := autoscalingv1.Scale{
-					ObjectMeta: ctrl.ObjectMeta{
-						Name:      deploymentOwner.Name,
-						Namespace: d.Namespace,
-					},
-					Spec: autoscalingv1.ScaleSpec{
-						Replicas: zero,
-					},
-				}
-				_, err = r.ScalesClient.Scales(d.Namespace).Update(ctx, supportedScaleResource.GroupResource(), &scale, metav1.UpdateOptions{})
-
-				if err == nil {
-					logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
-					return owner.Kind, owner.Name, true, nil
-				}
-
-				return "", "", false, err
-			} else if !apierrors.IsNotFound(err) {
-				return "", "", false, err
+			} else {
+				logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
+				return owner.Kind, owner.Name, true, nil
 			}
 		}
 	}
 
-	d.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Update(ctx, d); err != nil {
+	patched := d.DeepCopy()
+	patched.Spec.Replicas = &zero
+	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(d)); err != nil {
 		return "", "", false, err
 	}
 	logger.Info("Deployment scaled to zero", "name", d.Name)
@@ -502,8 +479,9 @@ func (r *Reconciler) scaleReplicaSetToZero(ctx context.Context, namespace string
 	if !deletedByController {
 		// There is no controller that owns the ReplicaSet. Scale the ReplicaSet to zero.
 		zero := int32(0)
-		rs.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Update(ctx, rs); err != nil {
+		patched := rs.DeepCopy()
+		patched.Spec.Replicas = &zero
+		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rs)); err != nil {
 			return "", "", false, err
 		}
 		logger.Info("ReplicaSet scaled to zero", "name", rs.Name)
@@ -540,8 +518,9 @@ func (r *Reconciler) scaleStatefulSetToZero(ctx context.Context, namespace strin
 		return "", "", false, err
 	}
 	zero := int32(0)
-	s.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Update(ctx, s); err != nil {
+	patched := s.DeepCopy()
+	patched.Spec.Replicas = &zero
+	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(s)); err != nil {
 		return "", "", false, err
 	}
 	log.FromContext(ctx).Info("StatefulSet scaled to zero", "name", s.Name)
@@ -556,9 +535,10 @@ func (r *Reconciler) scaleDeploymentConfigToZero(ctx context.Context, namespace 
 		}
 		return "", "", false, err
 	}
-	dc.Spec.Replicas = 0
-	dc.Spec.Paused = false
-	if err := r.AllNamespacesClient.Update(ctx, dc); err != nil {
+	patched := dc.DeepCopy()
+	patched.Spec.Replicas = 0
+	patched.Spec.Paused = false
+	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(dc)); err != nil {
 		return "", "", false, err
 	}
 	log.FromContext(ctx).Info("DeploymentConfig scaled to zero", "name", dc.Name)
@@ -580,8 +560,9 @@ func (r *Reconciler) scaleReplicationControllerToZero(ctx context.Context, names
 	if !deletedByController {
 		// There is no controller who owns the ReplicationController. Scale the ReplicationController to zero.
 		zero := int32(0)
-		rc.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Update(ctx, rc); err != nil {
+		patched := rc.DeepCopy()
+		patched.Spec.Replicas = &zero
+		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rc)); err != nil {
 			return "", "", false, err
 		}
 		log.FromContext(ctx).Info("ReplicationController scaled to zero", "name", rc.Name)

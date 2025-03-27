@@ -451,5 +451,5 @@ func (r *namespacesManager) setProvisionedNamespaceList(ctx context.Context, nsT
 	if err != nil {
 		return err
 	}
-	return r.statusManager.updateStatusProvisionedNamespaces(ctx, nsTmplSet, userNamespaces)
+	return r.updateStatusProvisionedNamespaces(ctx, nsTmplSet, userNamespaces)
 }

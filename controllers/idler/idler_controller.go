@@ -433,7 +433,7 @@ func (r *Reconciler) scaleDeploymentToZero(ctx context.Context, namespace string
 
 	patched := d.DeepCopy()
 	patched.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(d)); err != nil {
+	if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(d)); err != nil {
 		return "", "", false, err
 	}
 	logger.Info("Deployment scaled to zero", "name", d.Name)
@@ -474,7 +474,7 @@ func (r *Reconciler) scaleReplicaSetToZero(ctx context.Context, namespace string
 		zero := int32(0)
 		patched := rs.DeepCopy()
 		patched.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rs)); err != nil {
+		if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(rs)); err != nil {
 			return "", "", false, err
 		}
 		logger.Info("ReplicaSet scaled to zero", "name", rs.Name)
@@ -513,7 +513,7 @@ func (r *Reconciler) scaleStatefulSetToZero(ctx context.Context, namespace strin
 	zero := int32(0)
 	patched := s.DeepCopy()
 	patched.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(s)); err != nil {
+	if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(s)); err != nil {
 		return "", "", false, err
 	}
 	log.FromContext(ctx).Info("StatefulSet scaled to zero", "name", s.Name)
@@ -531,7 +531,7 @@ func (r *Reconciler) scaleDeploymentConfigToZero(ctx context.Context, namespace 
 	patched := dc.DeepCopy()
 	patched.Spec.Replicas = 0
 	patched.Spec.Paused = false
-	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(dc)); err != nil {
+	if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(dc)); err != nil {
 		return "", "", false, err
 	}
 	log.FromContext(ctx).Info("DeploymentConfig scaled to zero", "name", dc.Name)
@@ -555,7 +555,7 @@ func (r *Reconciler) scaleReplicationControllerToZero(ctx context.Context, names
 		zero := int32(0)
 		patched := rc.DeepCopy()
 		patched.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rc)); err != nil {
+		if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(rc)); err != nil {
 			return "", "", false, err
 		}
 		log.FromContext(ctx).Info("ReplicationController scaled to zero", "name", rc.Name)

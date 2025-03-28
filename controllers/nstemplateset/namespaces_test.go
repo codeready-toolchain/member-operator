@@ -381,7 +381,7 @@ func TestGetNamespaceName(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Equal(t, "", nsName)
+		assert.Empty(t, nsName)
 	})
 
 }

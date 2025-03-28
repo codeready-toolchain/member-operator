@@ -662,7 +662,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
 				copy(originalReactions, dynamicCl.ReactionChain)
 				defer func() {
-					dynamicCl.Fake.ReactionChain = originalReactions
+					dynamicCl.ReactionChain = originalReactions
 				}()
 				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
 					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
@@ -712,7 +712,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
 				copy(originalReactions, dynamicCl.ReactionChain)
 				defer func() {
-					dynamicCl.Fake.ReactionChain = originalReactions
+					dynamicCl.ReactionChain = originalReactions
 				}()
 				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
 					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
@@ -767,7 +767,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
 				copy(originalReactions, dynamicCl.ReactionChain)
 				defer func() {
-					dynamicCl.Fake.ReactionChain = originalReactions
+					dynamicCl.ReactionChain = originalReactions
 				}()
 				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
 					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"

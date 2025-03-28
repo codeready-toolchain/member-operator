@@ -751,7 +751,7 @@ func forNode(name string, roles []string, allocatableMemory string, metricsModif
 			},
 		}
 		for _, role := range roles {
-			node.ObjectMeta.Labels["node-role.kubernetes.io/"+role] = ""
+			node.Labels["node-role.kubernetes.io/"+role] = ""
 		}
 		nodeMetrics := &v1beta1.NodeMetrics{
 			ObjectMeta: metav1.ObjectMeta{

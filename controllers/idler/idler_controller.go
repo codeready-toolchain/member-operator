@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	runtimeCluster "sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -32,7 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -63,9 +64,10 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 
 // Reconciler reconciles an Idler object
 type Reconciler struct {
-	Client              runtimeclient.Client
+	Client              client.Client
 	Scheme              *runtime.Scheme
-	AllNamespacesClient runtimeclient.Client
+	AllNamespacesClient client.Client
+	RestClient          rest.Interface
 	ScalesClient        scale.ScalesGetter
 	DynamicClient       dynamic.Interface
 	DiscoveryClient     discovery.ServerResourcesInterface
@@ -161,7 +163,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
-	if err := r.AllNamespacesClient.List(ctx, podList, runtimeclient.InNamespace(idler.Name)); err != nil {
+	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
 		return 0, err
 	}
 	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
@@ -433,7 +435,7 @@ func (r *Reconciler) scaleDeploymentToZero(ctx context.Context, namespace string
 
 	patched := d.DeepCopy()
 	patched.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(d)); err != nil {
+	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(d)); err != nil {
 		return "", "", false, err
 	}
 	logger.Info("Deployment scaled to zero", "name", d.Name)
@@ -474,7 +476,7 @@ func (r *Reconciler) scaleReplicaSetToZero(ctx context.Context, namespace string
 		zero := int32(0)
 		patched := rs.DeepCopy()
 		patched.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(rs)); err != nil {
+		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rs)); err != nil {
 			return "", "", false, err
 		}
 		logger.Info("ReplicaSet scaled to zero", "name", rs.Name)
@@ -513,7 +515,7 @@ func (r *Reconciler) scaleStatefulSetToZero(ctx context.Context, namespace strin
 	zero := int32(0)
 	patched := s.DeepCopy()
 	patched.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(s)); err != nil {
+	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(s)); err != nil {
 		return "", "", false, err
 	}
 	log.FromContext(ctx).Info("StatefulSet scaled to zero", "name", s.Name)
@@ -531,7 +533,7 @@ func (r *Reconciler) scaleDeploymentConfigToZero(ctx context.Context, namespace 
 	patched := dc.DeepCopy()
 	patched.Spec.Replicas = 0
 	patched.Spec.Paused = false
-	if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(dc)); err != nil {
+	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(dc)); err != nil {
 		return "", "", false, err
 	}
 	log.FromContext(ctx).Info("DeploymentConfig scaled to zero", "name", dc.Name)
@@ -555,7 +557,7 @@ func (r *Reconciler) scaleReplicationControllerToZero(ctx context.Context, names
 		zero := int32(0)
 		patched := rc.DeepCopy()
 		patched.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Patch(ctx, patched, runtimeclient.MergeFrom(rc)); err != nil {
+		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rc)); err != nil {
 			return "", "", false, err
 		}
 		log.FromContext(ctx).Info("ReplicationController scaled to zero", "name", rc.Name)
@@ -580,7 +582,7 @@ func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner meta
 	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
 	propagationPolicy := metav1.DeletePropagationBackground
 
-	if err := r.AllNamespacesClient.Delete(ctx, j, &runtimeclient.DeleteOptions{
+	if err := r.AllNamespacesClient.Delete(ctx, j, &client.DeleteOptions{
 		PropagationPolicy: &propagationPolicy,
 	}); err != nil {
 		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
@@ -628,19 +630,20 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, o
 		return "", "", false, err
 	}
 
-	// stop the virtualmachine via its stop subresource
-	// see https://github.com/kubevirt/client-go/blob/9511917986c310fd00da06ca416a5c37f0ec5ed4/kubevirt/typed/core/v1/virtualmachine_expansion.go#L101-L115
-	vmName := vm.GetName()
-	_, err = r.DynamicClient.
-		Resource(schema.GroupVersionResource{Group: "subresources.kubevirt.io", Version: "v1", Resource: "virtualmachines"}).
-		Namespace(namespace).
-		Update(ctx, vm, metav1.UpdateOptions{}, "stop")
+	err = r.RestClient.Put().
+		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
+		Namespace(vm.GetNamespace()).
+		Resource("virtualmachines").
+		Name(vm.GetName()).
+		SubResource("stop").
+		Do(ctx).
+		Error()
 	if err != nil {
 		return "", "", false, err
 	}
 
-	logger.Info("VirtualMachine stopped", "name", vmName)
-	return vm.GetKind(), vmName, true, nil
+	logger.Info("VirtualMachine stopped", "name", vm.GetName())
+	return vm.GetKind(), vm.GetName(), true, nil
 }
 
 func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {

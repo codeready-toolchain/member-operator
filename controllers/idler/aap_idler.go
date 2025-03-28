@@ -2,13 +2,13 @@ package idler
 
 import (
 	"context"
-	errs "errors"
+	"errors"
 	"fmt"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -133,7 +133,7 @@ func (i *aapIdler) ensureAnsiblePlatformIdling(ctx context.Context, idler *toolc
 	}
 
 	// there is at least one aap instance, schedule the next reconcile
-	return requeueAfter, errs.Join(idleErrors...)
+	return requeueAfter, errors.Join(idleErrors...)
 }
 
 // getRunningAAPs returns the list of all AAP CRs that are not idled from the namespace the idler was created for
@@ -214,7 +214,7 @@ func (i *aapIdler) getAAPOwner(ctx context.Context, obj metav1.Object) (metav1.O
 	// Get the owner object
 	ownerObject, err := i.dynamicClient.Resource(*gvr).Namespace(obj.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
 	if err != nil {
-		if errors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
 			log.FromContext(ctx).Info("Owner not found", "kind", owner.Kind, "name", owner.Name)
 			return nil, nil
 		}

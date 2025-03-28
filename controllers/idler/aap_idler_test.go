@@ -93,7 +93,7 @@ func TestAAPIdler(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "john-dev",
 		},
-		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: oneHour},
+		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 	}
 	idledAAP := newAAP(t, true, "idled-test", idler.Name)
 	runningAAP := newAAP(t, false, "running-test", idler.Name)
@@ -137,8 +137,7 @@ func TestAAPIdler(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
-		assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+		assertRequeueAfterNoisePodsAAPTimeout(t, requeueAfter, idler)
 		interceptedNotify.assertThatCalled(t)
 		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 	})
@@ -167,8 +166,7 @@ func TestAAPIdler(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
-		assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+		assertRequeueTimeInDelta(t, requeueAfter, aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)
 		interceptedNotify.assertThatCalled(t)
 		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 	})
@@ -197,8 +195,7 @@ func TestAAPIdler(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
-		assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+		assertRequeueTimeInDelta(t, requeueAfter, aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)
 		interceptedNotify.assertThatCalled(t, runningAAP.GetName())
 		assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName(), runningAAP.GetName())
 	})
@@ -276,8 +273,7 @@ func TestAAPIdler(t *testing.T) {
 
 				// then
 				require.ErrorContains(t, err, "some get error")
-				assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
-				assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+				assertRequeueAfterNoisePodsAAPTimeout(t, requeueAfter, idler)
 				interceptedNotify.assertThatCalled(t)
 				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 			})
@@ -327,8 +323,7 @@ func TestAAPIdler(t *testing.T) {
 				// the dynamic client returned an error only once, but since the AAP instance owned several deployments,
 				// then the AAP was idled and the user was also notified
 				require.EqualError(t, err, "some patch error")
-				assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
-				assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+				assertRequeueAfterNoisePodsAAPTimeout(t, requeueAfter, idler)
 				interceptedNotify.assertThatCalled(t, runningAAP.GetName())
 				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName(), runningAAP.GetName())
 			})
@@ -343,8 +338,7 @@ func TestAAPIdler(t *testing.T) {
 
 				// then
 				require.NoError(t, err)
-				assert.Greater(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)-1)*time.Second)
-				assert.Less(t, requeueAfter, (time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/2)+1)*time.Second)
+				assertRequeueAfterNoisePodsAAPTimeout(t, requeueAfter, idler)
 				interceptedNotify.assertThatCalled(t)
 				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 			})
@@ -352,6 +346,11 @@ func TestAAPIdler(t *testing.T) {
 
 	})
 
+}
+
+func assertRequeueAfterNoisePodsAAPTimeout(t *testing.T, requeueAfter time.Duration, idler *toolchainv1alpha1.Idler) {
+	baseLineSeconds := aapTimeoutSeconds(idler.Spec.TimeoutSeconds) - aapTimeoutSeconds(idler.Spec.TimeoutSeconds)/12
+	assertRequeueTimeInDelta(t, requeueAfter, baseLineSeconds)
 }
 
 const oneHour = int32(60 * 60)

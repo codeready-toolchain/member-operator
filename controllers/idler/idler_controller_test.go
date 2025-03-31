@@ -49,7 +49,7 @@ const (
 	RestartCountWithinThresholdContainer1 = 30
 	RestartCountWithinThresholdContainer2 = 24
 	RestartCountOverThreshold             = 52
-	TestIdlerTimeOutSeconds               = 540
+	TestIdlerTimeOutSeconds               = 60 * 60 * 3 // 3 hours
 	apiEndpoint                           = "https://api.openshift.com:6443"
 )
 
@@ -118,7 +118,7 @@ func TestEnsureIdling(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "john-dev",
 			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds * 100},
+			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 
 		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
@@ -289,7 +289,7 @@ func TestEnsureIdling(t *testing.T) {
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 				assert.True(t, res.Requeue)
-				assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second)/12)
+				assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/24)
 
 				t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
 					//when
@@ -303,7 +303,7 @@ func TestEnsureIdling(t *testing.T) {
 						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 					assert.True(t, res.Requeue)
-					assert.Less(t, int64(res.RequeueAfter), int64(time.Duration(idler.Spec.TimeoutSeconds)*time.Second))
+					assert.Empty(t, res.RequeueAfter) // controlledPods are being tracked again and scheduled to be scaled down because in unit tests scaling down doesn't delete pods
 
 					t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
 						//given
@@ -355,8 +355,7 @@ func TestEnsureIdling(t *testing.T) {
 				require.NoError(t, err)
 				assert.True(t, res.Requeue)
 				// with VMs, it needs to be approx one twelfth of the idler timeout plus-minus one second
-				assert.Greater(t, int64(res.RequeueAfter), int64((TestIdlerTimeOutSeconds/12-1)*time.Second))
-				assert.Less(t, int64(res.RequeueAfter), int64((TestIdlerTimeOutSeconds/12+1)*time.Second))
+				assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/12)
 
 				t.Run("without VM", func(t *testing.T) {
 					// given
@@ -374,8 +373,7 @@ func TestEnsureIdling(t *testing.T) {
 					require.NoError(t, err)
 					assert.True(t, res.Requeue)
 					// without VMs, it needs to be approx the idler timeout plus-minus one second
-					assert.Greater(t, int64(res.RequeueAfter), int64((TestIdlerTimeOutSeconds-1)*time.Second))
-					assert.Less(t, int64(res.RequeueAfter), int64((TestIdlerTimeOutSeconds+1)*time.Second))
+					assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds)
 				})
 			})
 		})
@@ -544,8 +542,7 @@ func TestAAPIdlerIsCalled(t *testing.T) {
 		memberoperatortest.AssertThatInIdleableCluster(t, reconciler.AllNamespacesClient, dynamicClient).PodsExist(podsRunningForTooLong.standalonePods)
 
 		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled approx to the 1/12th of the timeout
-		assert.Greater(t, res.RequeueAfter, time.Duration(idler.Spec.TimeoutSeconds/12-1)*time.Second)
-		assert.Less(t, res.RequeueAfter, time.Duration(idler.Spec.TimeoutSeconds/12+1)*time.Second)
+		assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/12)
 		// idler tracks all pods
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 			TracksPods(podsRunningForTooLong.allPods).
@@ -1861,21 +1858,28 @@ func newMUR(name string) *toolchainv1alpha1.MasterUserRecord {
 	}
 }
 
+func assertRequeueTimeInDelta(t *testing.T, requeueAfter time.Duration, baseLineSeconds int32) {
+	// let's set the delta to 10s to have some time cushion in case the test takes a bit more time
+	assert.Greater(t, requeueAfter, time.Duration(baseLineSeconds-10)*time.Second)
+	assert.Less(t, requeueAfter, time.Duration(baseLineSeconds+10)*time.Second)
+}
+
 func freshStartTimes(timeoutSeconds int32) payloadStartTimes {
 	halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(timeoutSeconds/2) * time.Second)
-	twelfthOfIdlerTimeoutMinusOneSecondAgo := time.Now().Add(-time.Duration(timeoutSeconds/12-1) * time.Second) // needs to be smaller than 1/12 which is the vm idler time
+	// needs to be smaller than 1/12 which is the vm idler time, let's set ot to 1/24
+	twentyFourthOfIdlerTimeoutMinusOneSecondAgo := time.Now().Add(-time.Duration(timeoutSeconds/24) * time.Second)
 	return payloadStartTimes{
 		defaultStartTime: halfOfIdlerTimeoutAgo,
-		vmStartTime:      twelfthOfIdlerTimeoutMinusOneSecondAgo, // vms are killed in 1/12 of the idler time
+		vmStartTime:      twentyFourthOfIdlerTimeoutMinusOneSecondAgo, // vms are killed in 1/12 of the idler time
 	}
 }
 
 func expiredStartTimes(timeoutSeconds int32) payloadStartTimes {
 	idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(timeoutSeconds+1) * time.Second)
-	halfOfIdlerTimeoutAgo := time.Now().Add(-time.Duration(timeoutSeconds/2) * time.Second)
+	twelfthOfIdlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(timeoutSeconds/12+1) * time.Second)
 	return payloadStartTimes{
 		defaultStartTime: idlerTimeoutPlusOneSecondAgo,
-		vmStartTime:      halfOfIdlerTimeoutAgo, // vms are killed in 1/12 of the idler time
+		vmStartTime:      twelfthOfIdlerTimeoutPlusOneSecondAgo, // vms are killed in 1/12 of the idler time
 	}
 }
 

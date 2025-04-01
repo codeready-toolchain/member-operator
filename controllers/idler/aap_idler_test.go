@@ -263,7 +263,7 @@ func TestAAPIdler(t *testing.T) {
 
 			t.Run("get deployment fails", func(t *testing.T) {
 				// given
-				dynamicCl.Fake.ReactionChain = originalReactions
+				dynamicCl.ReactionChain = originalReactions
 				dynamicCl.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("some get error")
 				})
@@ -280,7 +280,7 @@ func TestAAPIdler(t *testing.T) {
 
 			t.Run("list AAP fails", func(t *testing.T) {
 				// given
-				dynamicCl.Fake.ReactionChain = originalReactions
+				dynamicCl.ReactionChain = originalReactions
 				dynamicCl.PrependReactor("list", "ansibleautomationplatforms", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, fmt.Errorf("some list error")
 				})
@@ -292,7 +292,7 @@ func TestAAPIdler(t *testing.T) {
 				require.EqualError(t, err, "some list error")
 				assert.Empty(t, requeueAfter)
 				interceptedNotify.assertThatCalled(t)
-				dynamicCl.Fake.ReactionChain = originalReactions
+				dynamicCl.ReactionChain = originalReactions
 				assertAAPsIdled(t, aapIdler, idler.Name, idledAAP.GetName())
 			})
 

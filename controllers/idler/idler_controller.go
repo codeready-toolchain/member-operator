@@ -248,6 +248,7 @@ func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *
 	for _, podCond := range pod.Status.Conditions {
 		if podCond.Type == "Ready" {
 			isCompleted = podCond.Reason == "PodCompleted"
+			break
 		}
 	}
 	appType, appName, deletedByController, err := r.scaleControllerToZero(podCtx, pod.ObjectMeta)

@@ -360,8 +360,8 @@ func TestEnsureIdling(t *testing.T) {
 				t.Run("without VM", func(t *testing.T) {
 					// given
 					// delete all VM pods
-					for _, pod := range payloads.controlledPods {
-						if len(pod.OwnerReferences) > 0 && pod.OwnerReferences[0].Name == payloads.virtualmachineinstance.GetName() {
+					for _, pod := range payloads.allPods {
+						if len(pod.OwnerReferences) > 0 && strings.HasPrefix(pod.OwnerReferences[0].Name, payloads.virtualmachineinstance.GetName()) {
 							require.NoError(t, reconciler.AllNamespacesClient.Delete(context.TODO(), pod))
 						}
 					}
@@ -1534,6 +1534,10 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	require.NoError(t, err)
 	controlledPods = createPods(t, clients.allNamespacesClient, vmi, &vmstartTime, controlledPods, noRestart()) // vmi controls pod
 
+	// create completed pods owned by the VM, they should be deleted if timeout is reached
+	standalonePods := createPodsWithSuffix(t, "-completed", clients.allNamespacesClient, vmi, &vmstartTime,
+		make([]*corev1.Pod, 0, 3), noRestart(), corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"})
+
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-replicationcontroller", namePrefix, namespace), Namespace: namespace},
@@ -1553,13 +1557,20 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 	}
-	standalonePods := createPods(t, clients.allNamespacesClient, idler, sTime, make([]*corev1.Pod, 0, 3), noRestart())
+	standalonePods = slices.Concat(standalonePods, createPods(t, clients.allNamespacesClient, idler, sTime, make([]*corev1.Pod, 0, 3), noRestart()))
 
 	// Pods with no owner.
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-pod-%d", namePrefix, namespace, i), Namespace: namespace},
-			Status:     corev1.PodStatus{StartTime: sTime},
+			Status: corev1.PodStatus{
+				StartTime:  sTime,
+				Conditions: []corev1.PodCondition{{Type: "Ready", Reason: "Running"}},
+			},
+		}
+		// one of them is completed
+		if i == 1 {
+			pod.Status.Conditions = []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}}
 		}
 		require.NoError(t, err)
 		standalonePods = append(standalonePods, pod)
@@ -1709,9 +1720,13 @@ func restartingUnderThreshold() []corev1.ContainerStatus {
 }
 
 func createPods(t *testing.T, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
+	return createPodsWithSuffix(t, "", allNamespacesClient, owner, startTime, podsToTrack, restartStatus, conditions...)
+}
+
+func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d", owner.GetName(), i), Namespace: owner.GetNamespace()},
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d%s", owner.GetName(), i, suffix), Namespace: owner.GetNamespace()},
 			Status:     corev1.PodStatus{StartTime: startTime, Conditions: conditions, ContainerStatuses: restartStatus},
 		}
 		err := controllerutil.SetControllerReference(owner, pod, scheme.Scheme)

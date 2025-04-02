@@ -244,18 +244,18 @@ func shorterDuration(first, second time.Duration) time.Duration {
 // Send notification if the deleted pod was managed by a controller, was a standalone pod that was not completed or was crashlooping
 func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
 	logger := log.FromContext(podCtx)
-	var podReason string
-	podCondition := pod.Status.Conditions
-	for _, podCond := range podCondition {
+	isCompleted := false
+	for _, podCond := range pod.Status.Conditions {
 		if podCond.Type == "Ready" {
-			podReason = podCond.Reason
+			isCompleted = podCond.Reason == "PodCompleted"
+			break
 		}
 	}
 	appType, appName, deletedByController, err := r.scaleControllerToZero(podCtx, pod.ObjectMeta)
 	if err != nil {
 		return err
 	}
-	if !deletedByController { // Pod not managed by a controller. We can just delete the pod.
+	if !deletedByController || isCompleted { // Pod not managed by a controller or completed pod. We can just delete the pod.
 		logger.Info("Deleting pod without controller")
 		if err := r.AllNamespacesClient.Delete(podCtx, &pod); err != nil {
 			return err
@@ -267,8 +267,9 @@ func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *
 		appType = "Pod"
 	}
 
-	// If a build pod is in "PodCompleted" status then it was not running so there's no reason to send an idler notification
-	if podReason != "PodCompleted" || deletedByController {
+	// If the pod was in the completed state (it wasn't running) and there was no controller scaled down,
+	// then  there's no reason to send an idler notification
+	if !isCompleted || deletedByController {
 		// By now either a pod has been deleted or scaled to zero by controller, idler Triggered notification should be sent
 		r.notify(podCtx, idler, appName, appType)
 	}

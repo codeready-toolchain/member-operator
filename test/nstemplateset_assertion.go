@@ -146,7 +146,7 @@ func (a *NSTemplateSetAssertion) HasProvisionedNamespaces(expected ...toolchainv
 func (a *NSTemplateSetAssertion) HasNoOwnerReferences() *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
-	assert.Empty(a.t, a.nsTmplSet.ObjectMeta.OwnerReferences)
+	assert.Empty(a.t, a.nsTmplSet.OwnerReferences)
 	return a
 }
 

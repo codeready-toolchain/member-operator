@@ -422,9 +422,9 @@ func TestReconcileProvisionOK(t *testing.T) {
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
 		rb2Code := newRoleBinding(stageNS.Name, "crtadmin-view", spacename)
 		ro := newRole(devNS.Name, "exec-pods", spacename)
-		delete(ro.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
+		delete(ro.Labels, toolchainv1alpha1.SpaceLabelKey)
 		roCode := newRole(stageNS.Name, "exec-pods", spacename)
-		delete(roCode.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
+		delete(roCode.Labels, toolchainv1alpha1.SpaceLabelKey)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, rb, rb2, ro, roCode, rbCode, rb2Code)
 
 		// when
@@ -471,8 +471,8 @@ func TestReconcileProvisionOK(t *testing.T) {
 		stageNS := newNamespace("basic", spacename, "stage", withTemplateRefUsingRevision("abcde11"))
 		rbDev := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
 		rbCode := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
-		delete(rbDev.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
-		delete(rbCode.ObjectMeta.Labels, toolchainv1alpha1.SpaceLabelKey)
+		delete(rbDev.Labels, toolchainv1alpha1.SpaceLabelKey)
+		delete(rbCode.Labels, toolchainv1alpha1.SpaceLabelKey)
 		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet, devNS, stageNS, rbDev, rbCode)
 
 		// when

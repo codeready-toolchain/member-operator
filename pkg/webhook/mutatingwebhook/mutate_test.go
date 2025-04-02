@@ -110,7 +110,7 @@ func fakeMutator(_ admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 }
 
 func assertPatchesEqual(t *testing.T, expected, actual []map[string]interface{}) {
-	assert.Equal(t, len(expected), len(actual))
+	assert.Len(t, actual, len(expected))
 	expectedPatchContent, err := json.Marshal(expected)
 	require.NoError(t, err)
 	actualPatchContent, err := json.Marshal(actual)

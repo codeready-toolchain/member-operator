@@ -108,10 +108,7 @@ func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Contex
 func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
 	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
-	if !reflect.DeepEqual(featureAnnotationList, nsTmplSet.Status.FeatureToggles) {
-		return true, featureAnnotationList
-	}
-	return false, featureAnnotationList
+	return !reflect.DeepEqual(featureAnnotationList, nsTmplSet.Status.FeatureToggles), featureAnnotationList
 }
 
 // clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset

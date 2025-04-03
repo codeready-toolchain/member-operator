@@ -7,6 +7,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"github.com/codeready-toolchain/toolchain-common/pkg/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,6 +71,68 @@ func (a *NSTemplateSetAssertion) HasConditions(expected ...toolchainv1alpha1.Con
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
 	test.AssertConditionsMatch(a.t, a.nsTmplSet.Status.Conditions, expected...)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusNamespaceRevisionsSet() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.NotEmpty(a.t, a.nsTmplSet.Status.Namespaces, "expected namespaces to not be empty")
+	assert.Equal(a.t, a.nsTmplSet.Spec.Namespaces, a.nsTmplSet.Status.Namespaces, "expected namespaces to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusNamespaceRevisionsValue(expectedNamespaces []toolchainv1alpha1.NSTemplateSetNamespace) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Equal(a.t, expectedNamespaces, a.nsTmplSet.Status.Namespaces, "expected namespaces to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusSpaceRolesRevisionsSet() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.NotEmpty(a.t, a.nsTmplSet.Status.SpaceRoles, "expected space roles to not be empty")
+	assert.Equal(a.t, a.nsTmplSet.Spec.SpaceRoles, a.nsTmplSet.Status.SpaceRoles, "expected space roles to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusSpaceRolesRevisionsValue(expectedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Equal(a.t, expectedSpaceRoles, a.nsTmplSet.Status.SpaceRoles, "expected space roles to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusClusterResourcesRevisionsValue(expectedClusterResources *toolchainv1alpha1.NSTemplateSetClusterResources) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Equal(a.t, expectedClusterResources, a.nsTmplSet.Status.ClusterResources, "expected ClusterResources to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusClusterResourcesRevisionsSet() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.NotEmpty(a.t, a.nsTmplSet.Status.ClusterResources, "expected ClusterResources to not be empty")
+	assert.Equal(a.t, a.nsTmplSet.Spec.ClusterResources, a.nsTmplSet.Status.ClusterResources, "expected ClusterResources to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusFeatureTogglesRevisionsSet() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	featureAnnotation, featureAnnotationFound := a.nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+	assert.True(a.t, featureAnnotationFound)
+	assert.Equal(a.t, utils.SplitCommaSeparatedList(featureAnnotation), a.nsTmplSet.Status.FeatureToggles, "expected feature toggles to match")
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasStatusAllRevisionsSet() *NSTemplateSetAssertion {
+	a.HasStatusClusterResourcesRevisionsSet()
+	a.HasStatusSpaceRolesRevisionsSet()
+	a.HasStatusNamespaceRevisionsSet()
+	a.HasStatusFeatureTogglesRevisionsSet()
 	return a
 }
 

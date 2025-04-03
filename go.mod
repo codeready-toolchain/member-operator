@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20250313170542-4e3c4147cb80
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20250313203311-0bce6563576f
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20250326132010-67676aa6ae2c
 	github.com/go-logr/logr v1.4.1
 	github.com/google/go-cmp v0.6.0
 	// using latest commit from 'github.com/openshift/api branch release-4.17'
@@ -11,7 +11,7 @@ require (
 	github.com/redhat-cop/operator-utils v1.3.8
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.26.0
-	gopkg.in/h2non/gock.v1 v1.0.14 // indirect
+	gopkg.in/h2non/gock.v1 v1.0.14
 	k8s.io/api v0.30.1
 	k8s.io/client-go v0.30.1
 	k8s.io/klog v1.0.0

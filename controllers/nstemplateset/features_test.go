@@ -1,9 +1,9 @@
 package nstemplateset
 
 import (
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 	"testing"
+
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
@@ -96,12 +96,6 @@ func TestShouldCreate(t *testing.T) {
 			assert.Equal(t, testRun.expectedToBeCreated, should)
 		})
 	}
-}
-
-func TestReallySplit(t *testing.T) {
-	assert.Empty(t, splitCommaSeparatedList(""))
-	assert.Equal(t, strings.Split("1,2,3", ","), splitCommaSeparatedList("1,2,3"))
-	assert.Equal(t, strings.Split("1", ","), splitCommaSeparatedList("1"))
 }
 
 func p(s string) *string {

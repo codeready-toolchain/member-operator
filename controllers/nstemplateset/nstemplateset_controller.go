@@ -134,8 +134,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
-		// set the provisioned templates in the status as refs
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, nil // wait for cluster resources to be created
 	}
 	if err := r.status.updateStatusClusterResourcesRevisions(ctx, nsTmplSet); err != nil {
 		return reconcile.Result{}, err

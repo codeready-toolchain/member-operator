@@ -113,12 +113,9 @@ func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (b
 
 // clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset
 func clusterResourcesNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
-	if (nsTmplSet.Status.ClusterResources == nil && nsTmplSet.Spec.ClusterResources != nil) ||
+	return (nsTmplSet.Status.ClusterResources == nil && nsTmplSet.Spec.ClusterResources != nil) ||
 		(nsTmplSet.Status.ClusterResources != nil && nsTmplSet.Spec.ClusterResources == nil) ||
-		nsTmplSet.Status.ClusterResources.TemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef {
-		return true
-	}
-	return false
+		nsTmplSet.Status.ClusterResources.TemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef
 }
 
 func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

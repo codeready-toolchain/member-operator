@@ -9,7 +9,7 @@ goarch ?= $(shell go env GOARCH)
 
 .PHONY: build
 ## Build the operator
-build: generate-assets $(OUT_DIR)/operator
+build: $(OUT_DIR)/operator
 
 $(OUT_DIR)/operator:
 	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
@@ -27,15 +27,6 @@ $(OUT_DIR)/operator:
 vendor:
 	$(Q)go mod vendor
 
-.PHONY: generate-assets
-generate-assets: go-bindata
-	@echo "generating webhooks template data..."
-	@rm ./pkg/webhook/deploy/webhooks/template_assets.go 2>/dev/null || true
-	@$(GO_BINDATA) -pkg webhooks -o ./pkg/webhook/deploy/webhooks/template_assets.go -nocompress -prefix deploy/webhook deploy/webhook
-	@echo "generating autoscaler buffer template data..."
-	@rm ./pkg/autoscaler/template_assets.go 2>/dev/null || true
-	@$(GO_BINDATA) -pkg autoscaler -o ./pkg/autoscaler/template_assets.go -nocompress -prefix deploy/autoscaler deploy/autoscaler
-
 .PHONY: verify-dependencies
 ## Runs commands to verify after the updated dependecies of toolchain-common/API(go mod replace), if the repo needs any changes to be made
 verify-dependencies: tidy vet build test lint-go-code
@@ -49,5 +40,5 @@ vet:
 	go vet ./...
 
 .PHONY: pre-verify
-pre-verify: generate-assets
+pre-verify: 
 	echo "Pre-requisite completed"

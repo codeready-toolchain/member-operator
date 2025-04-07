@@ -2,12 +2,12 @@ package nstemplateset
 
 import (
 	"context"
-	"reflect"
 	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/utils"
+	"github.com/google/go-cmp/cmp"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -108,7 +108,13 @@ func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Contex
 func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
 	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
-	return !reflect.DeepEqual(featureAnnotationList, nsTmplSet.Status.FeatureToggles), featureAnnotationList
+	// order is not important, so we are sorting the lists just for the sake of the comparison
+	transform := cmp.Transformer("Sort", func(in []int) []int {
+		out := append([]int(nil), in...) // Copy input to avoid mutating it
+		sort.Ints(out)
+		return out
+	})
+	return !cmp.Equal(featureAnnotationList, nsTmplSet.Status.FeatureToggles, transform), featureAnnotationList
 }
 
 // clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset
@@ -119,7 +125,15 @@ func clusterResourcesNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) boo
 }
 
 func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	if !reflect.DeepEqual(nsTmplSet.Spec.Namespaces, nsTmplSet.Status.Namespaces) {
+	// order is not important, so we are sorting the lists just for the sake of the comparison
+	transform := cmp.Transformer("Sort", func(in []toolchainv1alpha1.NSTemplateSetNamespace) []toolchainv1alpha1.NSTemplateSetNamespace {
+		out := append([]toolchainv1alpha1.NSTemplateSetNamespace(nil), in...) // Copy input to avoid mutating it
+		sort.Slice(out, func(i, j int) bool {
+			return out[i].TemplateRef < out[j].TemplateRef
+		})
+		return out
+	})
+	if !cmp.Equal(nsTmplSet.Spec.Namespaces, nsTmplSet.Status.Namespaces, transform) {
 		nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
 		return r.Client.Status().Update(ctx, nsTmplSet)
 	}
@@ -127,7 +141,19 @@ func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsT
 }
 
 func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
-	if !reflect.DeepEqual(nsTmplSet.Spec.SpaceRoles, nsTmplSet.Status.SpaceRoles) {
+	// order is not important, so we are sorting the lists just for the sake of the comparison
+	transform := cmp.Transformer("Sort", func(in []toolchainv1alpha1.NSTemplateSetSpaceRole) []toolchainv1alpha1.NSTemplateSetSpaceRole {
+		out := append([]toolchainv1alpha1.NSTemplateSetSpaceRole(nil), in...) // Copy input to avoid mutating it
+		sort.Slice(out, func(i, j int) bool {
+			// sort usernames within the space role
+			sort.Slice(out, func(x, y int) bool {
+				return out[i].Usernames[x] < out[j].Usernames[y]
+			})
+			return out[i].TemplateRef < out[j].TemplateRef
+		})
+		return out
+	})
+	if !cmp.Equal(nsTmplSet.Spec.SpaceRoles, nsTmplSet.Status.SpaceRoles, transform) {
 		nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
 		return r.Client.Status().Update(ctx, nsTmplSet)
 	}

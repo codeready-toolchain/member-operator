@@ -39,6 +39,9 @@ tidy:
 vet:
 	go vet ./...
 
+.PHONY: generate-assets
+generate-assets:
+
 .PHONY: pre-verify
 pre-verify: 
 	echo "Pre-requisite completed"

@@ -90,7 +90,7 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 }
 
 func GetTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {
-	deployment, err := deploy.WebhookFS.ReadFile("webhook/member-operator-webhook.yaml")
+	deployment, err := deploy.WebhookFS.ReadFile("templates/webhook/member-operator-webhook.yaml")
 	if err != nil {
 		return nil, err
 	}

@@ -75,7 +75,7 @@ func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 }
 
 func getTemplateObjects(s *runtime.Scheme, namespace string, config BufferConfiguration) ([]client.Object, error) {
-	deployment, err := deploy.AutoScalerFS.ReadFile("autoscaler/member-operator-autoscaler.yaml")
+	deployment, err := deploy.AutoScalerFS.ReadFile("templates/autoscaler/member-operator-autoscaler.yaml")
 	if err != nil {
 		return nil, err
 	}

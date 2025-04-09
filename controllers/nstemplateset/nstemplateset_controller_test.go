@@ -1066,7 +1066,8 @@ func TestReconcileUpdate(t *testing.T) {
 				withNamespaces("abcde12", "dev"),
 				withClusterResources("abcde12"),
 				withSpaceRoles(map[string][]string{
-					"advanced-admin-abcde12": {spacename},
+					"advanced-admin-abcde12":  {spacename},
+					"advanced-viewer-abcde12": {"zorro", spacename, "viewer"},
 				}),
 				withStatusNamespaces("abcde11", "dev", "stage"),
 				withStatusClusterResources("abcde11"),
@@ -1321,10 +1322,17 @@ func TestReconcileUpdate(t *testing.T) {
 									HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{{
 										TemplateRef: "advanced-dev-abcde12", // namespaces are unchanged
 									}}).
-									HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
-										TemplateRef: "advanced-admin-abcde12",
-										Usernames:   []string{spacename}, // space roles are updated now
-									}}).
+									// space roles are updated now
+									HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{
+										{
+											TemplateRef: "advanced-admin-abcde12",
+											Usernames:   []string{spacename},
+										},
+										{
+											TemplateRef: "advanced-viewer-abcde12",
+											Usernames:   []string{"zorro", spacename, "viewer"},
+										},
+									}).
 									HasConditions(Provisioned())
 								AssertThatCluster(t, fakeClient).
 									HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
@@ -2035,6 +2043,9 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]client.Object, error) {
 			"admin": { // space roles
 				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
 				"abcde12": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb, spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
+			},
+			"viewer": { // space roles
+				"abcde12": test.CreateTemplate(test.WithObjects(spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
 			},
 		},
 		"basic": {

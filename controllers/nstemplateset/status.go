@@ -145,12 +145,16 @@ func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsT
 	transform := cmp.Transformer("Sort", func(in []toolchainv1alpha1.NSTemplateSetSpaceRole) []toolchainv1alpha1.NSTemplateSetSpaceRole {
 		out := append([]toolchainv1alpha1.NSTemplateSetSpaceRole(nil), in...) // Copy input to avoid mutating it
 		sort.Slice(out, func(i, j int) bool {
-			// sort usernames within the space role
-			sort.Slice(out, func(x, y int) bool {
-				return out[i].Usernames[x] < out[j].Usernames[y]
-			})
 			return out[i].TemplateRef < out[j].TemplateRef
 		})
+		// sort usernames within the space role
+		for i := range out {
+			sortedUsernames := append([]string{}, out[i].Usernames...) // Copy input to avoid mutating it
+			sort.Slice(sortedUsernames, func(x, y int) bool {
+				return sortedUsernames[x] < sortedUsernames[y]
+			})
+			out[i].Usernames = sortedUsernames
+		}
 		return out
 	})
 	if !cmp.Equal(nsTmplSet.Spec.SpaceRoles, nsTmplSet.Status.SpaceRoles, transform) {

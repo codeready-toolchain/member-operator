@@ -149,11 +149,10 @@ func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsT
 		})
 		// sort usernames within the space role
 		for i := range out {
-			sortedUsernames := append([]string{}, out[i].Usernames...) // Copy input to avoid mutating it
-			sort.Slice(sortedUsernames, func(x, y int) bool {
-				return sortedUsernames[x] < sortedUsernames[y]
+			usernames := out[i].Usernames
+			sort.Slice(usernames, func(x, y int) bool {
+			    return usernames[x] < usernames[y]
 			})
-			out[i].Usernames = sortedUsernames
 		}
 		return out
 	})

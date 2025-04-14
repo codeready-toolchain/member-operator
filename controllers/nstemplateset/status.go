@@ -151,7 +151,7 @@ func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsT
 		for i := range out {
 			usernames := out[i].Usernames
 			sort.Slice(usernames, func(x, y int) bool {
-			    return usernames[x] < usernames[y]
+				return usernames[x] < usernames[y]
 			})
 		}
 		return out

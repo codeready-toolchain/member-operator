@@ -1330,7 +1330,7 @@ func TestReconcileUpdate(t *testing.T) {
 										},
 										{
 											TemplateRef: "advanced-viewer-abcde12",
-											Usernames:   []string{"zorro", spacename, "viewer"},
+											Usernames:   []string{spacename, "viewer", "zorro"},
 										},
 									}).
 									HasConditions(Provisioned())

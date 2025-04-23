@@ -32,7 +32,7 @@ test-with-coverage: generate-assets
 # DO NOT USE LOCALLY: must only be called by OpenShift CI when processing new PR and when a PR is merged! 
 upload-codecov-report: 
 	# Upload coverage to codecov.io. Since we don't run on a supported CI platform (Jenkins, Travis-ci, etc.), 
-	# we need to provide the PR metadata explicitely using env vars used coming from https://github.com/openshift/test-infra/blob/master/prow/jobs.md#job-environment-variables
+	# we need to provide the PR metadata explicitly using env vars used coming from https://github.com/openshift/test-infra/blob/master/prow/jobs.md#job-environment-variables
 	# 
 	# Also: not using the `-F unittests` flag for now as it's temporarily disabled in the codecov UI 
 	# (see https://docs.codecov.io/docs/flags#section-flags-in-the-codecov-ui)

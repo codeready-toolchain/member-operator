@@ -116,5 +116,4 @@ replace (
 	github.com/codeready-toolchain/api => github.com/rsoaresd/api v0.0.0-20250423134557-697fdaef2044
 
 	github.com/codeready-toolchain/toolchain-common => github.com/rsoaresd/toolchain-common v0.0.0-20250423135328-c3800b175eee
-
 )

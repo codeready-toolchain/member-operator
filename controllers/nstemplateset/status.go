@@ -6,6 +6,8 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
+	"github.com/codeready-toolchain/toolchain-common/pkg/utils"
+	"github.com/google/go-cmp/cmp"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -86,6 +88,79 @@ func (r *statusManager) setStatusReady(ctx context.Context, nsTmplSet *toolchain
 			Status: corev1.ConditionTrue,
 			Reason: toolchainv1alpha1.NSTemplateSetProvisionedReason,
 		})
+}
+
+// updateStatusClusterResourcesRevisions updates the cluster resources and features list in the status of the nstemplateset
+func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	updateFeatureAnnotation, featureAnnotation := featureAnnotationNeedsUpdate(nsTmplSet)
+	if updateFeatureAnnotation || clusterResourcesNeedsUpdate(nsTmplSet) {
+		// save the feature toggles into the status
+		// we updated also the featureToggles since the current logic handles only cluster scoped resources.
+		// the logic could be refactored and transformed in something more generic, that can be reused for namespace scoped resources as well.
+		nsTmplSet.Status.FeatureToggles = featureAnnotation
+		nsTmplSet.Status.ClusterResources = nsTmplSet.Spec.ClusterResources
+		return r.Client.Status().Update(ctx, nsTmplSet)
+	}
+	return nil
+}
+
+// featureAnnotationNeedsUpdate checks if the feature annotation has changed on the nstemlpateset compared to what was last time saved in the status
+func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
+	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
+	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
+	// order is not important, so we are sorting the lists just for the sake of the comparison
+	transform := cmp.Transformer("Sort", func(in []int) []int {
+		out := append([]int(nil), in...) // Copy input to avoid mutating it
+		sort.Ints(out)
+		return out
+	})
+	return !cmp.Equal(featureAnnotationList, nsTmplSet.Status.FeatureToggles, transform), featureAnnotationList
+}
+
+// clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset
+func clusterResourcesNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
+	return (nsTmplSet.Status.ClusterResources == nil && nsTmplSet.Spec.ClusterResources != nil) ||
+		(nsTmplSet.Status.ClusterResources != nil && nsTmplSet.Spec.ClusterResources == nil) ||
+		nsTmplSet.Status.ClusterResources.TemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef
+}
+
+func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	// order is not important, so we are sorting the lists just for the sake of the comparison
+	transform := cmp.Transformer("Sort", func(in []toolchainv1alpha1.NSTemplateSetNamespace) []toolchainv1alpha1.NSTemplateSetNamespace {
+		out := append([]toolchainv1alpha1.NSTemplateSetNamespace(nil), in...) // Copy input to avoid mutating it
+		sort.Slice(out, func(i, j int) bool {
+			return out[i].TemplateRef < out[j].TemplateRef
+		})
+		return out
+	})
+	if !cmp.Equal(nsTmplSet.Spec.Namespaces, nsTmplSet.Status.Namespaces, transform) {
+		nsTmplSet.Status.Namespaces = nsTmplSet.Spec.Namespaces
+		return r.Client.Status().Update(ctx, nsTmplSet)
+	}
+	return nil
+}
+
+func (r *statusManager) updateStatusSpaceRolesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	// order is not important, so we are sorting the lists just for the sake of the comparison
+	transform := cmp.Transformer("Sort", func(in []toolchainv1alpha1.NSTemplateSetSpaceRole) []toolchainv1alpha1.NSTemplateSetSpaceRole {
+		out := append([]toolchainv1alpha1.NSTemplateSetSpaceRole(nil), in...) // Copy input to avoid mutating it
+		sort.Slice(out, func(i, j int) bool {
+			return out[i].TemplateRef < out[j].TemplateRef
+		})
+		// sort usernames within the space role
+		for i := range out {
+			usernames := out[i].Usernames
+			sort.Slice(usernames, func(x, y int) bool {
+				return usernames[x] < usernames[y]
+			})
+		}
+		return out
+	})
+	if !cmp.Equal(nsTmplSet.Spec.SpaceRoles, nsTmplSet.Status.SpaceRoles, transform) {
+		nsTmplSet.Status.SpaceRoles = nsTmplSet.Spec.SpaceRoles
+		return r.Client.Status().Update(ctx, nsTmplSet)
+	}
+	return nil
 }
 
 func (r *statusManager) setStatusProvisioningIfNotUpdating(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

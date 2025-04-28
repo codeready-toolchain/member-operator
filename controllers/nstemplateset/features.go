@@ -2,9 +2,9 @@ package nstemplateset
 
 import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/toolchain-common/pkg/utils"
 	"k8s.io/utils/strings/slices"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 // shouldCreate checks if the object has a feature toggle annotation. If it does then check if the corresponding
@@ -22,15 +22,5 @@ func shouldCreate(toCreate runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NS
 	if !found {
 		return false // No feature winners in the NSTemplateSet at all. Skip this object.
 	}
-	return slices.Contains(splitCommaSeparatedList(winners), feature)
-}
-
-// splitCommaSeparatedList acts exactly the same as strings.Split(s, ",") but returns an empty slice for empty strings.
-// To be used when, for example, we want to get an empty slice for empty comma separated list:
-// strings.Split("", ",") returns [""] while splitCommaSeparatedList("") returns []
-func splitCommaSeparatedList(s string) []string {
-	if len(s) == 0 {
-		return []string{}
-	}
-	return strings.Split(s, ",")
+	return slices.Contains(utils.SplitCommaSeparatedList(winners), feature)
 }

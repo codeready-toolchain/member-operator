@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 
+	"github.com/codeready-toolchain/member-operator/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
-	"github.com/codeready-toolchain/member-operator/pkg/webhook/deploy/webhooks"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -90,7 +90,7 @@ func Delete(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, nam
 }
 
 func GetTemplateObjects(s *runtime.Scheme, namespace, image string, caBundle []byte) ([]runtimeclient.Object, error) {
-	deployment, err := webhooks.Asset("member-operator-webhook.yaml")
+	deployment, err := deploy.WebhookFS.ReadFile("templates/webhook/member-operator-webhook.yaml")
 	if err != nil {
 		return nil, err
 	}

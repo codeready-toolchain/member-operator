@@ -157,6 +157,49 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{})
 	})
 
+	t.Run("status provisioned with revisions", func(t *testing.T) {
+		// given
+		// create cluster resources
+		crq := newClusterResourceQuota(spacename, "advanced")
+		crqF1 := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-1"), withName("feature-1-for-"+spacename))
+		crb := newTektonClusterRoleBinding(spacename, "advanced")
+		idlerDev := newIdler(spacename, spacename+"-dev", "advanced")
+		idlerStage := newIdler(spacename, spacename+"-stage", "advanced")
+		// create namespaces (and assume they are complete since they have the expected revision number)
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withClusterResources("abcde11"),
+			withSpaceRoles(map[string][]string{
+				"advanced-admin-abcde11": {spacename},
+			}), withNSTemplateSetFeatureAnnotation("feature-1"))
+
+		devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
+		stageNS := newNamespace("advanced", spacename, "stage", withTemplateRefUsingRevision("abcde11"), withLastAppliedSpaceRoles(nsTmplSet))
+		devRole := newRole(devNS.Name, "exec-pods", spacename)
+		devRb := newRoleBinding(devNS.Name, "crtadmin-pods", spacename)
+		devRb2 := newRoleBinding(devNS.Name, "crtadmin-view", spacename)
+		stageRole := newRole(stageNS.Name, "exec-pods", spacename)
+		stageRb := newRoleBinding(stageNS.Name, "crtadmin-pods", spacename)
+		stageRb2 := newRoleBinding(stageNS.Name, "crtadmin-view", spacename)
+		r, req, fakeClient := prepareReconcile(t, namespaceName, spacename, nsTmplSet,
+			crq, crqF1, crb, idlerDev, idlerStage,
+			devNS, stageNS,
+			devRole, devRb, devRb2,
+			stageRole, stageRb, stageRb2)
+
+		// when
+		res, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, reconcile.Result{}, res)
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+			HasFinalizer().
+			HasStatusAllRevisionsSet(). // all revisions fields are set as expected
+			HasSpecNamespaces("dev", "stage").
+			HasConditions(Provisioned())
+		AssertThatCluster(t, fakeClient).
+			HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{})
+	})
+
 	t.Run("status should contain provisioned namespaces", func(t *testing.T) {
 		// given
 		condition := toolchainv1alpha1.Condition{
@@ -1019,7 +1062,20 @@ func TestReconcileUpdate(t *testing.T) {
 
 		t.Run("update ClusterResourceQuota", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"))
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
+				withNamespaces("abcde12", "dev"),
+				withClusterResources("abcde12"),
+				withSpaceRoles(map[string][]string{
+					"advanced-admin-abcde12":  {spacename},
+					"advanced-viewer-abcde12": {"zorro", spacename, "viewer"},
+				}),
+				withStatusNamespaces("abcde11", "dev", "stage"),
+				withStatusClusterResources("abcde11"),
+				withStatusSpaceRoles(
+					map[string][]string{
+						"advanced-admin-abcde11": {spacename},
+					}),
+			)
 
 			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
 			devRo := newRole(devNS.Name, "exec-pods", spacename)
@@ -1046,6 +1102,21 @@ func TestReconcileUpdate(t *testing.T) {
 			require.NoError(t, err)
 			AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 				HasFinalizer().
+				HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde11"}). // cluster resource still isn't fully updated
+				HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
+					{
+						TemplateRef: "advanced-dev-abcde11", // still not updated, has the old value
+					},
+					{
+						TemplateRef: "advanced-stage-abcde11", // still not updated, has the old value
+					},
+				}).
+				HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{
+					{
+						TemplateRef: "advanced-admin-abcde11", // still not updated, has the old value
+						Usernames:   []string{spacename},
+					},
+				}).
 				HasConditions(Updating())
 			AssertThatCluster(t, fakeClient).
 				HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
@@ -1076,10 +1147,25 @@ func TestReconcileUpdate(t *testing.T) {
 				require.NoError(t, err)
 				AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 					HasFinalizer().
+					HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde11"}). // cluster resource isn't still fully updated
+					HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
+						{
+							TemplateRef: "advanced-dev-abcde11", // still not updated, has the old value
+						},
+						{
+							TemplateRef: "advanced-stage-abcde11", // still not updated, has the old value
+						},
+					}).
+					HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{
+						{
+							TemplateRef: "advanced-admin-abcde11", // still not updated, has the old value
+							Usernames:   []string{spacename},
+						},
+					}).
 					HasConditions(Updating())
 				AssertThatCluster(t, fakeClient).
 					HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
-														WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+														WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"), // the templateref label is being updated on all objects
 														WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 					HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}) // deleted
 				for _, nsType := range []string{"stage", "dev"} {
@@ -1104,6 +1190,20 @@ func TestReconcileUpdate(t *testing.T) {
 					require.NoError(t, err)
 					AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 						HasFinalizer().
+						HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource is updated now
+						// namespaces were not updated yet
+						HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
+							{
+								TemplateRef: "advanced-dev-abcde11",
+							},
+							{
+								TemplateRef: "advanced-stage-abcde11",
+							},
+						}).
+						HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
+							TemplateRef: "advanced-admin-abcde11",
+							Usernames:   []string{spacename}, // still not updated, has the old value
+						}}).
 						HasConditions(Updating())
 					AssertThatCluster(t, fakeClient).
 						HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
@@ -1129,9 +1229,23 @@ func TestReconcileUpdate(t *testing.T) {
 
 						// then
 						require.NoError(t, err)
-						// NSTemplateSet provisioning is complete
+						// NSTemplateSet is still updating
 						AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 							HasFinalizer().
+							HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource remains unchanged
+							// namespaces were not updated yet
+							HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{
+								{
+									TemplateRef: "advanced-dev-abcde11",
+								},
+								{
+									TemplateRef: "advanced-stage-abcde11",
+								},
+							}).
+							HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
+								TemplateRef: "advanced-admin-abcde11",
+								Usernames:   []string{spacename}, // still not updated, has the old value
+							}}).
 							HasConditions(Updating())
 						AssertThatCluster(t, fakeClient).
 							HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
@@ -1151,36 +1265,97 @@ func TestReconcileUpdate(t *testing.T) {
 							HasResource("exec-pods", &rbacv1.Role{}).
 							HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
 
-						t.Run("when nothing to update, then it should be provisioned", func(t *testing.T) {
-							// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
-							r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
-
-							// when - should check if everything is OK and set status to provisioned
+						t.Run("create missing space roles", func(t *testing.T) {
+							// when - should upgrade the space roles by creating the missing role(binding)s
 							_, err = r.Reconcile(context.TODO(), req)
 
 							// then
 							require.NoError(t, err)
-							// NSTemplateSet provisioning is complete
 							AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 								HasFinalizer().
-								HasConditions(Provisioned())
+								HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resource remains unchanged
+								HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{{
+									TemplateRef: "advanced-dev-abcde12", // namespaces are updated now
+								}}).
+								HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{{
+									TemplateRef: "advanced-admin-abcde11",
+									Usernames:   []string{spacename}, // space roles were not updated yet
+								}}).
+								HasConditions(Updating())
+
 							AssertThatCluster(t, fakeClient).
 								HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
 									WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
 									WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
 								HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+
 							AssertThatNamespace(t, stageNS.Name, r.Client).
 								DoesNotExist()
 							AssertThatNamespace(t, devNS.Name, r.Client).
 								HasNoOwnerReference().
 								HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
-								HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
+								HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12").
 								HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
 								HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
 								HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
 								HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
 								HasResource("exec-pods", &rbacv1.Role{}).
-								HasNoResource("crtadmin-view", &rbacv1.RoleBinding{})
+								HasNoResource("crtadmin-view", &rbacv1.RoleBinding{}).
+								HasResource("space-admin", &rbacv1.Role{}).
+								HasResource(spacename+"-space-admin", &rbacv1.RoleBinding{}).
+								HasResource("space-viewer", &rbacv1.Role{}).
+								HasResource(spacename+"-space-viewer", &rbacv1.RoleBinding{})
+
+							t.Run("when nothing to update, then it should be provisioned", func(t *testing.T) {
+								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
+								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
+								// when - should check if everything is OK and set status to provisioned
+								_, err = r.Reconcile(context.TODO(), req)
+
+								// then
+								require.NoError(t, err)
+								// NSTemplateSet provisioning is complete
+								AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+									HasFinalizer().
+									HasStatusClusterResourcesRevisionsValue(&toolchainv1alpha1.NSTemplateSetClusterResources{TemplateRef: "advanced-clusterresources-abcde12"}). // cluster resources are unchanged
+									HasStatusNamespaceRevisionsValue([]toolchainv1alpha1.NSTemplateSetNamespace{{
+										TemplateRef: "advanced-dev-abcde12", // namespaces are unchanged
+									}}).
+									// space roles are updated now
+									HasStatusSpaceRolesRevisionsValue([]toolchainv1alpha1.NSTemplateSetSpaceRole{
+										{
+											TemplateRef: "advanced-admin-abcde12",
+											Usernames:   []string{spacename},
+										},
+										{
+											TemplateRef: "advanced-viewer-abcde12",
+											Usernames:   []string{spacename, "viewer", "zorro"},
+										},
+									}).
+									HasConditions(Provisioned())
+								AssertThatCluster(t, fakeClient).
+									HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{},
+										WithLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-clusterresources-abcde12"),
+										WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")).
+									HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
+								AssertThatNamespace(t, stageNS.Name, r.Client).
+									DoesNotExist()
+								AssertThatNamespace(t, devNS.Name, r.Client).
+									HasNoOwnerReference().
+									HasLabel(toolchainv1alpha1.SpaceLabelKey, spacename).
+									HasLabel(toolchainv1alpha1.TemplateRefLabelKey, "advanced-dev-abcde12"). // upgraded
+									HasLabel(toolchainv1alpha1.TypeLabelKey, "dev").
+									HasLabel(toolchainv1alpha1.ProviderLabelKey, "codeready-toolchain").
+									HasLabel(toolchainv1alpha1.TierLabelKey, "advanced").
+									HasResource("crtadmin-pods", &rbacv1.RoleBinding{}).
+									HasResource("exec-pods", &rbacv1.Role{}).
+									HasNoResource("crtadmin-view", &rbacv1.RoleBinding{}).
+									HasResource("space-admin", &rbacv1.Role{}).
+									HasResource(spacename+"-space-admin", &rbacv1.RoleBinding{}).
+									HasResource("space-viewer", &rbacv1.Role{}).
+									HasResource(spacename+"-space-viewer", &rbacv1.RoleBinding{})
+							})
 						})
 					})
 				})
@@ -1616,6 +1791,38 @@ func withSpaceRoles(roles map[string][]string) nsTmplSetOption {
 	}
 }
 
+func withStatusNamespaces(revision string, types ...string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nss := make([]toolchainv1alpha1.NSTemplateSetNamespace, len(types))
+		for index, nsType := range types {
+			nss[index] = toolchainv1alpha1.NSTemplateSetNamespace{
+				TemplateRef: NewTierTemplateName(nsTmplSet.Spec.TierName, nsType, revision),
+			}
+		}
+		nsTmplSet.Status.Namespaces = nss
+	}
+}
+
+func withStatusClusterResources(revision string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Status.ClusterResources = &toolchainv1alpha1.NSTemplateSetClusterResources{
+			TemplateRef: NewTierTemplateName(nsTmplSet.Spec.TierName, "clusterresources", revision),
+		}
+	}
+}
+
+func withStatusSpaceRoles(roles map[string][]string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Status.SpaceRoles = make([]toolchainv1alpha1.NSTemplateSetSpaceRole, 0, len(roles))
+		for ref, usernames := range roles {
+			nsTmplSet.Status.SpaceRoles = append(nsTmplSet.Status.SpaceRoles, toolchainv1alpha1.NSTemplateSetSpaceRole{
+				TemplateRef: ref,
+				Usernames:   usernames,
+			})
+		}
+	}
+}
+
 func withConditions(conditions ...toolchainv1alpha1.Condition) nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		nsTmplSet.Status.Conditions = conditions
@@ -1835,6 +2042,10 @@ func prepareTemplateTiers(decoder runtime.Decoder) ([]client.Object, error) {
 			},
 			"admin": { // space roles
 				"abcde11": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb), test.WithParams(namespace, username)),
+				"abcde12": test.CreateTemplate(test.WithObjects(spaceAdmin, spaceAdminRb, spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
+			},
+			"viewer": { // space roles
+				"abcde12": test.CreateTemplate(test.WithObjects(spaceViewer, spaceViewerRb), test.WithParams(namespace, username)),
 			},
 		},
 		"basic": {

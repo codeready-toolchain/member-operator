@@ -3,6 +3,8 @@ package autoscaler
 import (
 	"context"
 	"fmt"
+
+	"github.com/codeready-toolchain/member-operator/deploy"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	tmplv1 "github.com/openshift/api/template/v1"
@@ -73,7 +75,7 @@ func Delete(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 }
 
 func getTemplateObjects(s *runtime.Scheme, namespace string, config BufferConfiguration) ([]client.Object, error) {
-	deployment, err := Asset("member-operator-autoscaler.yaml")
+	deployment, err := deploy.AutoScalerFS.ReadFile("templates/autoscaler/member-operator-autoscaler.yaml")
 	if err != nil {
 		return nil, err
 	}

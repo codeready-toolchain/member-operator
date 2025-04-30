@@ -112,27 +112,13 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 
 	spacename := nsTmplSet.GetName()
 	var tierTemplate *tierTemplate
-	var tierTemplateRevision *toolchainv1alpha1.TierTemplateRevision
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		host, ok := r.GetHostCluster()
-		//TODO: move fetching the host inside of getToolchainTierTemplateRevision next, and also sort the logic of func to get a TTR cache similar
-		// to tiertemplates. This is temporary for now as we need to write the logic for creating TTRcache
-		tierTemplateRevision, err = getToolchainTierTemplateRevision(ctx, host, nsTmplSet.Spec.ClusterResources.TemplateRef)
-		if err != nil && (errors.IsNotFound(err) || !ok) {
-			tierTemplate, err = getTierTemplate(ctx, r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
-			if err != nil {
-				return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierCtx, nsTmplSet, err,
-					"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
-			}
-		} else {
+		tierTemplate, err = getTierTemplate(ctx, r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
+		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierCtx, nsTmplSet, err,
-				"failed to retrieve TierTemplateRevision for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
+				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)
 		}
-		if tierTemplateRevision != nil {
-			//TODO some logic when we will have TTRs
-		}
-
 	}
 	// go through all cluster resource kinds
 	for _, clusterResourceKind := range clusterResourceKinds {

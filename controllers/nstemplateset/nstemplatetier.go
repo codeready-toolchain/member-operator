@@ -3,7 +3,6 @@ package nstemplateset
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 
@@ -11,36 +10,42 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	templatev1 "github.com/openshift/api/template/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/pkg/errors"
+	errs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var tierTemplatesCache = newTierTemplateCache()
+// var tierTemplatesCache = newTierTemplateCache()
+var tmpl *toolchainv1alpha1.TierTemplate
 
 // getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
 func getTierTemplate(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	if templateRef == "" {
-		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 	}
-	if tierTmpl, ok := tierTemplatesCache.get(templateRef); ok && tierTmpl != nil {
-		return tierTmpl, nil
-	}
-	tmpl, err := getToolchainTierTemplate(ctx, hostClusterFunc, templateRef)
+
+	ttr, err := getToolchainTierTemplateRevision(ctx, hostClusterFunc, templateRef)
 	if err != nil {
-		return nil, err
+		if errs.IsNotFound(err) {
+			tmpl, err = getToolchainTierTemplate(ctx, hostClusterFunc, templateRef)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	tierTmpl := &tierTemplate{
 		templateRef: templateRef,
 		tierName:    tmpl.Spec.TierName,
 		typeName:    tmpl.Spec.Type,
 		template:    tmpl.Spec.Template,
+		ttr:         ttr,
 	}
-	tierTemplatesCache.add(tierTmpl)
 
 	return tierTmpl, nil
 }
@@ -73,6 +78,7 @@ type tierTemplate struct {
 	tierName    string
 	typeName    string
 	template    templatev1.Template
+	ttr         *toolchainv1alpha1.TierTemplateRevision
 }
 
 const (
@@ -92,29 +98,4 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 	tmplProcessor := template.NewProcessor(scheme)
 	params[MemberOperatorNS] = ns // add (or enforce)
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
-}
-
-type tierTemplateCache struct {
-	sync.RWMutex
-	// tierTemplatesByTemplateRef contains tierTemplatesByTemplateRef mapped by TemplateRef key
-	tierTemplatesByTemplateRef map[string]*tierTemplate
-}
-
-func newTierTemplateCache() *tierTemplateCache {
-	return &tierTemplateCache{
-		tierTemplatesByTemplateRef: map[string]*tierTemplate{},
-	}
-}
-
-func (c *tierTemplateCache) get(templateRef string) (*tierTemplate, bool) {
-	c.RLock()
-	defer c.RUnlock()
-	tierTemplate, ok := c.tierTemplatesByTemplateRef[templateRef]
-	return tierTemplate, ok
-}
-
-func (c *tierTemplateCache) add(tierTemplate *tierTemplate) {
-	c.Lock()
-	defer c.Unlock()
-	c.tierTemplatesByTemplateRef[tierTemplate.templateRef] = tierTemplate
 }

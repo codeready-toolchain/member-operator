@@ -8,7 +8,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	errs "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
-	errors "k8s.io/apimachinery/pkg/api/errors"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -99,35 +98,21 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 func (r *spaceRolesManager) getSpaceRolesObjects(ctx context.Context, ns *corev1.Namespace, spaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) ([]runtimeclient.Object, error) {
 	// store by kind and name
 	spaceRoleObjects := []runtimeclient.Object{}
-	var tierTemplateRevision *toolchainv1alpha1.TierTemplateRevision
 	for _, spaceRole := range spaceRoles {
 
-		host, _ := r.GetHostCluster()
-		//TODO: move fetching the host inside of getToolchainTierTemplateRevision next, and also sort the logic of func to get a TTR cache similar
-		// to tiertemplates. This is temporary for now as we need to write the logic for creating TTRcache
-		_, err := getToolchainTierTemplateRevision(ctx, host, spaceRole.TemplateRef)
+		tierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, spaceRole.TemplateRef)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				tierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, spaceRole.TemplateRef)
-				if err != nil {
-					return nil, err
-				}
-				for _, username := range spaceRole.Usernames {
-					objs, err := tierTemplate.process(r.Scheme, map[string]string{
-						Namespace: ns.Name,
-						Username:  username,
-					})
-					if err != nil {
-						return nil, errs.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)
-					}
-					spaceRoleObjects = append(spaceRoleObjects, objs...)
-				}
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
-		if tierTemplateRevision != nil {
-			//TODO some logic when we will have TTRs
+		for _, username := range spaceRole.Usernames {
+			objs, err := tierTemplate.process(r.Scheme, map[string]string{
+				Namespace: ns.Name,
+				Username:  username,
+			})
+			if err != nil {
+				return nil, errs.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)
+			}
+			spaceRoleObjects = append(spaceRoleObjects, objs...)
 		}
 
 	}

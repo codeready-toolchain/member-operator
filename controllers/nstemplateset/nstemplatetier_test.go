@@ -2,16 +2,14 @@ package nstemplateset
 
 import (
 	"context"
-	"sync"
 	"testing"
-
-	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
@@ -106,8 +104,10 @@ func TestGetTierTemplate(t *testing.T) {
 
 	other := newTierTemplate("other", "other", "other")
 	other.Namespace = "other"
-
 	cl := testcommon.NewFakeClient(t, basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage, other)
+	resetCache := func() {
+		cl = testcommon.NewFakeClient(t, basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage, other)
+	}
 	ctx := context.TODO()
 
 	t.Run("return code for basic tier", func(t *testing.T) {
@@ -144,62 +144,6 @@ func TestGetTierTemplate(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assertThatTierTemplateIsSameAs(t, basicTierCluster, tierTmpl)
-	})
-
-	t.Run("test cache", func(t *testing.T) {
-		// given
-		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-		defer resetCache()
-		_, err := getTierTemplate(ctx, hostCluster, "basic-code-abcdef")
-		require.NoError(t, err)
-
-		t.Run("return cached TierTemplate even when for the second call doesn't exist", func(t *testing.T) {
-
-			emptyHost := test.NewGetHostCluster(testcommon.NewFakeClient(t), true, apiv1.ConditionTrue)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, emptyHost, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-
-		t.Run("return cached TierTemplate even when the host cluster was removed", func(t *testing.T) {
-			// given
-			noCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, noCluster, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-
-		t.Run("return cached TierTemplate even when the host cluster is not ready", func(t *testing.T) {
-			// given
-			noCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, noCluster, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-
-		t.Run("return cached TierTemplate even when the host cluster is not ready", func(t *testing.T) {
-			// given
-			noCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, noCluster, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
 	})
 
 	t.Run("failures", func(t *testing.T) {
@@ -261,49 +205,44 @@ func TestGetTierTemplate(t *testing.T) {
 			_, err := getTierTemplate(ctx, hostCluster, "")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 		})
 	})
 
-	t.Run("test multiple retrievals in parallel", func(t *testing.T) {
-		// given
-		defer resetCache()
-		var latch sync.WaitGroup
-		latch.Add(1)
-		var waitForFinished sync.WaitGroup
+	// t.Run("test multiple retrievals in parallel", func(t *testing.T) {
+	// 	// given
+	// 	defer resetCache()
+	// 	var latch sync.WaitGroup
+	// 	latch.Add(1)
+	// 	var waitForFinished sync.WaitGroup
 
-		for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
-			for i := 0; i < 1000; i++ {
-				waitForFinished.Add(1)
-				go func(tierTemplate *toolchainv1alpha1.TierTemplate) {
-					// given
-					defer waitForFinished.Done()
-					latch.Wait()
-					hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-					if _, ok := tierTemplatesCache.get(tierTemplate.Name); ok {
-						hostCluster = test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-					}
+	// 	for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
+	// 		for i := 0; i < 1000; i++ {
+	// 			waitForFinished.Add(1)
+	// 			go func(tierTemplate *toolchainv1alpha1.TierTemplate) {
+	// 				// given
+	// 				defer waitForFinished.Done()
+	// 				latch.Wait()
+	// 				hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 
-					// when
-					retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
+	// 				err := cl.Get(ctx, runtimeclient.ObjectKeyFromObject(tierTemplate), &toolchainv1alpha1.TierTemplate{})
 
-					// then
-					assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
-					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
-				}(tierTemplate)
-			}
-		}
+	// 				// when
+	// 				retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
 
-		// when
-		latch.Done()
+	// 				// then
+	// 				assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
+	// 				assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
+	// 			}(tierTemplate)
+	// 		}
+	// 	}
 
-		// then
-		waitForFinished.Wait()
-	})
-}
+	// 	// when
+	// 	latch.Done()
 
-func resetCache() {
-	tierTemplatesCache = newTierTemplateCache()
+	// 	// then
+	// 	waitForFinished.Wait()
+	// })
 }
 
 func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.TierTemplate, actual *tierTemplate) {

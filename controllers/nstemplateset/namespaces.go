@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	rbac "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
@@ -271,26 +270,14 @@ func (r *namespacesManager) ensureDeleted(ctx context.Context, nsTmplSet *toolch
 
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
 	var tmpls []*tierTemplate
-	var tierTemplateRevision *toolchainv1alpha1.TierTemplateRevision
 	for _, ns := range nsTmplSet.Spec.Namespaces {
-		host, _ := r.GetHostCluster()
-		//TODO: move fetching the host inside of getToolchainTierTemplateRevision next, and also sort the logic of func to get a TTR cache similar
-		// to tiertemplates. This is temporary for now as we need to write the logic for creating TTRcache
-		_, err := getToolchainTierTemplateRevision(ctx, host, ns.TemplateRef)
+
+		nsTmpl, err := getTierTemplate(ctx, r.GetHostCluster, ns.TemplateRef)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				nsTmpl, err := getTierTemplate(ctx, r.GetHostCluster, ns.TemplateRef)
-				if err != nil {
-					return nil, err
-				}
-				tmpls = append(tmpls, nsTmpl)
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
-		if tierTemplateRevision != nil {
-			//TODO some logic when we will have TTRs
-		}
+		tmpls = append(tmpls, nsTmpl)
+
 	}
 	return tmpls, nil
 }

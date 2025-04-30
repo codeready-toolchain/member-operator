@@ -271,13 +271,11 @@ func (r *namespacesManager) ensureDeleted(ctx context.Context, nsTmplSet *toolch
 func (r *namespacesManager) getTierTemplatesForAllNamespaces(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) ([]*tierTemplate, error) {
 	var tmpls []*tierTemplate
 	for _, ns := range nsTmplSet.Spec.Namespaces {
-
 		nsTmpl, err := getTierTemplate(ctx, r.GetHostCluster, ns.TemplateRef)
 		if err != nil {
 			return nil, err
 		}
 		tmpls = append(tmpls, nsTmpl)
-
 	}
 	return tmpls, nil
 }

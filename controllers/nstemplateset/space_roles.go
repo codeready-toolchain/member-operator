@@ -6,7 +6,8 @@ import (
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	errs "github.com/pkg/errors"
+	"github.com/pkg/errors"
+
 	corev1 "k8s.io/api/core/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -34,7 +35,7 @@ func (r *spaceRolesManager) ensure(ctx context.Context, nsTmplSet *toolchainv1al
 		var lastAppliedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole
 		if currentSpaceRolesAnnotation, exists := ns.Annotations[toolchainv1alpha1.LastAppliedSpaceRolesAnnotationKey]; exists && currentSpaceRolesAnnotation != "" {
 			if err := json.Unmarshal([]byte(currentSpaceRolesAnnotation), &lastAppliedSpaceRoles); err != nil {
-				return false, errs.Wrap(err, "unable to decode current space roles in annotation")
+				return false, errors.Wrap(err, "unable to decode current space roles in annotation")
 			}
 		}
 		// compare last-applied vs spec to see if there's anything obsolete
@@ -99,7 +100,6 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ctx context.Context, ns *corev1
 	// store by kind and name
 	spaceRoleObjects := []runtimeclient.Object{}
 	for _, spaceRole := range spaceRoles {
-
 		tierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, spaceRole.TemplateRef)
 		if err != nil {
 			return nil, err
@@ -110,11 +110,10 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ctx context.Context, ns *corev1
 				Username:  username,
 			})
 			if err != nil {
-				return nil, errs.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)
+				return nil, errors.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)
 			}
 			spaceRoleObjects = append(spaceRoleObjects, objs...)
 		}
-
 	}
 	return spaceRoleObjects, nil
 }

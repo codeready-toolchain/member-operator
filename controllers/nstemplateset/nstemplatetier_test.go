@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -263,41 +264,41 @@ func TestGetTierTemplate(t *testing.T) {
 		})
 	})
 
-	// t.Run("test multiple retrievals in parallel", func(t *testing.T) {
-	// 	// given
-	// 	defer resetCache()
-	// 	var latch sync.WaitGroup
-	// 	latch.Add(1)
-	// 	var waitForFinished sync.WaitGroup
+	t.Run("test multiple retrievals in parallel", func(t *testing.T) {
+		// given
+		defer resetCache()
+		var latch sync.WaitGroup
+		latch.Add(1)
+		var waitForFinished sync.WaitGroup
 
-	// 	for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
-	// 		for i := 0; i < 1000; i++ {
-	// 			waitForFinished.Add(1)
-	// 			go func(tierTemplate *toolchainv1alpha1.TierTemplate) {
-	// 				// given
-	// 				defer waitForFinished.Done()
-	// 				latch.Wait()
-	// 				hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-	// 				if _, ok := tierTemplatesCache.get(tierTemplate.Name); ok {
-	// 					hostCluster = test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-	// 				}
+		for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
+			for i := 0; i < 1000; i++ {
+				waitForFinished.Add(1)
+				go func(tierTemplate *toolchainv1alpha1.TierTemplate) {
+					// given
+					defer waitForFinished.Done()
+					latch.Wait()
+					hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
+					if _, ok := tierTemplatesCache.get(tierTemplate.Name); ok {
+						hostCluster = test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
+					}
 
-	// 				// when
-	// 				retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
+					// when
+					retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
 
-	// 				// then
-	// 				assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
-	// 				assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
-	// 			}(tierTemplate)
-	// 		}
-	// 	}
+					// then
+					assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
+					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
+				}(tierTemplate)
+			}
+		}
 
-	// 	// when
-	// 	latch.Done()
+		// when
+		latch.Done()
 
-	// 	// then
-	// 	waitForFinished.Wait()
-	// })
+		// then
+		waitForFinished.Wait()
+	})
 }
 
 func resetCache() {

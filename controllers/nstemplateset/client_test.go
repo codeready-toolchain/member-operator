@@ -338,6 +338,7 @@ func prepareAPIClient(t *testing.T, initObjs ...runtimeclient.Object) (*APIClien
 	tierTemplates, err := prepareTemplateTiers(decoder)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
+	resetCache()
 
 	// objects created from OpenShift templates are `*unstructured.Unstructured`,
 	// which causes troubles when calling the `List` method on the fake client,

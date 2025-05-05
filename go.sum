@@ -27,6 +27,8 @@ github.com/cloudflare/circl v1.3.7 h1:qlCDlTPz2n9fu58M0Nh1J/JzcFpfgkFHHX3O35r5vc
 github.com/cloudflare/circl v1.3.7/go.mod h1:sRTcRWXGLrKw6yIGJ+l7amYJFfAXbZG0kBSc8r4zxgA=
 github.com/codeready-toolchain/api v0.0.0-20250313170542-4e3c4147cb80 h1:wh41dZ7VkyClQWiMJbMypku6xTxtxNZTgQJUAcodgUo=
 github.com/codeready-toolchain/api v0.0.0-20250313170542-4e3c4147cb80/go.mod h1:shTTQ+bYWinbdF/oK+ly4DO5jdXtIASZ+uPZElsmsKg=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20250326132010-67676aa6ae2c h1:qLhRZbJ6FkSim7QM8JNb7ruJWAMJ/I9LsktofzxMUOg=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20250326132010-67676aa6ae2c/go.mod h1:Rd64iFrlcocihpLq4qIsCMkjN/1invHHaU1AMq19OWA=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
@@ -41,8 +43,6 @@ github.com/evanphx/json-patch/v5 v5.9.0 h1:kcBlZQbplgElYIlo/n1hJbls2z/1awpXxpRi0
 github.com/evanphx/json-patch/v5 v5.9.0/go.mod h1:VNkHZ/282BpEyt/tObQO8s5CMPmYYq14uClGH4abBuQ=
 github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d h1:105gxyaGwCFad8crR9dcMQWvV9Hvulu6hwUh4tWPJnM=
 github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d/go.mod h1:ZZMPRZwes7CROmyNKgQzC3XPs6L/G2EJLHddWejkmf4=
-github.com/fbm3307/toolchain-common v0.0.0-20250429084500-e6b8c51272c9 h1:oa+Ivi8TXlD6G54WOffL6HO0fUEsLifGAR64/IpYfno=
-github.com/fbm3307/toolchain-common v0.0.0-20250429084500-e6b8c51272c9/go.mod h1:Rd64iFrlcocihpLq4qIsCMkjN/1invHHaU1AMq19OWA=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
 github.com/go-errors/errors v1.4.2 h1:J6MZopCL4uSllY1OfXM374weqZFFItUbrImctkmUxIA=

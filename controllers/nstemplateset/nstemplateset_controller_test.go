@@ -710,6 +710,9 @@ func TestProvisionTwoUsers(t *testing.T) {
 						HasLabel(toolchainv1alpha1.ProviderLabelKey, toolchainv1alpha1.ProviderLabelValue)
 
 					t.Run("provision john's inner resources of dev namespace", func(t *testing.T) {
+						// given - when host cluster is not ready, then it should use the cache
+						r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
 						// when
 						res, err := r.Reconcile(context.TODO(), req)
 
@@ -824,6 +827,9 @@ func TestProvisionTwoUsers(t *testing.T) {
 											HasResource(joeUsername+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 
 										t.Run("provision inner resources of joe's dev namespace (using cached TierTemplate)", func(t *testing.T) {
+											// given - when host cluster is not ready, then it should use the cache
+											r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
 											// when
 											res, err := r.Reconcile(context.TODO(), joeReq)
 
@@ -1010,6 +1016,9 @@ func TestReconcilePromotion(t *testing.T) {
 								HasResource("crtadmin-view", &rbacv1.RoleBinding{})
 
 							t.Run("when nothing to upgrade, then it should be provisioned", func(t *testing.T) {
+								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
+								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
 								// when - should check if everything is OK and set status to provisioned
 								_, err = r.Reconcile(context.TODO(), req)
 
@@ -1298,6 +1307,9 @@ func TestReconcileUpdate(t *testing.T) {
 								HasResource(spacename+"-space-viewer", &rbacv1.RoleBinding{})
 
 							t.Run("when nothing to update, then it should be provisioned", func(t *testing.T) {
+								// given - when host cluster is not ready, then it should use the cache (for both TierTemplates)
+								r.GetHostCluster = NewGetHostCluster(fakeClient, true, corev1.ConditionFalse)
+
 								// when - should check if everything is OK and set status to provisioned
 								_, err = r.Reconcile(context.TODO(), req)
 
@@ -1495,6 +1507,9 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 						HasNoResource("for-"+spacename, &quotav1.ClusterResourceQuota{}) // resource was deleted
 
 					t.Run("reconcile after cluster resource quota deletion triggers removal of the finalizer and thus successful deletion", func(t *testing.T) {
+						// given - when host cluster is not ready, then it should use the cache
+						r.GetHostCluster = NewGetHostCluster(r.Client, true, corev1.ConditionFalse)
+
 						// when a last reconcile loop is triggered (when the NSTemplateSet resource is marked for deletion and there's a finalizer)
 						_, err := r.Reconcile(context.TODO(), req)
 

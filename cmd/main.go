@@ -41,13 +41,11 @@ import (
 	klogv1 "k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 	kmetrics "k8s.io/metrics/pkg/apis/metrics/v1beta1"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	runtimecluster "sigs.k8s.io/controller-runtime/pkg/cluster"
-	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	//+kubebuilder:scaffold:imports
@@ -180,9 +178,6 @@ func main() {
 		// disable caching of Node metrics in the client to avoid getting the following error every second
 		// "failed to watch *v1beta1.NodeMetrics: the server does not allow this method on the requested resource (get nodes.metrics.k8s.io)"
 		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&kmetrics.NodeMetrics{}}}},
-		Controller: ctrlconfig.Controller{
-			SkipNameValidation: ptr.To(true),
-		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

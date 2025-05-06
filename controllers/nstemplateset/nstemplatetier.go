@@ -19,12 +19,13 @@ import (
 )
 
 var tierTemplatesCache = newTierTemplateCache()
-var tmpl *toolchainv1alpha1.TierTemplate
 
-// getTierTemplate retrieves the TierTemplate resource with the given name from the host cluster
+// getTierTemplate retrieves the TierTemplateRevision resource with the given name from the host cluster,
+// if not found then falls back to the current logic of retrieving the TierTemplate
 // and returns an instance of the tierTemplate type for it whose template content can be parsable.
 // The returned tierTemplate contains all data from TierTemplate including its name.
 func getTierTemplate(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
+	var tmpl *toolchainv1alpha1.TierTemplate
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 	}

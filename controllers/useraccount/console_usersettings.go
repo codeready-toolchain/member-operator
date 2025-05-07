@@ -2,6 +2,7 @@ package useraccount
 
 import (
 	"context"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -24,9 +25,9 @@ func deleteResource(ctx context.Context, cl client.Client, userUID string, toDel
 
 	name := ConsoleUserSettingsResourceNamePrefix + userUID
 	if toDelete.GetObjectKind().GroupVersionKind().Kind == "Role" {
-		name = name + ConsoleUserSettingsRoleSuffix
+		name += ConsoleUserSettingsRoleSuffix
 	} else if toDelete.GetObjectKind().GroupVersionKind().Kind == "RoleBinding" {
-		name = name + ConsoleUserSettingsRoleBindingSuffix
+		name += ConsoleUserSettingsRoleBindingSuffix
 	}
 
 	toDelete.SetName(name)

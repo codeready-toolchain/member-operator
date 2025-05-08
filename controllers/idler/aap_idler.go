@@ -3,7 +3,6 @@ package idler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -15,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -200,70 +198,23 @@ func (i *aapIdler) ensureAAPIdled(ctx context.Context, pod corev1.Pod, alreadyId
 
 // getAAPOwner returns the top level owner of the given object if it is an AAP instance.
 func (i *aapIdler) getAAPOwner(ctx context.Context, obj metav1.Object) (metav1.Object, error) {
-	owners := obj.GetOwnerReferences()
-	var owner metav1.OwnerReference
-	if len(owners) == 0 {
-		return nil, nil // No owner
+	fetcher := &ownerFetcher{
+		dynamicClient: i.dynamicClient,
+		resourceLists: i.resourceLists,
 	}
-	owner = owners[0] // In case of multiple owners, use the first one
-	// Get the GVR for the owner
-	gvr, err := gvrForKind(owner.Kind, owner.APIVersion, i.resourceLists)
-	if err != nil {
-		return nil, err
-	}
-	// Get the owner object
-	ownerObject, err := i.dynamicClient.Resource(*gvr).Namespace(obj.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
+	owners, err := fetcher.getOwners(ctx, obj)
 	if err != nil {
 		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			log.FromContext(ctx).Info("Owner not found", "kind", owner.Kind, "name", owner.Name)
+			log.FromContext(ctx).Info("Owner not found")
 			return nil, nil
 		}
 		return nil, err
 	}
-	if ownerObject.GetKind() == aapKind {
-		// Found the top AAP owner. Return it.
-		return ownerObject, nil
-	}
-
-	// Recursively try to find the top AAP owner
-	return i.getAAPOwner(ctx, ownerObject)
-}
-
-// gvrForKind returns GVR for the kind, if it's found in the available API list in the cluster
-// returns an error if not found or failed to parse the API version
-func gvrForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList) (*schema.GroupVersionResource, error) {
-	gvr, err := findGVRForKind(kind, apiVersion, resourceLists)
-	if gvr == nil && err == nil {
-		return nil, fmt.Errorf("no resource found for kind %s in %s", kind, apiVersion)
-	}
-	return gvr, err
-}
-
-// findGVRForKind returns GVR for the kind, if it's found in the available API list in the cluster
-// if not found then returns nil, nil
-// returns nil, error if failed to parse the API version
-func findGVRForKind(kind, apiVersion string, resourceLists []*metav1.APIResourceList) (*schema.GroupVersionResource, error) {
-	// Parse the group and version from the APIVersion (e.g., "apps/v1" -> group: "apps", version: "v1")
-	gv, err := schema.ParseGroupVersion(apiVersion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse APIVersion %s: %w", apiVersion, err)
-	}
-
-	// Look for a matching resource
-	for _, resourceList := range resourceLists {
-		if resourceList.GroupVersion == apiVersion {
-			for _, apiResource := range resourceList.APIResources {
-				if apiResource.Kind == kind {
-					// Construct the GVR
-					return &schema.GroupVersionResource{
-						Group:    gv.Group,
-						Version:  gv.Version,
-						Resource: apiResource.Name,
-					}, nil
-				}
-			}
+	for _, owner := range owners {
+		if owner.GetObjectKind().GroupVersionKind().Kind == aapKind {
+			// Found the top AAP owner. Return it.
+			return owner, nil
 		}
 	}
-
 	return nil, nil
 }

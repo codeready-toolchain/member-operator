@@ -516,7 +516,7 @@ func TestAAPIdlerIsCalled(t *testing.T) {
 			createOwnerObjects: func(ctx context.Context, object client.Object) error {
 				return createObjectWithDynamicClient(t, dynamicClient, object, func(kind schema.GroupVersionKind, object client.Object) {
 					if kind.Kind == "Deployment" {
-						require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+						require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 					}
 				})
 			},

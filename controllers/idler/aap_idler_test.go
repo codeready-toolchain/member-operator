@@ -18,10 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/dynamic"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
-	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	clienttest "k8s.io/client-go/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -151,14 +149,14 @@ func TestAAPIdler(t *testing.T) {
 			if gvk.Kind == "Deployment" {
 				// we want the AAP instance to own only one Deployment - that would be enough to idle it
 				if !isOwningSomething {
-					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true
 				}
 			}
 		}, idler.Name, "short-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		preparePayloadCrashloopingPodsWithinThreshold(t, clientSetForIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
-			require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
+			require.NoError(t, controllerutil.SetControllerReference(runningNoSpecAAP, object, scheme.Scheme))
 		}), idler.Name, "restarting-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		// when
@@ -179,14 +177,14 @@ func TestAAPIdler(t *testing.T) {
 			if kind.Kind == "Deployment" {
 				// we want the AAP instance to own only one Deployment - that will be enough to idle it
 				if !isOwningSomething {
-					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true
 				}
 			}
 		}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "ReplicaSet" && len(object.GetOwnerReferences()) == 0 {
-				require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
+				require.NoError(t, controllerutil.SetControllerReference(runningNoSpecAAP, object, scheme.Scheme))
 			}
 		}, idler.Name, "short-running-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -206,12 +204,14 @@ func TestAAPIdler(t *testing.T) {
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "Deployment" {
 				// let's make the AAP owner of all Deployments, to check that everything works as expected
-				require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+				require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 			}
 		}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		preparePayloadCrashloopingAboveThreshold(t, clientSetForIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
-			require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
+			if len(object.GetOwnerReferences()) == 0 {
+				require.NoError(t, controllerutil.SetControllerReference(runningNoSpecAAP, object, scheme.Scheme))
+			}
 		}), idler.Name, "restarting-")
 
 		// when
@@ -234,7 +234,7 @@ func TestAAPIdler(t *testing.T) {
 			}
 			preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 				if kind.Kind == "Deployment" {
-					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 				}
 			}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -253,7 +253,7 @@ func TestAAPIdler(t *testing.T) {
 			aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 			preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 				if kind.Kind == "Deployment" {
-					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 				}
 			}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -301,7 +301,7 @@ func TestAAPIdler(t *testing.T) {
 				aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 				preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 					if kind.Kind == "Deployment" {
-						require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
+						require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
 					}
 				}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -475,54 +475,7 @@ func newNoSpecAAP(t *testing.T, name, namespace string) *unstructured.Unstructur
 	return aap
 }
 
-func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
-	require.NoError(t, apis.AddToScheme(scheme.Scheme))
-	noAAPResources := []*metav1.APIResourceList{
-		{
-			GroupVersion: vmGVR.GroupVersion().String(),
-			APIResources: []metav1.APIResource{
-				{Name: "virtualmachineinstances", Namespaced: true, Kind: "VirtualMachineInstance"},
-				{Name: "virtualmachines", Namespaced: true, Kind: "VirtualMachine"},
-			},
-		},
-	}
-	for gvk := range scheme.Scheme.AllKnownTypes() {
-		resource, _ := meta.UnsafeGuessKindToResource(gvk)
-		noAAPResources = append(noAAPResources, &metav1.APIResourceList{
-			GroupVersion: gvk.GroupVersion().String(),
-			APIResources: []metav1.APIResource{
-				{Name: resource.Resource, Namespaced: true, Kind: gvk.Kind},
-			},
-		})
-	}
-
-	for gvk, gvr := range SupportedScaleResources {
-		noAAPResources = append(noAAPResources, &metav1.APIResourceList{
-			GroupVersion: gvr.GroupVersion().String(),
-			APIResources: []metav1.APIResource{
-				{Name: gvr.Resource, Namespaced: true, Kind: gvk.Kind},
-			},
-		})
-	}
-	return noAAPResources
-}
-
-func withAAPResourceList(t *testing.T) []*metav1.APIResourceList {
-	return append(noAAPResourceList(t), &metav1.APIResourceList{
-		GroupVersion: "aap.ansible.com/v1alpha1",
-		APIResources: []metav1.APIResource{
-			{Name: "ansibleautomationplatforms", Namespaced: true, Kind: "AnsibleAutomationPlatform"},
-			{Name: "ansibleautomationplatformbackups", Namespaced: true, Kind: "AnsibleAutomationPlatformBackup"},
-		},
-	})
-}
-
 var (
-	aapGVK = map[schema.GroupVersionResource]string{
-		{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatforms"}:       "AnsibleAutomationPlatformList",
-		{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatformbackups"}: "AnsibleAutomationPlatformBackupList",
-	}
-
 	aapHeader = `{
   "apiVersion": "aap.ansible.com/v1alpha1",
   "kind": "AnsibleAutomationPlatform",
@@ -559,20 +512,3 @@ var (
   }
 }`
 )
-
-type fakeDiscoveryClient struct {
-	*fake.FakeDiscovery
-	ServerPreferredResourcesError error
-}
-
-func newFakeDiscoveryClient(resources ...*metav1.APIResourceList) *fakeDiscoveryClient {
-	fakeDiscovery := fakeclientset.NewSimpleClientset().Discovery().(*fake.FakeDiscovery)
-	fakeDiscovery.Resources = resources
-	return &fakeDiscoveryClient{
-		FakeDiscovery: fakeDiscovery,
-	}
-}
-
-func (c *fakeDiscoveryClient) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
-	return c.Resources, c.ServerPreferredResourcesError
-}

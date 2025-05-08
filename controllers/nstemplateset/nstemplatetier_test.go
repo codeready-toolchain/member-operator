@@ -5,13 +5,12 @@ import (
 	"sync"
 	"testing"
 
-	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
@@ -261,7 +260,7 @@ func TestGetTierTemplate(t *testing.T) {
 			_, err := getTierTemplate(ctx, hostCluster, "")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 		})
 	})
 

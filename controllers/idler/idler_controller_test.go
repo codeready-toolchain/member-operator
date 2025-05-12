@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
-	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	fakescale "k8s.io/client-go/scale/fake"
 	clienttest "k8s.io/client-go/testing"
@@ -176,9 +175,9 @@ func TestEnsureIdling(t *testing.T) {
 
 		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler.Spec.TimeoutSeconds))
 		podsCrashLoopingWithinThreshold := preparePayloadCrashloopingPodsWithinThreshold(
-			t, clientSetForReconciler(reconciler), idler.Name, "inThreshRestarts-", freshStartTimes(idler.Spec.TimeoutSeconds))
+			t, clientSetForReconciler(t, reconciler), idler.Name, "inThreshRestarts-", freshStartTimes(idler.Spec.TimeoutSeconds))
 		podsCrashLooping := preparePayloadCrashloopingAboveThreshold(
-			t, clientSetForReconciler(reconciler), idler.Name, "restartCount-")
+			t, clientSetForReconciler(t, reconciler), idler.Name, "restartCount-")
 		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
 		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler.Spec.TimeoutSeconds))
@@ -342,8 +341,8 @@ func TestEnsureIdling(t *testing.T) {
 				// given
 				reconciler, req, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 				payloads := preparePayloads(t, reconciler, idler.Name, "", startTimes)
-				preparePayloadCrashloopingPodsWithinThreshold(t, clientSetForReconciler(reconciler), idler.Name, "inThreshRestarts-", startTimes)
-				preparePayloadCrashloopingAboveThreshold(t, clientSetForReconciler(reconciler), idler.Name, "restartCount-")
+				preparePayloadCrashloopingPodsWithinThreshold(t, clientSetForReconciler(t, reconciler), idler.Name, "inThreshRestarts-", startTimes)
+				preparePayloadCrashloopingAboveThreshold(t, clientSetForReconciler(t, reconciler), idler.Name, "restartCount-")
 				// start tracking
 				_, err := reconciler.Reconcile(context.TODO(), req)
 				require.NoError(t, err)
@@ -387,7 +386,7 @@ func TestEnsureIdling(t *testing.T) {
 			_, err := reconciler.Reconcile(context.TODO(), req)
 			require.NoError(t, err)
 			allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-				if reflect.TypeOf(obj) == reflect.TypeOf(&appsv1.ReplicaSet{}) {
+				if obj.GetObjectKind().GroupVersionKind().Kind == "ReplicaSet" {
 					return fmt.Errorf("some error")
 				}
 				return allCl.Client.Patch(ctx, obj, patch, opts...)
@@ -643,30 +642,12 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("can't get controllers because of general error", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
+			assertCanNotGetObject := func(inaccessibleResource, errMsg string) {
 				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
-
-				get := allCl.MockGet
-				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
-						return errors.New(errMsg)
-					}
-					return allCl.Client.Get(ctx, key, obj, opts...)
-				}
-
-				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
-				copy(originalReactions, dynamicCl.ReactionChain)
-				defer func() {
-					dynamicCl.ReactionChain = originalReactions
-				}()
-				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
-					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
-					dynamicCl.PrependReactor("get", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New(errMsg)
-					})
-				}
+				reconciler, req, cl, _, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				dynamicCl.PrependReactor("get", inaccessibleResource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New(errMsg)
+				})
 
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -678,15 +659,15 @@ func TestEnsureIdlingFailed(t *testing.T) {
 					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 			}
 
-			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
-			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset")
-			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset")
-			assertCanNotGetObject(&batchv1.Job{}, "can't get job")
-			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
-			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
-			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
-			assertCanNotGetObject(vm, "can't get virtualmachine")
-			assertCanNotGetObject(vmi, "can't get virtualmachineinstance")
+			assertCanNotGetObject("deployments", "can't get deployment")
+			assertCanNotGetObject("replicasets", "can't get replicaset")
+			assertCanNotGetObject("daemonsets", "can't get daemonset")
+			assertCanNotGetObject("jobs", "can't get job")
+			assertCanNotGetObject("statefulsets", "can't get statefulset")
+			assertCanNotGetObject("deploymentconfigs", "can't get deploymentconfig")
+			assertCanNotGetObject("replicationcontrollers", "can't get replicationcontroller")
+			assertCanNotGetObject("virtualmachines", "can't get virtualmachine")
+			assertCanNotGetObject("virtualmachineinstances", "can't get virtualmachineinstance")
 		})
 
 		t.Run("can't get controllers because not found", func(t *testing.T) {
@@ -720,7 +701,6 @@ func TestEnsureIdlingFailed(t *testing.T) {
 						}, inaccessible.(*unstructured.Unstructured).GetName())
 					})
 				}
-
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
@@ -744,34 +724,22 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		})
 
 		t.Run("can't update controllers", func(t *testing.T) {
-			assertCanNotUpdateObject := func(inaccessible runtime.Object, errMsg string) {
+			assertCanNotUpdateObject := func(inaccessibleKind, errMsg string) {
 				// given
 				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
 				gock.Off()
 				// mock stop call
 				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
 
-				update := allCl.MockUpdate
-				defer func() { allCl.MockUpdate = update }()
 				allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
+					if obj.GetObjectKind().GroupVersionKind().Kind == inaccessibleKind {
 						return errors.New(errMsg)
 					}
 					return allCl.Client.Patch(ctx, obj, patch, opts...)
 				}
-
-				// dynamic client for vms
-				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
-				copy(originalReactions, dynamicCl.ReactionChain)
-				defer func() {
-					dynamicCl.ReactionChain = originalReactions
-				}()
-				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
-					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
-					dynamicCl.PrependReactor("patch", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New(errMsg)
-					})
-				}
+				dynamicCl.PrependReactor("patch", strings.ToLower(inaccessibleKind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New(errMsg)
+				})
 
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -783,23 +751,24 @@ func TestEnsureIdlingFailed(t *testing.T) {
 					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 			}
 
-			assertCanNotUpdateObject(&appsv1.Deployment{}, "can't update deployment")
-			assertCanNotUpdateObject(&appsv1.ReplicaSet{}, "can't update replicaset")
-			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
-			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
-			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
-			assertCanNotUpdateObject(vm, "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
+			assertCanNotUpdateObject("Deployment", "can't update deployment")
+			assertCanNotUpdateObject("ReplicaSet", "can't update replicaset")
+			assertCanNotUpdateObject("StatefulSet", "can't update statefulset")
+			assertCanNotUpdateObject("DeploymentConfig", "can't update deploymentconfig")
+			assertCanNotUpdateObject("ReplicationController", "can't update replicationcontroller")
+			assertCanNotUpdateObject("VirtualMachine", "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
 		})
 
 		t.Run("can't delete payloads", func(t *testing.T) {
-			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string) {
+			assertCanNotDeleteObject := func(inaccessibleKind, errMsg string) {
 				// given
 				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
 
 				dlt := allCl.MockDelete
 				defer func() { allCl.MockDelete = dlt }()
 				allCl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
+					if obj.GetObjectKind().GroupVersionKind().Kind == inaccessibleKind ||
+						(inaccessibleKind == "Pod" && reflect.TypeOf(obj) == reflect.TypeOf(&corev1.Pod{})) {
 						return errors.New(errMsg)
 					}
 					return allCl.Client.Delete(ctx, obj, opts...)
@@ -815,9 +784,9 @@ func TestEnsureIdlingFailed(t *testing.T) {
 					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 			}
 
-			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
-			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
-			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
+			assertCanNotDeleteObject("DaemonSet", "can't delete daemonset")
+			assertCanNotDeleteObject("Job", "can't delete job")
+			assertCanNotDeleteObject("Pod", "can't delete pod")
 		})
 	})
 
@@ -920,6 +889,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("alex")
 	reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+	ownerFetcher := newOwnerFetcher(reconciler.DiscoveryClient, reconciler.DynamicClient)
 	plds := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler.Spec.TimeoutSeconds))
 
 	tests := map[string]struct {
@@ -997,11 +967,10 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			}()
 
 			//when
-			appType, appName, deletedByController, err := reconciler.scaleControllerToZero(context.TODO(), p.ObjectMeta)
+			appType, appName, err := reconciler.scaleControllerToZero(context.TODO(), p, ownerFetcher)
 
 			//then
 			require.NoError(t, err)
-			require.True(t, deletedByController)
 			require.Equal(t, tc.expectedAppType, appType)
 			require.Equal(t, tc.expectedAppName, appName)
 		})
@@ -1360,7 +1329,7 @@ type payloadStartTimes struct {
 }
 
 func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTimes payloadStartTimes, conditions ...corev1.PodCondition) payloads {
-	return preparePayloadsWithCreateFunc(t, clientSetForReconciler(r), namespace, namePrefix, startTimes, conditions...)
+	return preparePayloadsWithCreateFunc(t, clientSetForReconciler(t, r), namespace, namePrefix, startTimes, conditions...)
 }
 
 type createFunc func(context.Context, client.Object) error
@@ -1370,11 +1339,14 @@ type clientSet struct {
 	dynamicClient       dynamic.Interface
 }
 
-func clientSetForReconciler(r *Reconciler) clientSet {
+func clientSetForReconciler(t *testing.T, r *Reconciler) clientSet {
 	return clientSet{
 		allNamespacesClient: r.AllNamespacesClient,
 		dynamicClient:       r.DynamicClient,
 		createOwnerObjects: func(ctx context.Context, object client.Object) error {
+			if err := createObjectWithDynamicClient(t, r.DynamicClient, object, nil); err != nil {
+				return err
+			}
 			return r.AllNamespacesClient.Create(ctx, object)
 		},
 	}
@@ -1557,6 +1529,8 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 	}
+	err = clients.createOwnerObjects(context.TODO(), idler)
+	require.NoError(t, err)
 	standalonePods = slices.Concat(standalonePods, createPods(t, clients.allNamespacesClient, idler, sTime, make([]*corev1.Pod, 0, 3), noRestart()))
 
 	// Pods with no owner.
@@ -1745,9 +1719,9 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
-	dynamicClient := fakedynamic.NewSimpleDynamicClient(s)
+	dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, aapGVK)
 
-	fakeDiscovery := fakeclientset.NewSimpleClientset().Discovery()
+	fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
 
 	scalesClient := fakescale.FakeScaleClient{}
 	scalesClient.AddReactor("patch", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {

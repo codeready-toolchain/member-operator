@@ -118,7 +118,6 @@ func TestReconcileWhenMemberOperatorConfigIsNotPresent(t *testing.T) {
 }
 
 func TestHandleAutoscalerDeploy(t *testing.T) {
-
 	t.Run("deploy false", func(t *testing.T) {
 		// given
 		config := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.Autoscaler().Deploy(false))

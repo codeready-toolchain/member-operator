@@ -3,9 +3,11 @@ package deploy
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 
 	"github.com/codeready-toolchain/member-operator/deploy"
 	"github.com/codeready-toolchain/member-operator/pkg/cert"
+	"github.com/codeready-toolchain/member-operator/pkg/constants"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -42,13 +44,11 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}
 
-	applyClient := applycl.NewApplyClient(cl)
+	applyClient := applycl.NewSSAApplyClient(cl, constants.MemberOperatorFieldManager)
 	// create all objects that are within the template, and update only when the object has changed.
 	// if the object was either created or updated, then return and wait for another reconcile
-	for _, obj := range objs {
-		if _, err := applyClient.ApplyObject(ctx, obj); err != nil {
-			return errs.Wrap(err, "cannot deploy webhook template")
-		}
+	if err := applyClient.Apply(ctx, objs); err != nil {
+		return fmt.Errorf("cannot deploy webhook template: %w", err)
 	}
 	return nil
 }

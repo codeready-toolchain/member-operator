@@ -4,6 +4,7 @@ import (
 	"context"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/constants"
 	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +20,6 @@ func CreateOrUpdateResources(ctx context.Context, client client.Client, namespac
 		},
 		Spec: toolchainv1alpha1.MemberStatusSpec{},
 	}
-	cl := commonclient.NewApplyClient(client)
-	_, err := cl.ApplyObject(ctx, memberStatus)
-	return err
+	cl := commonclient.NewSSAApplyClient(client, constants.MemberOperatorFieldManager)
+	return cl.ApplyObject(ctx, memberStatus)
 }

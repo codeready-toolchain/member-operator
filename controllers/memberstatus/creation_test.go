@@ -37,14 +37,14 @@ func TestCreateOrUpdateResources(t *testing.T) {
 	t.Run("should return an error if creation fails ", func(t *testing.T) {
 		// given
 		cl := NewFakeClient(t)
-		cl.MockCreate = func(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-			return fmt.Errorf("creation failed")
+		cl.MockPatch = func(_ context.Context, _ client.Object, _ client.Patch, _ ...client.PatchOption) error {
+			return fmt.Errorf("patch failed")
 		}
 
 		// when
 		err = CreateOrUpdateResources(context.TODO(), cl, MemberOperatorNs, MemberStatusName)
 
 		// then
-		require.EqualError(t, err, "unable to create resource of kind: , version: : creation failed")
+		require.EqualError(t, err, "unable to patch 'toolchain.dev.openshift.com/v1alpha1, Kind=MemberStatus' called 'toolchain-member-status' in namespace 'toolchain-member-operator': patch failed")
 	})
 }

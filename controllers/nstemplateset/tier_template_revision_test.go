@@ -15,24 +15,24 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func createTierTemplateRevision(templateRef string) (*toolchainv1alpha1.TierTemplateRevision, error) {
+func createTierTemplateRevision(templateRef string) *toolchainv1alpha1.TierTemplateRevision {
 	return &toolchainv1alpha1.TierTemplateRevision{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      templateRef,
 			Namespace: test.HostOperatorNs,
 		},
-	}, nil
+	}
 }
 
 func TestGetTTR(t *testing.T) {
 	// given
-	ttRev, _ := createTierTemplateRevision("test-ttr")
-	ttRevTest, _ := createTierTemplateRevision("test-ttr-abc")
-	ttRevExtra, _ := createTierTemplateRevision("test-ttr-def")
+	ttRev := createTierTemplateRevision("test-ttr")
+	ttRevTest := createTierTemplateRevision("test-ttr-abc")
+	ttRevExtra := createTierTemplateRevision("test-ttr-def")
 	ctx := context.TODO()
 	cl := test.NewFakeClient(t, ttRev, ttRevExtra, ttRevTest)
 	hostCluster := testmem.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-	t.Run("fetch ttr successfuly", func(t *testing.T) {
+	t.Run("fetch ttr successfully", func(t *testing.T) {
 		//when
 		ttr, err := getToolchainTierTemplateRevision(ctx, hostCluster, "test-ttr")
 

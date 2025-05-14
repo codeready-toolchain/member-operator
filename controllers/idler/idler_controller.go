@@ -389,12 +389,13 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 // Otherwise, returns empty strings.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.Object, ownerFetcher *ownerFetcher) (kind string, name string, err error) {
 	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.GetName())
-	var owners []client.Object
+	var owners []*objectWithGVR
 	owners, err = ownerFetcher.getOwners(ctx, meta)
 	if err != nil {
 		return
 	}
-	for _, owner := range owners {
+	for _, ownerWithGVR := range owners {
+		owner := ownerWithGVR.object
 		kind = owner.GetObjectKind().GroupVersionKind().Kind
 		name = owner.GetName()
 		switch kind {

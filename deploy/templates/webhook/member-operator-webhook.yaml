@@ -217,7 +217,6 @@ objects:
           scope: "Namespaced"
       sideEffects: None
       timeoutSeconds: 5
-      reinvocationPolicy: Never
       failurePolicy: Ignore
       namespaceSelector:
         matchLabels:
@@ -246,7 +245,6 @@ objects:
           scope: "Namespaced"
       sideEffects: None
       timeoutSeconds: 5
-      reinvocationPolicy: Never
       failurePolicy: Fail
       namespaceSelector:
         matchLabels:
@@ -273,7 +271,6 @@ objects:
           scope: "Namespaced"
       sideEffects: None
       timeoutSeconds: 5
-      reinvocationPolicy: Never
       failurePolicy: Fail
       namespaceSelector:
         matchLabels:
@@ -300,7 +297,6 @@ objects:
           scope: "Namespaced"
       sideEffects: None
       timeoutSeconds: 5
-      reinvocationPolicy: Never
       failurePolicy: Fail
       namespaceSelector:
         matchLabels:

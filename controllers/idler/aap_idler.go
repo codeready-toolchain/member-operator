@@ -211,9 +211,9 @@ func (i *aapIdler) getAAPOwner(ctx context.Context, obj metav1.Object) (metav1.O
 		return nil, err
 	}
 	for _, owner := range owners {
-		if owner.GetObjectKind().GroupVersionKind().Kind == aapKind {
+		if owner.object.GetObjectKind().GroupVersionKind().Kind == aapKind {
 			// Found the top AAP owner. Return it.
-			return owner, nil
+			return owner.object, nil
 		}
 	}
 	return nil, nil

@@ -147,7 +147,7 @@ func TestGetOwners(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, owners, len(testData.expectedOwners))
 			for i := range testData.expectedOwners {
-				assert.Equal(t, testData.expectedOwners[i].GetName(), owners[i].GetName())
+				assert.Equal(t, testData.expectedOwners[i].GetName(), owners[i].object.GetName())
 			}
 
 		})

@@ -24,8 +24,13 @@ func newOwnerFetcher(discoveryClient discovery.ServerResourcesInterface, dynamic
 	}
 }
 
+type objectWithGVR struct {
+	object client.Object
+	gvr    *schema.GroupVersionResource
+}
+
 // getOwners returns the whole tree of all controller owners going recursively to the top owner for the given object
-func (o *ownerFetcher) getOwners(ctx context.Context, obj metav1.Object) ([]client.Object, error) {
+func (o *ownerFetcher) getOwners(ctx context.Context, obj metav1.Object) ([]*objectWithGVR, error) {
 	if o.resourceLists == nil {
 		// Get all API resources from the cluster using the discovery client. We need it for constructing GVRs for unstructured objects.
 		// Do it here once, so we do not have to list it multiple times before listing/getting every unstructured resource.
@@ -38,32 +43,36 @@ func (o *ownerFetcher) getOwners(ctx context.Context, obj metav1.Object) ([]clie
 
 	// get the controller owner (it's possible to have only one controller owner)
 	owners := obj.GetOwnerReferences()
-	var owner metav1.OwnerReference
+	var ownerReference metav1.OwnerReference
 	for _, ownerRef := range owners {
 		if ownerRef.Controller != nil && *ownerRef.Controller {
-			owner = ownerRef
+			ownerReference = ownerRef
 			break
 		}
 	}
-	if owner.Name == "" {
+	if ownerReference.Name == "" {
 		return nil, nil // No owner
 	}
 	// Get the GVR for the owner
-	gvr, err := gvrForKind(owner.Kind, owner.APIVersion, o.resourceLists)
+	gvr, err := gvrForKind(ownerReference.Kind, ownerReference.APIVersion, o.resourceLists)
 	if err != nil {
 		return nil, err
 	}
 	// Get the owner object
-	ownerObject, err := o.dynamicClient.Resource(*gvr).Namespace(obj.GetNamespace()).Get(ctx, owner.Name, metav1.GetOptions{})
+	ownerObject, err := o.dynamicClient.Resource(*gvr).Namespace(obj.GetNamespace()).Get(ctx, ownerReference.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
+	}
+	owner := &objectWithGVR{
+		object: ownerObject,
+		gvr:    gvr,
 	}
 	// Recursively try to find the top owner
 	ownerOwners, err := o.getOwners(ctx, ownerObject)
 	if err != nil || owners == nil {
-		return []client.Object{ownerObject}, err
+		return []*objectWithGVR{owner}, err
 	}
-	return append(ownerOwners, ownerObject), nil
+	return append(ownerOwners, owner), nil
 }
 
 // gvrForKind returns GVR for the kind, if it's found in the available API list in the cluster

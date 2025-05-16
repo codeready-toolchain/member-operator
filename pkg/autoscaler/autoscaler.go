@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/codeready-toolchain/member-operator/deploy"
+	"github.com/codeready-toolchain/member-operator/pkg/constants"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	tmplv1 "github.com/openshift/api/template/v1"
@@ -31,18 +32,13 @@ func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 	}
 	logger := log.FromContext(ctx)
 
-	applyClient := applycl.NewApplyClient(cl)
+	applyClient := applycl.NewSSAApplyClient(cl, constants.MemberOperatorFieldManager)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, obj := range objs {
-		applied, err := applyClient.ApplyObject(ctx, obj)
-		if err != nil {
+		if err := applyClient.ApplyObject(ctx, obj); err != nil {
 			return errs.Wrap(err, "cannot deploy autoscaling buffer template")
 		}
-		if applied {
-			logger.Info("Autoscaling Buffer object created or updated", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
-		} else {
-			logger.Info("Autoscaling Buffer object has not changed", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
-		}
+		logger.Info("Autoscaling Buffer object applied", "kind", obj.GetObjectKind(), "namespace", obj.GetNamespace(), "name", obj.GetName())
 	}
 	return nil
 }

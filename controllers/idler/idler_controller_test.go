@@ -641,86 +641,47 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		err = vmi.UnmarshalJSON(virtualmachineinstanceJSON)
 		require.NoError(t, err)
 
-		t.Run("can't get controllers because of general error", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessibleResource, errMsg string) {
-				// given
-				reconciler, req, cl, _, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
-				dynamicCl.PrependReactor("get", inaccessibleResource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New(errMsg)
-				})
+		t.Run("error when getting owner deployment is ignored", func(t *testing.T) {
+			// given
+			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
+			toKill := preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
+			//start tracking pods, so the Idler status is filled with the tracked pods
+			_, err := reconciler.Reconcile(context.TODO(), req)
+			require.NoError(t, err)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(toKill.allPods)
+			dynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+				return true, nil, errors.New("can't get deployment")
+			})
 
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
+			//when
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
-				// then
-				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
-				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
+			// then
+			require.NoError(t, err) // errors are ignored!
+			// it should idle the rest
+
+			payloadAssertion := memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
+				// not idled
+				DeploymentScaledUp(toKill.deployment).
+				DeploymentScaledUp(toKill.integration).
+				DeploymentScaledUp(toKill.kameletBinding).
+				// idled
+				PodsDoNotExist(toKill.standalonePods).
+				ReplicaSetScaledDown(toKill.replicaSet).
+				DaemonSetDoesNotExist(toKill.daemonSet).
+				JobDoesNotExist(toKill.job).
+				DeploymentConfigScaledDown(toKill.deploymentConfig).
+				ReplicationControllerScaledDown(toKill.replicationController).
+				StatefulSetScaledDown(toKill.statefulSet).
+				VMStopped(toKill.vmStopCallCounter)
+			// replicaSets owned by the deployments
+			for _, rs := range toKill.replicaSetsWithDeployment {
+				payloadAssertion.ReplicaSetScaledDown(rs)
 			}
-
-			assertCanNotGetObject("deployments", "can't get deployment")
-			assertCanNotGetObject("replicasets", "can't get replicaset")
-			assertCanNotGetObject("daemonsets", "can't get daemonset")
-			assertCanNotGetObject("jobs", "can't get job")
-			assertCanNotGetObject("statefulsets", "can't get statefulset")
-			assertCanNotGetObject("deploymentconfigs", "can't get deploymentconfig")
-			assertCanNotGetObject("replicationcontrollers", "can't get replicationcontroller")
-			assertCanNotGetObject("virtualmachines", "can't get virtualmachine")
-			assertCanNotGetObject("virtualmachineinstances", "can't get virtualmachineinstance")
-		})
-
-		t.Run("can't get controllers because not found", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessible runtime.Object) {
-				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
-
-				get := allCl.MockGet
-				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
-						return apierrors.NewNotFound(schema.GroupResource{
-							Group:    "",
-							Resource: reflect.TypeOf(obj).Name(),
-						}, key.Name)
-					}
-					return allCl.Client.Get(ctx, key, obj, opts...)
-				}
-
-				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
-				copy(originalReactions, dynamicCl.ReactionChain)
-				defer func() {
-					dynamicCl.ReactionChain = originalReactions
-				}()
-				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
-					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
-					dynamicCl.PrependReactor("get", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, apierrors.NewNotFound(schema.GroupResource{
-							Group:    "",
-							Resource: resource,
-						}, inaccessible.(*unstructured.Unstructured).GetName())
-					})
-				}
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.NoError(t, err) // 'NotFound' errors are ignored!
-				// no other pods being tracked
-				assert.True(t, res.Requeue)
-				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
-			}
-
-			assertCanNotGetObject(&appsv1.Deployment{})
-			assertCanNotGetObject(&appsv1.ReplicaSet{})
-			assertCanNotGetObject(&appsv1.DaemonSet{})
-			assertCanNotGetObject(&batchv1.Job{})
-			assertCanNotGetObject(&appsv1.StatefulSet{})
-			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{})
-			assertCanNotGetObject(&corev1.ReplicationController{})
-			assertCanNotGetObject(vm)
-			assertCanNotGetObject(vmi)
+			// no other pods being tracked
+			assert.True(t, res.Requeue)
+			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
 		})
 
 		t.Run("can't update controllers", func(t *testing.T) {
@@ -1309,18 +1270,19 @@ type payloads struct {
 	// standalonePods + controlledPods
 	allPods []*corev1.Pod
 
-	deployment             *appsv1.Deployment
-	integration            *appsv1.Deployment
-	kameletBinding         *appsv1.Deployment
-	replicaSet             *appsv1.ReplicaSet
-	daemonSet              *appsv1.DaemonSet
-	statefulSet            *appsv1.StatefulSet
-	deploymentConfig       *openshiftappsv1.DeploymentConfig
-	replicationController  *corev1.ReplicationController
-	job                    *batchv1.Job
-	virtualmachine         *unstructured.Unstructured
-	vmStopCallCounter      *int
-	virtualmachineinstance *unstructured.Unstructured
+	deployment                *appsv1.Deployment
+	integration               *appsv1.Deployment
+	kameletBinding            *appsv1.Deployment
+	replicaSet                *appsv1.ReplicaSet
+	replicaSetsWithDeployment []*appsv1.ReplicaSet
+	daemonSet                 *appsv1.DaemonSet
+	statefulSet               *appsv1.StatefulSet
+	deploymentConfig          *openshiftappsv1.DeploymentConfig
+	replicationController     *corev1.ReplicationController
+	job                       *batchv1.Job
+	virtualmachine            *unstructured.Unstructured
+	vmStopCallCounter         *int
+	virtualmachineinstance    *unstructured.Unstructured
 }
 
 type payloadStartTimes struct {
@@ -1366,6 +1328,7 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	}
 	err := clients.createOwnerObjects(context.TODO(), d)
 	require.NoError(t, err)
+	var replicaSetsWithDeployment []*appsv1.ReplicaSet
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", d.Name), Namespace: namespace},
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
@@ -1374,6 +1337,7 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	require.NoError(t, err)
 	err = clients.createOwnerObjects(context.TODO(), rs)
 	require.NoError(t, err)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, rs)
 	controlledPods := createPods(t, clients.allNamespacesClient, rs, sTime, make([]*corev1.Pod, 0, 3), noRestart(), conditions...)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
@@ -1401,6 +1365,7 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	require.NoError(t, err)
 	err = clients.createOwnerObjects(context.TODO(), integrationRS)
 	require.NoError(t, err)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, integrationRS)
 	controlledPods = createPods(t, clients.allNamespacesClient, integrationRS, sTime, controlledPods, noRestart())
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
@@ -1428,6 +1393,7 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	require.NoError(t, err)
 	err = clients.createOwnerObjects(context.TODO(), bindingRS)
 	require.NoError(t, err)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, bindingRS)
 	controlledPods = createPods(t, clients.allNamespacesClient, bindingRS, sTime, controlledPods, noRestart())
 
 	// Standalone ReplicaSet
@@ -1553,21 +1519,22 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	}
 
 	return payloads{
-		standalonePods:         standalonePods,
-		controlledPods:         controlledPods,
-		allPods:                append(standalonePods, controlledPods...),
-		deployment:             d,
-		integration:            integration,
-		kameletBinding:         binding,
-		replicaSet:             standaloneRs,
-		daemonSet:              ds,
-		statefulSet:            sts,
-		deploymentConfig:       dc,
-		replicationController:  standaloneRC,
-		job:                    job,
-		virtualmachine:         vm,
-		vmStopCallCounter:      stopCallCounter,
-		virtualmachineinstance: vmi,
+		standalonePods:            standalonePods,
+		controlledPods:            controlledPods,
+		allPods:                   append(standalonePods, controlledPods...),
+		deployment:                d,
+		integration:               integration,
+		kameletBinding:            binding,
+		replicaSet:                standaloneRs,
+		replicaSetsWithDeployment: replicaSetsWithDeployment,
+		daemonSet:                 ds,
+		statefulSet:               sts,
+		deploymentConfig:          dc,
+		replicationController:     standaloneRC,
+		job:                       job,
+		virtualmachine:            vm,
+		vmStopCallCounter:         stopCallCounter,
+		virtualmachineinstance:    vmi,
 	}
 }
 

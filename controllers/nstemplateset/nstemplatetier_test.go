@@ -109,6 +109,24 @@ func TestGetTierTemplate(t *testing.T) {
 	cl := testcommon.NewFakeClient(t, basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage, other)
 	ctx := context.TODO()
 
+	t.Run("fetch ttr successfully and add it to the tiertemplate object", func(t *testing.T) {
+		// given
+		ttRev := createTierTemplateRevision("basic-clusterresources-aa11bb22")
+		ttRev.Labels = map[string]string{
+			toolchainv1alpha1.TierLabelKey:        "basic",
+			toolchainv1alpha1.TemplateRefLabelKey: "basic-clusterresources-aa11bb22",
+		}
+		ctx := context.TODO()
+		cl := testcommon.NewFakeClient(t, ttRev, basicTierCluster)
+		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
+		//when
+		ttrTmpl, err := getTierTemplate(ctx, hostCluster, "basic-clusterresources-aa11bb22")
+
+		//then
+		require.NoError(t, err)
+		assert.Equal(t, ttrTmpl.ttr, ttRev)
+
+	})
 	t.Run("return code for basic tier", func(t *testing.T) {
 		// given
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)

@@ -34,7 +34,7 @@ func TestGetTTR(t *testing.T) {
 	hostCluster := testmem.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
 	t.Run("fetch ttr successfully", func(t *testing.T) {
 		//when
-		ttr, err := getToolchainTierTemplateRevision(ctx, hostCluster, "test-ttr")
+		ttr, err := getTierTemplateRevision(ctx, hostCluster, "test-ttr")
 
 		//then
 		require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestGetTTR(t *testing.T) {
 		//given
 		hostCluster := testmem.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
 		//when
-		_, err := getToolchainTierTemplateRevision(ctx, hostCluster, "test-ttr")
+		_, err := getTierTemplateRevision(ctx, hostCluster, "test-ttr")
 		//then
 		require.EqualError(t, err, "the host cluster is not ready")
 
@@ -54,7 +54,7 @@ func TestGetTTR(t *testing.T) {
 	t.Run("host cluster not ok", func(t *testing.T) {
 		noCluster := testmem.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
 		//when
-		_, err := getToolchainTierTemplateRevision(ctx, noCluster, "test-ttr")
+		_, err := getTierTemplateRevision(ctx, noCluster, "test-ttr")
 		//then
 		require.EqualError(t, err, "unable to connect to the host cluster: unknown cluster")
 
@@ -69,10 +69,10 @@ func TestGetTTR(t *testing.T) {
 			return cl.Client.Get(ctx, key, obj, opts...)
 		}
 		//when
-		_, err := getToolchainTierTemplateRevision(ctx, hostCluster, "test-ttr")
+		_, err := getTierTemplateRevision(ctx, hostCluster, "test-ttr")
 
 		//then
-		require.ErrorContains(t, err, "unable to retrieve the TierTemplateRevision")
+		require.EqualError(t, err, "unable to retrieve the TierTemplateRevision 'test-ttr' from 'Host' cluster: mock error")
 
 	})
 

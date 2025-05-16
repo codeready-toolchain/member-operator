@@ -12,7 +12,7 @@ import (
 )
 
 // getTierTemplateRevision gets the TierTemplateRevision resource from the host cluster.
-func getToolchainTierTemplateRevision(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplateRevision, error) {
+func getTierTemplateRevision(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplateRevision, error) {
 	// retrieve the ToolchainCluster instance representing the host cluster
 	host, ok := hostClusterFunc()
 	if !ok {

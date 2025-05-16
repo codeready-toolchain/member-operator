@@ -26,6 +26,7 @@ var tierTemplatesCache = newTierTemplateCache()
 // The returned tierTemplate contains all data from TierTemplate including its name.
 func getTierTemplate(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*tierTemplate, error) {
 	var tmpl *toolchainv1alpha1.TierTemplate
+	var tierTmpl *tierTemplate
 	if templateRef == "" {
 		return nil, fmt.Errorf("templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 	}
@@ -33,23 +34,33 @@ func getTierTemplate(ctx context.Context, hostClusterFunc cluster.GetHostCluster
 	if tierTmpl, ok := tierTemplatesCache.get(templateRef); ok && tierTmpl != nil {
 		return tierTmpl, nil
 	}
-	ttr, err := getToolchainTierTemplateRevision(ctx, hostClusterFunc, templateRef)
+	ttr, err := getTierTemplateRevision(ctx, hostClusterFunc, templateRef)
 	if err != nil {
 		if errs.IsNotFound(err) {
 			tmpl, err = getToolchainTierTemplate(ctx, hostClusterFunc, templateRef)
 			if err != nil {
 				return nil, err
 			}
+			tierTmpl = &tierTemplate{
+				templateRef: templateRef,
+				tierName:    tmpl.Spec.TierName,
+				typeName:    tmpl.Spec.Type,
+				template:    tmpl.Spec.Template,
+			}
 		} else {
 			return nil, err
 		}
-	}
-	tierTmpl := &tierTemplate{
-		templateRef: templateRef,
-		tierName:    tmpl.Spec.TierName,
-		typeName:    tmpl.Spec.Type,
-		template:    tmpl.Spec.Template,
-		ttr:         ttr,
+	} else {
+		ttrTmpl, err := getToolchainTierTemplate(ctx, hostClusterFunc, ttr.GetLabels()[toolchainv1alpha1.TemplateRefLabelKey])
+		if err != nil {
+			return nil, err
+		}
+		tierTmpl = &tierTemplate{
+			templateRef: templateRef,
+			tierName:    ttrTmpl.Spec.TierName,
+			typeName:    ttrTmpl.Spec.Type,
+			ttr:         ttr,
+		}
 	}
 
 	tierTemplatesCache.add(tierTmpl)

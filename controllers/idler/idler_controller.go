@@ -388,11 +388,11 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 // If any known controller owner is found, then it's scaled down (or deleted) and its kind and name is returned.
 // Otherwise, returns empty strings.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.Object, ownerFetcher *ownerFetcher) (kind string, name string, err error) {
-	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.GetName())
-	var owners []*objectWithGVR
-	owners, err = ownerFetcher.getOwners(ctx, meta)
+	logger := log.FromContext(ctx)
+	logger.Info("Scaling controller to zero", "name", meta.GetName())
+	owners, err := ownerFetcher.getOwners(ctx, meta)
 	if err != nil {
-		return
+		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
 	}
 	for _, ownerWithGVR := range owners {
 		owner := ownerWithGVR.object

@@ -44,11 +44,20 @@ func (o *ownerFetcher) getOwners(ctx context.Context, obj metav1.Object) ([]*obj
 	// get the controller owner (it's possible to have only one controller owner)
 	owners := obj.GetOwnerReferences()
 	var ownerReference metav1.OwnerReference
+	var nonControllerOwner metav1.OwnerReference
 	for _, ownerRef := range owners {
+		// try to get the controller owner as the preferred one
 		if ownerRef.Controller != nil && *ownerRef.Controller {
 			ownerReference = ownerRef
 			break
+		} else if nonControllerOwner.Name == "" {
+			// take only the first non-controller owner
+			nonControllerOwner = ownerRef
 		}
+	}
+	// if no controller owner was found, then use the first non-controller owner (if present)
+	if ownerReference.Name == "" {
+		ownerReference = nonControllerOwner
 	}
 	if ownerReference.Name == "" {
 		return nil, nil // No owner
@@ -70,7 +79,7 @@ func (o *ownerFetcher) getOwners(ctx context.Context, obj metav1.Object) ([]*obj
 	// Recursively try to find the top owner
 	ownerOwners, err := o.getOwners(ctx, ownerObject)
 	if err != nil || owners == nil {
-		return []*objectWithGVR{owner}, err
+		return append(ownerOwners, owner), err
 	}
 	return append(ownerOwners, owner), nil
 }

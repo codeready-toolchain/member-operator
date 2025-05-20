@@ -258,8 +258,9 @@ func (r *Reconciler) deletePodsAndCreateNotification(podCtx context.Context, pod
 	}
 	// when appType is empty, then it no known controller was found
 	deletedByController := appType != ""
-	if !deletedByController || isCompleted { // Pod not managed by a controller or completed pod. We can just delete the pod.
-		logger.Info("Deleting pod without controller")
+	isEvicted := pod.Status.Reason == "Evicted"
+	if !deletedByController || isCompleted || isEvicted { // Pod not managed by a controller, or completed or evicted pod. We can just delete the pod.
+		logger.Info("Deleting pod", "managed-by-controller", deletedByController, "completed", isCompleted, "evicted", isEvicted)
 		if err := r.AllNamespacesClient.Delete(podCtx, &pod); err != nil {
 			return err
 		}
@@ -388,11 +389,11 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 // If any known controller owner is found, then it's scaled down (or deleted) and its kind and name is returned.
 // Otherwise, returns empty strings.
 func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.Object, ownerFetcher *ownerFetcher) (kind string, name string, err error) {
-	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.GetName())
-	var owners []*objectWithGVR
-	owners, err = ownerFetcher.getOwners(ctx, meta)
+	logger := log.FromContext(ctx)
+	logger.Info("Scaling controller to zero", "name", meta.GetName())
+	owners, err := ownerFetcher.getOwners(ctx, meta)
 	if err != nil {
-		return
+		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
 	}
 	for _, ownerWithGVR := range owners {
 		owner := ownerWithGVR.object

@@ -258,8 +258,9 @@ func (r *Reconciler) deletePodsAndCreateNotification(podCtx context.Context, pod
 	}
 	// when appType is empty, then it no known controller was found
 	deletedByController := appType != ""
-	if !deletedByController || isCompleted { // Pod not managed by a controller or completed pod. We can just delete the pod.
-		logger.Info("Deleting pod without controller")
+	isEvicted := pod.Status.Reason == "Evicted"
+	if !deletedByController || isCompleted || isEvicted { // Pod not managed by a controller, or completed or evicted pod. We can just delete the pod.
+		logger.Info("Deleting pod", "managed-by-controller", deletedByController, "completed", isCompleted, "evicted", isEvicted)
 		if err := r.AllNamespacesClient.Delete(podCtx, &pod); err != nil {
 			return err
 		}

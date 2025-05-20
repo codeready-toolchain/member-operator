@@ -1340,6 +1340,10 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	replicaSetsWithDeployment = append(replicaSetsWithDeployment, rs)
 	controlledPods := createPods(t, clients.allNamespacesClient, rs, sTime, make([]*corev1.Pod, 0, 3), noRestart(), conditions...)
 
+	// create evicted pods owned by the ReplicaSet, they should be deleted if timeout is reached
+	standalonePods := createPodsWithSuffix(t, "-evicted", clients.allNamespacesClient, rs, make([]*corev1.Pod, 0, 3),
+		corev1.PodStatus{StartTime: sTime, Conditions: conditions, Reason: "Evicted"})
+
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	integration := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1473,8 +1477,8 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	controlledPods = createPods(t, clients.allNamespacesClient, vmi, &vmstartTime, controlledPods, noRestart()) // vmi controls pod
 
 	// create completed pods owned by the VM, they should be deleted if timeout is reached
-	standalonePods := createPodsWithSuffix(t, "-completed", clients.allNamespacesClient, vmi, &vmstartTime,
-		make([]*corev1.Pod, 0, 3), noRestart(), corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"})
+	standalonePods = createPodsWithSuffix(t, "-completed", clients.allNamespacesClient, vmi, standalonePods,
+		corev1.PodStatus{StartTime: &vmstartTime, Conditions: []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}}})
 
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
@@ -1661,14 +1665,14 @@ func restartingUnderThreshold() []corev1.ContainerStatus {
 }
 
 func createPods(t *testing.T, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
-	return createPodsWithSuffix(t, "", allNamespacesClient, owner, startTime, podsToTrack, restartStatus, conditions...)
+	return createPodsWithSuffix(t, "", allNamespacesClient, owner, podsToTrack, corev1.PodStatus{StartTime: startTime, Conditions: conditions, ContainerStatuses: restartStatus})
 }
 
-func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
+func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, podsToTrack []*corev1.Pod, podStatus corev1.PodStatus) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d%s", owner.GetName(), i, suffix), Namespace: owner.GetNamespace()},
-			Status:     corev1.PodStatus{StartTime: startTime, Conditions: conditions, ContainerStatuses: restartStatus},
+			Status:     podStatus,
 		}
 		err := controllerutil.SetControllerReference(owner, pod, scheme.Scheme)
 		require.NoError(t, err)

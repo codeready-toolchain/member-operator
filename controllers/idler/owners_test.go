@@ -127,6 +127,7 @@ func TestGetOwners(t *testing.T) {
 			pod := givenPod.DeepCopy()
 			initObjects := []runtime.Object{pod}
 			var noiseObjects []runtime.Object
+			var noiseOwners []runtime.Object
 			for i := len(testData.expectedOwners) - 1; i >= 0; i-- {
 				owner := testData.expectedOwners[i].DeepCopyObject().(client.Object)
 
@@ -134,17 +135,24 @@ func TestGetOwners(t *testing.T) {
 				noise.SetName("noise-" + noise.GetName())
 				noiseObjects = append(noiseObjects, noise)
 
-				err := controllerruntime.SetControllerReference(owner, initObjects[len(initObjects)-1].(client.Object), scheme.Scheme)
+				// switch the type of the ownerReference (controller owner, non-controller owner) every second object to test both options properly
+				if i/2 == 0 {
+					err := controllerruntime.SetControllerReference(owner, initObjects[len(initObjects)-1].(client.Object), scheme.Scheme)
+					require.NoError(t, err)
+				} else {
+					err := controllerutil.SetOwnerReference(owner, initObjects[len(initObjects)-1].(client.Object), scheme.Scheme)
+					require.NoError(t, err)
+				}
+				// for each object, add a noise owner; it should be always ignored
+				noiseOwner := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("noise-owner-%d", i), Namespace: owner.GetNamespace()}}
+				err := controllerutil.SetOwnerReference(noiseOwner, initObjects[len(initObjects)-1].(client.Object), scheme.Scheme)
 				require.NoError(t, err)
+
+				noiseOwners = append(noiseOwners, noiseOwner)
 				initObjects = append(initObjects, owner)
 			}
 
-			// owner refs that are not controllers are ignored
-			noiseTopOwner := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "test-daemon", Namespace: "test-namespace"}}
-			err := controllerutil.SetOwnerReference(noiseTopOwner, initObjects[len(initObjects)-1].(client.Object), scheme.Scheme)
-			require.NoError(t, err)
-
-			dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, slices.Concat(initObjects, noiseObjects)...)
+			dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, slices.Concat(initObjects, noiseObjects, noiseOwners)...)
 
 			fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
 			fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)

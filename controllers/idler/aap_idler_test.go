@@ -149,14 +149,14 @@ func TestAAPIdler(t *testing.T) {
 			if gvk.Kind == "Deployment" {
 				// we want the AAP instance to own only one Deployment - that would be enough to idle it
 				if !isOwningSomething {
-					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true
 				}
 			}
 		}, idler.Name, "short-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		preparePayloadCrashloopingPodsWithinThreshold(t, clientSetForIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
-			require.NoError(t, controllerutil.SetControllerReference(runningNoSpecAAP, object, scheme.Scheme))
+			require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
 		}), idler.Name, "restarting-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		// when
@@ -177,14 +177,14 @@ func TestAAPIdler(t *testing.T) {
 			if kind.Kind == "Deployment" {
 				// we want the AAP instance to own only one Deployment - that will be enough to idle it
 				if !isOwningSomething {
-					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 					isOwningSomething = true
 				}
 			}
 		}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "ReplicaSet" && len(object.GetOwnerReferences()) == 0 {
-				require.NoError(t, controllerutil.SetControllerReference(runningNoSpecAAP, object, scheme.Scheme))
+				require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
 			}
 		}, idler.Name, "short-running-", freshStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -204,13 +204,13 @@ func TestAAPIdler(t *testing.T) {
 		preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if kind.Kind == "Deployment" {
 				// let's make the AAP owner of all Deployments, to check that everything works as expected
-				require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
+				require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 			}
 		}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
 		preparePayloadCrashloopingAboveThreshold(t, clientSetForIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 			if len(object.GetOwnerReferences()) == 0 {
-				require.NoError(t, controllerutil.SetControllerReference(runningNoSpecAAP, object, scheme.Scheme))
+				require.NoError(t, controllerutil.SetOwnerReference(runningNoSpecAAP, object, scheme.Scheme))
 			}
 		}), idler.Name, "restarting-")
 
@@ -234,7 +234,7 @@ func TestAAPIdler(t *testing.T) {
 			}
 			preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 				if kind.Kind == "Deployment" {
-					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 				}
 			}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -253,7 +253,7 @@ func TestAAPIdler(t *testing.T) {
 			aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 			preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 				if kind.Kind == "Deployment" {
-					require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
+					require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 				}
 			}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 
@@ -301,7 +301,7 @@ func TestAAPIdler(t *testing.T) {
 				aapIdler, interceptedNotify := prepareAAPIdler(t, idler, idledAAP, runningAAP, runningNoSpecAAP, noiseAAP)
 				preparePayloadsForAAPIdler(t, aapIdler, func(kind schema.GroupVersionKind, object client.Object) {
 					if kind.Kind == "Deployment" {
-						require.NoError(t, controllerutil.SetControllerReference(runningAAP, object, scheme.Scheme))
+						require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
 					}
 				}, idler.Name, "long-", expiredStartTimes(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)))
 

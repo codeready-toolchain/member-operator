@@ -5,13 +5,12 @@ import (
 	"sync"
 	"testing"
 
-	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
@@ -110,6 +109,24 @@ func TestGetTierTemplate(t *testing.T) {
 	cl := testcommon.NewFakeClient(t, basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage, other)
 	ctx := context.TODO()
 
+	t.Run("fetch ttr successfully and add it to the tiertemplate object", func(t *testing.T) {
+		// given
+		ttRev := createTierTemplateRevision("basic-clusterresources-aa11bb22")
+		ttRev.Labels = map[string]string{
+			toolchainv1alpha1.TierLabelKey:        "basic",
+			toolchainv1alpha1.TemplateRefLabelKey: "basic-clusterresources-aa11bb22",
+		}
+		ctx := context.TODO()
+		cl := testcommon.NewFakeClient(t, ttRev, basicTierCluster)
+		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
+		//when
+		ttrTmpl, err := getTierTemplate(ctx, hostCluster, "basic-clusterresources-aa11bb22")
+
+		//then
+		require.NoError(t, err)
+		assert.Equal(t, ttrTmpl.ttr, ttRev)
+
+	})
 	t.Run("return code for basic tier", func(t *testing.T) {
 		// given
 		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
@@ -261,7 +278,7 @@ func TestGetTierTemplate(t *testing.T) {
 			_, err := getTierTemplate(ctx, hostCluster, "")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 		})
 	})
 

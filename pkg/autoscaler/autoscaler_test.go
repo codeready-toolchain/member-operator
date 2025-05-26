@@ -73,7 +73,7 @@ func TestDeploy(t *testing.T) {
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
 		fakeClient := test.NewFakeClient(t)
-		fakeClient.MockCreate = func(_ context.Context, _ client.Object, _ ...client.CreateOption) error {
+		fakeClient.MockPatch = func(_ context.Context, _ client.Object, _ client.Patch, _ ...client.PatchOption) error {
 			return fmt.Errorf("some error")
 		}
 
@@ -81,7 +81,7 @@ func TestDeploy(t *testing.T) {
 		err := Deploy(context.TODO(), fakeClient, s, test.MemberOperatorNs, bufferConfiguration("7Gi", "1", 3))
 
 		// then
-		require.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to create resource of kind: PriorityClass, version: v1: some error")
+		require.EqualError(t, err, "cannot deploy autoscaling buffer template: unable to patch 'scheduling.k8s.io/v1, Kind=PriorityClass' called 'member-operator-autoscaling-buffer' in namespace '': some error")
 	})
 }
 

@@ -165,7 +165,6 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	}
 	ownerFetcher := newOwnerFetcher(r.DiscoveryClient, r.DynamicClient)
 	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
-	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	var idleErrors []error
 	for _, pod := range podList.Items {
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
@@ -176,8 +175,8 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			// the infra costs because VMs consume much more resources
 			timeoutSeconds = timeoutSeconds / 12
 		}
-		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
-			// check the restart count for the trackedPod
+		if pod.Status.StartTime != nil {
+			// check the restart count for the pod
 			restartCount := getHighestRestartCount(pod.Status)
 			if restartCount > restartThreshold {
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
@@ -189,9 +188,9 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				idleErrors = append(idleErrors, err)
 				podLogger.Error(err, "failed to kill the pod")
 			}
-			// Already tracking this pod. Check the timeout.
-			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
-				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
+			// Check the start time
+			if time.Now().After(pod.Status.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
+				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", pod.Status.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := r.deletePodsAndCreateNotification(podCtx, pod, idler, ownerFetcher)
 				if err == nil {
@@ -200,14 +199,6 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				idleErrors = append(idleErrors, err)
 				podLogger.Error(err, "failed to kill the pod")
 			}
-			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
-
-		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
-			podLogger.Info("New pod detected. Start tracking.")
-			newStatusPods = append(newStatusPods, toolchainv1alpha1.Pod{
-				Name:      pod.Name,
-				StartTime: *pod.Status.StartTime,
-			})
 		}
 		// calculate the next reconcile
 		if pod.Status.StartTime != nil {
@@ -218,9 +209,6 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			// if not already scheduled to an earlier time
 			requeueAfter = shorterDuration(requeueAfter, time.Duration(timeoutSeconds)*time.Second)
 		}
-	}
-	if err := r.updateStatusPods(ctx, idler, newStatusPods); err != nil {
-		idleErrors = append(idleErrors, err)
 	}
 	return requeueAfter, errors.Join(idleErrors...)
 }
@@ -297,7 +285,7 @@ func (r *Reconciler) notify(ctx context.Context, idler *toolchainv1alpha1.Idler,
 		logger.Error(err, "failed to create Notification")
 		if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
 			logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-		} // not returning error to continue tracking remaining pods
+		} // not returning error to continue idling remaining pods
 	}
 }
 
@@ -550,34 +538,6 @@ func (r *Reconciler) stopVirtualMachine(ctx context.Context, object client.Objec
 
 	logger.Info("VirtualMachine stopped", "name", object.GetName())
 	return nil
-}
-
-func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {
-	for _, pod := range idler.Status.Pods {
-		if pod.Name == name {
-			return &pod
-		}
-	}
-	return nil
-}
-
-// updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.
-func (r *Reconciler) updateStatusPods(ctx context.Context, idler *toolchainv1alpha1.Idler, newPods []toolchainv1alpha1.Pod) error {
-	nothingChanged := len(idler.Status.Pods) == len(newPods)
-	if nothingChanged {
-		for _, newPod := range newPods {
-			if findPodByName(idler, newPod.Name) == nil {
-				// New untracked Pod!
-				nothingChanged = false
-				break
-			}
-		}
-	}
-	if nothingChanged {
-		return nil
-	}
-	idler.Status.Pods = newPods
-	return r.Client.Status().Update(ctx, idler)
 }
 
 type statusUpdater func(ctx context.Context, idler *toolchainv1alpha1.Idler, message string) error

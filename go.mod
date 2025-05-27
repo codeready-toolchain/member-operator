@@ -20,6 +20,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.19.7
 )
 
+replace github.com/codeready-toolchain/api => github.com/matousjobanek/api v0.0.0-20250527073940-9271ed30af92
+
 require (
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.19.1

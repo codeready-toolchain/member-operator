@@ -122,10 +122,10 @@ func TestNewCachedHostClientInitializer(t *testing.T) {
 					hostClient, err := initializer.GetHostClient(context.TODO())
 
 					// then
-					require.NoError(t, err)
-					require.NotNil(t, hostClient)
-					require.NotNil(t, hostClient.Client)
-					require.Equal(t, testcommon.HostOperatorNs, hostClient.Namespace)
+					assert.NoError(t, err)
+					assert.NotNil(t, hostClient)
+					assert.NotNil(t, hostClient.Client)
+					assert.Equal(t, testcommon.HostOperatorNs, hostClient.Namespace)
 				}()
 			}
 

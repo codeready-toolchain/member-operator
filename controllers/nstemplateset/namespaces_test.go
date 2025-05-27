@@ -1264,7 +1264,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 		}
 
-		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostClusterClient, "basic-dev-abcde11")
 		require.NoError(t, err)
 		// when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
@@ -1290,7 +1290,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		rb2 := newRoleBinding(devNS.Name, "crtadmin-view", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2)
-		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostClusterClient, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, &devNS, tierTmpl)
@@ -1305,7 +1305,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		rb := newRoleBinding(devNS.Name, "crtadmin-pods", "johnsmith")
 		role := newRole(devNS.Name, "exec-pods", "johnsmith")
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, role)
-		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostClusterClient, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
@@ -1329,7 +1329,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb, rb2, role)
-		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "advanced-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostClusterClient, "advanced-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
@@ -1351,7 +1351,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 			},
 		}
 		manager, _ := prepareNamespacesManager(t, nsTmplSet, rb)
-		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostClusterClient, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)
@@ -1365,7 +1365,7 @@ func TestIsUpToDateAndProvisioned(t *testing.T) {
 		devNS := newNamespace("basic", "johnsmith", "dev", withTemplateRefUsingRevision("abcde11"))
 		delete(devNS.Labels, toolchainv1alpha1.SpaceLabelKey)
 		manager, _ := prepareNamespacesManager(t, nsTmplSet)
-		tierTmpl, err := getTierTemplate(ctx, manager.GetHostCluster, "basic-dev-abcde11")
+		tierTmpl, err := getTierTemplate(ctx, manager.GetHostClusterClient, "basic-dev-abcde11")
 		require.NoError(t, err)
 		//when
 		isProvisioned, err := manager.isUpToDateAndProvisioned(ctx, devNS, tierTmpl)

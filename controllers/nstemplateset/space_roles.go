@@ -100,7 +100,7 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ctx context.Context, ns *corev1
 	// store by kind and name
 	spaceRoleObjects := []runtimeclient.Object{}
 	for _, spaceRole := range spaceRoles {
-		tierTemplate, err := getTierTemplate(ctx, r.GetHostCluster, spaceRole.TemplateRef)
+		tierTemplate, err := getTierTemplate(ctx, r.GetHostClusterClient, spaceRole.TemplateRef)
 		if err != nil {
 			return nil, err
 		}

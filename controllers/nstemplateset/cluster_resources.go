@@ -114,7 +114,7 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 	var tierTemplate *tierTemplate
 	var err error
 	if nsTmplSet.Spec.ClusterResources != nil {
-		tierTemplate, err = getTierTemplate(ctx, r.GetHostCluster, nsTmplSet.Spec.ClusterResources.TemplateRef)
+		tierTemplate, err = getTierTemplate(ctx, r.GetHostClusterClient, nsTmplSet.Spec.ClusterResources.TemplateRef)
 		if err != nil {
 			return false, r.wrapErrorWithStatusUpdateForClusterResourceFailure(userTierCtx, nsTmplSet, err,
 				"failed to retrieve TierTemplate for the cluster resources with the name '%s'", nsTmplSet.Spec.ClusterResources.TemplateRef)

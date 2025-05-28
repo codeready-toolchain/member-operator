@@ -7,6 +7,7 @@ import (
 	goruntime "runtime"
 	"time"
 
+	"github.com/codeready-toolchain/member-operator/pkg/host"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/codeready-toolchain/member-operator/controllers/idler"
@@ -219,6 +220,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	hostClientInitializer := host.NewCachedHostClientInitializer(scheme, cluster.GetHostCluster)
+
 	// Setup all Controllers
 	if err = (&toolchainclusterresources.Reconciler{
 		Client:    mgr.GetClient(),
@@ -271,10 +274,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (nstemplateset.NewReconciler(&nstemplateset.APIClient{
-		Client:              mgr.GetClient(),
-		AllNamespacesClient: allNamespacesCluster.GetClient(),
-		Scheme:              mgr.GetScheme(),
-		GetHostCluster:      cluster.GetHostCluster,
+		Client:               mgr.GetClient(),
+		AllNamespacesClient:  allNamespacesCluster.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		GetHostClusterClient: hostClientInitializer.GetHostClient,
 	})).SetupWithManager(mgr, allNamespacesCluster, discoveryClient); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NSTemplateSet")
 		os.Exit(1)

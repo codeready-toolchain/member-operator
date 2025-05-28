@@ -1,7 +1,10 @@
 package test
 
 import (
+	"context"
+
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/host"
 	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 
@@ -10,6 +13,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// NewHostClientGetter returns the host.ClientGetter function that returns the same given values
+func NewHostClientGetter(cl client.Client, err error) host.ClientGetter {
+	return func(_ context.Context) (*host.NamespacedClient, error) {
+		return host.NewNamespacedClient(cl, test.HostOperatorNs), err
+	}
+}
 
 // NewGetHostCluster returns cluster.GetHostClusterFunc function. The cluster.CachedToolchainCluster
 // that is returned by the function then contains the given client and the given status.

@@ -5,26 +5,22 @@ import (
 	"fmt"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
-
+	"github.com/codeready-toolchain/member-operator/pkg/host"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 // getTierTemplateRevision gets the TierTemplateRevision resource from the host cluster.
-func getTierTemplateRevision(ctx context.Context, hostClusterFunc cluster.GetHostClusterFunc, templateRef string) (*toolchainv1alpha1.TierTemplateRevision, error) {
-	// retrieve the ToolchainCluster instance representing the host cluster
-	host, ok := hostClusterFunc()
-	if !ok {
-		return nil, fmt.Errorf("unable to connect to the host cluster: unknown cluster")
-	}
-	if !cluster.IsReady(host.ClusterStatus) {
-		return nil, fmt.Errorf("the host cluster is not ready")
+func getTierTemplateRevision(ctx context.Context, getHostClient host.ClientGetter, templateRef string) (*toolchainv1alpha1.TierTemplateRevision, error) {
+	// get the host client
+	hostClient, err := getHostClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to connect to the host cluster: %w", err)
 	}
 
 	tierTemplateRevision := &toolchainv1alpha1.TierTemplateRevision{}
-	err := host.Client.Get(ctx, types.NamespacedName{
-		Namespace: host.OperatorNamespace,
+	err = hostClient.Get(ctx, types.NamespacedName{
+		Namespace: hostClient.Namespace,
 		Name:      templateRef,
 	}, tierTemplateRevision)
 	if err != nil {

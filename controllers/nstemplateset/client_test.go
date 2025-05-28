@@ -338,7 +338,6 @@ func prepareAPIClient(t *testing.T, initObjs ...runtimeclient.Object) (*APIClien
 	tierTemplates, err := prepareTemplateTiers(decoder)
 	require.NoError(t, err)
 	fakeClient := test.NewFakeClient(t, append(initObjs, tierTemplates...)...)
-	resetCache()
 
 	// objects created from OpenShift templates are `*unstructured.Unstructured`,
 	// which causes troubles when calling the `List` method on the fake client,
@@ -366,10 +365,10 @@ func prepareAPIClient(t *testing.T, initObjs ...runtimeclient.Object) (*APIClien
 		return nil
 	}
 	return &APIClient{
-		AllNamespacesClient: fakeClient,
-		Client:              fakeClient,
-		Scheme:              s,
-		GetHostCluster:      NewGetHostCluster(fakeClient, true, corev1.ConditionTrue),
+		AllNamespacesClient:  fakeClient,
+		Client:               fakeClient,
+		Scheme:               s,
+		GetHostClusterClient: NewHostClientGetter(fakeClient, nil),
 		AvailableAPIGroups: newAPIGroups(
 			newAPIGroup("quota.openshift.io", "v1"),
 			newAPIGroup("rbac.authorization.k8s.io", "v1"),

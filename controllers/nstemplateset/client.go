@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/host"
 	applycl "github.com/codeready-toolchain/toolchain-common/pkg/client"
-	"github.com/codeready-toolchain/toolchain-common/pkg/cluster"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,11 +16,11 @@ import (
 )
 
 type APIClient struct {
-	AllNamespacesClient runtimeclient.Client
-	Client              runtimeclient.Client
-	Scheme              *runtime.Scheme
-	GetHostCluster      cluster.GetHostClusterFunc
-	AvailableAPIGroups  []metav1.APIGroup
+	AllNamespacesClient  runtimeclient.Client
+	Client               runtimeclient.Client
+	Scheme               *runtime.Scheme
+	GetHostClusterClient host.ClientGetter
+	AvailableAPIGroups   []metav1.APIGroup
 }
 
 // ApplyToolchainObjects applies the given ToolchainObjects with the given labels.

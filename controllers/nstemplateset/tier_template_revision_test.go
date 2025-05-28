@@ -9,7 +9,6 @@ import (
 	testmem "github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/stretchr/testify/require"
-	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,7 +30,7 @@ func TestGetTTR(t *testing.T) {
 	ttRevExtra := createTierTemplateRevision("test-ttr-def")
 	ctx := context.TODO()
 	cl := test.NewFakeClient(t, ttRev, ttRevExtra, ttRevTest)
-	hostCluster := testmem.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
+	hostCluster := testmem.NewHostClientGetter(cl, nil)
 	t.Run("fetch ttr successfully", func(t *testing.T) {
 		//when
 		ttr, err := getTierTemplateRevision(ctx, hostCluster, "test-ttr")
@@ -41,22 +40,13 @@ func TestGetTTR(t *testing.T) {
 		require.Equal(t, ttRev, ttr)
 	})
 
-	t.Run("host cluster not ready", func(t *testing.T) {
+	t.Run("get host client fails", func(t *testing.T) {
 		//given
-		hostCluster := testmem.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
+		hostCluster := testmem.NewHostClientGetter(cl, fmt.Errorf("some error"))
 		//when
 		_, err := getTierTemplateRevision(ctx, hostCluster, "test-ttr")
 		//then
-		require.EqualError(t, err, "the host cluster is not ready")
-
-	})
-
-	t.Run("host cluster not ok", func(t *testing.T) {
-		noCluster := testmem.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
-		//when
-		_, err := getTierTemplateRevision(ctx, noCluster, "test-ttr")
-		//then
-		require.EqualError(t, err, "unable to connect to the host cluster: unknown cluster")
+		require.EqualError(t, err, "unable to connect to the host cluster: some error")
 
 	})
 

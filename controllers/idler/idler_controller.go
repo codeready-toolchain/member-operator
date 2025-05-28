@@ -285,7 +285,7 @@ func (r *Reconciler) notify(ctx context.Context, idler *toolchainv1alpha1.Idler,
 		logger.Error(err, "failed to create Notification")
 		if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
 			logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-		} // not returning error to continue idling remaining pods
+		} // not returning error to continue processing remaining pods
 	}
 }
 

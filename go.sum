@@ -27,8 +27,6 @@ github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDk
 github.com/cloudflare/circl v1.1.0/go.mod h1:prBCrKB9DV4poKZY1l9zBXg2QJY7mvgRvtMxxK7fi4I=
 github.com/cloudflare/circl v1.3.7 h1:qlCDlTPz2n9fu58M0Nh1J/JzcFpfgkFHHX3O35r5vcU=
 github.com/cloudflare/circl v1.3.7/go.mod h1:sRTcRWXGLrKw6yIGJ+l7amYJFfAXbZG0kBSc8r4zxgA=
-github.com/codeready-toolchain/api v0.0.0-20250506092100-39b4862e1271 h1:AHrFr/aPuJ4+0zHw4sFXcfMA92kChy12JAPS5bLODlw=
-github.com/codeready-toolchain/api v0.0.0-20250506092100-39b4862e1271/go.mod h1:20258od6i5+jP406Z76YaI2ow/vc7URwsDU2bokpkRE=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20250506093954-2b65ad3a2e12 h1:w54sojJJ8PsHZzK1mC+/EUBrQ9F2sC/k7JUVc8LSqK4=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20250506093954-2b65ad3a2e12/go.mod h1:TrMvD0sP69wI6Rouzfs7OsOUSj4CGn/ZiIdiDBAFQjk=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
@@ -142,6 +140,8 @@ github.com/magiconair/properties v1.8.5 h1:b6kJs+EmPFMYGkow9GiUyCyOvIwYetYJ3fSaW
 github.com/magiconair/properties v1.8.5/go.mod h1:y3VJvCyxH9uVvJTWEGAELF3aiYNyPKd5NZ3oSwXrF60=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
+github.com/matousjobanek/api v0.0.0-20250527073940-9271ed30af92 h1:5xxyKEw/1LN5B8+W6ZiJ8eaNnJD5q8FLQC4J3IwY2S8=
+github.com/matousjobanek/api v0.0.0-20250527073940-9271ed30af92/go.mod h1:20258od6i5+jP406Z76YaI2ow/vc7URwsDU2bokpkRE=
 github.com/migueleliasweb/go-github-mock v0.0.18 h1:0lWt9MYmZQGnQE2rFtjlft/YtD6hzxuN6JJRFpujzEI=
 github.com/migueleliasweb/go-github-mock v0.0.18/go.mod h1:CcgXcbMoRnf3rRVHqGssuBquZDIcaplxL2W6G+xs7kM=
 github.com/mitchellh/copystructure v1.0.0 h1:Laisrj+bAB6b/yJwB5Bt3ITZhGJdqmxquMKeZ+mmkFQ=

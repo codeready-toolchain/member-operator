@@ -99,20 +99,31 @@ const (
 )
 
 // process processes the template inside of the tierTemplate object with the given parameters.
+// it first checks if tiertemplaterevision resource is present, and process its object and
+// if not present then it process the openshift template(current) logic
 // Optionally, it also filters the result to return a subset of the template objects.
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
 	if t.ttr != nil {
-		for i := range t.ttr.Spec.TemplateObjects {
-			strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
-			obj := make([]runtimeclient.Object, len(t.ttr.Spec.TemplateObjects))
-			ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
-			var b bytes.Buffer
 
+		objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
+		var b bytes.Buffer
+		unStruct := &unstructured.Unstructured{}
+		paramMap := t.convertParametersToMap() // go execute requires parameters in form of map
+
+		for i := range t.ttr.Spec.TemplateObjects {
+			objectString, err := json.Marshal(t.ttr.Spec.TemplateObjects[i].Object)
+			if err != nil {
+				return nil, err
+			}
+
+			strTemp := string(objectString)
+
+			ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
 			if err != nil {
 				return nil, err
 			} else {
-				unStruct := &unstructured.Unstructured{}
-				err := ttrTemp.Execute(&b, t.ttr.Spec.Parameters)
+				err := ttrTemp.Execute(&b, paramMap)
 				if err != nil {
 					return nil, err
 				}
@@ -120,16 +131,14 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 				if err != nil {
 					return nil, err
 				}
-				err = runtime.DefaultUnstructuredConverter.FromUnstructured(unStruct.UnstructuredContent(), obj[i])
-				if err != nil {
-					return nil, err
-				}
-				return obj, nil
+				objList = append(objList, unStruct)
+
+				return objList, nil
 
 			}
 		}
 	}
-
+	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
 	if err != nil {
 		return nil, err
@@ -137,5 +146,15 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 	tmplProcessor := template.NewProcessor(scheme)
 	params[MemberOperatorNS] = ns // add (or enforce)
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
+
+}
+
+// convert ttr parametres to a map
+func (t *tierTemplate) convertParametersToMap() map[string]interface{} {
+	paramMap := map[string]interface{}{}
+	for _, params := range t.ttr.Spec.Parameters {
+		paramMap[params.Name] = params.Value
+	}
+	return paramMap
 
 }

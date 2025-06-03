@@ -40,7 +40,7 @@ func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTem
 	}
 }
 
-func TestProcess(t *testing.T) {
+func TestProcessWithoutTTR(t *testing.T) {
 	// given
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
@@ -93,64 +93,15 @@ func TestProcessWithTTR(t *testing.T) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
-	codecFactory := serializer.NewCodecFactory(s)
-	decoder := codecFactory.UniversalDeserializer()
-	ttRev := toolchainv1alpha1.TierTemplateRevision{}
-	ttrContent := `
-apiVersion: toolchain.dev.openshift.com/v1alpha1
-kind: TierTemplate
-metadata:
- name: appstudio-clusterresources
- namespace: toolchain-host
-spec:
- revision: abcde
- tierName: appstudio
- type: clusterresources
- templateObjects:
- - apiVersion: quota.openshift.io/v1
-   kind: ClusterResourceQuota
-   metadata:
-     name: for-{{.SPACE_NAME}}-deployments
-   spec:
-     quota:
-       hard:
-         count/deploymentconfigs.apps: '{{.DEPLOYMENT_QUOTA}}'
-         count/deployments.apps: '{{.DEPLOYMENT_QUOTA}}'
-         count/pods: 600
-     selector:
-       annotations: null
-       labels:
-         matchLabels:
-           toolchain.dev.openshift.com/space: '{{.SPACE_NAME}}'
-`
-	_, _, err = decoder.Decode([]byte(ttrContent), nil, &ttRev)
-	require.NoError(t, err)
-
-	tierTemplate := &tierTemplate{
-		ttr: &ttRev,
-	}
-
-	restore := testcommon.SetEnvVarAndRestore(t, commonconfig.WatchNamespaceEnvVar, "my-member-operator-namespace")
-	t.Cleanup(restore)
-
-	ttrObj, err := tierTemplate.process(s, map[string]string{
-		SpaceName: "johnsmith",
-	})
-
-	// then
-	require.NoError(t, err)
-	require.Len(t, ttrObj, 1)
-
-}
-
-func TestProcessWithTTR1(t *testing.T) {
-	// given
-	s := scheme.Scheme
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
 	ttRev := createTierTemplateRevision("test-ttr")
 	crq := newTestCRQ("600")
 	ttRev.Spec.TemplateObjects = append(ttRev.Spec.TemplateObjects, runtime.RawExtension{Object: &crq})
+	ttRev.Spec.Parameters = []toolchainv1alpha1.Parameter{
+		{Name: "SPACE_NAME",
+			Value: "test-space"},
+		{Name: "DEPLOYMENT_QUOTA",
+			Value: "600"},
+	}
 
 	tierTemplate := &tierTemplate{
 		ttr: ttRev,
@@ -162,6 +113,8 @@ func TestProcessWithTTR1(t *testing.T) {
 	// then
 	require.NoError(t, err)
 	require.Len(t, ttrObj, 1)
+	require.Equal(t, "for-test-space-deployments", ttrObj[0].GetName())
+	require.Equal(t, &expectedCRQ, ttrObj[0])
 
 }
 
@@ -314,4 +267,28 @@ func newTestCRQ(podsCount string) unstructured.Unstructured {
 		},
 	}}
 	return crq
+}
+
+var expectedCRQ = unstructured.Unstructured{
+	Object: map[string]interface{}{
+		"kind": "ClusterResourceQuota",
+		"metadata": map[string]interface{}{
+			"name": "for-test-space-deployments"},
+		"spec": map[string]interface{}{
+			"quota": map[string]interface{}{
+				"hard": map[string]interface{}{
+					"count/deploymentconfigs.apps": "600",
+					"count/deployments.apps":       "600",
+					"count/pods":                   "600"},
+			},
+			"selector": map[string]interface{}{
+				"annotations": map[string]interface{}{},
+				"labels": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"toolchain.dev.openshift.com/space": "'test-space'",
+					},
+				},
+			},
+		},
+	},
 }

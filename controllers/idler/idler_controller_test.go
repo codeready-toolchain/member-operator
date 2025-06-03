@@ -142,7 +142,7 @@ func TestEnsureIdling(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		preparePayloads(t, reconciler, idler.Name, "", payloadStartTimes{})
 
 		// when
@@ -153,7 +153,6 @@ func TestEnsureIdling(t *testing.T) {
 		assert.True(t, res.Requeue)
 		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled to the 1/12th of the timeout
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second/12, res.RequeueAfter)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running()).TracksPods(nil)
 	})
 
 	t.Run("Idle pods", func(t *testing.T) {
@@ -182,152 +181,79 @@ func TestEnsureIdling(t *testing.T) {
 
 		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
-		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
+		t.Run("Delete long running and crashlooping pods.", func(t *testing.T) {
 			//when
 			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
-			// Idler tracks all pods now but pods have not been deleted yet
+			// Too long running pods are gone. All long running controllers are scaled down.
+			// Crashlooping pods are gone.
+			// The rest of the pods are still there and controllers are scaled up.
 			memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
-				PodsExist(podsRunningForTooLong.standalonePods).
+				PodsDoNotExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
-				PodsExist(podsCrashLooping.standalonePods).
-				DaemonSetExists(podsRunningForTooLong.daemonSet).
+				PodsDoNotExist(podsCrashLooping.standalonePods).
+				DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
 				DaemonSetExists(podsTooEarlyToKill.daemonSet).
 				DaemonSetExists(noise.daemonSet).
-				JobExists(podsRunningForTooLong.job).
+				JobDoesNotExist(podsRunningForTooLong.job).
 				JobExists(podsTooEarlyToKill.job).
 				JobExists(noise.job).
-				DeploymentScaledUp(podsRunningForTooLong.deployment).
-				DeploymentScaledUp(podsRunningForTooLong.integration).
-				DeploymentScaledUp(podsRunningForTooLong.kameletBinding).
+				DeploymentScaledDown(podsRunningForTooLong.deployment).
+				DeploymentScaledDown(podsRunningForTooLong.integration).
+				DeploymentScaledDown(podsRunningForTooLong.kameletBinding).
+				DeploymentScaledDown(podsCrashLooping.deployment).
 				DeploymentScaledUp(podsTooEarlyToKill.deployment).
 				DeploymentScaledUp(podsTooEarlyToKill.integration).
 				DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
 				DeploymentScaledUp(noise.deployment).
 				DeploymentScaledUp(noise.integration).
 				DeploymentScaledUp(noise.kameletBinding).
-				DeploymentScaledUp(podsCrashLooping.deployment).
-				ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
+				ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
 				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 				ReplicaSetScaledUp(noise.replicaSet).
-				DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
+				DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
 				DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
 				DeploymentConfigScaledUp(noise.deploymentConfig).
-				ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
+				ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
 				ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
 				ReplicationControllerScaledUp(noise.replicationController).
-				StatefulSetScaledUp(podsRunningForTooLong.statefulSet).
+				StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
 				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
 				StatefulSetScaledUp(noise.statefulSet).
 				StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
-				VMRunning(podsRunningForTooLong.vmStopCallCounter).
+				VMStopped(podsRunningForTooLong.vmStopCallCounter).
 				VMRunning(podsTooEarlyToKill.vmStopCallCounter).
 				VMRunning(noise.vmStopCallCounter)
 
-			// Tracked pods
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods, podsCrashLooping.allPods, podsCrashLoopingWithinThreshold.allPods)).
-				HasConditions(memberoperatortest.Running())
+				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 			assert.True(t, res.Requeue)
-			assert.Equal(t, 0, int(res.RequeueAfter)) // pods running for too long should be killed immediately
+			assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/24)
 
-			t.Run("Second Reconcile. Delete long running and crashlooping pods.", func(t *testing.T) {
+			t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
+				//given
+				// cleanup remaining pods
+				pods := slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)
+				for _, pod := range pods {
+					err := allCl.Delete(context.TODO(), pod)
+					require.NoError(t, err)
+				}
+
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
-				// Too long running pods are gone. All long running controllers are scaled down.
-				// Crashlooping pods are gone.
-				// The rest of the pods are still there and controllers are scaled up.
-				memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
-					PodsDoNotExist(podsRunningForTooLong.standalonePods).
-					PodsExist(podsTooEarlyToKill.standalonePods).
-					PodsExist(noise.standalonePods).
-					PodsDoNotExist(podsCrashLooping.standalonePods).
-					DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
-					DaemonSetExists(podsTooEarlyToKill.daemonSet).
-					DaemonSetExists(noise.daemonSet).
-					JobDoesNotExist(podsRunningForTooLong.job).
-					JobExists(podsTooEarlyToKill.job).
-					JobExists(noise.job).
-					DeploymentScaledDown(podsRunningForTooLong.deployment).
-					DeploymentScaledDown(podsRunningForTooLong.integration).
-					DeploymentScaledDown(podsRunningForTooLong.kameletBinding).
-					DeploymentScaledDown(podsCrashLooping.deployment).
-					DeploymentScaledUp(podsTooEarlyToKill.deployment).
-					DeploymentScaledUp(podsTooEarlyToKill.integration).
-					DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
-					DeploymentScaledUp(noise.deployment).
-					DeploymentScaledUp(noise.integration).
-					DeploymentScaledUp(noise.kameletBinding).
-					ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
-					ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
-					ReplicaSetScaledUp(noise.replicaSet).
-					DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
-					DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
-					DeploymentConfigScaledUp(noise.deploymentConfig).
-					ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
-					ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
-					ReplicationControllerScaledUp(noise.replicationController).
-					StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
-					StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
-					StatefulSetScaledUp(noise.statefulSet).
-					StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
-					VMStopped(podsRunningForTooLong.vmStopCallCounter).
-					VMRunning(podsTooEarlyToKill.vmStopCallCounter).
-					VMRunning(noise.vmStopCallCounter)
-
-				// Only tracks pods that have not been deleted
 				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					TracksPods(append(podsTooEarlyToKill.allPods, podsCrashLoopingWithinThreshold.allPods...)).
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
+				// no pods being tracked -> requeue after idler timeout
 				assert.True(t, res.Requeue)
-				assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/24)
-
-				t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
-					//when
-					res, err := reconciler.Reconcile(context.TODO(), req)
-
-					// then
-					require.NoError(t, err)
-					// Tracking existing pods only.
-					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)). // controlledPods are being tracked again because in unit tests scaling down doesn't delete pods
-						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-
-					assert.True(t, res.Requeue)
-					assert.Empty(t, res.RequeueAfter) // controlledPods are being tracked again and scheduled to be scaled down because in unit tests scaling down doesn't delete pods
-
-					t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
-						//given
-						// cleanup remaining pods
-						pods := slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)
-						for _, pod := range pods {
-							err := allCl.Delete(context.TODO(), pod)
-							require.NoError(t, err)
-						}
-
-						//when
-						res, err := reconciler.Reconcile(context.TODO(), req)
-
-						// then
-						require.NoError(t, err)
-						// No pods tracked
-						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-							TracksPods([]*corev1.Pod{}).
-							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-
-						// no pods being tracked -> requeue after idler timeout
-						assert.True(t, res.Requeue)
-						assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-					})
-				})
+				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 			})
 		})
 
@@ -343,9 +269,6 @@ func TestEnsureIdling(t *testing.T) {
 				payloads := preparePayloads(t, reconciler, idler.Name, "", startTimes)
 				preparePayloadCrashloopingPodsWithinThreshold(t, clientSetForReconciler(t, reconciler), idler.Name, "inThreshRestarts-", startTimes)
 				preparePayloadCrashloopingAboveThreshold(t, clientSetForReconciler(t, reconciler), idler.Name, "restartCount-")
-				// start tracking
-				_, err := reconciler.Reconcile(context.TODO(), req)
-				require.NoError(t, err)
 
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -381,10 +304,6 @@ func TestEnsureIdling(t *testing.T) {
 			// given
 			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 			toKill := preparePayloads(t, reconciler, idler.Name, "tokill-", expiredStartTimes(idler.Spec.TimeoutSeconds))
-
-			// to start tracking
-			_, err := reconciler.Reconcile(context.TODO(), req)
-			require.NoError(t, err)
 			allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 				if obj.GetObjectKind().GroupVersionKind().Kind == "ReplicaSet" {
 					return fmt.Errorf("some error")
@@ -393,7 +312,7 @@ func TestEnsureIdling(t *testing.T) {
 			}
 
 			// when
-			_, err = reconciler.Reconcile(context.TODO(), req)
+			_, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.Error(t, err)
@@ -412,16 +331,7 @@ func TestEnsureIdling(t *testing.T) {
 				StatefulSetScaledDown(toKill.statefulSet).
 				VMStopped(toKill.vmStopCallCounter)
 
-			var beingTracked []*corev1.Pod
-			for _, pod := range toKill.controlledPods {
-				if pod.OwnerReferences[0].Name == toKill.replicaSet.Name {
-					beingTracked = append(beingTracked, pod)
-				}
-			}
-
-			// Only tracks pods that have not been deleted
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(beingTracked).
 				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 		})
 	})
@@ -444,16 +354,14 @@ func TestEnsureIdling(t *testing.T) {
 		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
-		// first reconcile to track pods
+		// when
+		// first reconcile should delete pods and create notification
 		res, err := reconciler.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.True(t, res.Requeue)
-		assert.Equal(t, 0, int(res.RequeueAfter))
 
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
 		//then
 		require.NoError(t, err)
+		assert.True(t, res.Requeue)
+		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 		//check the notification is actually created
@@ -468,19 +376,24 @@ func TestEnsureIdling(t *testing.T) {
 		require.Equal(t, "alex@test.com", notification.Spec.Recipient)
 		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
 
-		// third reconcile should not create a notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		require.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+		t.Run("second reconcile doesn't create notification", func(t *testing.T) {
+			// when
+			res, err = reconciler.Reconcile(context.TODO(), req)
 
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "alex-stage-idled",
-		}, notification)
-		require.NoError(t, err)
-		require.Equal(t, notificationCreationTime, notification.CreationTimestamp)
+			//then
+			require.NoError(t, err)
+			assert.True(t, res.Requeue)
+			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+
+			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+				Namespace: test.HostOperatorNs,
+				Name:      "alex-stage-idled",
+			}, notification)
+			require.NoError(t, err)
+			require.Equal(t, notificationCreationTime, notification.CreationTimestamp)
+		})
 	})
 }
 
@@ -542,9 +455,7 @@ func TestAAPIdlerIsCalled(t *testing.T) {
 
 		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled approx to the 1/12th of the timeout
 		assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/12)
-		// idler tracks all pods
 		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			TracksPods(podsRunningForTooLong.allPods).
 			// aap idler idled the AAP CR and sent the notification
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 		// hack to verify that he AAP CR is idled
@@ -645,10 +556,6 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			// given
 			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
 			toKill := preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
-			//start tracking pods, so the Idler status is filled with the tracked pods
-			_, err := reconciler.Reconcile(context.TODO(), req)
-			require.NoError(t, err)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(toKill.allPods)
 			dynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 				return true, nil, errors.New("can't get deployment")
 			})
@@ -678,7 +585,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			for _, rs := range toKill.replicaSetsWithDeployment {
 				payloadAssertion.ReplicaSetScaledDown(rs)
 			}
-			// no other pods being tracked
+			// nothing to idler/track
 			assert.True(t, res.Requeue)
 			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 			memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
@@ -687,7 +594,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		t.Run("can't update controllers", func(t *testing.T) {
 			assertCanNotUpdateObject := func(inaccessibleKind, errMsg string) {
 				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, dynamicCl := prepareReconcile(t, idler.Name, getHostCluster, &idler)
+				preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
 				gock.Off()
 				// mock stop call
 				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
@@ -723,7 +631,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		t.Run("can't delete payloads", func(t *testing.T) {
 			assertCanNotDeleteObject := func(inaccessibleKind, errMsg string) {
 				// given
-				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
+				reconciler, req, cl, allCl, _ := prepareReconcile(t, idler.Name, getHostCluster, &idler)
+				preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
 				dlt := allCl.MockDelete
 				defer func() { allCl.MockDelete = dlt }()
@@ -751,7 +660,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		})
 	})
 
-	t.Run("Fail if cannot update notification creation failed status", func(t *testing.T) {
+	t.Run("Fail if cannot update notification creation doesn't affect idling of other pods", func(t *testing.T) {
 		// given
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
@@ -765,23 +674,30 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"john"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "john", "advanced", "abcde11", namespaces, usernames)
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
-		preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
-
-		// when
-		// first reconcile to start tracking pods
-		_, err := reconciler.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-
-		// second reconcile to delete pods and create notification
+		reconciler, req, cl, allNsCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
+		toKill := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
 		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return fmt.Errorf("cannot set status to fail")
 		}
-		_, err = reconciler.Reconcile(context.TODO(), req)
+		// when
+		_, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
-		// since no mur, error should have been wrapped as status update, but status update fails
-		require.EqualError(t, err, "failed to ensure idling 'john-dev': cannot set status to fail")
+		// error is not wrapped since it's returned by the final update of the status
+		require.EqualError(t, err, "cannot set status to fail")
+		memberoperatortest.AssertThatInIdleableCluster(t, allNsCl, dynamicClient).
+			// idled
+			PodsDoNotExist(toKill.standalonePods).
+			DaemonSetDoesNotExist(toKill.daemonSet).
+			JobDoesNotExist(toKill.job).
+			ReplicaSetScaledDown(toKill.replicaSet).
+			DeploymentScaledDown(toKill.deployment).
+			DeploymentScaledDown(toKill.integration).
+			DeploymentScaledDown(toKill.kameletBinding).
+			DeploymentConfigScaledDown(toKill.deploymentConfig).
+			ReplicationControllerScaledDown(toKill.replicationController).
+			StatefulSetScaledDown(toKill.statefulSet).
+			VMStopped(toKill.vmStopCallCounter)
 	})
 
 	t.Run("aap idler failures", func(t *testing.T) {
@@ -1011,13 +927,9 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 				pname = p.Name
 			}
 
-			// first reconcile to track pods
-			res, err := reconciler.Reconcile(context.TODO(), req)
-			require.NoError(t, err)
-			assert.True(t, res.Requeue)
-
 			// second reconcile should delete pods and create notification
-			res, err = reconciler.Reconcile(context.TODO(), req)
+			_, err := reconciler.Reconcile(context.TODO(), req)
+
 			//then
 			require.NoError(t, err)
 
@@ -1261,7 +1173,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 }
 
 type payloads struct {
-	// standalonePods are pods which are supposed to be tracked and also deleted directly by the Idler controller
+	// standalonePods are pods which are supposed to be directly deleted by the Idler controller
 	// if run for too long
 	standalonePods []*corev1.Pod
 	// controlledPods are pods which are managed by Deployment/ReplicaSet/etc controllers and not supposed to be deleted
@@ -1491,7 +1403,7 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
-	// which is not a tracked controller such as Deployment or ReplicaSet.
+	// which is not a supported owner such as Deployment or ReplicaSet.
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-somename", namePrefix, namespace),
@@ -1664,11 +1576,11 @@ func restartingUnderThreshold() []corev1.ContainerStatus {
 	}
 }
 
-func createPods(t *testing.T, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
-	return createPodsWithSuffix(t, "", allNamespacesClient, owner, podsToTrack, corev1.PodStatus{StartTime: startTime, Conditions: conditions, ContainerStatuses: restartStatus})
+func createPods(t *testing.T, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, createdPods []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
+	return createPodsWithSuffix(t, "", allNamespacesClient, owner, createdPods, corev1.PodStatus{StartTime: startTime, Conditions: conditions, ContainerStatuses: restartStatus})
 }
 
-func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, podsToTrack []*corev1.Pod, podStatus corev1.PodStatus) []*corev1.Pod {
+func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, createdPods []*corev1.Pod, podStatus corev1.PodStatus) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d%s", owner.GetName(), i, suffix), Namespace: owner.GetNamespace()},
@@ -1676,11 +1588,11 @@ func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient clien
 		}
 		err := controllerutil.SetControllerReference(owner, pod, scheme.Scheme)
 		require.NoError(t, err)
-		podsToTrack = append(podsToTrack, pod)
+		createdPods = append(createdPods, pod)
 		err = allNamespacesClient.Create(context.TODO(), pod)
 		require.NoError(t, err)
 	}
-	return podsToTrack
+	return createdPods
 }
 
 func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
@@ -1757,17 +1669,6 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		Namespace:           test.MemberOperatorNs,
 	}
 	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient, dynamicClient
-}
-
-// prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
-func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
-	reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
-	payloads := preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
-	//start tracking pods, so the Idler status is filled with the tracked pods
-	_, err := reconciler.Reconcile(context.TODO(), req)
-	require.NoError(t, err)
-	memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(payloads.allPods)
-	return reconciler, req, cl, allCl, dynamicClient
 }
 
 func getHostCluster(fakeClient client.Client) cluster.GetHostClusterFunc {

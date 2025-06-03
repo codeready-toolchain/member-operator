@@ -3,7 +3,6 @@ package test
 import (
 	"context"
 	"testing"
-	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 
@@ -16,7 +15,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,22 +43,6 @@ func AssertThatIdler(t *testing.T, name string, client client.Client) *IdlerAsse
 		namespacedName: types.NamespacedName{Name: name},
 		t:              t,
 	}
-}
-
-func (a *IdlerAssertion) TracksPods(pods []*corev1.Pod) *IdlerAssertion {
-	err := a.loadIdlerAssertion()
-	require.NoError(a.t, err)
-
-	require.Len(a.t, a.idler.Status.Pods, len(pods))
-	for _, pod := range pods {
-		startTimeNoMilSec := pod.Status.StartTime.Truncate(time.Second)
-		expected := toolchainv1alpha1.Pod{
-			Name:      pod.Name,
-			StartTime: metav1.NewTime(startTimeNoMilSec),
-		}
-		assert.Contains(a.t, a.idler.Status.Pods, expected)
-	}
-	return a
 }
 
 func (a *IdlerAssertion) HasConditions(expected ...toolchainv1alpha1.Condition) *IdlerAssertion {

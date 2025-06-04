@@ -133,10 +133,9 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 				}
 				objList = append(objList, unStruct)
 
-				return objList, nil
-
 			}
 		}
+		return objList, nil
 	}
 	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()

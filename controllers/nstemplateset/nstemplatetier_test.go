@@ -10,12 +10,14 @@ import (
 	"github.com/codeready-toolchain/member-operator/test"
 	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
@@ -38,7 +40,7 @@ func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTem
 	}
 }
 
-func TestProcess(t *testing.T) {
+func TestProcessWithoutTTR(t *testing.T) {
 	// given
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
@@ -84,6 +86,36 @@ parameters:
 	require.Len(t, obj, 1)
 	assert.Equal(t, "my-member-operator-namespace", obj[0].GetNamespace())
 	assert.Equal(t, "johnsmith", obj[0].GetName())
+}
+
+func TestProcessWithTTR(t *testing.T) {
+	// given
+	s := scheme.Scheme
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
+	ttRev := createTierTemplateRevision("test-ttr")
+	crq := newTestCRQ("600")
+	ttRev.Spec.TemplateObjects = append(ttRev.Spec.TemplateObjects, runtime.RawExtension{Object: &crq})
+	ttRev.Spec.Parameters = []toolchainv1alpha1.Parameter{
+		{Name: "SPACE_NAME",
+			Value: "test-space"},
+		{Name: "DEPLOYMENT_QUOTA",
+			Value: "600"},
+	}
+
+	tierTemplate := &tierTemplate{
+		ttr: ttRev,
+	}
+	ttrObj, err := tierTemplate.process(s, map[string]string{
+		SpaceName: "johnsmith",
+	})
+
+	// then
+	require.NoError(t, err)
+	require.Len(t, ttrObj, 1)
+	require.Equal(t, "for-test-space-deployments", ttrObj[0].GetName())
+	require.Equal(t, &expectedCRQ, ttrObj[0])
+
 }
 
 func TestGetTierTemplate(t *testing.T) {
@@ -208,4 +240,55 @@ func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.Ti
 	assert.Equal(t, expected.Spec.Template, actual.template)
 	assert.Equal(t, expected.Name, actual.templateRef)
 	assert.Equal(t, expected.Spec.TierName, actual.tierName)
+}
+
+func newTestCRQ(podsCount string) unstructured.Unstructured {
+	var crq = unstructured.Unstructured{Object: map[string]interface{}{
+		"kind": "ClusterResourceQuota",
+		"metadata": map[string]interface{}{
+			"name": "for-{{.SPACE_NAME}}-deployments",
+		},
+		"spec": map[string]interface{}{
+			"quota": map[string]interface{}{
+				"hard": map[string]interface{}{
+					"count/deploymentconfigs.apps": "{{.DEPLOYMENT_QUOTA}}",
+					"count/deployments.apps":       "{{.DEPLOYMENT_QUOTA}}",
+					"count/pods":                   podsCount,
+				},
+			},
+			"selector": map[string]interface{}{
+				"annotations": map[string]interface{}{},
+				"labels": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"toolchain.dev.openshift.com/space": "'{{.SPACE_NAME}}'",
+					},
+				},
+			},
+		},
+	}}
+	return crq
+}
+
+var expectedCRQ = unstructured.Unstructured{
+	Object: map[string]interface{}{
+		"kind": "ClusterResourceQuota",
+		"metadata": map[string]interface{}{
+			"name": "for-test-space-deployments"},
+		"spec": map[string]interface{}{
+			"quota": map[string]interface{}{
+				"hard": map[string]interface{}{
+					"count/deploymentconfigs.apps": "600",
+					"count/deployments.apps":       "600",
+					"count/pods":                   "600"},
+			},
+			"selector": map[string]interface{}{
+				"annotations": map[string]interface{}{},
+				"labels": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"toolchain.dev.openshift.com/space": "'test-space'",
+					},
+				},
+			},
+		},
+	},
 }

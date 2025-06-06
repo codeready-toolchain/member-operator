@@ -4,14 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
+	"github.com/codeready-toolchain/member-operator/test"
+	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	apiv1 "github.com/openshift/api/apps/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/h2non/gock.v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,11 +30,254 @@ import (
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	fakescale "k8s.io/client-go/scale/fake"
 	clienttest "k8s.io/client-go/testing"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
+
+func preparePayloadsForDynamicClient(t *testing.T, dynamicClient *fakedynamic.FakeDynamicClient) payloads {
+	return preparePayloadsWithCreateFunc(t, clientSet{
+		allNamespacesClient: testcommon.NewFakeClient(t),
+		dynamicClient:       dynamicClient,
+		createOwnerObjects: func(ctx context.Context, object client.Object) error {
+			return createObjectWithDynamicClient(t, dynamicClient, object, nil)
+		}}, "alex-stage", "", freshStartTimes(60))
+}
+
+type payloadTestConfig struct {
+	podOwnerName    string
+	expectedAppName string
+	ownerScaledUp   func(*test.IdleablePayloadAssertion)
+	ownerScaledDown func(*test.IdleablePayloadAssertion)
+}
+
+type createTestConfigFunc func(payloads) payloadTestConfig
+
+var testConfigs = map[string]createTestConfigFunc{
+	"Deployment": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with a nested controllers (Deployment -> ReplicaSet -> Pod) here,
+			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
+			podOwnerName:    fmt.Sprintf("%s-replicaset", plds.deployment.Name),
+			expectedAppName: plds.deployment.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DeploymentScaledUp(plds.deployment)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DeploymentScaledDown(plds.deployment)
+			},
+		}
+	},
+	"ReplicaSet": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.replicaSet.Name,
+			expectedAppName: plds.replicaSet.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ReplicaSetScaledUp(plds.replicaSet)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ReplicaSetScaledDown(plds.replicaSet)
+			},
+		}
+	},
+	"DaemonSet": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.daemonSet.Name,
+			expectedAppName: plds.daemonSet.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DaemonSetExists(plds.daemonSet)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DaemonSetDoesNotExist(plds.daemonSet)
+			},
+		}
+	},
+	"StatefulSet": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.statefulSet.Name,
+			expectedAppName: plds.statefulSet.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.StatefulSetScaledUp(plds.statefulSet)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.StatefulSetScaledDown(plds.statefulSet)
+			},
+		}
+	},
+	"DeploymentConfig": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with a nested controllers (DeploymentConfig -> ReplicationController -> Pod) here,
+			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
+			podOwnerName:    fmt.Sprintf("%s-replicationcontroller", plds.deploymentConfig.Name),
+			expectedAppName: plds.deploymentConfig.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DeploymentConfigScaledUp(plds.deploymentConfig)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DeploymentConfigScaledDown(plds.deploymentConfig)
+			},
+		}
+	},
+	"ReplicationController": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.replicationController.Name,
+			expectedAppName: plds.replicationController.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ReplicationControllerScaledUp(plds.replicationController)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ReplicationControllerScaledDown(plds.replicationController)
+			},
+		}
+	},
+	"Job": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.job.Name,
+			expectedAppName: plds.job.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.JobExists(plds.job)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.JobDoesNotExist(plds.job)
+			},
+		}
+	},
+	"VirtualMachine": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.virtualmachineinstance.GetName(),
+			expectedAppName: plds.virtualmachine.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.VMRunning(plds.vmStopCallCounter)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.VMStopped(plds.vmStopCallCounter)
+			},
+		}
+	},
+}
+
+func TestAppNameTypeForControllers(t *testing.T) {
+	setup := func(t *testing.T, createTestConfig createTestConfigFunc) (*ownerIdler, *fakedynamic.FakeDynamicClient, payloadTestConfig, payloads, *corev1.Pod) {
+		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
+		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+		scalesClient := &fakescale.FakeScaleClient{}
+		restClient, err := testcommon.NewRESTClient("dummy-token", apiEndpoint)
+		require.NoError(t, err)
+		restClient.Client.Transport = gock.DefaultTransport
+		t.Cleanup(func() {
+			gock.OffAll()
+		})
+
+		ownerIdler := newOwnerIdler(fakeDiscovery, dynamicClient, scalesClient, restClient)
+
+		plds := preparePayloadsForDynamicClient(t, dynamicClient)
+		tc := createTestConfig(plds)
+
+		p := func() *corev1.Pod {
+			for _, pod := range plds.controlledPods {
+				for _, owner := range pod.OwnerReferences {
+					if owner.Name == tc.podOwnerName {
+						return pod
+					}
+				}
+			}
+			return nil
+		}()
+		return ownerIdler, dynamicClient, tc, plds, p
+	}
+
+	t.Run("success", func(t *testing.T) {
+
+		for kind, createTestConfig := range testConfigs {
+			t.Run(kind, func(t *testing.T) {
+				//given
+				ownerIdler, dynamicClient, testConfig, plds, pod := setup(t, createTestConfig)
+
+				//when
+				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
+
+				//then
+				require.NoError(t, err)
+				require.Equal(t, kind, appType)
+				require.Equal(t, testConfig.expectedAppName, appName)
+				assertion := test.AssertThatInIdleableCluster(t, testcommon.NewFakeClient(t), dynamicClient)
+				testConfig.ownerScaledDown(assertion)
+				for otherKind, othersTCFunc := range testConfigs {
+					if kind != otherKind {
+						othersTCFunc(plds).ownerScaledUp(assertion)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("failure when patching/deleting", func(t *testing.T) {
+		for kind, createTestConfig := range testConfigs {
+			t.Run(kind, func(t *testing.T) {
+				//given
+				ownerIdler, dynamicClient, testConfig, plds, pod := setup(t, createTestConfig)
+				gock.OffAll()
+				// mock stop call
+				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
+
+				errMsg := "can't update/delete " + kind
+				dynamicClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New(errMsg)
+				})
+				dynamicClient.PrependReactor("delete", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New(errMsg)
+				})
+
+				//when
+				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
+
+				//then
+				assertion := test.AssertThatInIdleableCluster(t, testcommon.NewFakeClient(t), dynamicClient)
+				if kind != "VirtualMachine" {
+					require.EqualError(t, err, errMsg)
+					testConfig.ownerScaledUp(assertion)
+				} else {
+					require.EqualError(t, err, "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
+				}
+
+				require.Equal(t, kind, appType)
+				require.Equal(t, testConfig.expectedAppName, appName)
+				for otherKind, othersTCFunc := range testConfigs {
+					if kind != otherKind {
+						othersTCFunc(plds).ownerScaledUp(assertion)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run("error when getting owner deployment is ignored", func(t *testing.T) {
+		// given
+		ownerIdler, dynamicClient, testConfig, plds, pod := setup(t, testConfigs["Deployment"])
+		reactionChain := dynamicClient.ReactionChain
+		dynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+			return true, nil, errors.New("can't get deployment")
+		})
+
+		//when
+		appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
+
+		// then
+		require.NoError(t, err) // errors are ignored!
+		dynamicClient.ReactionChain = reactionChain
+		payloadAssertion := test.AssertThatInIdleableCluster(t, testcommon.NewFakeClient(t), dynamicClient).
+			DeploymentScaledUp(plds.deployment) // deployment is not idled
+		for _, rs := range plds.replicaSetsWithDeployment {
+			if rs.Name == testConfig.podOwnerName {
+				payloadAssertion.ReplicaSetScaledDown(rs) // but the ReplicaSet is
+			}
+		}
+		require.Equal(t, "ReplicaSet", appType)
+		require.Equal(t, testConfig.podOwnerName, appName)
+	})
+}
 
 func TestGetAPIResourceList(t *testing.T) {
 	// given

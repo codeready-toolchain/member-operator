@@ -239,8 +239,9 @@ func TestEnsureIdling(t *testing.T) {
 				// cleanup remaining pods
 				pods := slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)
 				for _, pod := range pods {
-					err := allCl.Delete(context.TODO(), pod)
-					require.NoError(t, err)
+					if err := allCl.Delete(context.TODO(), pod); err != nil && !apierrors.IsNotFound(err) {
+						require.NoError(t, err)
+					}
 				}
 
 				//when
@@ -304,12 +305,9 @@ func TestEnsureIdling(t *testing.T) {
 			// given
 			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 			toKill := preparePayloads(t, reconciler, idler.Name, "tokill-", expiredStartTimes(idler.Spec.TimeoutSeconds))
-			allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-				if obj.GetObjectKind().GroupVersionKind().Kind == "ReplicaSet" {
-					return fmt.Errorf("some error")
-				}
-				return allCl.Client.Patch(ctx, obj, patch, opts...)
-			}
+			dynamicClient.PrependReactor("patch", "replicasets", func(action clienttest.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("some error")
+			})
 
 			// when
 			_, err := reconciler.Reconcile(context.TODO(), req)
@@ -552,111 +550,25 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		err = vmi.UnmarshalJSON(virtualmachineinstanceJSON)
 		require.NoError(t, err)
 
-		t.Run("error when getting owner deployment is ignored", func(t *testing.T) {
+		t.Run("can't delete pod", func(t *testing.T) {
 			// given
-			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
-			toKill := preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
-			dynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-				return true, nil, errors.New("can't get deployment")
-			})
+			reconciler, req, cl, allCl, _ := prepareReconcile(t, idler.Name, getHostCluster, &idler)
+			preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
+
+			dlt := allCl.MockDelete
+			defer func() { allCl.MockDelete = dlt }()
+			allCl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				return errors.New("can't delete pod")
+			}
 
 			//when
 			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
-			require.NoError(t, err) // errors are ignored!
-			// it should idle the rest
-
-			payloadAssertion := memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
-				// not idled
-				DeploymentScaledUp(toKill.deployment).
-				DeploymentScaledUp(toKill.integration).
-				DeploymentScaledUp(toKill.kameletBinding).
-				// idled
-				PodsDoNotExist(toKill.standalonePods).
-				ReplicaSetScaledDown(toKill.replicaSet).
-				DaemonSetDoesNotExist(toKill.daemonSet).
-				JobDoesNotExist(toKill.job).
-				DeploymentConfigScaledDown(toKill.deploymentConfig).
-				ReplicationControllerScaledDown(toKill.replicationController).
-				StatefulSetScaledDown(toKill.statefulSet).
-				VMStopped(toKill.vmStopCallCounter)
-			// replicaSets owned by the deployments
-			for _, rs := range toKill.replicaSetsWithDeployment {
-				payloadAssertion.ReplicaSetScaledDown(rs)
-			}
-			// nothing to idler/track
-			assert.True(t, res.Requeue)
-			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
-		})
-
-		t.Run("can't update controllers", func(t *testing.T) {
-			assertCanNotUpdateObject := func(inaccessibleKind, errMsg string) {
-				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcile(t, idler.Name, getHostCluster, &idler)
-				preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
-				gock.Off()
-				// mock stop call
-				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
-
-				allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-					if obj.GetObjectKind().GroupVersionKind().Kind == inaccessibleKind {
-						return errors.New(errMsg)
-					}
-					return allCl.Client.Patch(ctx, obj, patch, opts...)
-				}
-				dynamicCl.PrependReactor("patch", strings.ToLower(inaccessibleKind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-					return true, nil, errors.New(errMsg)
-				})
-
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
-				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
-			}
-
-			assertCanNotUpdateObject("Deployment", "can't update deployment")
-			assertCanNotUpdateObject("ReplicaSet", "can't update replicaset")
-			assertCanNotUpdateObject("StatefulSet", "can't update statefulset")
-			assertCanNotUpdateObject("DeploymentConfig", "can't update deploymentconfig")
-			assertCanNotUpdateObject("ReplicationController", "can't update replicationcontroller")
-			assertCanNotUpdateObject("VirtualMachine", "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
-		})
-
-		t.Run("can't delete payloads", func(t *testing.T) {
-			assertCanNotDeleteObject := func(inaccessibleKind, errMsg string) {
-				// given
-				reconciler, req, cl, allCl, _ := prepareReconcile(t, idler.Name, getHostCluster, &idler)
-				preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
-
-				dlt := allCl.MockDelete
-				defer func() { allCl.MockDelete = dlt }()
-				allCl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-					if obj.GetObjectKind().GroupVersionKind().Kind == inaccessibleKind ||
-						(inaccessibleKind == "Pod" && reflect.TypeOf(obj) == reflect.TypeOf(&corev1.Pod{})) {
-						return errors.New(errMsg)
-					}
-					return allCl.Client.Delete(ctx, obj, opts...)
-				}
-
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
-				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
-			}
-
-			assertCanNotDeleteObject("DaemonSet", "can't delete daemonset")
-			assertCanNotDeleteObject("Job", "can't delete job")
-			assertCanNotDeleteObject("Pod", "can't delete pod")
+			require.ErrorContains(t, err, "failed to ensure idling 'alex-stage': can't delete pod")
+			assert.Equal(t, reconcile.Result{}, res)
+			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 		})
 	})
 
@@ -748,110 +660,6 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				HasConditions(memberoperatortest.FailedToIdle("failed to ensure aap idling 'john-dev': some list error"))
 		})
 	})
-}
-
-func TestAppNameTypeForControllers(t *testing.T) {
-
-	idler := &toolchainv1alpha1.Idler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "alex-stage",
-			Labels: map[string]string{
-				toolchainv1alpha1.SpaceLabelKey: "alex",
-			},
-		},
-		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
-	}
-	namespaces := []string{"dev", "stage"}
-	usernames := []string{"alex"}
-	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-	mur := newMUR("alex")
-	reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-	ownerFetcher := newOwnerFetcher(reconciler.DiscoveryClient, reconciler.DynamicClient)
-	plds := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler.Spec.TimeoutSeconds))
-
-	tests := map[string]struct {
-		ownerKind       string
-		ownerName       string
-		expectedAppType string
-		expectedAppName string
-	}{
-		"Deployment": {
-			// We are testing the case with a nested controllers (Deployment -> ReplicaSet -> Pod) here,
-			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
-			ownerKind:       "ReplicaSet",
-			ownerName:       fmt.Sprintf("%s-replicaset", plds.deployment.Name),
-			expectedAppType: "Deployment",
-			expectedAppName: plds.deployment.Name,
-		},
-		"ReplicaSet": {
-			ownerKind:       "ReplicaSet",
-			ownerName:       plds.replicaSet.Name,
-			expectedAppType: "ReplicaSet",
-			expectedAppName: plds.replicaSet.Name,
-		},
-		"DaemonSet": {
-			ownerKind:       "DaemonSet",
-			ownerName:       plds.daemonSet.Name,
-			expectedAppType: "DaemonSet",
-			expectedAppName: plds.daemonSet.Name,
-		},
-		"StatefulSet": {
-			ownerKind:       "StatefulSet",
-			ownerName:       plds.statefulSet.Name,
-			expectedAppType: "StatefulSet",
-			expectedAppName: plds.statefulSet.Name,
-		},
-		"DeploymentConfig": {
-			// We are testing the case with a nested controllers (DeploymentConfig -> ReplicationController -> Pod) here,
-			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
-			ownerKind:       "ReplicationController",
-			ownerName:       fmt.Sprintf("%s-replicationcontroller", plds.deploymentConfig.Name),
-			expectedAppType: "DeploymentConfig",
-			expectedAppName: plds.deploymentConfig.Name,
-		},
-		"ReplicationController": {
-			ownerKind:       "ReplicationController",
-			ownerName:       plds.replicationController.Name,
-			expectedAppType: "ReplicationController",
-			expectedAppName: plds.replicationController.Name,
-		},
-		"Job": {
-			ownerKind:       "Job",
-			ownerName:       plds.job.Name,
-			expectedAppType: "Job",
-			expectedAppName: plds.job.Name,
-		},
-		"VirtualMachineInstance": {
-			ownerKind:       "VirtualMachineInstance",
-			ownerName:       plds.virtualmachineinstance.GetName(),
-			expectedAppType: "VirtualMachine",
-			expectedAppName: plds.virtualmachine.GetName(),
-		},
-	}
-
-	for k, tc := range tests {
-		t.Run(k, func(t *testing.T) {
-			//given
-			p := func() *corev1.Pod {
-				for _, pod := range plds.controlledPods {
-					for _, owner := range pod.OwnerReferences {
-						if owner.Kind == tc.ownerKind && owner.Name == tc.ownerName {
-							return pod
-						}
-					}
-				}
-				return nil
-			}()
-
-			//when
-			appType, appName, err := reconciler.scaleControllerToZero(context.TODO(), p, ownerFetcher)
-
-			//then
-			require.NoError(t, err)
-			require.Equal(t, tc.expectedAppType, appType)
-			require.Equal(t, tc.expectedAppName, appName)
-		})
-	}
 }
 
 func TestNotificationAppNameTypeForPods(t *testing.T) {
@@ -1218,10 +1026,7 @@ func clientSetForReconciler(t *testing.T, r *Reconciler) clientSet {
 		allNamespacesClient: r.AllNamespacesClient,
 		dynamicClient:       r.DynamicClient,
 		createOwnerObjects: func(ctx context.Context, object client.Object) error {
-			if err := createObjectWithDynamicClient(t, r.DynamicClient, object, nil); err != nil {
-				return err
-			}
-			return r.AllNamespacesClient.Create(ctx, object)
+			return createObjectWithDynamicClient(t, r.DynamicClient, object, nil)
 		},
 	}
 }
@@ -1256,21 +1061,23 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	standalonePods := createPodsWithSuffix(t, "-evicted", clients.allNamespacesClient, rs, make([]*corev1.Pod, 0, 3),
 		corev1.PodStatus{StartTime: sTime, Conditions: conditions, Reason: "Evicted"})
 
+	camelInt := &unstructured.Unstructured{}
+	camelInt.SetAPIVersion("camel.apache.org/v1")
+	camelInt.SetKind("Integration")
+	camelInt.SetNamespace(namespace)
+	camelInt.SetName(fmt.Sprintf("%s%s-integration", namePrefix, namespace))
+	err = clients.createOwnerObjects(context.TODO(), camelInt)
+	require.NoError(t, err)
+
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	integration := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-integration-deployment", namePrefix, namespace),
 			Namespace: namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "camel.apache.org/v1",
-					Kind:       "Integration",
-					Name:       fmt.Sprintf("%s%s-integration", namePrefix, namespace),
-				},
-			},
 		},
 		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
 	}
+	require.NoError(t, controllerutil.SetOwnerReference(camelInt, integration, scheme.Scheme))
 	err = clients.createOwnerObjects(context.TODO(), integration)
 	require.NoError(t, err)
 	integrationRS := &appsv1.ReplicaSet{
@@ -1284,21 +1091,23 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	replicaSetsWithDeployment = append(replicaSetsWithDeployment, integrationRS)
 	controlledPods = createPods(t, clients.allNamespacesClient, integrationRS, sTime, controlledPods, noRestart())
 
+	camelBinding := &unstructured.Unstructured{}
+	camelBinding.SetAPIVersion("camel.apache.org/v1alpha1")
+	camelBinding.SetKind("KameletBinding")
+	camelBinding.SetNamespace(namespace)
+	camelBinding.SetName(fmt.Sprintf("%s%s-binding", namePrefix, namespace))
+	err = clients.createOwnerObjects(context.TODO(), camelBinding)
+	require.NoError(t, err)
+
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
 	binding := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-binding-deployment", namePrefix, namespace),
 			Namespace: namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "camel.apache.org/v1alpha1",
-					Kind:       "KameletBinding",
-					Name:       fmt.Sprintf("%s%s-binding", namePrefix, namespace),
-				},
-			},
 		},
 		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
 	}
+	require.NoError(t, controllerutil.SetOwnerReference(camelBinding, binding, scheme.Scheme))
 	err = clients.createOwnerObjects(context.TODO(), binding)
 	require.NoError(t, err)
 	bindingRS := &appsv1.ReplicaSet{
@@ -1609,14 +1418,12 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 	scalesClient := fakescale.FakeScaleClient{}
 	scalesClient.AddReactor("patch", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
 		action := rawAction.(clienttest.PatchAction) // nolint: forcetypeassert
-
 		// update owned deployment
-		d := &appsv1.Deployment{}
-		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: action.GetName() + "-deployment", Namespace: action.GetNamespace()}, d)
-		if err != nil {
-			return false, nil, err
-		}
-		err = allNamespacesClient.Patch(context.TODO(), d, client.RawPatch(types.MergePatchType, action.GetPatch()))
+		gvr := appsv1.SchemeGroupVersion.WithResource("deployments")
+		_, err = dynamicClient.
+			Resource(gvr).
+			Namespace(action.GetNamespace()).
+			Patch(context.TODO(), action.GetName()+"-deployment", types.MergePatchType, action.GetPatch(), metav1.PatchOptions{})
 		if err != nil {
 			return false, nil, err
 		}

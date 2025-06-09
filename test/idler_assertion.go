@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -136,8 +139,8 @@ func (a *IdleablePayloadAssertion) PodsExist(pods []*corev1.Pod) *IdleablePayloa
 
 func (a *IdleablePayloadAssertion) DeploymentScaledDown(deployment *appsv1.Deployment) *IdleablePayloadAssertion {
 	d := &appsv1.Deployment{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
+	gvr := appsv1.SchemeGroupVersion.WithResource("deployments")
+	a.getResourceFromDynamicClient(gvr, deployment.Namespace, deployment.Name, d)
 	require.NotNil(a.t, d.Spec.Replicas)
 	assert.Equal(a.t, int32(0), *d.Spec.Replicas, "namespace %s name %s", deployment.Namespace, deployment.Name)
 	return a
@@ -145,8 +148,8 @@ func (a *IdleablePayloadAssertion) DeploymentScaledDown(deployment *appsv1.Deplo
 
 func (a *IdleablePayloadAssertion) DeploymentScaledUp(deployment *appsv1.Deployment) *IdleablePayloadAssertion {
 	d := &appsv1.Deployment{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
+	gvr := appsv1.SchemeGroupVersion.WithResource("deployments")
+	a.getResourceFromDynamicClient(gvr, deployment.Namespace, deployment.Name, d)
 	require.NotNil(a.t, d.Spec.Replicas)
 	assert.Equal(a.t, int32(3), *d.Spec.Replicas)
 	return a
@@ -154,17 +157,28 @@ func (a *IdleablePayloadAssertion) DeploymentScaledUp(deployment *appsv1.Deploym
 
 func (a *IdleablePayloadAssertion) ReplicaSetScaledDown(replicaSet *appsv1.ReplicaSet) *IdleablePayloadAssertion {
 	r := &appsv1.ReplicaSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: replicaSet.Name, Namespace: replicaSet.Namespace}, r)
-	require.NoError(a.t, err)
+	gvr := appsv1.SchemeGroupVersion.WithResource("replicasets")
+	a.getResourceFromDynamicClient(gvr, replicaSet.Namespace, replicaSet.Name, r)
 	require.NotNil(a.t, r.Spec.Replicas)
 	assert.Equal(a.t, int32(0), *r.Spec.Replicas)
 	return a
 }
 
+func (a *IdleablePayloadAssertion) getResourceFromDynamicClient(gvr schema.GroupVersionResource, namespace, name string, object runtime.Object) {
+	unstructured, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(namespace).
+		Get(context.TODO(), name, metav1.GetOptions{})
+	require.NoError(a.t, err)
+
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(unstructured.Object, object)
+	require.NoError(a.t, err)
+}
+
 func (a *IdleablePayloadAssertion) ReplicaSetScaledUp(replicaSet *appsv1.ReplicaSet) *IdleablePayloadAssertion {
 	r := &appsv1.ReplicaSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: replicaSet.Name, Namespace: replicaSet.Namespace}, r)
-	require.NoError(a.t, err)
+	gvr := appsv1.SchemeGroupVersion.WithResource("replicasets")
+	a.getResourceFromDynamicClient(gvr, replicaSet.Namespace, replicaSet.Name, r)
 	require.NotNil(a.t, r.Spec.Replicas)
 	assert.Equal(a.t, int32(3), *r.Spec.Replicas)
 	return a
@@ -172,8 +186,8 @@ func (a *IdleablePayloadAssertion) ReplicaSetScaledUp(replicaSet *appsv1.Replica
 
 func (a *IdleablePayloadAssertion) DeploymentConfigScaledDown(deployment *openshiftappsv1.DeploymentConfig) *IdleablePayloadAssertion {
 	d := &openshiftappsv1.DeploymentConfig{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
+	gvr := openshiftappsv1.SchemeGroupVersion.WithResource("deploymentconfigs")
+	a.getResourceFromDynamicClient(gvr, deployment.Namespace, deployment.Name, d)
 	assert.Equal(a.t, int32(0), d.Spec.Replicas)
 	assert.False(a.t, d.Spec.Paused) // DeploymentConfig should be unpaused when scaling down so that the replicas update can be rolled out
 	return a
@@ -181,16 +195,16 @@ func (a *IdleablePayloadAssertion) DeploymentConfigScaledDown(deployment *opensh
 
 func (a *IdleablePayloadAssertion) DeploymentConfigScaledUp(deployment *openshiftappsv1.DeploymentConfig) *IdleablePayloadAssertion {
 	d := &openshiftappsv1.DeploymentConfig{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, d)
-	require.NoError(a.t, err)
+	gvr := openshiftappsv1.SchemeGroupVersion.WithResource("deploymentconfigs")
+	a.getResourceFromDynamicClient(gvr, deployment.Namespace, deployment.Name, d)
 	assert.Equal(a.t, int32(3), d.Spec.Replicas)
 	return a
 }
 
 func (a *IdleablePayloadAssertion) ReplicationControllerScaledDown(rc *corev1.ReplicationController) *IdleablePayloadAssertion {
 	r := &corev1.ReplicationController{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: rc.Name, Namespace: rc.Namespace}, r)
-	require.NoError(a.t, err)
+	gvr := corev1.SchemeGroupVersion.WithResource("replicationcontrollers")
+	a.getResourceFromDynamicClient(gvr, rc.Namespace, rc.Name, r)
 	require.NotNil(a.t, r.Spec.Replicas)
 	assert.Equal(a.t, int32(0), *r.Spec.Replicas)
 	return a
@@ -198,47 +212,59 @@ func (a *IdleablePayloadAssertion) ReplicationControllerScaledDown(rc *corev1.Re
 
 func (a *IdleablePayloadAssertion) ReplicationControllerScaledUp(rc *corev1.ReplicationController) *IdleablePayloadAssertion {
 	r := &corev1.ReplicationController{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: rc.Name, Namespace: rc.Namespace}, r)
-	require.NoError(a.t, err)
+	gvr := corev1.SchemeGroupVersion.WithResource("replicationcontrollers")
+	a.getResourceFromDynamicClient(gvr, rc.Namespace, rc.Name, r)
 	require.NotNil(a.t, r.Spec.Replicas)
 	assert.Equal(a.t, int32(3), *r.Spec.Replicas)
 	return a
 }
 
 func (a *IdleablePayloadAssertion) DaemonSetExists(daemonSet *appsv1.DaemonSet) *IdleablePayloadAssertion {
-	d := &appsv1.DaemonSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
+	gvr := appsv1.SchemeGroupVersion.WithResource("daemonsets")
+	_, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(daemonSet.Namespace).
+		Get(context.TODO(), daemonSet.Name, metav1.GetOptions{})
 	require.NoError(a.t, err)
 	return a
 }
 
 func (a *IdleablePayloadAssertion) DaemonSetDoesNotExist(daemonSet *appsv1.DaemonSet) *IdleablePayloadAssertion {
-	d := &appsv1.DaemonSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: daemonSet.Name, Namespace: daemonSet.Namespace}, d)
-	require.Error(a.t, err, "daemonSet %s still exists", d.Name)
+	gvr := appsv1.SchemeGroupVersion.WithResource("daemonsets")
+	_, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(daemonSet.Namespace).
+		Get(context.TODO(), daemonSet.Name, metav1.GetOptions{})
+	require.Error(a.t, err, "daemonSet %s still exists", daemonSet.Name)
 	assert.True(a.t, apierrors.IsNotFound(err))
 	return a
 }
 
 func (a *IdleablePayloadAssertion) JobExists(job *batchv1.Job) *IdleablePayloadAssertion {
-	j := &batchv1.Job{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, j)
+	gvr := batchv1.SchemeGroupVersion.WithResource("jobs")
+	_, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(job.Namespace).
+		Get(context.TODO(), job.Name, metav1.GetOptions{})
 	require.NoError(a.t, err)
 	return a
 }
 
 func (a *IdleablePayloadAssertion) JobDoesNotExist(job *batchv1.Job) *IdleablePayloadAssertion {
-	j := &batchv1.Job{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: job.Name, Namespace: job.Namespace}, j)
-	require.Error(a.t, err, "job %s still exists", j.Name)
+	gvr := batchv1.SchemeGroupVersion.WithResource("jobs")
+	_, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(job.Namespace).
+		Get(context.TODO(), job.Name, metav1.GetOptions{})
+	require.Error(a.t, err, "job %s still exists", job.Name)
 	assert.True(a.t, apierrors.IsNotFound(err))
 	return a
 }
 
 func (a *IdleablePayloadAssertion) StatefulSetScaledDown(statefulSet *appsv1.StatefulSet) *IdleablePayloadAssertion {
 	s := &appsv1.StatefulSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, s)
-	require.NoError(a.t, err)
+	gvr := appsv1.SchemeGroupVersion.WithResource("statefulsets")
+	a.getResourceFromDynamicClient(gvr, statefulSet.Namespace, statefulSet.Name, s)
 	require.NotNil(a.t, s.Spec.Replicas)
 	assert.Equal(a.t, int32(0), *s.Spec.Replicas)
 	return a
@@ -246,8 +272,8 @@ func (a *IdleablePayloadAssertion) StatefulSetScaledDown(statefulSet *appsv1.Sta
 
 func (a *IdleablePayloadAssertion) StatefulSetScaledUp(statefulSet *appsv1.StatefulSet) *IdleablePayloadAssertion {
 	s := &appsv1.StatefulSet{}
-	err := a.client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, s)
-	require.NoError(a.t, err)
+	gvr := appsv1.SchemeGroupVersion.WithResource("statefulsets")
+	a.getResourceFromDynamicClient(gvr, statefulSet.Namespace, statefulSet.Name, s)
 	require.NotNil(a.t, s.Spec.Replicas)
 	assert.Equal(a.t, int32(3), *s.Spec.Replicas)
 	return a

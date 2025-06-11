@@ -72,8 +72,8 @@ var testConfigs = map[string]createTestConfigFunc{
 	},
 	"Integration": func(plds payloads) payloadTestConfig {
 		return payloadTestConfig{
-			// We are testing the case with a nested controllers (Integration -> Deployment -> ReplicaSet -> Pod) here,
-			// so we the pod's owner is ReplicaSet but the expected scaled app is the top-parent Integration CR.
+			// We are testing the case with nested controllers (Integration -> Deployment -> ReplicaSet -> Pod) here,
+			// so the pod's owner is ReplicaSet but the expected scaled app is the top-parent Integration CR.
 			podOwnerName:    fmt.Sprintf("%s-deployment-replicaset", plds.integration.GetName()),
 			expectedAppName: plds.integration.GetName(),
 			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {

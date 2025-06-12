@@ -2,15 +2,18 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"testing"
-
-	batchv1 "k8s.io/api/batch/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
+	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakescale "k8s.io/client-go/scale/fake"
+	k8sgotest "k8s.io/client-go/testing"
 
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	"github.com/stretchr/testify/assert"
@@ -40,9 +43,9 @@ func (a *IdlerAssertion) loadIdlerAssertion() error {
 	return err
 }
 
-func AssertThatIdler(t *testing.T, name string, client client.Client) *IdlerAssertion {
+func AssertThatIdler(t *testing.T, name string, fakeClients *FakeClientSet) *IdlerAssertion {
 	return &IdlerAssertion{
-		client:         client,
+		client:         fakeClients.DefaultClient,
 		namespacedName: types.NamespacedName{Name: name},
 		t:              t,
 	}
@@ -104,17 +107,24 @@ func IdlerNotificationCreationFailed(message string) toolchainv1alpha1.Condition
 	}
 }
 
+type FakeClientSet struct {
+	DefaultClient, AllNamespacesClient *test.FakeClient
+	DynamicClient                      *fakedynamic.FakeDynamicClient
+	ScalesClient                       *fakescale.FakeScaleClient
+}
 type IdleablePayloadAssertion struct {
 	client        client.Client
 	t             *testing.T
 	dynamicClient *fakedynamic.FakeDynamicClient
+	scalesClient  *fakescale.FakeScaleClient
 }
 
-func AssertThatInIdleableCluster(t *testing.T, client client.Client, dynamicClient *fakedynamic.FakeDynamicClient) *IdleablePayloadAssertion {
+func AssertThatInIdleableCluster(t *testing.T, fakeClients *FakeClientSet) *IdleablePayloadAssertion {
 	return &IdleablePayloadAssertion{
-		client:        client,
+		client:        fakeClients.AllNamespacesClient,
 		t:             t,
-		dynamicClient: dynamicClient,
+		dynamicClient: fakeClients.DynamicClient,
+		scalesClient:  fakeClients.ScalesClient,
 	}
 }
 
@@ -152,6 +162,34 @@ func (a *IdleablePayloadAssertion) DeploymentScaledUp(deployment *appsv1.Deploym
 	a.getResourceFromDynamicClient(gvr, deployment.Namespace, deployment.Name, d)
 	require.NotNil(a.t, d.Spec.Replicas)
 	assert.Equal(a.t, int32(3), *d.Spec.Replicas)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) ScaleSubresourceScaledDown(obj *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actions := a.scalesClient.Actions()
+	for _, action := range actions {
+		if action.GetVerb() == "patch" {
+			patchActionImpl := action.(k8sgotest.PatchActionImpl)
+			if patchActionImpl.GetName() == obj.GetName() && patchActionImpl.GetNamespace() == obj.GetNamespace() {
+				assert.JSONEq(a.t, `{"spec":{"replicas":0}}`, string(patchActionImpl.GetPatch()))
+				return a
+			}
+		}
+	}
+	assert.Fail(a.t, fmt.Sprintf("object of the kind %s in namespace %s with the name %s wasn't scaled down, but it should be", obj.GetKind(), obj.GetNamespace(), obj.GetName()))
+	return a
+}
+
+func (a *IdleablePayloadAssertion) ScaleSubresourceScaledUp(obj *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actions := a.scalesClient.Actions()
+	for _, action := range actions {
+		if action.GetVerb() == "patch" {
+			patchActionImpl := action.(k8sgotest.PatchActionImpl)
+			if patchActionImpl.GetName() == obj.GetName() && patchActionImpl.GetNamespace() == obj.GetNamespace() {
+				assert.Fail(a.t, fmt.Sprintf("object of the kind %s in namespace %s with the name %s was scaled down, but it shouldn't be", obj.GetKind(), obj.GetNamespace(), obj.GetName()))
+			}
+		}
+	}
 	return a
 }
 

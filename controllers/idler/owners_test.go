@@ -70,6 +70,34 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 		}
 	},
+	"Integration": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with nested controllers (Integration -> Deployment -> ReplicaSet -> Pod) here,
+			// so the pod's owner is ReplicaSet but the expected scaled app is the top-parent Integration CR.
+			podOwnerName:    fmt.Sprintf("%s-deployment-replicaset", plds.integration.GetName()),
+			expectedAppName: plds.integration.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ScaleSubresourceScaledUp(plds.integration)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ScaleSubresourceScaledDown(plds.integration)
+			},
+		}
+	},
+	"KameletBinding": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with nested controllers (KameletBinding -> Deployment -> ReplicaSet -> Pod) here,
+			// so the pod's owner is ReplicaSet but the expected scaled app is the top-parent KameletBinding CR.
+			podOwnerName:    fmt.Sprintf("%s-deployment-replicaset", plds.kameletBinding.GetName()),
+			expectedAppName: plds.kameletBinding.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ScaleSubresourceScaledUp(plds.kameletBinding)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ScaleSubresourceScaledDown(plds.kameletBinding)
+			},
+		}
+	},
 	"ReplicaSet": func(plds payloads) payloadTestConfig {
 		return payloadTestConfig{
 			podOwnerName:    plds.replicaSet.Name,
@@ -159,7 +187,7 @@ var testConfigs = map[string]createTestConfigFunc{
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {
-	setup := func(t *testing.T, createTestConfig createTestConfigFunc) (*ownerIdler, *fakedynamic.FakeDynamicClient, payloadTestConfig, payloads, *corev1.Pod) {
+	setup := func(t *testing.T, createTestConfig createTestConfigFunc) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
 		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
 		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
 		scalesClient := &fakescale.FakeScaleClient{}
@@ -175,17 +203,12 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		plds := preparePayloadsForDynamicClient(t, dynamicClient)
 		tc := createTestConfig(plds)
 
-		p := func() *corev1.Pod {
-			for _, pod := range plds.controlledPods {
-				for _, owner := range pod.OwnerReferences {
-					if owner.Name == tc.podOwnerName {
-						return pod
-					}
-				}
-			}
-			return nil
-		}()
-		return ownerIdler, dynamicClient, tc, plds, p
+		p := plds.getFirstControlledPod(tc.podOwnerName)
+		return ownerIdler, &test.FakeClientSet{
+			DynamicClient:       dynamicClient,
+			AllNamespacesClient: testcommon.NewFakeClient(t),
+			ScalesClient:        scalesClient,
+		}, tc, plds, p
 	}
 
 	t.Run("success", func(t *testing.T) {
@@ -193,7 +216,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		for kind, createTestConfig := range testConfigs {
 			t.Run(kind, func(t *testing.T) {
 				//given
-				ownerIdler, dynamicClient, testConfig, plds, pod := setup(t, createTestConfig)
+				ownerIdler, fakeClients, testConfig, plds, pod := setup(t, createTestConfig)
 
 				//when
 				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
@@ -202,7 +225,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, kind, appType)
 				require.Equal(t, testConfig.expectedAppName, appName)
-				assertion := test.AssertThatInIdleableCluster(t, testcommon.NewFakeClient(t), dynamicClient)
+				assertion := test.AssertThatInIdleableCluster(t, fakeClients)
 				testConfig.ownerScaledDown(assertion)
 				for otherKind, othersTCFunc := range testConfigs {
 					if kind != otherKind {
@@ -217,16 +240,19 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		for kind, createTestConfig := range testConfigs {
 			t.Run(kind, func(t *testing.T) {
 				//given
-				ownerIdler, dynamicClient, testConfig, plds, pod := setup(t, createTestConfig)
+				ownerIdler, fakeClients, testConfig, plds, pod := setup(t, createTestConfig)
 				gock.OffAll()
 				// mock stop call
 				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
 
 				errMsg := "can't update/delete " + kind
-				dynamicClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+				fakeClients.DynamicClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, errors.New(errMsg)
 				})
-				dynamicClient.PrependReactor("delete", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+				fakeClients.DynamicClient.PrependReactor("delete", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New(errMsg)
+				})
+				fakeClients.ScalesClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New(errMsg)
 				})
 
@@ -234,7 +260,8 @@ func TestAppNameTypeForControllers(t *testing.T) {
 				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
 
 				//then
-				assertion := test.AssertThatInIdleableCluster(t, testcommon.NewFakeClient(t), dynamicClient)
+				fakeClients.ScalesClient.ClearActions()
+				assertion := test.AssertThatInIdleableCluster(t, fakeClients)
 				if kind != "VirtualMachine" {
 					require.EqualError(t, err, errMsg)
 					testConfig.ownerScaledUp(assertion)
@@ -255,9 +282,9 @@ func TestAppNameTypeForControllers(t *testing.T) {
 
 	t.Run("error when getting owner deployment is ignored", func(t *testing.T) {
 		// given
-		ownerIdler, dynamicClient, testConfig, plds, pod := setup(t, testConfigs["Deployment"])
-		reactionChain := dynamicClient.ReactionChain
-		dynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+		ownerIdler, fakeClients, testConfig, plds, pod := setup(t, testConfigs["Deployment"])
+		reactionChain := fakeClients.DynamicClient.ReactionChain
+		fakeClients.DynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, errors.New("can't get deployment")
 		})
 
@@ -266,8 +293,8 @@ func TestAppNameTypeForControllers(t *testing.T) {
 
 		// then
 		require.NoError(t, err) // errors are ignored!
-		dynamicClient.ReactionChain = reactionChain
-		payloadAssertion := test.AssertThatInIdleableCluster(t, testcommon.NewFakeClient(t), dynamicClient).
+		fakeClients.DynamicClient.ReactionChain = reactionChain
+		payloadAssertion := test.AssertThatInIdleableCluster(t, fakeClients).
 			DeploymentScaledUp(plds.deployment) // deployment is not idled
 		for _, rs := range plds.replicaSetsWithDeployment {
 			if rs.Name == testConfig.podOwnerName {
@@ -578,7 +605,7 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 		})
 	}
 
-	for gvk, gvr := range SupportedScaleResources {
+	for gvk, gvr := range supportedScaleResources {
 		noAAPResources = append(noAAPResources, &metav1.APIResourceList{
 			GroupVersion: gvr.GroupVersion().String(),
 			APIResources: []metav1.APIResource{

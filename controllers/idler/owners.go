@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,26 +47,14 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, meta metav1.Object) (
 		kind = owner.GetObjectKind().GroupVersionKind().Kind
 		name = owner.GetName()
 		switch kind {
-		case "Deployment":
-			err = i.scaleDeploymentToZero(ctx, ownerWithGVR)
-			return
-		case "ReplicaSet":
+		case "Deployment", "ReplicaSet", "Integration", "KameletBinding", "StatefulSet", "ReplicationController":
 			err = i.scaleToZero(ctx, ownerWithGVR)
 			return
-		case "DaemonSet":
+		case "DaemonSet", "Job":
 			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
-			return
-		case "StatefulSet":
-			err = i.scaleToZero(ctx, ownerWithGVR)
 			return
 		case "DeploymentConfig":
 			err = i.scaleDeploymentConfigToZero(ctx, ownerWithGVR)
-			return
-		case "ReplicationController":
-			err = i.scaleToZero(ctx, ownerWithGVR)
-			return
-		case "Job":
-			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
 			return
 		case "VirtualMachine":
 			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
@@ -77,54 +64,29 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, meta metav1.Object) (
 	return "", "", nil
 }
 
-func (i *ownerIdler) scaleDeploymentToZero(ctx context.Context, objectWithGVR *objectWithGVR) error {
-	logger := log.FromContext(ctx)
-	object := objectWithGVR.object
-	logger.Info("Scaling deployment to zero", "name", object.GetName())
-	patch := []byte(`{"spec":{"replicas":0}}`)
-	for _, deploymentOwner := range object.GetOwnerReferences() {
-		if supportedScaleResource := getSupportedScaleResource(deploymentOwner); supportedScaleResource != nil {
-			_, err := i.scalesClient.Scales(object.GetNamespace()).Patch(ctx, *supportedScaleResource, deploymentOwner.Name, types.MergePatchType, patch, metav1.PatchOptions{})
-			if err != nil {
-				if !apierrors.IsNotFound(err) {
-					return err
-				}
-			} else {
-				logger.Info("Deployment scaled to zero using scale sub resource", "name", object.GetName())
-				return nil
-			}
-		}
-	}
-	_, err := i.dynamicClient.
-		Resource(*objectWithGVR.gvr).
-		Namespace(object.GetNamespace()).
-		Patch(ctx, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		return err
-	}
-	logger.Info("Deployment scaled to zero", "name", object.GetName())
-	return nil
-}
-
-func getSupportedScaleResource(ownerReference metav1.OwnerReference) *schema.GroupVersionResource {
-	if ownerGVK, err := schema.ParseGroupVersion(ownerReference.APIVersion); err == nil {
-		for groupVersionKind, groupVersionResource := range SupportedScaleResources {
-			if groupVersionKind.String() == ownerGVK.WithKind(ownerReference.Kind).String() {
-				return &groupVersionResource
-			}
-		}
-	}
-
-	return nil
+var supportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
+	schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithKind("Integration"):          schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithResource("integrations"),
+	schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
 }
 
 func (i *ownerIdler) scaleToZero(ctx context.Context, objectWithGVR *objectWithGVR) error {
-	logger := log.FromContext(ctx)
 	object := objectWithGVR.object
-	logger.Info("Scaling controller owner to zero",
-		"kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
+	logger := log.FromContext(ctx).WithValues("kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
+	logger.Info("Scaling controller owner to zero")
 
 	patch := []byte(`{"spec":{"replicas":0}}`)
+	for _, groupVersionResource := range supportedScaleResources {
+		if groupVersionResource.String() == objectWithGVR.gvr.String() {
+			logger.Info("Scaling controller owner to zero using the scale subresource")
+			_, err := i.scalesClient.Scales(object.GetNamespace()).Patch(ctx, *objectWithGVR.gvr, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+			if err != nil {
+				return err
+			}
+			logger.Info("Controller owner scaled to zero using the scale subresource")
+			return nil
+		}
+	}
+
 	_, err := i.dynamicClient.
 		Resource(*objectWithGVR.gvr).
 		Namespace(object.GetNamespace()).
@@ -133,8 +95,7 @@ func (i *ownerIdler) scaleToZero(ctx context.Context, objectWithGVR *objectWithG
 		return err
 	}
 
-	logger.Info("Controller owner scaled to zero",
-		"kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
+	logger.Info("Controller owner scaled to zero")
 	return nil
 }
 

@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -95,10 +96,10 @@ func TestProcessWithTTR(t *testing.T) {
 	require.NoError(t, err)
 	ttRev := createTierTemplateRevision("test-ttr")
 	crq := newTestCRQ("600")
-	ttRev.Spec.TemplateObjects = append(ttRev.Spec.TemplateObjects, runtime.RawExtension{Object: &crq})
+	objectString, err := json.Marshal(crq.Object)
+	require.NoError(t, err)
+	ttRev.Spec.TemplateObjects = append(ttRev.Spec.TemplateObjects, runtime.RawExtension{Raw: []byte(objectString)})
 	ttRev.Spec.Parameters = []toolchainv1alpha1.Parameter{
-		{Name: "SPACE_NAME",
-			Value: "test-space"},
 		{Name: "DEPLOYMENT_QUOTA",
 			Value: "600"},
 	}
@@ -113,9 +114,18 @@ func TestProcessWithTTR(t *testing.T) {
 	// then
 	require.NoError(t, err)
 	require.Len(t, ttrObj, 1)
-	require.Equal(t, "for-test-space-deployments", ttrObj[0].GetName())
+	require.Equal(t, "for-johnsmith-deployments", ttrObj[0].GetName())
 	require.Equal(t, &expectedCRQ, ttrObj[0])
-
+	t.Run("test convert parameters to map", func(t *testing.T) {
+		paramM := tierTemplate.convertParametersToMap(map[string]string{
+			SpaceName: "johnsmith",
+		})
+		expectedParameters := map[string]string{
+			"DEPLOYMENT_QUOTA": "600",
+			"SPACE_NAME":       "johnsmith",
+		}
+		require.Equal(t, expectedParameters, paramM)
+	})
 }
 
 func TestGetTierTemplate(t *testing.T) {
@@ -273,7 +283,7 @@ var expectedCRQ = unstructured.Unstructured{
 	Object: map[string]interface{}{
 		"kind": "ClusterResourceQuota",
 		"metadata": map[string]interface{}{
-			"name": "for-test-space-deployments"},
+			"name": "for-johnsmith-deployments"},
 		"spec": map[string]interface{}{
 			"quota": map[string]interface{}{
 				"hard": map[string]interface{}{
@@ -285,7 +295,7 @@ var expectedCRQ = unstructured.Unstructured{
 				"annotations": map[string]interface{}{},
 				"labels": map[string]interface{}{
 					"matchLabels": map[string]interface{}{
-						"toolchain.dev.openshift.com/space": "'test-space'",
+						"toolchain.dev.openshift.com/space": "'johnsmith'",
 					},
 				},
 			},

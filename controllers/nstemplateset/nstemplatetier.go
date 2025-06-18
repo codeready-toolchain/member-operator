@@ -3,7 +3,8 @@ package nstemplateset
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"maps"
+
 	"fmt"
 
 	gotemp "text/template"
@@ -107,33 +108,29 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 	if t.ttr != nil {
 
 		objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
-		var b bytes.Buffer
-		unStruct := &unstructured.Unstructured{}
-		paramMap := t.convertParametersToMap() // go execute requires parameters in form of map
+
+		paramMap := t.convertParametersToMap(params) // go execute requires parameters in form of map
 
 		for i := range t.ttr.Spec.TemplateObjects {
-			objectString, err := json.Marshal(t.ttr.Spec.TemplateObjects[i].Object)
-			if err != nil {
-				return nil, err
-			}
-
-			strTemp := string(objectString)
+			var b bytes.Buffer
+			unStruct := unstructured.Unstructured{}
+			strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
 
 			ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
 			if err != nil {
-				return nil, err
-			} else {
-				err := ttrTemp.Execute(&b, paramMap)
-				if err != nil {
-					return nil, err
-				}
-				err = json.Unmarshal(b.Bytes(), unStruct)
-				if err != nil {
-					return nil, err
-				}
-				objList = append(objList, unStruct)
 
+				return nil, err
 			}
+			if err := ttrTemp.Execute(&b, paramMap); err != nil {
+				return nil, err
+			}
+
+			if _, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct); err != nil {
+				return nil, err
+			}
+
+			objList = append(objList, unStruct.DeepCopy())
+
 		}
 		return objList, nil
 	}
@@ -148,12 +145,13 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 
 }
 
-// convert ttr parametres to a map
-func (t *tierTemplate) convertParametersToMap() map[string]interface{} {
-	paramMap := map[string]interface{}{}
+// convert ttr parameters to a map
+func (t *tierTemplate) convertParametersToMap(param map[string]string) map[string]string {
+	paramMap := map[string]string{}
 	for _, params := range t.ttr.Spec.Parameters {
 		paramMap[params.Name] = params.Value
 	}
+	maps.Copy(paramMap, param) // need to add dynamic parameters like space-name also
 	return paramMap
 
 }

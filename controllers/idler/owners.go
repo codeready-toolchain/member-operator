@@ -6,10 +6,157 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+type ownerIdler struct {
+	ownerFetcher  *ownerFetcher
+	dynamicClient dynamic.Interface
+	scalesClient  scale.ScalesGetter
+	restClient    rest.Interface
+}
+
+func newOwnerIdler(discoveryClient discovery.ServerResourcesInterface, dynamicClient dynamic.Interface, scalesClient scale.ScalesGetter, restClient rest.Interface) *ownerIdler {
+	return &ownerIdler{
+		ownerFetcher:  newOwnerFetcher(discoveryClient, dynamicClient),
+		dynamicClient: dynamicClient,
+		scalesClient:  scalesClient,
+		restClient:    restClient,
+	}
+}
+
+// scaleOwnerToZero fetches the whole tree of the controller owners from the provided object (Deployment, ReplicaSet, etc).
+// If any known controller owner is found, then it's scaled down (or deleted) and its kind and name is returned.
+// Otherwise, returns empty strings.
+func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, meta metav1.Object) (kind string, name string, err error) {
+	logger := log.FromContext(ctx)
+	logger.Info("Scaling owner to zero", "name", meta.GetName())
+
+	owners, err := i.ownerFetcher.getOwners(ctx, meta)
+	if err != nil {
+		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
+	}
+	for _, ownerWithGVR := range owners {
+		owner := ownerWithGVR.object
+		kind = owner.GetObjectKind().GroupVersionKind().Kind
+		name = owner.GetName()
+		switch kind {
+		case "Deployment", "ReplicaSet", "Integration", "KameletBinding", "StatefulSet", "ReplicationController":
+			err = i.scaleToZero(ctx, ownerWithGVR)
+			return
+		case "DaemonSet", "Job":
+			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
+			return
+		case "DeploymentConfig":
+			err = i.scaleDeploymentConfigToZero(ctx, ownerWithGVR)
+			return
+		case "VirtualMachine":
+			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
+			return
+		}
+	}
+	return "", "", nil
+}
+
+var supportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
+	schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithKind("Integration"):          schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithResource("integrations"),
+	schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
+}
+
+func (i *ownerIdler) scaleToZero(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	object := objectWithGVR.object
+	logger := log.FromContext(ctx).WithValues("kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
+	logger.Info("Scaling controller owner to zero")
+
+	patch := []byte(`{"spec":{"replicas":0}}`)
+	for _, groupVersionResource := range supportedScaleResources {
+		if groupVersionResource.String() == objectWithGVR.gvr.String() {
+			logger.Info("Scaling controller owner to zero using the scale subresource")
+			_, err := i.scalesClient.Scales(object.GetNamespace()).Patch(ctx, *objectWithGVR.gvr, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+			if err != nil {
+				return err
+			}
+			logger.Info("Controller owner scaled to zero using the scale subresource")
+			return nil
+		}
+	}
+
+	_, err := i.dynamicClient.
+		Resource(*objectWithGVR.gvr).
+		Namespace(object.GetNamespace()).
+		Patch(ctx, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return err
+	}
+
+	logger.Info("Controller owner scaled to zero")
+	return nil
+}
+
+func (i *ownerIdler) deleteResource(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	logger := log.FromContext(ctx)
+	object := objectWithGVR.object
+	logger.Info("Deleting controller owner",
+		"kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
+	// see https://github.com/kubernetes/kubernetes/issues/20902#issuecomment-321484735
+	// also, this may be needed for the e2e tests if the call to `client.Delete` comes too quickly after creating the job,
+	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
+	propagationPolicy := metav1.DeletePropagationBackground
+
+	err := i.dynamicClient.
+		Resource(*objectWithGVR.gvr).
+		Namespace(object.GetNamespace()).
+		Delete(ctx, object.GetName(), metav1.DeleteOptions{PropagationPolicy: &propagationPolicy})
+	if err != nil {
+		return err
+	}
+
+	logger.Info("Controller owner deleted",
+		"kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
+	return nil
+}
+
+func (i *ownerIdler) scaleDeploymentConfigToZero(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	logger := log.FromContext(ctx)
+	object := objectWithGVR.object
+	logger.Info("Scaling DeploymentConfig to zero", "name", object.GetName())
+	patch := []byte(`{"spec":{"replicas":0,"paused":false}}`)
+	_, err := i.dynamicClient.
+		Resource(*objectWithGVR.gvr).
+		Namespace(object.GetNamespace()).
+		Patch(ctx, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return err
+	}
+	log.FromContext(ctx).Info("DeploymentConfig scaled to zero", "name", object.GetName())
+	return nil
+}
+
+func (i *ownerIdler) stopVirtualMachine(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	logger := log.FromContext(ctx)
+	object := objectWithGVR.object
+	logger.Info("Stopping VirtualMachine", "name", object.GetName())
+	err := i.restClient.Put().
+		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
+		Namespace(object.GetNamespace()).
+		Resource("virtualmachines").
+		Name(object.GetName()).
+		SubResource("stop").
+		Do(ctx).
+		Error()
+	if err != nil {
+		return err
+	}
+
+	logger.Info("VirtualMachine stopped", "name", object.GetName())
+	return nil
+}
 
 type ownerFetcher struct {
 	resourceLists   []*metav1.APIResourceList // All available API in the cluster

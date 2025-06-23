@@ -193,7 +193,7 @@ var testConfigs = map[string]createTestConfigFunc{
 func TestAppNameTypeForControllers(t *testing.T) {
 	setup := func(t *testing.T, createTestConfig createTestConfigFunc) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
 		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
-		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		scalesClient := &fakescale.FakeScaleClient{}
 		restClient, err := testcommon.NewRESTClient("dummy-token", apiEndpoint)
 		require.NoError(t, err)
@@ -317,7 +317,7 @@ func TestGetAPIResourceList(t *testing.T) {
 
 	t.Run("get APIs, pod with no owners", func(t *testing.T) {
 		// given
-		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
 
 		// when
@@ -344,7 +344,7 @@ func TestGetAPIResourceList(t *testing.T) {
 
 	t.Run("failure when getting APIs", func(t *testing.T) {
 		// given
-		fakeDiscovery := newFakeDiscoveryClient(noAAPResourceList(t)...)
+		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		fakeDiscovery.ServerPreferredResourcesError = fmt.Errorf("some error")
 		fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
 
@@ -433,7 +433,7 @@ func TestGetOwners(t *testing.T) {
 
 			dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, slices.Concat(initObjects, noiseObjects, noiseOwners)...)
 
-			fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+			fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 			fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
 
 			// when
@@ -485,7 +485,7 @@ func TestGetOwnersFailures(t *testing.T) {
 		assertCanNotGetObject := func(t *testing.T, inaccessibleResource string, ownerObject client.Object, isNotFound bool) {
 			t.Run(inaccessibleResource, func(t *testing.T) {
 				// given
-				fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+				fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 
 				t.Run("with one owner", func(t *testing.T) {
 
@@ -621,7 +621,7 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 	return noAAPResources
 }
 
-func withAAPResourceList(t *testing.T) []*metav1.APIResourceList {
+func allResourcesList(t *testing.T) []*metav1.APIResourceList {
 	return append(noAAPResourceList(t), &metav1.APIResourceList{
 		GroupVersion: "aap.ansible.com/v1alpha1",
 		APIResources: []metav1.APIResource{

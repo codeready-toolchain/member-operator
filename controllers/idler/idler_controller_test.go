@@ -1247,7 +1247,7 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 	allNamespacesClient := test.NewFakeClient(t)
 	dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
 
-	fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+	fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 
 	scalesClient := &fakescale.FakeScaleClient{}
 

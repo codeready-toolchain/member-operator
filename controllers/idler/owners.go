@@ -112,6 +112,7 @@ func (i *ownerIdler) idleAAP(ctx context.Context, objectWithGVR *objectWithGVR) 
 	}
 	if idled {
 		logger.Info("AAP CR is already idled")
+		return nil
 	}
 	logger.Info("Idling AAP")
 

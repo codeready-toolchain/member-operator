@@ -25,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery/fake"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
@@ -36,15 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
-
-func preparePayloadsForDynamicClient(t *testing.T, dynamicClient *fakedynamic.FakeDynamicClient) payloads {
-	return preparePayloadsWithCreateFunc(t, clientSet{
-		allNamespacesClient: testcommon.NewFakeClient(t),
-		dynamicClient:       dynamicClient,
-		createOwnerObjects: func(ctx context.Context, object client.Object) error {
-			return createObjectWithDynamicClient(t, dynamicClient, object, nil)
-		}}, "alex-stage", "", freshStartTimes(60))
-}
 
 type payloadTestConfig struct {
 	podOwnerName    string
@@ -184,12 +174,26 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 		}
 	},
+	"AnsibleAutomationPlatform": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with nested controllers (AnsibleAutomationPlatform -> Deployment -> ReplicaSet -> Pod) here,
+			// so the pod's owner is ReplicaSet but the expected scaled app is the top-parent AnsibleAutomationPlatform CR.
+			podOwnerName:    fmt.Sprintf("%s-deployment-replicaset", plds.aap.GetName()),
+			expectedAppName: plds.aap.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.AAPRunning(plds.aap)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.AAPIdled(plds.aap)
+			},
+		}
+	},
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {
 	setup := func(t *testing.T, createTestConfig createTestConfigFunc) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
 		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
-		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		scalesClient := &fakescale.FakeScaleClient{}
 		restClient, err := testcommon.NewRESTClient("dummy-token", apiEndpoint)
 		require.NoError(t, err)
@@ -200,7 +204,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 
 		ownerIdler := newOwnerIdler(fakeDiscovery, dynamicClient, scalesClient, restClient)
 
-		plds := preparePayloadsForDynamicClient(t, dynamicClient)
+		plds := preparePayloads(t, &test.FakeClientSet{DynamicClient: dynamicClient, AllNamespacesClient: testcommon.NewFakeClient(t)}, "alex-stage", "", freshStartTimes(60))
 		tc := createTestConfig(plds)
 
 		p := plds.getFirstControlledPod(tc.podOwnerName)
@@ -313,7 +317,7 @@ func TestGetAPIResourceList(t *testing.T) {
 
 	t.Run("get APIs, pod with no owners", func(t *testing.T) {
 		// given
-		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
 
 		// when
@@ -340,7 +344,7 @@ func TestGetAPIResourceList(t *testing.T) {
 
 	t.Run("failure when getting APIs", func(t *testing.T) {
 		// given
-		fakeDiscovery := newFakeDiscoveryClient(noAAPResourceList(t)...)
+		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		fakeDiscovery.ServerPreferredResourcesError = fmt.Errorf("some error")
 		fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
 
@@ -429,7 +433,7 @@ func TestGetOwners(t *testing.T) {
 
 			dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, slices.Concat(initObjects, noiseObjects, noiseOwners)...)
 
-			fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+			fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 			fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
 
 			// when
@@ -481,7 +485,7 @@ func TestGetOwnersFailures(t *testing.T) {
 		assertCanNotGetObject := func(t *testing.T, inaccessibleResource string, ownerObject client.Object, isNotFound bool) {
 			t.Run(inaccessibleResource, func(t *testing.T) {
 				// given
-				fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
+				fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 
 				t.Run("with one owner", func(t *testing.T) {
 
@@ -544,15 +548,16 @@ func TestGetOwnersFailures(t *testing.T) {
 		}
 
 		testCases := map[string]client.Object{
-			"deployments":             deployment,
-			"replicasets":             replica,
-			"daemonsets":              daemon,
-			"jobs":                    job,
-			"statefulsets":            statefulSet,
-			"deploymentconfigs":       dc,
-			"replicationcontrollers":  rc,
-			"virtualmachines":         vm,
-			"virtualmachineinstances": vmi,
+			"deployments":                deployment,
+			"replicasets":                replica,
+			"daemonsets":                 daemon,
+			"jobs":                       job,
+			"statefulsets":               statefulSet,
+			"deploymentconfigs":          dc,
+			"replicationcontrollers":     rc,
+			"virtualmachines":            vm,
+			"virtualmachineinstances":    vmi,
+			"ansibleautomationplatforms": aap,
 		}
 		for inaccessibleResource, inaccessibleObject := range testCases {
 			t.Run(inaccessibleResource, func(t *testing.T) {
@@ -616,7 +621,7 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 	return noAAPResources
 }
 
-func withAAPResourceList(t *testing.T) []*metav1.APIResourceList {
+func allResourcesList(t *testing.T) []*metav1.APIResourceList {
 	return append(noAAPResourceList(t), &metav1.APIResourceList{
 		GroupVersion: "aap.ansible.com/v1alpha1",
 		APIResources: []metav1.APIResource{
@@ -624,9 +629,4 @@ func withAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 			{Name: "ansibleautomationplatformbackups", Namespaced: true, Kind: "AnsibleAutomationPlatformBackup"},
 		},
 	})
-}
-
-var aapGVK = map[schema.GroupVersionResource]string{
-	{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatforms"}:       "AnsibleAutomationPlatformList",
-	{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatformbackups"}: "AnsibleAutomationPlatformBackupList",
 }

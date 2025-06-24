@@ -326,3 +326,23 @@ func (a *IdleablePayloadAssertion) VMStopped(vmStopCallCounter *int) *IdleablePa
 	assert.NotEmpty(a.t, *vmStopCallCounter)
 	return a
 }
+
+var aapGVR = schema.GroupVersionResource{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatforms"}
+
+func (a *IdleablePayloadAssertion) AAPIdled(aap *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actualAAP := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(aapGVR, aap.GetNamespace(), aap.GetName(), actualAAP)
+	idled, _, err := unstructured.NestedBool(actualAAP.UnstructuredContent(), "spec", "idle_aap")
+	require.NoError(a.t, err)
+	assert.True(a.t, idled)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) AAPRunning(aap *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actualAAP := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(aapGVR, aap.GetNamespace(), aap.GetName(), actualAAP)
+	idled, _, err := unstructured.NestedBool(actualAAP.UnstructuredContent(), "spec", "idle_aap")
+	require.NoError(a.t, err)
+	assert.False(a.t, idled)
+	return a
+}

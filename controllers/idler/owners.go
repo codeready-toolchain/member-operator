@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -59,6 +59,9 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, meta metav1.Object) (
 		case "VirtualMachine":
 			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
 			return
+		case "AnsibleAutomationPlatform":
+			err = i.idleAAP(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
+			return
 		}
 	}
 	return "", "", nil
@@ -96,6 +99,34 @@ func (i *ownerIdler) scaleToZero(ctx context.Context, objectWithGVR *objectWithG
 	}
 
 	logger.Info("Controller owner scaled to zero")
+	return nil
+}
+
+// idleAAP idles AAP instance if not already idled
+func (i *ownerIdler) idleAAP(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	aapName := objectWithGVR.object.GetName()
+	logger := log.FromContext(ctx).WithValues("name", aapName)
+	idled, _, err := unstructured.NestedBool(objectWithGVR.object.UnstructuredContent(), "spec", "idle_aap")
+	if err != nil {
+		logger.Error(err, "Failed to parse AAP CR to get the spec.idle_aap field")
+	}
+	if idled {
+		logger.Info("AAP CR is already idled")
+		return nil
+	}
+	logger.Info("Idling AAP")
+
+	// Patch the aap resource by setting spec.idle_aap to true in order to idle it
+	patch := []byte(`{"spec":{"idle_aap":true}}`)
+	_, err = i.dynamicClient.
+		Resource(*objectWithGVR.gvr).
+		Namespace(objectWithGVR.object.GetNamespace()).
+		Patch(ctx, aapName, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return err
+	}
+
+	logger.Info("AAP idled", "name", aapName)
 	return nil
 }
 
@@ -172,7 +203,7 @@ func newOwnerFetcher(discoveryClient discovery.ServerResourcesInterface, dynamic
 }
 
 type objectWithGVR struct {
-	object client.Object
+	object *unstructured.Unstructured
 	gvr    *schema.GroupVersionResource
 }
 

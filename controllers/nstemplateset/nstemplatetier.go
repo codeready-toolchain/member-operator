@@ -1,17 +1,22 @@
 package nstemplateset
 
 import (
+	"bytes"
 	"context"
+	"maps"
+
 	"fmt"
 
-	"github.com/codeready-toolchain/member-operator/pkg/host"
-	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	gotemp "text/template"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/host"
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/pkg/errors"
 	errs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,8 +100,15 @@ const (
 )
 
 // process processes the template inside of the tierTemplate object with the given parameters.
+// it first checks if tiertemplaterevision resource is present, and process its object and
+// if not present then it process the openshift template(current) logic
 // Optionally, it also filters the result to return a subset of the template objects.
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
+	if t.ttr != nil {
+		return t.processGoTemplates(params)
+	}
+	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
 	if err != nil {
 		return nil, err
@@ -104,4 +116,45 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 	tmplProcessor := template.NewProcessor(scheme)
 	params[MemberOperatorNS] = ns // add (or enforce)
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
+
+}
+
+// convert ttr parameters to a map
+func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) map[string]string {
+	staticParamMap := map[string]string{}
+	for _, params := range t.ttr.Spec.Parameters {
+		staticParamMap[params.Name] = params.Value
+	}
+	maps.Copy(staticParamMap, runtimeParam) // need to add dynamic parameters like space-name also
+	return staticParamMap
+
+}
+
+func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string) ([]runtimeclient.Object, error) {
+	objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
+
+	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
+
+	for i := range t.ttr.Spec.TemplateObjects {
+		var b bytes.Buffer
+		unStruct := unstructured.Unstructured{}
+		strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
+
+		ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := ttrTemp.Execute(&b, paramMap); err != nil {
+			return nil, err
+		}
+
+		if _, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct); err != nil {
+			return nil, err
+		}
+
+		objList = append(objList, unStruct.DeepCopy())
+
+	}
+	return objList, nil
 }

@@ -106,33 +106,7 @@ const (
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
 	if t.ttr != nil {
-
-		objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
-
-		paramMap := t.convertParametersToMap(params) // go execute requires parameters in form of map
-
-		for i := range t.ttr.Spec.TemplateObjects {
-			var b bytes.Buffer
-			unStruct := unstructured.Unstructured{}
-			strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
-
-			ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
-			if err != nil {
-
-				return nil, err
-			}
-			if err := ttrTemp.Execute(&b, paramMap); err != nil {
-				return nil, err
-			}
-
-			if _, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct); err != nil {
-				return nil, err
-			}
-
-			objList = append(objList, unStruct.DeepCopy())
-
-		}
-		return objList, nil
+		return t.processGoTemplates(params)
 	}
 	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
@@ -146,12 +120,41 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 }
 
 // convert ttr parameters to a map
-func (t *tierTemplate) convertParametersToMap(param map[string]string) map[string]string {
-	paramMap := map[string]string{}
+func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) map[string]string {
+	staticParamMap := map[string]string{}
 	for _, params := range t.ttr.Spec.Parameters {
-		paramMap[params.Name] = params.Value
+		staticParamMap[params.Name] = params.Value
 	}
-	maps.Copy(paramMap, param) // need to add dynamic parameters like space-name also
-	return paramMap
+	maps.Copy(staticParamMap, runtimeParam) // need to add dynamic parameters like space-name also
+	return staticParamMap
 
+}
+
+func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string) ([]runtimeclient.Object, error) {
+	objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
+
+	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
+
+	for i := range t.ttr.Spec.TemplateObjects {
+		var b bytes.Buffer
+		unStruct := unstructured.Unstructured{}
+		strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
+
+		ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := ttrTemp.Execute(&b, paramMap); err != nil {
+			return nil, err
+		}
+
+		if _, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct); err != nil {
+			return nil, err
+		}
+
+		objList = append(objList, unStruct.DeepCopy())
+
+	}
+	return objList, nil
 }

@@ -43,7 +43,6 @@ const (
 )
 
 var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
-var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstances"}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
@@ -123,31 +122,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	aapIdlerFailed := false
-	if aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify); err != nil {
-		err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to init aap idler '%s': %w", idler.Name, err), "")
-		logger.Error(err, "init AAP idler failed")
-		aapIdlerFailed = true
-	} else {
-		aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
-		if err != nil {
-			err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to ensure aap idling '%s': %w", idler.Name, err), "")
-			logger.Error(err, "AAP idler execution failed")
-			aapIdlerFailed = true
-		}
-		if aapRequeueAfter != 0 {
-			requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
-		}
-	}
-
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
 		Requeue:      true,
 		RequeueAfter: requeueAfter,
-	}
-	if aapIdlerFailed {
-		// Do not return any errors if the AAP idler failed. We just log the error (above), update the Idler CR status and move on.
-		return result, nil
 	}
 	return result, r.setStatusReady(ctx, idler)
 }

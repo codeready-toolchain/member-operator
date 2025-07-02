@@ -188,6 +188,20 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 		}
 	},
+	"Notebook": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with nested controllers (Notebook -> StatefulSet -> Pod) here,
+			// so the pod's owner is StatefulSet but the expected scaled app is the top-parent Notebook CR.
+			podOwnerName:    fmt.Sprintf("%s-statefulset", plds.notebook.GetName()),
+			expectedAppName: plds.notebook.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.NotebookRunning(plds.notebook)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.NotebookStopped(plds.notebook)
+			},
+		}
+	},
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {
@@ -251,6 +265,9 @@ func TestAppNameTypeForControllers(t *testing.T) {
 
 				errMsg := "can't update/delete " + kind
 				fakeClients.DynamicClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+					return true, nil, errors.New(errMsg)
+				})
+				fakeClients.DynamicClient.PrependReactor("update", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, errors.New(errMsg)
 				})
 				fakeClients.DynamicClient.PrependReactor("delete", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
@@ -462,7 +479,7 @@ func TestGetOwnersFailures(t *testing.T) {
 	rc := &corev1.ReplicationController{ObjectMeta: metav1.ObjectMeta{Name: "test-rc", Namespace: "test-namespace"}}
 	aap := newAAP(t, false, "test-aap", "test-namespace")
 	vm, vmi := newVMResources(t, "test-vm", "test-namespace")
-
+	notebook := newNotebook(t, "test-notebook", "test-namespace")
 	t.Run("api not available", func(t *testing.T) {
 		// given
 		pod := givenPod.DeepCopy()
@@ -558,6 +575,7 @@ func TestGetOwnersFailures(t *testing.T) {
 			"virtualmachines":            vm,
 			"virtualmachineinstances":    vmi,
 			"ansibleautomationplatforms": aap,
+			"notebooks":                  notebook,
 		}
 		for inaccessibleResource, inaccessibleObject := range testCases {
 			t.Run(inaccessibleResource, func(t *testing.T) {
@@ -627,6 +645,11 @@ func allResourcesList(t *testing.T) []*metav1.APIResourceList {
 		APIResources: []metav1.APIResource{
 			{Name: "ansibleautomationplatforms", Namespaced: true, Kind: "AnsibleAutomationPlatform"},
 			{Name: "ansibleautomationplatformbackups", Namespaced: true, Kind: "AnsibleAutomationPlatformBackup"},
+		},
+	}, &metav1.APIResourceList{
+		GroupVersion: "kubeflow.org/v1",
+		APIResources: []metav1.APIResource{
+			{Name: "notebooks", Namespaced: true, Kind: "Notebook"},
 		},
 	})
 }

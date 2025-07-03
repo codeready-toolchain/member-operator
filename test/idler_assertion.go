@@ -327,7 +327,10 @@ func (a *IdleablePayloadAssertion) VMStopped(vmStopCallCounter *int) *IdleablePa
 	return a
 }
 
-var aapGVR = schema.GroupVersionResource{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatforms"}
+var (
+	aapGVR      = schema.GroupVersionResource{Group: "aap.ansible.com", Version: "v1alpha1", Resource: "ansibleautomationplatforms"}
+	kubeFlowGVR = schema.GroupVersionResource{Group: "kubeflow.org", Version: "v1", Resource: "notebooks"}
+)
 
 func (a *IdleablePayloadAssertion) AAPIdled(aap *unstructured.Unstructured) *IdleablePayloadAssertion {
 	actualAAP := &unstructured.Unstructured{}
@@ -343,6 +346,25 @@ func (a *IdleablePayloadAssertion) AAPRunning(aap *unstructured.Unstructured) *I
 	a.getResourceFromDynamicClient(aapGVR, aap.GetNamespace(), aap.GetName(), actualAAP)
 	idled, _, err := unstructured.NestedBool(actualAAP.UnstructuredContent(), "spec", "idle_aap")
 	require.NoError(a.t, err)
-	assert.False(a.t, idled)
+	assert.False(a.t, idled, "AAP CR should not be idled")
+	return a
+}
+
+func (a *IdleablePayloadAssertion) NotebookStopped(notebook *unstructured.Unstructured) *IdleablePayloadAssertion {
+	// Check that the Notebook CR has the kubeflow-resource-stopped annotation
+	notebookObj := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(kubeFlowGVR, notebook.GetNamespace(), notebook.GetName(), notebookObj)
+	annotations := notebookObj.GetAnnotations()
+	require.NotNil(a.t, annotations)
+	assert.Contains(a.t, annotations, "kubeflow-resource-stopped", "Notebook should have kubeflow-resource-stopped annotation")
+	return a
+}
+
+func (a *IdleablePayloadAssertion) NotebookRunning(notebook *unstructured.Unstructured) *IdleablePayloadAssertion {
+	// Check that the Notebook CR does not have the kubeflow-resource-stopped annotation
+	notebookObj := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(kubeFlowGVR, notebook.GetNamespace(), notebook.GetName(), notebookObj)
+	annotations := notebookObj.GetAnnotations()
+	assert.NotContains(a.t, annotations, "kubeflow-resource-stopped", "Notebook should not have kubeflow-resource-stopped annotation")
 	return a
 }

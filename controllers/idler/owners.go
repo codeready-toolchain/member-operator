@@ -3,6 +3,7 @@ package idler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -61,6 +62,9 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, meta metav1.Object) (
 			return
 		case "AnsibleAutomationPlatform":
 			err = i.idleAAP(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
+			return
+		case "Notebook":
+			err = i.stopNotebook(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
 			return
 		}
 	}
@@ -186,6 +190,32 @@ func (i *ownerIdler) stopVirtualMachine(ctx context.Context, objectWithGVR *obje
 	}
 
 	logger.Info("VirtualMachine stopped", "name", object.GetName())
+	return nil
+}
+
+func (i *ownerIdler) stopNotebook(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	logger := log.FromContext(ctx)
+	object := objectWithGVR.object
+	logger.Info("Stopping Notebook", "name", object.GetName())
+
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	// Set the kubeflow-resource-stopped annotation with current timestamp
+	annotations["kubeflow-resource-stopped"] = time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	object.SetAnnotations(annotations)
+
+	_, err := i.dynamicClient.
+		Resource(*objectWithGVR.gvr).
+		Namespace(object.GetNamespace()).
+		Update(ctx, object, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+
+	logger.Info("Notebook stopped", "name", object.GetName())
 	return nil
 }
 

@@ -228,7 +228,10 @@ func TestEnsureIdling(t *testing.T) {
 				VMRunning(noise.vmStopCallCounter).
 				AAPIdled(podsRunningForTooLong.aap).
 				AAPRunning(podsTooEarlyToKill.aap).
-				AAPRunning(noise.aap)
+				AAPRunning(noise.aap).
+				NotebookStopped(podsRunningForTooLong.notebook).
+				NotebookRunning(podsTooEarlyToKill.notebook).
+				NotebookRunning(noise.notebook)
 
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
@@ -330,7 +333,8 @@ func TestEnsureIdling(t *testing.T) {
 				ReplicationControllerScaledDown(toKill.replicationController).
 				StatefulSetScaledDown(toKill.statefulSet).
 				VMStopped(toKill.vmStopCallCounter).
-				AAPIdled(toKill.aap)
+				AAPIdled(toKill.aap).
+				NotebookStopped(toKill.notebook)
 
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
@@ -545,7 +549,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			ReplicationControllerScaledDown(toKill.replicationController).
 			StatefulSetScaledDown(toKill.statefulSet).
 			VMStopped(toKill.vmStopCallCounter).
-			AAPIdled(toKill.aap)
+			AAPIdled(toKill.aap).
+			NotebookStopped(toKill.notebook)
 	})
 }
 
@@ -599,6 +604,14 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 			preparePayload: func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string) {
 				plds := preparePayloads(t, fakeClients, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
 				return plds.getFirstControlledPod(plds.virtualmachineinstance.GetName()), plds.virtualmachine.GetName()
+			},
+		},
+		"Controlled by Notebook": {
+			expectedAppType:             "Notebook",
+			expectedNotificationCreated: true,
+			preparePayload: func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string) {
+				plds := preparePayloads(t, fakeClients, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
+				return plds.getFirstControlledPod(fmt.Sprintf("%s-statefulset", plds.notebook.GetName())), plds.notebook.GetName()
 			},
 		},
 	}
@@ -875,6 +888,7 @@ type payloads struct {
 	vmStopCallCounter         *int
 	virtualmachineinstance    *unstructured.Unstructured
 	aap                       *unstructured.Unstructured
+	notebook                  *unstructured.Unstructured
 }
 
 func (p payloads) getFirstControlledPod(ownerName string) *corev1.Pod {
@@ -1046,6 +1060,18 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 	replicaSetsWithDeployment = append(replicaSetsWithDeployment, aapRs)
 	controlledPods = createPods(t, clients.AllNamespacesClient, aapRs, sTime, controlledPods, noRestart())
 
+	// Notebook
+	notebookObject := newNotebook(t, fmt.Sprintf("%s%s-notebook", namePrefix, namespace), namespace)
+	createObjectWithDynamicClient(t, clients.DynamicClient, notebookObject)
+	notebookSts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-statefulset", notebookObject.GetName()), Namespace: namespace},
+		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
+	}
+	err = controllerutil.SetControllerReference(notebookObject, notebookSts, scheme.Scheme)
+	require.NoError(t, err)
+	createObjectWithDynamicClient(t, clients.DynamicClient, notebookSts)
+	controlledPods = createPods(t, clients.AllNamespacesClient, notebookSts, sTime, controlledPods, noRestart())
+
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
 	// which is not a supported owner such as Deployment or ReplicaSet.
@@ -1097,6 +1123,7 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 		vmStopCallCounter:         stopCallCounter,
 		virtualmachineinstance:    vmi,
 		aap:                       aapObject,
+		notebook:                  notebookObject,
 	}
 }
 
@@ -1427,3 +1454,22 @@ var (
   }
 }`
 )
+
+func newNotebook(t *testing.T, name, namespace string) *unstructured.Unstructured {
+	formatted := fmt.Sprintf(notebook, name, namespace)
+	notebook := &unstructured.Unstructured{}
+	require.NoError(t, notebook.UnmarshalJSON([]byte(formatted)))
+	return notebook
+}
+
+var notebook = `{
+	"apiVersion": "kubeflow.org/v1",
+	"kind": "Notebook",
+	"metadata": {
+		"name": "%s",
+		"namespace": "%s"
+	},
+	"spec": {
+		"image": "quay.io/openshift-notebooks/notebooks-rhel8:latest"
+	}
+}`

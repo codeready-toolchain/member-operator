@@ -606,7 +606,7 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 	for pt, tcs := range testpod {
 		t.Run(pt, func(t *testing.T) {
 			reconciler, _, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-			ownerIdler := newOwnerIdler(reconciler.DiscoveryClient, reconciler.DynamicClient, reconciler.ScalesClient, reconciler.RestClient)
+			ownerIdler := newOwnerIdler(idler, reconciler)
 			pod, appName := tcs.preparePayload(fakeClients)
 
 			// when

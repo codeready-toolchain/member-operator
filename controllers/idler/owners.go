@@ -2,8 +2,12 @@ package idler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -16,55 +20,78 @@ import (
 )
 
 type ownerIdler struct {
+	idler         *toolchainv1alpha1.Idler
 	ownerFetcher  *ownerFetcher
 	dynamicClient dynamic.Interface
 	scalesClient  scale.ScalesGetter
 	restClient    rest.Interface
 }
 
-func newOwnerIdler(discoveryClient discovery.ServerResourcesInterface, dynamicClient dynamic.Interface, scalesClient scale.ScalesGetter, restClient rest.Interface) *ownerIdler {
+func newOwnerIdler(idler *toolchainv1alpha1.Idler, reconciler *Reconciler) *ownerIdler {
 	return &ownerIdler{
-		ownerFetcher:  newOwnerFetcher(discoveryClient, dynamicClient),
-		dynamicClient: dynamicClient,
-		scalesClient:  scalesClient,
-		restClient:    restClient,
+		idler:         idler,
+		ownerFetcher:  newOwnerFetcher(reconciler.DiscoveryClient, reconciler.DynamicClient),
+		dynamicClient: reconciler.DynamicClient,
+		scalesClient:  reconciler.ScalesClient,
+		restClient:    reconciler.RestClient,
 	}
 }
 
-// scaleOwnerToZero fetches the whole tree of the controller owners from the provided object (Deployment, ReplicaSet, etc).
+// scaleOwnerToZero fetches the whole tree of the controller owners from the provided pod.
 // If any known controller owner is found, then it's scaled down (or deleted) and its kind and name is returned.
+// If the pod has been running for longer than 105% of the idler timeout, it will also idle the second known owner.
 // Otherwise, returns empty strings.
-func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, meta metav1.Object) (kind string, name string, err error) {
+func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (string, string, error) {
 	logger := log.FromContext(ctx)
-	logger.Info("Scaling owner to zero", "name", meta.GetName())
+	logger.Info("Scaling owner to zero")
 
-	owners, err := i.ownerFetcher.getOwners(ctx, meta)
+	owners, err := i.ownerFetcher.getOwners(ctx, pod)
 	if err != nil {
 		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
 	}
+
+	var topOwnerKind, topOwnerName string
+	var errToReturn error
 	for _, ownerWithGVR := range owners {
 		owner := ownerWithGVR.object
-		kind = owner.GetObjectKind().GroupVersionKind().Kind
-		name = owner.GetName()
-		switch kind {
+		ownerKind := owner.GetObjectKind().GroupVersionKind().Kind
+
+		switch ownerKind {
 		case "Deployment", "ReplicaSet", "Integration", "KameletBinding", "StatefulSet", "ReplicationController":
 			err = i.scaleToZero(ctx, ownerWithGVR)
-			return
 		case "DaemonSet", "Job":
 			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
-			return
 		case "DeploymentConfig":
 			err = i.scaleDeploymentConfigToZero(ctx, ownerWithGVR)
-			return
 		case "VirtualMachine":
 			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
-			return
 		case "AnsibleAutomationPlatform":
 			err = i.idleAAP(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
-			return
+		default:
+			continue // Skip unknown owner types
 		}
+
+		// Store the first processed owner's info and preserve its error
+		if topOwnerKind == "" {
+			topOwnerKind = ownerKind
+			topOwnerName = owner.GetName()
+			errToReturn = err
+		} else {
+			// if it's the second known owner being processed, then stop the loop
+			errToReturn = errors.Join(errToReturn, err)
+			break
+		}
+
+		// If no error occurred and the pod doesn't run for longer than 105% of the idler timeout, return immediately after the first owner was idled
+		timeoutSeconds := getTimeout(i.idler, *pod)
+		if err == nil && !time.Now().After(pod.Status.StartTime.Add(time.Duration(float64(timeoutSeconds)*1.05)*time.Second)) {
+			return topOwnerKind, topOwnerName, nil
+		}
+		logger.Info("Scaling the first known owner down either failed or the pod has been running for longer than 105% of the idler timeout. Scaling the next known owner.")
 	}
-	return "", "", nil
+
+	// Return the first processed owner's info (or empty if none were processed), and the list of errors (if any happened)
+	return topOwnerKind, topOwnerName, errToReturn
 }
 
 var supportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{

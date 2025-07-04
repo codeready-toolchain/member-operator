@@ -8,8 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/codeready-toolchain/api/api/v1alpha1"
+	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
@@ -191,7 +192,7 @@ var testConfigs = map[string]createTestConfigFunc{
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {
-	setup := func(t *testing.T, createTestConfig createTestConfigFunc) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
+	setup := func(t *testing.T, createTestConfig createTestConfigFunc, extraExceedTimeout bool) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
 		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
 		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		scalesClient := &fakescale.FakeScaleClient{}
@@ -202,9 +203,35 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			gock.OffAll()
 		})
 
-		ownerIdler := newOwnerIdler(fakeDiscovery, dynamicClient, scalesClient, restClient)
+		timeoutSeconds := int32(3600) // 1 hour
+		idler := &toolchainv1alpha1.Idler{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-idler",
+			},
+			Spec: toolchainv1alpha1.IdlerSpec{
+				TimeoutSeconds: timeoutSeconds,
+			},
+		}
+		ownerIdler := &ownerIdler{
+			idler:         idler,
+			ownerFetcher:  newOwnerFetcher(fakeDiscovery, dynamicClient),
+			dynamicClient: dynamicClient,
+			scalesClient:  scalesClient,
+			restClient:    restClient,
+		}
 
-		plds := preparePayloads(t, &test.FakeClientSet{DynamicClient: dynamicClient, AllNamespacesClient: testcommon.NewFakeClient(t)}, "alex-stage", "", freshStartTimes(60))
+		// Calculate start time based on whether timeout should be exceeded
+		timeoutRatio := 1.01
+		if extraExceedTimeout {
+			timeoutRatio = 1.1
+		}
+
+		startTimes := payloadStartTimes{
+			defaultStartTime: time.Now().Add(-time.Duration(float64(timeoutSeconds)*timeoutRatio) * time.Second),
+			vmStartTime:      time.Now().Add(-time.Duration(float64(timeoutSeconds)/12*timeoutRatio) * time.Second),
+		}
+
+		plds := preparePayloads(t, &test.FakeClientSet{DynamicClient: dynamicClient, AllNamespacesClient: testcommon.NewFakeClient(t)}, "alex-stage", "", startTimes)
 		tc := createTestConfig(plds)
 
 		p := plds.getFirstControlledPod(tc.podOwnerName)
@@ -220,7 +247,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		for kind, createTestConfig := range testConfigs {
 			t.Run(kind, func(t *testing.T) {
 				//given
-				ownerIdler, fakeClients, testConfig, plds, pod := setup(t, createTestConfig)
+				ownerIdler, fakeClients, testConfig, plds, pod := setup(t, createTestConfig, false)
 
 				//when
 				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
@@ -236,6 +263,29 @@ func TestAppNameTypeForControllers(t *testing.T) {
 						othersTCFunc(plds).ownerScaledUp(assertion)
 					}
 				}
+				assertOtherOwners(t, ownerIdler, pod, false)
+			})
+		}
+	})
+
+	t.Run("timeout exceeded - multiple owners processed", func(t *testing.T) {
+		for kind, createTestConfig := range testConfigs {
+			t.Run(kind, func(t *testing.T) {
+				//given - pod running for more than 105% of timeout
+				ownerIdler, fakeClients, testConfig, _, pod := setup(t, createTestConfig, true)
+
+				//when
+				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
+
+				//then
+				require.NoError(t, err)
+				require.Equal(t, kind, appType)
+				require.Equal(t, testConfig.expectedAppName, appName)
+				assertion := test.AssertThatInIdleableCluster(t, fakeClients)
+				testConfig.ownerScaledDown(assertion)
+
+				// when there are multiple owners, then verify that the second one is scaled down too
+				assertOtherOwners(t, ownerIdler, pod, true)
 			})
 		}
 	})
@@ -244,7 +294,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		for kind, createTestConfig := range testConfigs {
 			t.Run(kind, func(t *testing.T) {
 				//given
-				ownerIdler, fakeClients, testConfig, plds, pod := setup(t, createTestConfig)
+				ownerIdler, fakeClients, testConfig, plds, pod := setup(t, createTestConfig, false)
 				gock.OffAll()
 				// mock stop call
 				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
@@ -280,13 +330,14 @@ func TestAppNameTypeForControllers(t *testing.T) {
 						othersTCFunc(plds).ownerScaledUp(assertion)
 					}
 				}
+				assertOtherOwners(t, ownerIdler, pod, true)
 			})
 		}
 	})
 
 	t.Run("error when getting owner deployment is ignored", func(t *testing.T) {
 		// given
-		ownerIdler, fakeClients, testConfig, plds, pod := setup(t, testConfigs["Deployment"])
+		ownerIdler, fakeClients, testConfig, plds, pod := setup(t, testConfigs["Deployment"], false)
 		reactionChain := fakeClients.DynamicClient.ReactionChain
 		fakeClients.DynamicClient.PrependReactor("get", "deployments", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 			return true, nil, errors.New("can't get deployment")
@@ -308,6 +359,34 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		require.Equal(t, "ReplicaSet", appType)
 		require.Equal(t, testConfig.podOwnerName, appName)
 	})
+}
+
+func assertOtherOwners(t *testing.T, ownerIdler *ownerIdler, pod *corev1.Pod, secondOwnerIdled bool) {
+	owners, err := ownerIdler.ownerFetcher.getOwners(context.TODO(), pod)
+	if !apierrors.IsNotFound(err) {
+		require.NoError(t, err)
+	}
+	// if there are more owners than one
+	if len(owners) > 1 {
+		// by default, all other owners shouldn't be idled
+		notIdledOwnersStartIndex := 1
+		if secondOwnerIdled {
+			// if the second owner is supposed to be idled
+			assertReplicas(t, owners[1].object, 0)
+			// then set the start index for all other owners not idled at 2
+			notIdledOwnersStartIndex = 2
+		}
+		// check that all other owners are not idled
+		for i := notIdledOwnersStartIndex; i < len(owners)-1; i++ {
+			assertReplicas(t, owners[i].object, 3)
+		}
+	}
+}
+
+func assertReplicas(t *testing.T, object *unstructured.Unstructured, expReplicas int64) {
+	replicas, _, err := unstructured.NestedInt64(object.UnstructuredContent(), "spec", "replicas")
+	require.NoError(t, err)
+	require.Equal(t, expReplicas, replicas)
 }
 
 func TestGetAPIResourceList(t *testing.T) {
@@ -518,7 +597,7 @@ func TestGetOwnersFailures(t *testing.T) {
 				t.Run("intermediate owner is returned", func(t *testing.T) {
 					// given
 					pod := givenPod.DeepCopy()
-					idler := &v1alpha1.Idler{ObjectMeta: metav1.ObjectMeta{Name: "test-rc", Namespace: "test-namespace"}}
+					idler := &toolchainv1alpha1.Idler{ObjectMeta: metav1.ObjectMeta{Name: "test-rc", Namespace: "test-namespace"}}
 					require.NoError(t, controllerruntime.SetControllerReference(idler, pod, scheme.Scheme))
 					require.NoError(t, controllerruntime.SetControllerReference(ownerObject, idler, scheme.Scheme))
 					// when it's supposed to be "not found" then do not include it in the client

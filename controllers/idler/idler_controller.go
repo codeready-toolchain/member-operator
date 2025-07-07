@@ -173,6 +173,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := r.deletePodsAndCreateNotification(podCtx, pod, idler, ownerIdler)
 				if err == nil {
+					requeueAfter = shorterDuration(requeueAfter, time.Duration(float32(timeoutSeconds)*0.05)*time.Second)
 					continue
 				}
 				idleErrors = append(idleErrors, err)

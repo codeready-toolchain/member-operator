@@ -234,7 +234,8 @@ func TestEnsureIdling(t *testing.T) {
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 			assert.True(t, res.Requeue)
-			assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/24)
+			// something was idled, expect the next reconcile in 5% of the timeout
+			assertRequeueTimeInDelta(t, res.RequeueAfter, int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))
 
 			t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
 				//given
@@ -362,7 +363,8 @@ func TestEnsureIdling(t *testing.T) {
 		//then
 		require.NoError(t, err)
 		assert.True(t, res.Requeue)
-		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
+		// something was idled, expect the next reconcile in 5% of the timeout
+		assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 		//check the notification is actually created
@@ -384,7 +386,8 @@ func TestEnsureIdling(t *testing.T) {
 			//then
 			require.NoError(t, err)
 			assert.True(t, res.Requeue)
-			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
+			// pods (exceeding the timeout) are still running, expect the next reconcile in 5% of the timeout
+			assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
@@ -606,7 +609,7 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 	for pt, tcs := range testpod {
 		t.Run(pt, func(t *testing.T) {
 			reconciler, _, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-			ownerIdler := newOwnerIdler(reconciler.DiscoveryClient, reconciler.DynamicClient, reconciler.ScalesClient, reconciler.RestClient)
+			ownerIdler := newOwnerIdler(idler, reconciler)
 			pod, appName := tcs.preparePayload(fakeClients)
 
 			// when

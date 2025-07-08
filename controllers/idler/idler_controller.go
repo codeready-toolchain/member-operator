@@ -130,24 +130,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	return result, r.setStatusReady(ctx, idler)
 }
 
+func getTimeout(idler *toolchainv1alpha1.Idler, pod corev1.Pod) int32 {
+	timeoutSeconds := idler.Spec.TimeoutSeconds
+	if isOwnedByVM(pod.ObjectMeta) {
+		// use 1/12th of the timeout for VMs to have more aggressive idling to decrease
+		// the infra costs because VMs consume much more resources
+		timeoutSeconds = timeoutSeconds / 12
+	}
+	return timeoutSeconds
+}
+
 func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
 	// Get all pods running in the namespace
 	podList := &corev1.PodList{}
 	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
 		return 0, err
 	}
-	ownerIdler := newOwnerIdler(r.DiscoveryClient, r.DynamicClient, r.ScalesClient, r.RestClient)
+	ownerIdler := newOwnerIdler(idler, r)
 	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
 	var idleErrors []error
 	for _, pod := range podList.Items {
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		podCtx := log.IntoContext(ctx, podLogger)
-		timeoutSeconds := idler.Spec.TimeoutSeconds
-		if isOwnedByVM(pod.ObjectMeta) {
-			// use 1/12th of the timeout for VMs to have more aggressive idling to decrease
-			// the infra costs because VMs consume much more resources
-			timeoutSeconds = timeoutSeconds / 12
-		}
+
+		timeoutSeconds := getTimeout(idler, pod)
 		if pod.Status.StartTime != nil {
 			// check the restart count for the pod
 			restartCount := getHighestRestartCount(pod.Status)
@@ -167,6 +173,7 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 				err := r.deletePodsAndCreateNotification(podCtx, pod, idler, ownerIdler)
 				if err == nil {
+					requeueAfter = shorterDuration(requeueAfter, time.Duration(float32(timeoutSeconds)*0.05)*time.Second)
 					continue
 				}
 				idleErrors = append(idleErrors, err)

@@ -40,6 +40,7 @@ func newOwnerIdler(idler *toolchainv1alpha1.Idler, reconciler *Reconciler) *owne
 // scaleOwnerToZero fetches the whole tree of the controller owners from the provided pod.
 // If any known controller owner is found, then it's scaled down (or deleted) and its kind and name is returned.
 // If the pod has been running for longer than 105% of the idler timeout, it will also idle the second known owner.
+// This is a workaround for cases when the top owner controller fails to idle the workload. For example the AAP controller sometimes fails to scale down StatefulSets for postgres pods owned by the top AAP CR. Scaling down the StatefulSet (AAP -> StatefulSet -> Pods) mitigates that AAP controller bug.
 // Otherwise, returns empty strings.
 func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (string, string, error) {
 	logger := log.FromContext(ctx)

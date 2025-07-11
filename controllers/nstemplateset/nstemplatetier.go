@@ -106,7 +106,7 @@ const (
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
 	if t.ttr != nil {
-		return t.processGoTemplates(params)
+		return t.processGoTemplates(params, filters...)
 	}
 	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
@@ -130,9 +130,9 @@ func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) ma
 
 }
 
-func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string) ([]runtimeclient.Object, error) {
+func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
-
+	rawExtObjList := make([]runtime.RawExtension, 0, len(t.ttr.Spec.TemplateObjects))
 	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
 
 	for i := range t.ttr.Spec.TemplateObjects {
@@ -149,12 +149,29 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string) ([]ru
 			return nil, err
 		}
 
-		if _, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct); err != nil {
+		runObj, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct)
+		if err != nil {
 			return nil, err
 		}
 
-		objList = append(objList, unStruct.DeepCopy())
-
+		// Convert runObj to runtime.RawExtension
+		// runtime.RawExtension expects an Object field, not Raw bytes
+		rawExt := runtime.RawExtension{
+			Object: runObj,
+		}
+		rawExtObjList = append(rawExtObjList, rawExt)
 	}
+	// Apply filters if needed
+	filtered := template.Filter(rawExtObjList, filters...)
+
+	// Convert filtered RawExtensions back to runtime.Objects
+	for _, f := range filtered {
+		if clientObj, ok := f.Object.(runtimeclient.Object); ok {
+			objList = append(objList, clientObj)
+		} else {
+			return nil, fmt.Errorf("unable to cast object to client.Object: %+v", f.Object)
+		}
+	}
+
 	return objList, nil
 }

@@ -359,8 +359,8 @@ const (
 			"config": "{{.CONFIG_VALUE}}"
 		}
 	}`
-
-	secretTemplate = `{
+	// #nosec G101  // This is a test template, not a real secret and does not have any sensitive data or static values passed
+	secTemplate = `{
 		"apiVersion": "v1",
 		"kind": "Secret",
 		"metadata": {
@@ -443,7 +443,7 @@ func TestProcessGoTemplates(t *testing.T) {
 		},
 		{
 			name:      "parameter substitution with static and runtime params",
-			templates: []string{secretTemplate},
+			templates: []string{secTemplate},
 			staticParams: []toolchainv1alpha1.Parameter{
 				{Name: "QUOTA_LIMIT", Value: "1000"},
 				{Name: "NAMESPACE", Value: "test-ns"},

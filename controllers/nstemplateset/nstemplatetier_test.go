@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,7 +44,7 @@ func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTem
 
 func TestProcessWithoutTTR(t *testing.T) {
 	// given
-	s := scheme.Scheme
+	s := runtime.NewScheme()
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	codecFactory := serializer.NewCodecFactory(s)
@@ -93,7 +92,7 @@ parameters:
 
 func TestProcessWithTTR(t *testing.T) {
 	// given
-	s := scheme.Scheme
+	s := runtime.NewScheme()
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 	ttRev := createTierTemplateRevision("test-ttr")
@@ -134,7 +133,8 @@ func TestGetTierTemplate(t *testing.T) {
 
 	// given
 	// Setup Scheme for all resources (required before adding objects in the fake client)
-	err := apis.AddToScheme(scheme.Scheme)
+	s := runtime.NewScheme()
+	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
 	basicTierCode := newTierTemplate("basic", "code", "abcdef")
@@ -414,7 +414,7 @@ const (
 
 func TestProcessGoTemplates(t *testing.T) {
 	// Setup scheme
-	s := scheme.Scheme
+	s := runtime.NewScheme()
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 

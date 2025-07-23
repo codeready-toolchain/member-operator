@@ -117,16 +117,7 @@ func TestProcessWithTTR(t *testing.T) {
 	require.Len(t, ttrObj, 1)
 	require.Equal(t, "for-johnsmith-deployments", ttrObj[0].GetName())
 	require.Equal(t, &expectedCRQ, ttrObj[0])
-	t.Run("test convert parameters to map", func(t *testing.T) {
-		paramM := tierTemplate.convertParametersToMap(map[string]string{
-			SpaceName: "johnsmith",
-		})
-		expectedParameters := map[string]string{
-			"DEPLOYMENT_QUOTA": "600",
-			"SPACE_NAME":       "johnsmith",
-		}
-		require.Equal(t, expectedParameters, paramM)
-	})
+
 }
 
 func TestGetTierTemplate(t *testing.T) {

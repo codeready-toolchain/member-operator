@@ -23,6 +23,72 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Template constants to avoid duplication
+const (
+	configMapTemplate = `{
+		"apiVersion": "v1",
+		"kind": "ConfigMap",
+		"metadata": {
+			"name": "config-{{.SPACE_NAME}}",
+			"namespace": "{{.NAMESPACE}}"
+		},
+		"data": {
+			"config": "{{.CONFIG_VALUE}}"
+		}
+	}`
+	// #nosec G101  // This is a test template, not a real secret and does not have any sensitive data or static values passed
+	secTemplate = `{
+		"apiVersion": "v1",
+		"kind": "Secret",
+		"metadata": {
+			"name": "secret-{{.SPACE_NAME}}",
+			"namespace": "{{.NAMESPACE}}"
+		},
+		"data": {
+			"quota": "{{.QUOTA_LIMIT}}",
+			"runtime-param": "{{.RUNTIME_PARAM}}"
+		}
+	}`
+
+	namespaceTemplate = `{
+		"apiVersion": "v1",
+		"kind": "Namespace",
+		"metadata": {
+			"name": "ns-{{.SPACE_NAME}}"
+		}
+	}`
+
+	invalidTemplate = `{
+		"apiVersion": "v1",
+		"kind": "ConfigMap",
+		"metadata": {
+			"name": "config-{{.SPACE_NAME",
+			"namespace": "default"
+		}
+	}`
+
+	invalidFunctionTemplate = `{
+		"apiVersion": "v1",
+		"kind": "ConfigMap",
+		"metadata": {
+			"name": "config-{{.SPACE_NAME | invalid_function}}",
+			"namespace": "default"
+		}
+	}`
+
+	invalidJSONTemplate = `{
+		"apiVersion": "v1",
+		"kind": "ConfigMap",
+		"metadata": {
+			"name": "config-{{.SPACE_NAME}}",
+			"namespace": "default"
+		},
+		"data": {
+			"invalid": "json"
+		}
+	` // Missing closing brace
+)
+
 func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
 	return &toolchainv1alpha1.TierTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -118,8 +184,246 @@ func TestProcessWithTTR(t *testing.T) {
 	require.Equal(t, "for-johnsmith-deployments", ttrObj[0].GetName())
 	require.Equal(t, &expectedCRQ, ttrObj[0])
 
+	standardRuntimeParams := map[string]string{
+		"SPACE_NAME": "johnsmith",
+	}
+
+	// Table-driven tests for common scenarios
+	testCases := []templateProcessTestCase{
+		{
+			name:      "successful processing with valid templates",
+			templates: []string{configMapTemplate},
+			staticParams: []toolchainv1alpha1.Parameter{
+				{Name: "CONFIG_VALUE", Value: "test-value"},
+				{Name: "NAMESPACE", Value: "test-namespace"},
+			},
+			runtimeParams: standardRuntimeParams,
+			expectedCount: 1,
+			validate: func(t *testing.T, objects []runtimeclient.Object) {
+				cm := objects[0]
+				assert.Equal(t, "ConfigMap", cm.GetObjectKind().GroupVersionKind().Kind)
+				assert.Equal(t, "config-johnsmith", cm.GetName())
+				assert.Equal(t, "test-namespace", cm.GetNamespace())
+			},
+		},
+		{
+			name:      "parameter substitution with static and runtime params",
+			templates: []string{secTemplate},
+			staticParams: []toolchainv1alpha1.Parameter{
+				{Name: "QUOTA_LIMIT", Value: "1000"},
+				{Name: "NAMESPACE", Value: "test-ns"},
+			},
+			runtimeParams: map[string]string{
+				"SPACE_NAME":    "testuser",
+				"RUNTIME_PARAM": "runtime-value",
+			},
+			expectedCount: 1,
+			validate: func(t *testing.T, objects []runtimeclient.Object) {
+				secret := objects[0]
+				assert.Equal(t, "Secret", secret.GetObjectKind().GroupVersionKind().Kind)
+				assert.Equal(t, "secret-testuser", secret.GetName())
+				assert.Equal(t, "test-ns", secret.GetNamespace())
+			},
+		},
+		{
+			name:          "empty template objects",
+			templates:     []string{},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: map[string]string{},
+			expectedCount: 0,
+		},
+		{
+			name:          "invalid template syntax",
+			templates:     []string{invalidTemplate},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: standardRuntimeParams,
+			expectedError: "template:",
+		},
+		{
+			name:          "template execution error - invalid function",
+			templates:     []string{invalidFunctionTemplate},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: standardRuntimeParams,
+			expectedError: "invalid_function",
+		},
+		{
+			name:          "invalid JSON in template",
+			templates:     []string{invalidJSONTemplate},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: standardRuntimeParams,
+			expectedError: "unexpected end of JSON input",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// given
+			ttr := createTestTTR("test-ttr", tc.templates, tc.staticParams)
+			tierTemplate := createTestTierTemplate(ttr)
+
+			// when
+			objects, err := tierTemplate.process(s, tc.runtimeParams, tc.filters...)
+
+			// then
+			if tc.expectedError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, objects, tc.expectedCount)
+			if tc.validate != nil {
+				tc.validate(t, objects)
+			}
+		})
+	}
+
+	t.Run("processing with filters", func(t *testing.T) {
+		// given - create templates with both namespace and configmap
+		templates := []string{namespaceTemplate, configMapTemplate}
+		ttr := createTestTTR("test-ttr", templates, []toolchainv1alpha1.Parameter{
+			{Name: "NAMESPACE", Value: "default"},
+		})
+		tierTemplate := createTestTierTemplate(ttr)
+		runtimeParams := map[string]string{"SPACE_NAME": "testuser"}
+
+		t.Run("filter namespaces only", func(t *testing.T) {
+			// when
+			objects, err := tierTemplate.process(s, runtimeParams, template.RetainNamespaces)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, objects, 1)
+			assert.Equal(t, "Namespace", objects[0].GetObjectKind().GroupVersionKind().Kind)
+			assert.Equal(t, "ns-testuser", objects[0].GetName())
+		})
+
+		t.Run("filter non-namespace objects", func(t *testing.T) {
+			// when
+			objects, err := tierTemplate.process(s, runtimeParams, template.RetainAllButNamespaces)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, objects, 1)
+			assert.Equal(t, "ConfigMap", objects[0].GetObjectKind().GroupVersionKind().Kind)
+			assert.Equal(t, "config-testuser", objects[0].GetName())
+		})
+
+		t.Run("custom filter function", func(t *testing.T) {
+			// Custom filter to retain only ConfigMaps
+			configMapFilter := func(obj runtime.RawExtension) bool {
+				return obj.Object.GetObjectKind().GroupVersionKind().Kind == "ConfigMap"
+			}
+
+			// when
+			objects, err := tierTemplate.process(s, runtimeParams, configMapFilter)
+
+			// then
+			require.NoError(t, err)
+			require.Len(t, objects, 1)
+			assert.Equal(t, "ConfigMap", objects[0].GetObjectKind().GroupVersionKind().Kind)
+			assert.Equal(t, "config-testuser", objects[0].GetName())
+		})
+	})
+
+	t.Run("complex template with multiple objects", func(t *testing.T) {
+		// given
+		nsTemplate := `{
+			"apiVersion": "v1",
+			"kind": "Namespace",
+			"metadata": {
+				"name": "{{.SPACE_NAME}}-dev",
+				"labels": {
+					"toolchain.dev.openshift.com/space": "{{.SPACE_NAME}}",
+					"tier": "{{.TIER_NAME}}"
+				}
+			}
+		}`
+
+		rbTemplate := `{
+			"apiVersion": "rbac.authorization.k8s.io/v1",
+			"kind": "RoleBinding",
+			"metadata": {
+				"name": "{{.SPACE_NAME}}-admin",
+				"namespace": "{{.SPACE_NAME}}-dev"
+			},
+			"subjects": [{
+				"kind": "User",
+				"name": "{{.USERNAME}}"
+			}],
+			"roleRef": {
+				"kind": "ClusterRole",
+				"name": "admin",
+				"apiGroup": "rbac.authorization.k8s.io"
+			}
+		}`
+
+		ttr := createTestTTR("test-ttr", []string{nsTemplate, rbTemplate}, []toolchainv1alpha1.Parameter{
+			{Name: "TIER_NAME", Value: "basic"},
+		})
+		tierTemplate := createTestTierTemplate(ttr)
+
+		runtimeParams := map[string]string{
+			"SPACE_NAME": "johnsmith",
+			"USERNAME":   "john.smith",
+		}
+
+		// when
+		objects, err := tierTemplate.process(s, runtimeParams)
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, objects, 2)
+
+		// Check namespace
+		ns := objects[0]
+		assert.Equal(t, "Namespace", ns.GetObjectKind().GroupVersionKind().Kind)
+		assert.Equal(t, "johnsmith-dev", ns.GetName())
+		assert.Equal(t, "johnsmith", ns.GetLabels()["toolchain.dev.openshift.com/space"])
+		assert.Equal(t, "basic", ns.GetLabels()["tier"])
+
+		// Check role binding
+		rb := objects[1]
+		assert.Equal(t, "RoleBinding", rb.GetObjectKind().GroupVersionKind().Kind)
+		assert.Equal(t, "johnsmith-admin", rb.GetName())
+		assert.Equal(t, "johnsmith-dev", rb.GetNamespace())
+	})
+
 }
 
+func TestConvertParametersToMap(t *testing.T) {
+	// given
+	ttr := &toolchainv1alpha1.TierTemplateRevision{
+		Spec: toolchainv1alpha1.TierTemplateRevisionSpec{
+			Parameters: []toolchainv1alpha1.Parameter{
+				{Name: "STATIC_PARAM1", Value: "static-value1"},
+				{Name: "STATIC_PARAM2", Value: "static-value2"},
+			},
+		},
+	}
+
+	tierTemplate := createTestTierTemplate(ttr)
+
+	runtimeParams := map[string]string{
+		"RUNTIME_PARAM1": "runtime-value1",
+		"RUNTIME_PARAM2": "runtime-value2",
+		"STATIC_PARAM1":  "overridden-value", // Should override static param
+	}
+
+	// when
+	result := tierTemplate.convertParametersToMap(runtimeParams)
+
+	// then
+	expected := map[string]string{
+		"STATIC_PARAM1":  "overridden-value", // Runtime param overrides static
+		"STATIC_PARAM2":  "static-value2",
+		"RUNTIME_PARAM1": "runtime-value1",
+		"RUNTIME_PARAM2": "runtime-value2",
+	}
+
+	assert.Equal(t, expected, result)
+}
 func TestGetTierTemplate(t *testing.T) {
 
 	// given
@@ -297,7 +601,7 @@ var expectedCRQ = unstructured.Unstructured{
 }
 
 // Test helper functions and data structures for TestProcessGoTemplates
-type templateTestCase struct {
+type templateProcessTestCase struct {
 	name          string
 	templates     []string
 	staticParams  []toolchainv1alpha1.Parameter
@@ -335,317 +639,4 @@ func createTestTierTemplate(ttr *toolchainv1alpha1.TierTemplateRevision) *tierTe
 		typeName:    "dev",
 		ttr:         ttr,
 	}
-}
-
-// Template constants to avoid duplication
-const (
-	configMapTemplate = `{
-		"apiVersion": "v1",
-		"kind": "ConfigMap",
-		"metadata": {
-			"name": "config-{{.SPACE_NAME}}",
-			"namespace": "{{.NAMESPACE}}"
-		},
-		"data": {
-			"config": "{{.CONFIG_VALUE}}"
-		}
-	}`
-	// #nosec G101  // This is a test template, not a real secret and does not have any sensitive data or static values passed
-	secTemplate = `{
-		"apiVersion": "v1",
-		"kind": "Secret",
-		"metadata": {
-			"name": "secret-{{.SPACE_NAME}}",
-			"namespace": "{{.NAMESPACE}}"
-		},
-		"data": {
-			"quota": "{{.QUOTA_LIMIT}}",
-			"runtime-param": "{{.RUNTIME_PARAM}}"
-		}
-	}`
-
-	namespaceTemplate = `{
-		"apiVersion": "v1",
-		"kind": "Namespace",
-		"metadata": {
-			"name": "ns-{{.SPACE_NAME}}"
-		}
-	}`
-
-	invalidTemplate = `{
-		"apiVersion": "v1",
-		"kind": "ConfigMap",
-		"metadata": {
-			"name": "config-{{.SPACE_NAME",
-			"namespace": "default"
-		}
-	}`
-
-	invalidFunctionTemplate = `{
-		"apiVersion": "v1",
-		"kind": "ConfigMap",
-		"metadata": {
-			"name": "config-{{.SPACE_NAME | invalid_function}}",
-			"namespace": "default"
-		}
-	}`
-
-	invalidJSONTemplate = `{
-		"apiVersion": "v1",
-		"kind": "ConfigMap",
-		"metadata": {
-			"name": "config-{{.SPACE_NAME}}",
-			"namespace": "default"
-		},
-		"data": {
-			"invalid": "json"
-		}
-	` // Missing closing brace
-)
-
-func TestProcessGoTemplates(t *testing.T) {
-	// Setup scheme
-	s := runtime.NewScheme()
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
-
-	// Standard runtime parameters for most tests
-	standardRuntimeParams := map[string]string{
-		"SPACE_NAME": "johnsmith",
-	}
-
-	// Table-driven tests for common scenarios
-	testCases := []templateTestCase{
-		{
-			name:      "successful processing with valid templates",
-			templates: []string{configMapTemplate},
-			staticParams: []toolchainv1alpha1.Parameter{
-				{Name: "CONFIG_VALUE", Value: "test-value"},
-				{Name: "NAMESPACE", Value: "test-namespace"},
-			},
-			runtimeParams: standardRuntimeParams,
-			expectedCount: 1,
-			validate: func(t *testing.T, objects []runtimeclient.Object) {
-				cm := objects[0]
-				assert.Equal(t, "ConfigMap", cm.GetObjectKind().GroupVersionKind().Kind)
-				assert.Equal(t, "config-johnsmith", cm.GetName())
-				assert.Equal(t, "test-namespace", cm.GetNamespace())
-			},
-		},
-		{
-			name:      "parameter substitution with static and runtime params",
-			templates: []string{secTemplate},
-			staticParams: []toolchainv1alpha1.Parameter{
-				{Name: "QUOTA_LIMIT", Value: "1000"},
-				{Name: "NAMESPACE", Value: "test-ns"},
-			},
-			runtimeParams: map[string]string{
-				"SPACE_NAME":    "testuser",
-				"RUNTIME_PARAM": "runtime-value",
-			},
-			expectedCount: 1,
-			validate: func(t *testing.T, objects []runtimeclient.Object) {
-				secret := objects[0]
-				assert.Equal(t, "Secret", secret.GetObjectKind().GroupVersionKind().Kind)
-				assert.Equal(t, "secret-testuser", secret.GetName())
-				assert.Equal(t, "test-ns", secret.GetNamespace())
-			},
-		},
-		{
-			name:          "empty template objects",
-			templates:     []string{},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: map[string]string{},
-			expectedCount: 0,
-		},
-		{
-			name:          "invalid template syntax",
-			templates:     []string{invalidTemplate},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: standardRuntimeParams,
-			expectedError: "template:",
-		},
-		{
-			name:          "template execution error - invalid function",
-			templates:     []string{invalidFunctionTemplate},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: standardRuntimeParams,
-			expectedError: "invalid_function",
-		},
-		{
-			name:          "invalid JSON in template",
-			templates:     []string{invalidJSONTemplate},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: standardRuntimeParams,
-			expectedError: "unexpected end of JSON input",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			// given
-			ttr := createTestTTR("test-ttr", tc.templates, tc.staticParams)
-			tierTemplate := createTestTierTemplate(ttr)
-
-			// when
-			objects, err := tierTemplate.processGoTemplates(tc.runtimeParams, tc.filters...)
-
-			// then
-			if tc.expectedError != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.expectedError)
-				return
-			}
-
-			require.NoError(t, err)
-			require.Len(t, objects, tc.expectedCount)
-			if tc.validate != nil {
-				tc.validate(t, objects)
-			}
-		})
-	}
-
-	t.Run("processing with filters", func(t *testing.T) {
-		// given - create templates with both namespace and configmap
-		templates := []string{namespaceTemplate, configMapTemplate}
-		ttr := createTestTTR("test-ttr", templates, []toolchainv1alpha1.Parameter{
-			{Name: "NAMESPACE", Value: "default"},
-		})
-		tierTemplate := createTestTierTemplate(ttr)
-		runtimeParams := map[string]string{"SPACE_NAME": "testuser"}
-
-		t.Run("filter namespaces only", func(t *testing.T) {
-			// when
-			objects, err := tierTemplate.processGoTemplates(runtimeParams, template.RetainNamespaces)
-
-			// then
-			require.NoError(t, err)
-			require.Len(t, objects, 1)
-			assert.Equal(t, "Namespace", objects[0].GetObjectKind().GroupVersionKind().Kind)
-			assert.Equal(t, "ns-testuser", objects[0].GetName())
-		})
-
-		t.Run("filter non-namespace objects", func(t *testing.T) {
-			// when
-			objects, err := tierTemplate.processGoTemplates(runtimeParams, template.RetainAllButNamespaces)
-
-			// then
-			require.NoError(t, err)
-			require.Len(t, objects, 1)
-			assert.Equal(t, "ConfigMap", objects[0].GetObjectKind().GroupVersionKind().Kind)
-			assert.Equal(t, "config-testuser", objects[0].GetName())
-		})
-
-		t.Run("custom filter function", func(t *testing.T) {
-			// Custom filter to retain only ConfigMaps
-			configMapFilter := func(obj runtime.RawExtension) bool {
-				return obj.Object.GetObjectKind().GroupVersionKind().Kind == "ConfigMap"
-			}
-
-			// when
-			objects, err := tierTemplate.processGoTemplates(runtimeParams, configMapFilter)
-
-			// then
-			require.NoError(t, err)
-			require.Len(t, objects, 1)
-			assert.Equal(t, "ConfigMap", objects[0].GetObjectKind().GroupVersionKind().Kind)
-			assert.Equal(t, "config-testuser", objects[0].GetName())
-		})
-	})
-
-	t.Run("convertParametersToMap", func(t *testing.T) {
-		// given
-		ttr := &toolchainv1alpha1.TierTemplateRevision{
-			Spec: toolchainv1alpha1.TierTemplateRevisionSpec{
-				Parameters: []toolchainv1alpha1.Parameter{
-					{Name: "STATIC_PARAM1", Value: "static-value1"},
-					{Name: "STATIC_PARAM2", Value: "static-value2"},
-				},
-			},
-		}
-
-		tierTemplate := createTestTierTemplate(ttr)
-
-		runtimeParams := map[string]string{
-			"RUNTIME_PARAM1": "runtime-value1",
-			"RUNTIME_PARAM2": "runtime-value2",
-			"STATIC_PARAM1":  "overridden-value", // Should override static param
-		}
-
-		// when
-		result := tierTemplate.convertParametersToMap(runtimeParams)
-
-		// then
-		expected := map[string]string{
-			"STATIC_PARAM1":  "overridden-value", // Runtime param overrides static
-			"STATIC_PARAM2":  "static-value2",
-			"RUNTIME_PARAM1": "runtime-value1",
-			"RUNTIME_PARAM2": "runtime-value2",
-		}
-
-		assert.Equal(t, expected, result)
-	})
-
-	t.Run("complex template with multiple objects", func(t *testing.T) {
-		// given
-		nsTemplate := `{
-			"apiVersion": "v1",
-			"kind": "Namespace",
-			"metadata": {
-				"name": "{{.SPACE_NAME}}-dev",
-				"labels": {
-					"toolchain.dev.openshift.com/space": "{{.SPACE_NAME}}",
-					"tier": "{{.TIER_NAME}}"
-				}
-			}
-		}`
-
-		rbTemplate := `{
-			"apiVersion": "rbac.authorization.k8s.io/v1",
-			"kind": "RoleBinding",
-			"metadata": {
-				"name": "{{.SPACE_NAME}}-admin",
-				"namespace": "{{.SPACE_NAME}}-dev"
-			},
-			"subjects": [{
-				"kind": "User",
-				"name": "{{.USERNAME}}"
-			}],
-			"roleRef": {
-				"kind": "ClusterRole",
-				"name": "admin",
-				"apiGroup": "rbac.authorization.k8s.io"
-			}
-		}`
-
-		ttr := createTestTTR("test-ttr", []string{nsTemplate, rbTemplate}, []toolchainv1alpha1.Parameter{
-			{Name: "TIER_NAME", Value: "basic"},
-		})
-		tierTemplate := createTestTierTemplate(ttr)
-
-		runtimeParams := map[string]string{
-			"SPACE_NAME": "johnsmith",
-			"USERNAME":   "john.smith",
-		}
-
-		// when
-		objects, err := tierTemplate.processGoTemplates(runtimeParams)
-
-		// then
-		require.NoError(t, err)
-		require.Len(t, objects, 2)
-
-		// Check namespace
-		ns := objects[0]
-		assert.Equal(t, "Namespace", ns.GetObjectKind().GroupVersionKind().Kind)
-		assert.Equal(t, "johnsmith-dev", ns.GetName())
-		assert.Equal(t, "johnsmith", ns.GetLabels()["toolchain.dev.openshift.com/space"])
-		assert.Equal(t, "basic", ns.GetLabels()["tier"])
-
-		// Check role binding
-		rb := objects[1]
-		assert.Equal(t, "RoleBinding", rb.GetObjectKind().GroupVersionKind().Kind)
-		assert.Equal(t, "johnsmith-admin", rb.GetName())
-		assert.Equal(t, "johnsmith-dev", rb.GetNamespace())
-	})
 }

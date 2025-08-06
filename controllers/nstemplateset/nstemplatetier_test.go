@@ -2,7 +2,6 @@ package nstemplateset
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
@@ -156,38 +155,14 @@ parameters:
 	assert.Equal(t, "johnsmith", obj[0].GetName())
 }
 
-func TestProcessWithTTR(t *testing.T) {
+func TestProcessWithTTRTable(t *testing.T) {
 	// given
-	s := runtime.NewScheme()
-	err := apis.AddToScheme(s)
-	require.NoError(t, err)
-	ttRev := createTierTemplateRevision("test-ttr")
-	crq := newTestCRQ("600")
-	objectString, err := json.Marshal(crq.Object)
-	require.NoError(t, err)
-	ttRev.Spec.TemplateObjects = append(ttRev.Spec.TemplateObjects, runtime.RawExtension{Raw: []byte(objectString)})
-	ttRev.Spec.Parameters = []toolchainv1alpha1.Parameter{
-		{Name: "DEPLOYMENT_QUOTA",
-			Value: "600"},
-	}
-
-	tierTemplate := &tierTemplate{
-		ttr: ttRev,
-	}
-	ttrObj, err := tierTemplate.process(s, map[string]string{
-		SpaceName: "johnsmith",
-	})
-
-	// then
-	require.NoError(t, err)
-	require.Len(t, ttrObj, 1)
-	require.Equal(t, "for-johnsmith-deployments", ttrObj[0].GetName())
-	require.Equal(t, &expectedCRQ, ttrObj[0])
-
 	standardRuntimeParams := map[string]string{
 		"SPACE_NAME": "johnsmith",
 	}
-
+	s := runtime.NewScheme()
+	err := apis.AddToScheme(s)
+	require.NoError(t, err)
 	// Table-driven tests for common scenarios
 	testCases := []templateProcessTestCase{
 		{

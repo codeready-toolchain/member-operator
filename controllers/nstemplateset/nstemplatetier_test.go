@@ -18,7 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -522,57 +521,6 @@ func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.Ti
 	assert.Equal(t, expected.Spec.Template, actual.template)
 	assert.Equal(t, expected.Name, actual.templateRef)
 	assert.Equal(t, expected.Spec.TierName, actual.tierName)
-}
-
-func newTestCRQ(podsCount string) unstructured.Unstructured {
-	var crq = unstructured.Unstructured{Object: map[string]interface{}{
-		"kind": "ClusterResourceQuota",
-		"metadata": map[string]interface{}{
-			"name": "for-{{.SPACE_NAME}}-deployments",
-		},
-		"spec": map[string]interface{}{
-			"quota": map[string]interface{}{
-				"hard": map[string]interface{}{
-					"count/deploymentconfigs.apps": "{{.DEPLOYMENT_QUOTA}}",
-					"count/deployments.apps":       "{{.DEPLOYMENT_QUOTA}}",
-					"count/pods":                   podsCount,
-				},
-			},
-			"selector": map[string]interface{}{
-				"annotations": map[string]interface{}{},
-				"labels": map[string]interface{}{
-					"matchLabels": map[string]interface{}{
-						"toolchain.dev.openshift.com/space": "'{{.SPACE_NAME}}'",
-					},
-				},
-			},
-		},
-	}}
-	return crq
-}
-
-var expectedCRQ = unstructured.Unstructured{
-	Object: map[string]interface{}{
-		"kind": "ClusterResourceQuota",
-		"metadata": map[string]interface{}{
-			"name": "for-johnsmith-deployments"},
-		"spec": map[string]interface{}{
-			"quota": map[string]interface{}{
-				"hard": map[string]interface{}{
-					"count/deploymentconfigs.apps": "600",
-					"count/deployments.apps":       "600",
-					"count/pods":                   "600"},
-			},
-			"selector": map[string]interface{}{
-				"annotations": map[string]interface{}{},
-				"labels": map[string]interface{}{
-					"matchLabels": map[string]interface{}{
-						"toolchain.dev.openshift.com/space": "'johnsmith'",
-					},
-				},
-			},
-		},
-	},
 }
 
 // Test helper functions and data structures for TestProcessGoTemplates

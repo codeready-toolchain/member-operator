@@ -227,6 +227,13 @@ func TestProcessWithTTRTable(t *testing.T) {
 			runtimeParams: standardRuntimeParams,
 			expectedError: "unexpected end of JSON input",
 		},
+		{
+			name:          "missing required runtime parameter",
+			templates:     []string{`{"apiVersion":"v1","kind":"ConfigMap","metadata":{"name":"cm-{{.SPACE_NAME}}"}}`},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: map[string]string{}, // SPACE_NAME missing
+			expectedError: `map has no entry for key "SPACE_NAME"`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -258,6 +265,7 @@ func TestProcessWithTTRTable(t *testing.T) {
 		templates := []string{namespaceTemplate, configMapTemplate}
 		ttr := createTestTTR("test-ttr", templates, []toolchainv1alpha1.Parameter{
 			{Name: "NAMESPACE", Value: "default"},
+			{Name: "CONFIG_VALUE", Value: "test-config"},
 		})
 		tierTemplate := createTestTierTemplate(ttr)
 		runtimeParams := map[string]string{"SPACE_NAME": "testuser"}

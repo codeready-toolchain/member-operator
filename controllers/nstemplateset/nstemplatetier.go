@@ -140,18 +140,18 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 		unStruct := unstructured.Unstructured{}
 		strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
 
-		ttrTemp, err := gotemp.New(t.ttr.Name).Parse(strTemp)
+		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse go template for object %d in tierTemplateRevision '%s': %w", t.ttr.Spec.TemplateObjects[i].Raw, t.ttr.Name, err)
+			return nil, fmt.Errorf("failed to parse go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
 		if err := ttrTemp.Execute(&b, paramMap); err != nil {
-			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision '%s': %w", t.ttr.Spec.TemplateObjects[i].Raw, t.ttr.Name, err)
+			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
 		runObj, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode go template for object %d in tierTemplateRevision '%s': %w", t.ttr.Spec.TemplateObjects[i].Raw, t.ttr.Name, err)
+			return nil, fmt.Errorf("failed to decode go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
 		// Convert runObj to runtime.RawExtension

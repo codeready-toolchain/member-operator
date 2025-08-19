@@ -18,7 +18,9 @@ import (
 	errs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -131,46 +133,71 @@ func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) ma
 }
 
 func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
-	objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
-	rawExtObjList := make([]runtime.RawExtension, 0, len(t.ttr.Spec.TemplateObjects))
 	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
 
+	// Step 1: Unmarshal raw Go templates to populate Object field for filtering
+	rawExtensionsWithObjects := make([]runtime.RawExtension, 0, len(t.ttr.Spec.TemplateObjects))
+
 	for i := range t.ttr.Spec.TemplateObjects {
+		// Unmarshal the raw Go template (with template variables as literal strings)
+		var unStruct unstructured.Unstructured
+		if err := yaml.Unmarshal(t.ttr.Spec.TemplateObjects[i].Raw, &unStruct); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal raw go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, string(t.ttr.Spec.TemplateObjects[i].Raw))
+		}
+
+		// Create RawExtension with populated Object field
+		rawExt := runtime.RawExtension{
+			Raw:    t.ttr.Spec.TemplateObjects[i].Raw, // Keep original raw bytes for later processing
+			Object: &unStruct,                         // Populated Object field for filtering
+		}
+		rawExtensionsWithObjects = append(rawExtensionsWithObjects, rawExt)
+	}
+
+	// Step 2: Apply standard filters using the populated Object field
+	filtered := template.Filter(rawExtensionsWithObjects, filters...)
+
+	// Step 3: Parse and execute only the filtered templates
+	objList := make([]runtimeclient.Object, 0, len(filtered))
+
+	for i, filteredRawExt := range filtered {
 		var b bytes.Buffer
 		unStruct := unstructured.Unstructured{}
-		strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
+		strTemp := string(filteredRawExt.Raw)
 
+		// Parse Go template
 		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to parse go template for filtered object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
+		// Execute Go template with parameters
 		if err := ttrTemp.Execute(&b, paramMap); err != nil {
-			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to execute go template for filtered object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
-		runObj, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct)
+		// Decode the executed template into final object
+		// Try JSON first (for backward compatibility), then YAML
+		_, _, err = unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			// If JSON fails, try YAML (for real Go templates that output YAML)
+			if yamlErr := yaml.Unmarshal(b.Bytes(), &unStruct); yamlErr != nil {
+				return nil, fmt.Errorf("failed to decode executed go template for filtered object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			}
+			// When using yaml.Unmarshal, the GVK is not automatically set, so we need to set it manually
+			// Extract GVK from the YAML content
+			if apiVersion, found, _ := unstructured.NestedString(unStruct.Object, "apiVersion"); found {
+				if kind, found, _ := unstructured.NestedString(unStruct.Object, "kind"); found {
+					gv, err := schema.ParseGroupVersion(apiVersion)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse apiVersion %q for filtered object %d in tierTemplateRevision %q: %w", apiVersion, i, t.ttr.Name, err)
+					}
+					unStruct.SetGroupVersionKind(gv.WithKind(kind))
+				}
+			}
 		}
 
-		// Convert runObj to runtime.RawExtension
-		// runtime.RawExtension expects an Object field, not Raw bytes
-		rawExt := runtime.RawExtension{
-			Object: runObj,
-		}
-		rawExtObjList = append(rawExtObjList, rawExt)
-	}
-	// Apply filters if needed
-	filtered := template.Filter(rawExtObjList, filters...)
-
-	// Convert filtered RawExtensions back to runtime.Objects
-	for _, f := range filtered {
-		if clientObj, ok := f.Object.(runtimeclient.Object); ok {
-			objList = append(objList, clientObj)
-		} else {
-			return nil, fmt.Errorf("unable to cast object to client.Object: %+v", f.Object)
-		}
+		// unstructured.Unstructured already implements runtimeclient.Object
+		objList = append(objList, &unStruct)
 	}
 
 	return objList, nil

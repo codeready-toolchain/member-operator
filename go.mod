@@ -111,3 +111,5 @@ require (
 go 1.22.0
 
 toolchain go1.22.12
+
+replace github.com/codeready-toolchain/toolchain-common => github.com/fbm3307/toolchain-common v0.0.0-20250819153413-b62c5d12bf1e

@@ -12,6 +12,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
@@ -85,6 +86,44 @@ const (
 			"invalid": "json"
 		}
 	` // Missing closing brace
+
+	// Template requiring manual GVK setting
+	templateRequiringManualGVK = `apiVersion: quota.openshift.io/v1
+kind: ClusterResourceQuota
+metadata:
+  name: crq-{{.SPACE_NAME}}
+spec:
+  quota:
+    hard:
+      count/pods: "10"`
+
+	// Template with invalid apiVersion format that will cause schema.ParseGroupVersion to fail
+	invalidApiVersionTemplate = `apiVersion: invalid/version/with/too/many/slashes
+kind: ConfigMap
+metadata:
+  name: invalid-{{.SPACE_NAME}}
+data:
+  test: value`
+
+	// Completely invalid YAML for Step 1 unmarshal error
+	completelyInvalidYAML = `this is not valid YAML at all
+	no structure: [[[invalid`
+
+	// ClusterResourceQuota template for GVK filtering
+	clusterResourceQuotaTemplate = `{
+		"apiVersion": "quota.openshift.io/v1",
+		"kind": "ClusterResourceQuota", 
+		"metadata": {
+			"name": "crq-{{.SPACE_NAME}}"
+		},
+		"spec": {
+			"quota": {
+				"hard": {
+					"count/pods": "10"
+				}
+			}
+		}
+	}`
 )
 
 func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
@@ -225,7 +264,7 @@ func TestProcessWithTTRTable(t *testing.T) {
 			templates:     []string{invalidJSONTemplate},
 			staticParams:  []toolchainv1alpha1.Parameter{},
 			runtimeParams: standardRuntimeParams,
-			expectedError: "unexpected end of JSON input",
+			expectedError: "error converting YAML to JSON",
 		},
 		{
 			name:          "missing required runtime parameter",
@@ -233,6 +272,56 @@ func TestProcessWithTTRTable(t *testing.T) {
 			staticParams:  []toolchainv1alpha1.Parameter{},
 			runtimeParams: map[string]string{}, // SPACE_NAME missing
 			expectedError: `map has no entry for key "SPACE_NAME"`,
+		},
+
+		{
+			name:          "template requiring manual GVK setting",
+			templates:     []string{templateRequiringManualGVK},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: standardRuntimeParams,
+			expectedCount: 1,
+			validate: func(t *testing.T, objects []runtimeclient.Object) {
+				obj := objects[0]
+				gvk := obj.GetObjectKind().GroupVersionKind()
+				assert.Equal(t, "quota.openshift.io", gvk.Group)
+				assert.Equal(t, "v1", gvk.Version)
+				assert.Equal(t, "ClusterResourceQuota", gvk.Kind)
+				assert.Equal(t, "crq-johnsmith", obj.GetName())
+			},
+		},
+		{
+			name:          "template with invalid apiVersion format",
+			templates:     []string{invalidApiVersionTemplate},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: standardRuntimeParams,
+			expectedError: "failed to unmarshal raw go template for object 0",
+		},
+		{
+			name:          "completely invalid YAML in step 1",
+			templates:     []string{completelyInvalidYAML},
+			staticParams:  []toolchainv1alpha1.Parameter{},
+			runtimeParams: standardRuntimeParams,
+			expectedError: "failed to unmarshal raw go template for object 0",
+		},
+		{
+			name:      "GVK-specific filtering like cluster resources",
+			templates: []string{namespaceTemplate, configMapTemplate, clusterResourceQuotaTemplate},
+			staticParams: []toolchainv1alpha1.Parameter{
+				{Name: "NAMESPACE", Value: "test-ns"},
+				{Name: "CONFIG_VALUE", Value: "test-config"},
+			},
+			runtimeParams: standardRuntimeParams,
+			filters: []template.FilterFunc{retainObjectsOfSameGVK(schema.GroupVersionKind{
+				Group:   "quota.openshift.io",
+				Version: "v1",
+				Kind:    "ClusterResourceQuota",
+			})},
+			expectedCount: 1,
+			validate: func(t *testing.T, objects []runtimeclient.Object) {
+				obj := objects[0]
+				assert.Equal(t, "ClusterResourceQuota", obj.GetObjectKind().GroupVersionKind().Kind)
+				assert.Equal(t, "crq-johnsmith", obj.GetName())
+			},
 		},
 	}
 

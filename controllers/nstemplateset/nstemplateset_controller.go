@@ -59,15 +59,13 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.Or[runtimeclient.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
 		Watches(&corev1.Namespace{}, mapToOwnerByLabel).
+		// we're watching the roles and role bindings explicitly so that the users that accidentally lose access to their namespaces
+		// can get it restored as quickly as possible.
+		//
+		// We watch no other resource kinds that are created from the templates. Instead we rely on the periodic reconcile of nstemplatesets that is automatically
+		// triggered by the controller runtime roughly once a day.
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.Role{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{})).
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.RoleBinding{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{}))
-	// watch for all cluster resource kinds associated with an NSTemplateSet
-	for _, clusterResource := range clusterResourceKinds {
-		// only reconcile generation changes for cluster resources and only when the API group is present in the cluster
-		if apiGroupIsPresent(apiGroupList.Groups, clusterResource.gvk) {
-			build = build.Watches(clusterResource.object, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
-		}
-	}
 
 	r.AllNamespacesClient = allNamespaceCluster.GetClient()
 	r.AvailableAPIGroups = apiGroupList.Groups

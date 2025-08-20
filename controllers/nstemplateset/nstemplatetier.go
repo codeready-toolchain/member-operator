@@ -139,33 +139,25 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 	var templatesToProcess []runtime.RawExtension
 	if len(filters) == 0 {
 		// No filters: process all templates directly without filtering overhead
-		templatesToProcess = make([]runtime.RawExtension, 0, len(t.ttr.Spec.TemplateObjects))
-		for i := range t.ttr.Spec.TemplateObjects {
-			templatesToProcess = append(templatesToProcess, runtime.RawExtension{
-				Raw: t.ttr.Spec.TemplateObjects[i].Raw,
-			})
-		}
+		templatesToProcess = t.ttr.Spec.TemplateObjects
 	} else {
-		// With filters: unmarshal raw Go templates to populate Object field for filtering
-		rawExtensionsWithObjects := make([]runtime.RawExtension, 0, len(t.ttr.Spec.TemplateObjects))
-
+		// With filters: populate Object field directly on original templates for filtering
 		for i := range t.ttr.Spec.TemplateObjects {
-			// Unmarshal the raw Go template (with template variables as literal strings)
-			var unStruct unstructured.Unstructured
-			if err := yaml.Unmarshal(t.ttr.Spec.TemplateObjects[i].Raw, &unStruct); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal raw go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, string(t.ttr.Spec.TemplateObjects[i].Raw))
-			}
+			// Only populate Object field if it's not already set
+			if t.ttr.Spec.TemplateObjects[i].Object == nil {
+				// Unmarshal the raw Go template (with template variables as literal strings)
+				var unStruct unstructured.Unstructured
+				if err := yaml.Unmarshal(t.ttr.Spec.TemplateObjects[i].Raw, &unStruct); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal raw go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, string(t.ttr.Spec.TemplateObjects[i].Raw))
+				}
 
-			// Create RawExtension with populated Object field
-			rawExt := runtime.RawExtension{
-				Raw:    t.ttr.Spec.TemplateObjects[i].Raw, // Keep original raw bytes for later processing
-				Object: &unStruct,                         // Populated Object field for filtering
+				// Populate Object field for filtering
+				t.ttr.Spec.TemplateObjects[i].Object = &unStruct
 			}
-			rawExtensionsWithObjects = append(rawExtensionsWithObjects, rawExt)
 		}
 
 		// Apply standard filters using the populated Object field
-		templatesToProcess = template.Filter(rawExtensionsWithObjects, filters...)
+		templatesToProcess = template.Filter(t.ttr.Spec.TemplateObjects, filters...)
 	}
 
 	// Parse and execute the templates to process

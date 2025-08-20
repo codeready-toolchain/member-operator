@@ -246,7 +246,7 @@ func TestProcessWithTTRTable(t *testing.T) {
 			templates:     []string{invalidJSONTemplate},
 			staticParams:  []toolchainv1alpha1.Parameter{},
 			runtimeParams: standardRuntimeParams,
-			expectedError: "error converting YAML to JSON",
+			expectedError: "couldn't get version/kind; json parse error",
 		},
 		{
 			name:          "missing required runtime parameter",
@@ -261,7 +261,7 @@ func TestProcessWithTTRTable(t *testing.T) {
 			templates:     []string{completelyInvalidYAML},
 			staticParams:  []toolchainv1alpha1.Parameter{},
 			runtimeParams: standardRuntimeParams,
-			expectedError: "failed to unmarshal raw go template for object 0",
+			expectedError: "yaml: line 2: mapping values are not allowed in this context",
 		},
 		{
 			name:      "GVK-specific filtering like cluster resources",

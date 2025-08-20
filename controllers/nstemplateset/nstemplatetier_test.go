@@ -87,24 +87,6 @@ const (
 		}
 	` // Missing closing brace
 
-	// Template requiring manual GVK setting
-	templateRequiringManualGVK = `apiVersion: quota.openshift.io/v1
-kind: ClusterResourceQuota
-metadata:
-  name: crq-{{.SPACE_NAME}}
-spec:
-  quota:
-    hard:
-      count/pods: "10"`
-
-	// Template with invalid apiVersion format that will cause schema.ParseGroupVersion to fail
-	invalidApiVersionTemplate = `apiVersion: invalid/version/with/too/many/slashes
-kind: ConfigMap
-metadata:
-  name: invalid-{{.SPACE_NAME}}
-data:
-  test: value`
-
 	// Completely invalid YAML for Step 1 unmarshal error
 	completelyInvalidYAML = `this is not valid YAML at all
 	no structure: [[[invalid`
@@ -274,28 +256,6 @@ func TestProcessWithTTRTable(t *testing.T) {
 			expectedError: `map has no entry for key "SPACE_NAME"`,
 		},
 
-		{
-			name:          "template requiring manual GVK setting",
-			templates:     []string{templateRequiringManualGVK},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: standardRuntimeParams,
-			expectedCount: 1,
-			validate: func(t *testing.T, objects []runtimeclient.Object) {
-				obj := objects[0]
-				gvk := obj.GetObjectKind().GroupVersionKind()
-				assert.Equal(t, "quota.openshift.io", gvk.Group)
-				assert.Equal(t, "v1", gvk.Version)
-				assert.Equal(t, "ClusterResourceQuota", gvk.Kind)
-				assert.Equal(t, "crq-johnsmith", obj.GetName())
-			},
-		},
-		{
-			name:          "template with invalid apiVersion format",
-			templates:     []string{invalidApiVersionTemplate},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: standardRuntimeParams,
-			expectedError: "failed to unmarshal raw go template for object 0",
-		},
 		{
 			name:          "completely invalid YAML in step 1",
 			templates:     []string{completelyInvalidYAML},

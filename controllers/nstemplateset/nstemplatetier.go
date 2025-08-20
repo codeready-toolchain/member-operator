@@ -18,9 +18,9 @@ import (
 	errs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -176,24 +176,11 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 		}
 
 		// Decode the executed template into final object
-		// Try JSON first (for backward compatibility), then YAML
-		_, _, err = unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct)
+		// Use UniversalDeserializer which handles both JSON and YAML and automatically sets GVK
+		decoder := scheme.Codecs.UniversalDeserializer()
+		_, _, err = decoder.Decode(b.Bytes(), nil, &unStruct)
 		if err != nil {
-			// If JSON fails, try YAML (for real Go templates that output YAML)
-			if yamlErr := yaml.Unmarshal(b.Bytes(), &unStruct); yamlErr != nil {
-				return nil, fmt.Errorf("failed to decode executed go template for filtered object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
-			}
-			// When using yaml.Unmarshal, the GVK is not automatically set, so we need to set it manually
-			// Extract GVK from the YAML content
-			if apiVersion, found, _ := unstructured.NestedString(unStruct.Object, "apiVersion"); found {
-				if kind, found, _ := unstructured.NestedString(unStruct.Object, "kind"); found {
-					gv, err := schema.ParseGroupVersion(apiVersion)
-					if err != nil {
-						return nil, fmt.Errorf("failed to parse apiVersion %q for filtered object %d in tierTemplateRevision %q: %w", apiVersion, i, t.ttr.Name, err)
-					}
-					unStruct.SetGroupVersionKind(gv.WithKind(kind))
-				}
-			}
+			return nil, fmt.Errorf("failed to decode executed go template for filtered object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
 		// unstructured.Unstructured already implements runtimeclient.Object

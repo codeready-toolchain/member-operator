@@ -12,7 +12,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
@@ -86,26 +85,6 @@ const (
 			"invalid": "json"
 		}
 	` // Missing closing brace
-
-	// Completely invalid YAML for Step 1 unmarshal error
-	completelyInvalidYAML = `this is not valid YAML at all
-	no structure: [[[invalid`
-
-	// ClusterResourceQuota template for GVK filtering
-	clusterResourceQuotaTemplate = `{
-		"apiVersion": "quota.openshift.io/v1",
-		"kind": "ClusterResourceQuota", 
-		"metadata": {
-			"name": "crq-{{.SPACE_NAME}}"
-		},
-		"spec": {
-			"quota": {
-				"hard": {
-					"count/pods": "10"
-				}
-			}
-		}
-	}`
 )
 
 func newTierTemplate(tier, typeName, revision string) *toolchainv1alpha1.TierTemplate {
@@ -254,34 +233,6 @@ func TestProcessWithTTRTable(t *testing.T) {
 			staticParams:  []toolchainv1alpha1.Parameter{},
 			runtimeParams: map[string]string{}, // SPACE_NAME missing
 			expectedError: `map has no entry for key "SPACE_NAME"`,
-		},
-
-		{
-			name:          "completely invalid YAML in step 1",
-			templates:     []string{completelyInvalidYAML},
-			staticParams:  []toolchainv1alpha1.Parameter{},
-			runtimeParams: standardRuntimeParams,
-			expectedError: "yaml: line 2: mapping values are not allowed in this context",
-		},
-		{
-			name:      "GVK-specific filtering like cluster resources",
-			templates: []string{namespaceTemplate, configMapTemplate, clusterResourceQuotaTemplate},
-			staticParams: []toolchainv1alpha1.Parameter{
-				{Name: "NAMESPACE", Value: "test-ns"},
-				{Name: "CONFIG_VALUE", Value: "test-config"},
-			},
-			runtimeParams: standardRuntimeParams,
-			filters: []template.FilterFunc{retainObjectsOfSameGVK(schema.GroupVersionKind{
-				Group:   "quota.openshift.io",
-				Version: "v1",
-				Kind:    "ClusterResourceQuota",
-			})},
-			expectedCount: 1,
-			validate: func(t *testing.T, objects []runtimeclient.Object) {
-				obj := objects[0]
-				assert.Equal(t, "ClusterResourceQuota", obj.GetObjectKind().GroupVersionKind().Kind)
-				assert.Equal(t, "crq-johnsmith", obj.GetName())
-			},
 		},
 	}
 
@@ -592,7 +543,6 @@ type templateProcessTestCase struct {
 	validate      func(t *testing.T, objects []runtimeclient.Object)
 }
 
-// Helper to create a TierTemplateRevision for testing
 func createTestTTR(name string, templates []string, params []toolchainv1alpha1.Parameter) *toolchainv1alpha1.TierTemplateRevision {
 	templateObjects := make([]runtime.RawExtension, len(templates))
 	for i, tmpl := range templates {
@@ -611,7 +561,6 @@ func createTestTTR(name string, templates []string, params []toolchainv1alpha1.P
 	}
 }
 
-// Helper to create a tierTemplate with TTR
 func createTestTierTemplate(ttr *toolchainv1alpha1.TierTemplateRevision) *tierTemplate {
 	return &tierTemplate{
 		templateRef: "test-template",

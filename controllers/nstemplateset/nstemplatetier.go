@@ -132,38 +132,30 @@ func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) ma
 
 }
 
+// processGoTemplates processes the Go templates
 func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
-
-	// Determine which templates to process
 	var templatesToProcess []runtime.RawExtension
-	if len(filters) == 0 {
-		// No filters: process all templates directly without filtering overhead
-		templatesToProcess = t.ttr.Spec.TemplateObjects
-	} else {
-		// With filters: populate Object field directly on original templates for filtering
-		for i := range t.ttr.Spec.TemplateObjects {
-			// Only populate Object field if it's not already set
-			if t.ttr.Spec.TemplateObjects[i].Object == nil {
-				// Unmarshal the raw Go template (with template variables as literal strings)
+	// If there are no filters, then all the templates are to be processed(parsed), No need to filter them first
+	templatesToProcess = t.ttr.Spec.TemplateObjects
+	if len(filters) > 0 {
+		// if there are filters provided, then populate Object field from raw template so the templateObjects can be filtered
+		for i, rawObj := range t.ttr.Spec.TemplateObjects {
+			if rawObj.Object == nil {
 				var unStruct unstructured.Unstructured
-				if err := yaml.Unmarshal(t.ttr.Spec.TemplateObjects[i].Raw, &unStruct); err != nil {
-					return nil, fmt.Errorf("failed to unmarshal raw go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, string(t.ttr.Spec.TemplateObjects[i].Raw))
+				if err := yaml.Unmarshal(rawObj.Raw, &unStruct); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal raw go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, string(rawObj.Raw))
 				}
-
-				// Populate Object field for filtering
 				t.ttr.Spec.TemplateObjects[i].Object = &unStruct
 			}
 		}
-
-		// Apply standard filters using the populated Object field
 		templatesToProcess = template.Filter(t.ttr.Spec.TemplateObjects, filters...)
 	}
 
 	// Parse and execute the templates to process
 	objList := make([]runtimeclient.Object, 0, len(templatesToProcess))
 
-	for i, rawExt := range templatesToProcess {
+	for _, rawExt := range templatesToProcess {
 		var b bytes.Buffer
 		unStruct := unstructured.Unstructured{}
 		strTemp := string(rawExt.Raw)
@@ -171,23 +163,20 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 		// Parse Go template
 		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to parse go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, strTemp)
 		}
 
 		// Execute Go template with parameters
 		if err := ttrTemp.Execute(&b, paramMap); err != nil {
-			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to execute go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, strTemp)
 		}
 
-		// Decode the executed template into final object
-		// Use UniversalDeserializer which handles both JSON and YAML and automatically sets GVK
 		decoder := scheme.Codecs.UniversalDeserializer()
 		_, _, err = decoder.Decode(b.Bytes(), nil, &unStruct)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode executed go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to decode executed go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, strTemp)
 		}
 
-		// unstructured.Unstructured already implements runtimeclient.Object
 		objList = append(objList, &unStruct)
 	}
 

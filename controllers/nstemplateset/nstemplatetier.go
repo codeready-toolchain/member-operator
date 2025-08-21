@@ -154,10 +154,11 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 
 	// Parse and execute the templates to process
 	objList := make([]runtimeclient.Object, 0, len(templatesToProcess))
+	decoder := scheme.Codecs.UniversalDeserializer()
 
 	for i, rawExt := range templatesToProcess {
 		var b bytes.Buffer
-		unStruct := unstructured.Unstructured{}
+		unStructObj := &unstructured.Unstructured{}
 		strTemp := string(rawExt.Raw)
 
 		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
@@ -169,13 +170,12 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
-		decoder := scheme.Codecs.UniversalDeserializer()
-		_, _, err = decoder.Decode(b.Bytes(), nil, &unStruct)
+		_, _, err = decoder.Decode(b.Bytes(), nil, unStructObj)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode executed go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
-		objList = append(objList, &unStruct)
+		objList = append(objList, unStructObj)
 	}
 
 	return objList, nil

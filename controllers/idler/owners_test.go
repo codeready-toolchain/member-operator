@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery/fake"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
@@ -189,11 +190,27 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 		}
 	},
+	"ServingRuntime": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// We are testing the case with nested controllers (ServingRuntime -> Deployment -> ReplicaSet -> Pod) here,
+			// so the pod's owner is ReplicaSet but the expected top-parent is ServingRuntime CR. In addition to that,
+			// the expected (not-)deleted CR is InferenceService.
+			podOwnerName:    fmt.Sprintf("%s-deployment-replicaset", plds.servingRuntime.GetName()),
+			expectedAppName: plds.servingRuntime.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.InferenceServiceExists(plds.inferenceService)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.InferenceServiceDoesNotExist(plds.inferenceService)
+			},
+		}
+	},
 }
 
 func TestAppNameTypeForControllers(t *testing.T) {
 	setup := func(t *testing.T, createTestConfig createTestConfigFunc, extraExceedTimeout bool) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
-		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
+		// Register custom list kinds for KServe resources
+		dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds)
 		fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 		scalesClient := &fakescale.FakeScaleClient{}
 		restClient, err := testcommon.NewRESTClient("dummy-token", apiEndpoint)
@@ -299,14 +316,18 @@ func TestAppNameTypeForControllers(t *testing.T) {
 				// mock stop call
 				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
 
-				errMsg := "can't update/delete " + kind
-				fakeClients.DynamicClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+				affectedKind := kind
+				if kind == "ServingRuntime" {
+					affectedKind = "InferenceService"
+				}
+				errMsg := "can't update/delete " + affectedKind
+				fakeClients.DynamicClient.PrependReactor("patch", strings.ToLower(affectedKind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, errors.New(errMsg)
 				})
-				fakeClients.DynamicClient.PrependReactor("delete", strings.ToLower(kind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
+				fakeClients.DynamicClient.PrependReactor("delete", strings.ToLower(affectedKind)+"s", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 					return true, nil, errors.New(errMsg)
 				})
-				fakeClients.ScalesClient.PrependReactor("patch", strings.ToLower(kind)+"s", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
+				fakeClients.ScalesClient.PrependReactor("patch", strings.ToLower(affectedKind)+"s", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
 					return true, nil, errors.New(errMsg)
 				})
 
@@ -392,7 +413,7 @@ func assertReplicas(t *testing.T, object *unstructured.Unstructured, expReplicas
 func TestGetAPIResourceList(t *testing.T) {
 	// given
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "test-namespace"}}
-	dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
+	dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds)
 
 	t.Run("get APIs, pod with no owners", func(t *testing.T) {
 		// given
@@ -510,7 +531,7 @@ func TestGetOwners(t *testing.T) {
 				initObjects = append(initObjects, owner)
 			}
 
-			dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, slices.Concat(initObjects, noiseObjects, noiseOwners)...)
+			dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds, slices.Concat(initObjects, noiseObjects, noiseOwners)...)
 
 			fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 			fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
@@ -527,6 +548,10 @@ func TestGetOwners(t *testing.T) {
 
 		})
 	}
+}
+
+var customListKinds = map[schema.GroupVersionResource]string{
+	{Group: "serving.kserve.io", Version: "v1beta1", Resource: "inferenceservices"}: "InferenceServiceList",
 }
 
 func TestGetOwnersFailures(t *testing.T) {
@@ -547,7 +572,7 @@ func TestGetOwnersFailures(t *testing.T) {
 		pod := givenPod.DeepCopy()
 		err := controllerruntime.SetControllerReference(aap, pod, scheme.Scheme)
 		require.NoError(t, err)
-		dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, pod, aap)
+		dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds, pod, aap)
 
 		fakeDiscovery := newFakeDiscoveryClient(noAAPResourceList(t)...)
 		fetcher := newOwnerFetcher(fakeDiscovery, dynamicClient)
@@ -571,10 +596,10 @@ func TestGetOwnersFailures(t *testing.T) {
 					pod := givenPod.DeepCopy()
 					require.NoError(t, controllerruntime.SetControllerReference(ownerObject, pod, scheme.Scheme))
 					// when it's supposed to be "not found" then do not include it in the client
-					dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, pod)
+					dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds, pod)
 					// otherwise, configure general error for the client
 					if !isNotFound {
-						dynamicClient = fakedynamic.NewSimpleDynamicClient(scheme.Scheme, pod, ownerObject)
+						dynamicClient = fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds, pod, ownerObject)
 						dynamicClient.PrependReactor("get", inaccessibleResource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("some error")
 						})
@@ -601,10 +626,10 @@ func TestGetOwnersFailures(t *testing.T) {
 					require.NoError(t, controllerruntime.SetControllerReference(idler, pod, scheme.Scheme))
 					require.NoError(t, controllerruntime.SetControllerReference(ownerObject, idler, scheme.Scheme))
 					// when it's supposed to be "not found" then do not include it in the client
-					dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme, pod, idler)
+					dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds, pod, idler)
 					// otherwise, configure general error for the client
 					if !isNotFound {
-						dynamicClient = fakedynamic.NewSimpleDynamicClient(scheme.Scheme, pod, idler, ownerObject)
+						dynamicClient = fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds, pod, idler, ownerObject)
 						dynamicClient.PrependReactor("get", inaccessibleResource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, errors.New("some error")
 						})
@@ -701,11 +726,25 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 }
 
 func allResourcesList(t *testing.T) []*metav1.APIResourceList {
-	return append(noAAPResourceList(t), &metav1.APIResourceList{
-		GroupVersion: "aap.ansible.com/v1alpha1",
-		APIResources: []metav1.APIResource{
-			{Name: "ansibleautomationplatforms", Namespaced: true, Kind: "AnsibleAutomationPlatform"},
-			{Name: "ansibleautomationplatformbackups", Namespaced: true, Kind: "AnsibleAutomationPlatformBackup"},
+	return append(noAAPResourceList(t),
+		&metav1.APIResourceList{
+			GroupVersion: "aap.ansible.com/v1alpha1",
+			APIResources: []metav1.APIResource{
+				{Name: "ansibleautomationplatforms", Namespaced: true, Kind: "AnsibleAutomationPlatform"},
+				{Name: "ansibleautomationplatformbackups", Namespaced: true, Kind: "AnsibleAutomationPlatformBackup"},
+			},
 		},
-	})
+		&metav1.APIResourceList{
+			GroupVersion: "serving.kserve.io/v1alpha1",
+			APIResources: []metav1.APIResource{
+				{Name: "servingruntimes", Namespaced: true, Kind: "ServingRuntime"},
+			},
+		},
+		&metav1.APIResourceList{
+			GroupVersion: "serving.kserve.io/v1beta1",
+			APIResources: []metav1.APIResource{
+				{Name: "inferenceservices", Namespaced: true, Kind: "InferenceService"},
+			},
+		},
+	)
 }

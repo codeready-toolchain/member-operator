@@ -543,6 +543,7 @@ type templateProcessTestCase struct {
 	validate      func(t *testing.T, objects []runtimeclient.Object)
 }
 
+// Helper to create a TierTemplateRevision for testing
 func createTestTTR(name string, templates []string, params []toolchainv1alpha1.Parameter) *toolchainv1alpha1.TierTemplateRevision {
 	templateObjects := make([]runtime.RawExtension, len(templates))
 	for i, tmpl := range templates {
@@ -561,6 +562,7 @@ func createTestTTR(name string, templates []string, params []toolchainv1alpha1.P
 	}
 }
 
+// Helper to create a tierTemplate with TTR
 func createTestTierTemplate(ttr *toolchainv1alpha1.TierTemplateRevision) *tierTemplate {
 	return &tierTemplate{
 		templateRef: "test-template",

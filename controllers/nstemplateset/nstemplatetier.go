@@ -155,26 +155,24 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 	// Parse and execute the templates to process
 	objList := make([]runtimeclient.Object, 0, len(templatesToProcess))
 
-	for _, rawExt := range templatesToProcess {
+	for i, rawExt := range templatesToProcess {
 		var b bytes.Buffer
 		unStruct := unstructured.Unstructured{}
 		strTemp := string(rawExt.Raw)
 
-		// Parse Go template
 		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to parse go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
-		// Execute Go template with parameters
 		if err := ttrTemp.Execute(&b, paramMap); err != nil {
-			return nil, fmt.Errorf("failed to execute go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
 		decoder := scheme.Codecs.UniversalDeserializer()
 		_, _, err = decoder.Decode(b.Bytes(), nil, &unStruct)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode executed go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to decode executed go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
 		objList = append(objList, &unStruct)

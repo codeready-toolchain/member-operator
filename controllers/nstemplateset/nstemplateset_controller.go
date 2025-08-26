@@ -132,7 +132,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
-		return reconcile.Result{}, nil // wait for cluster resources to be created
+		// we need to requeue to make sure we apply all cluster resources before continuing further
+		return reconcile.Result{Requeue: true}, nil // wait for cluster resources to be created
 	}
 	if err := r.status.updateStatusClusterResourcesRevisions(ctx, nsTmplSet); err != nil {
 		return reconcile.Result{}, err
@@ -206,7 +207,6 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 		}
 		// One or more namespaces may not yet be deleted. We can stop here.
 		return reconcile.Result{
-			Requeue:      true,
 			RequeueAfter: time.Second,
 		}, nil
 	}
@@ -214,7 +214,8 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user
 	deletedAny, err := r.clusterResources.delete(ctx, nsTmplSet)
 	if err != nil || deletedAny {
-		return reconcile.Result{}, err
+		// we need to check if there are some more cluster resources left
+		return reconcile.Result{Requeue: true}, err
 	}
 
 	// if nothing was to be deleted, then we can remove the finalizer and we're done

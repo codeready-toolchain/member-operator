@@ -62,8 +62,8 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 		// we're watching the roles and role bindings explicitly so that the users that accidentally lose access to their namespaces
 		// can get it restored as quickly as possible.
 		//
-		// We watch no other resource kinds that are created from the templates. Instead we rely on the periodic reconcile of nstemplatesets that is automatically
-		// triggered by the controller runtime roughly once a day.
+		// We intentionally do not watch any other resources potentially created by the templates (including cluster-scoped resources).
+		// Instead, we rely on controller-runtime's/ periodic resync/reconcile of NSTemplateSets as configured via manager.Options.Cache.SyncPeriod.
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.Role{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{})).
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.RoleBinding{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{}))
 
@@ -126,7 +126,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	// we proceed with the cluster-scoped resources template, then all namespaces and finally space roles
-	// as we want ot be sure that cluster scoped resources such as quotas are set
+	// as we want ot be sure that cluster-scoped resources such as quotas are set
 	// even before the namespaces exist
 	if createdOrUpdated, err := r.clusterResources.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update cluster resources")

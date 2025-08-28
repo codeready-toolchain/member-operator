@@ -64,6 +64,11 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 		//
 		// We intentionally do not watch any other resources potentially created by the templates (including cluster-scoped resources).
 		// Instead, we rely on controller-runtime's/ periodic resync/reconcile of NSTemplateSets as configured via manager.Options.Cache.SyncPeriod.
+		//
+		// This is a reasonable thing to do because the users either don't have the write access to the resources that are part of the template at all (i.e.
+		// the users don't have write access to any cluster-scoped resources) or there is the assumption that there is not much potential harm
+		// when the users modify the (namespaced) resources from the template. As mentioned above, the notable exception are roles and bindings that can
+		// cause the user to lose the access to the namespace and therefore we DO watch those to reapply the template and restore the access as soon as possible.
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.Role{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{})).
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.RoleBinding{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{}))
 

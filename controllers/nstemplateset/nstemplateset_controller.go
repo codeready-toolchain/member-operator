@@ -131,7 +131,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	// we proceed with the cluster-scoped resources template, then all namespaces and finally space roles
-	// as we want ot be sure that cluster-scoped resources such as quotas are set
+	// as we want to be sure that cluster-scoped resources such as quotas are set
 	// even before the namespaces exist
 	if createdOrUpdated, err := r.clusterResources.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update cluster resources")

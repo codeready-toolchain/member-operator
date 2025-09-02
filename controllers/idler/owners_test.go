@@ -207,6 +207,10 @@ var testConfigs = map[string]createTestConfigFunc{
 	},
 }
 
+var customListKinds = map[schema.GroupVersionResource]string{
+	{Group: "serving.kserve.io", Version: "v1beta1", Resource: "inferenceservices"}: "InferenceServiceList",
+}
+
 func TestAppNameTypeForControllers(t *testing.T) {
 	setup := func(t *testing.T, createTestConfig createTestConfigFunc, extraExceedTimeout bool) (*ownerIdler, *test.FakeClientSet, payloadTestConfig, payloads, *corev1.Pod) {
 		// Register custom list kinds for KServe resources
@@ -548,10 +552,6 @@ func TestGetOwners(t *testing.T) {
 
 		})
 	}
-}
-
-var customListKinds = map[schema.GroupVersionResource]string{
-	{Group: "serving.kserve.io", Version: "v1beta1", Resource: "inferenceservices"}: "InferenceServiceList",
 }
 
 func TestGetOwnersFailures(t *testing.T) {

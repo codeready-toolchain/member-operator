@@ -109,7 +109,7 @@ require (
 
 replace github.com/codeready-toolchain/api => github.com/rsoaresd/api v0.0.0-20250904111715-ce08642a4499
 
-replace github.com/codeready-toolchain/toolchain-common => github.com/rsoaresd/toolchain-common v0.0.0-20250506093954-2b65ad3a2e12
+replace github.com/codeready-toolchain/toolchain-common => github.com/rsoaresd/toolchain-common v0.0.0-20250904123823-7c569c802618
 
 go 1.23.0
 

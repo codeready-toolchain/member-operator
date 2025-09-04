@@ -2,6 +2,7 @@ package idler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	"github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"gopkg.in/h2non/gock.v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -26,16 +28,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	fakedynamic "k8s.io/client-go/dynamic/fake"
-	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	fakescale "k8s.io/client-go/scale/fake"
 	clienttest "k8s.io/client-go/testing"
@@ -58,7 +57,7 @@ func TestReconcile(t *testing.T) {
 	t.Run("No Idler resource found", func(t *testing.T) {
 		// given
 		requestName := "not-existing-name"
-		reconciler, req, _, _, _ := prepareReconcile(t, requestName, getHostCluster)
+		reconciler, req, _ := prepareReconcile(t, requestName, getHostCluster)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -70,8 +69,8 @@ func TestReconcile(t *testing.T) {
 
 	t.Run("Fail to get Idler resource", func(t *testing.T) {
 		// given
-		reconciler, req, cl, _, _ := prepareReconcile(t, "cant-get-idler", getHostCluster)
-		cl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+		reconciler, req, fakeClients := prepareReconcile(t, "cant-get-idler", getHostCluster)
+		fakeClients.DefaultClient.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 			if key.Name == "cant-get-idler" {
 				return errors.New("can't get idler")
 			}
@@ -97,7 +96,7 @@ func TestReconcile(t *testing.T) {
 			},
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
-		reconciler, req, _, _, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
+		reconciler, req, _ := prepareReconcile(t, "being-deleted", getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -121,8 +120,8 @@ func TestEnsureIdling(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-		preparePayloads(t, reconciler, "another-namespace", "", payloadStartTimes{time.Now(), time.Now()}) // noise
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		preparePayloads(t, fakeClients, "another-namespace", "", payloadStartTimes{time.Now(), time.Now()}) // noise
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -131,7 +130,7 @@ func TestEnsureIdling(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, res.Requeue)
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running())
+		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).HasConditions(memberoperatortest.Running())
 	})
 
 	t.Run("pods without startTime", func(t *testing.T) {
@@ -143,8 +142,8 @@ func TestEnsureIdling(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
 		}
 
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-		preparePayloads(t, reconciler, idler.Name, "", payloadStartTimes{})
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		preparePayloads(t, fakeClients, idler.Name, "", payloadStartTimes{})
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -154,7 +153,6 @@ func TestEnsureIdling(t *testing.T) {
 		assert.True(t, res.Requeue)
 		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled to the 1/12th of the timeout
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second/12, res.RequeueAfter)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.Running()).TracksPods(nil)
 	})
 
 	t.Run("Idle pods", func(t *testing.T) {
@@ -172,163 +170,94 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
-		podsTooEarlyToKill := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler.Spec.TimeoutSeconds))
+		podsTooEarlyToKill := preparePayloads(t, fakeClients, idler.Name, "", freshStartTimes(idler.Spec.TimeoutSeconds))
 		podsCrashLoopingWithinThreshold := preparePayloadCrashloopingPodsWithinThreshold(
-			t, clientSetForReconciler(reconciler), idler.Name, "inThreshRestarts-", freshStartTimes(idler.Spec.TimeoutSeconds))
-		podsCrashLooping := preparePayloadCrashloopingAboveThreshold(
-			t, clientSetForReconciler(reconciler), idler.Name, "restartCount-")
-		podsRunningForTooLong := preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
+			t, fakeClients, idler.Name, "inThreshRestarts-", freshStartTimes(idler.Spec.TimeoutSeconds))
+		podsCrashLooping := preparePayloadCrashloopingAboveThreshold(t, fakeClients, idler.Name, "restartCount-")
+		podsRunningForTooLong := preparePayloads(t, fakeClients, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
-		noise := preparePayloads(t, reconciler, "another-namespace", "", expiredStartTimes(idler.Spec.TimeoutSeconds))
+		noise := preparePayloads(t, fakeClients, "another-namespace", "", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
-		t.Run("First reconcile. Start tracking.", func(t *testing.T) {
+		t.Run("Delete long running and crashlooping pods.", func(t *testing.T) {
 			//when
 			res, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.NoError(t, err)
-			// Idler tracks all pods now but pods have not been deleted yet
-			memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
-				PodsExist(podsRunningForTooLong.standalonePods).
+			// Too long running pods are gone. All long running controllers are scaled down.
+			// Crashlooping pods are gone.
+			// The rest of the pods are still there and controllers are scaled up.
+			memberoperatortest.AssertThatInIdleableCluster(t, fakeClients).
+				PodsDoNotExist(podsRunningForTooLong.standalonePods).
 				PodsExist(podsTooEarlyToKill.standalonePods).
 				PodsExist(noise.standalonePods).
-				PodsExist(podsCrashLooping.standalonePods).
-				DaemonSetExists(podsRunningForTooLong.daemonSet).
+				PodsDoNotExist(podsCrashLooping.standalonePods).
+				DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
 				DaemonSetExists(podsTooEarlyToKill.daemonSet).
 				DaemonSetExists(noise.daemonSet).
-				JobExists(podsRunningForTooLong.job).
+				JobDoesNotExist(podsRunningForTooLong.job).
 				JobExists(podsTooEarlyToKill.job).
 				JobExists(noise.job).
-				DeploymentScaledUp(podsRunningForTooLong.deployment).
-				DeploymentScaledUp(podsRunningForTooLong.integration).
-				DeploymentScaledUp(podsRunningForTooLong.kameletBinding).
+				DeploymentScaledDown(podsRunningForTooLong.deployment).
+				ScaleSubresourceScaledDown(podsRunningForTooLong.integration).
+				ScaleSubresourceScaledDown(podsRunningForTooLong.kameletBinding).
+				DeploymentScaledDown(podsCrashLooping.deployment).
 				DeploymentScaledUp(podsTooEarlyToKill.deployment).
-				DeploymentScaledUp(podsTooEarlyToKill.integration).
-				DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
+				ScaleSubresourceScaledUp(podsTooEarlyToKill.integration).
+				ScaleSubresourceScaledUp(podsTooEarlyToKill.kameletBinding).
 				DeploymentScaledUp(noise.deployment).
-				DeploymentScaledUp(noise.integration).
-				DeploymentScaledUp(noise.kameletBinding).
-				DeploymentScaledUp(podsCrashLooping.deployment).
-				ReplicaSetScaledUp(podsRunningForTooLong.replicaSet).
+				ScaleSubresourceScaledUp(noise.integration).
+				ScaleSubresourceScaledUp(noise.kameletBinding).
+				ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
 				ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
 				ReplicaSetScaledUp(noise.replicaSet).
-				DeploymentConfigScaledUp(podsRunningForTooLong.deploymentConfig).
+				DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
 				DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
 				DeploymentConfigScaledUp(noise.deploymentConfig).
-				ReplicationControllerScaledUp(podsRunningForTooLong.replicationController).
+				ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
 				ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
 				ReplicationControllerScaledUp(noise.replicationController).
-				StatefulSetScaledUp(podsRunningForTooLong.statefulSet).
+				StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
 				StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
 				StatefulSetScaledUp(noise.statefulSet).
 				StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
-				VMRunning(podsRunningForTooLong.vmStopCallCounter).
+				VMStopped(podsRunningForTooLong.vmStopCallCounter).
 				VMRunning(podsTooEarlyToKill.vmStopCallCounter).
-				VMRunning(noise.vmStopCallCounter)
+				VMRunning(noise.vmStopCallCounter).
+				AAPIdled(podsRunningForTooLong.aap).
+				AAPRunning(podsTooEarlyToKill.aap).
+				AAPRunning(noise.aap)
 
-			// Tracked pods
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.allPods, podsCrashLooping.allPods, podsCrashLoopingWithinThreshold.allPods)).
-				HasConditions(memberoperatortest.Running())
+			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
+				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 			assert.True(t, res.Requeue)
-			assert.Equal(t, 0, int(res.RequeueAfter)) // pods running for too long should be killed immediately
+			// something was idled, expect the next reconcile in 5% of the timeout
+			assertRequeueTimeInDelta(t, res.RequeueAfter, int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))
 
-			t.Run("Second Reconcile. Delete long running and crashlooping pods.", func(t *testing.T) {
+			t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
+				//given
+				// cleanup remaining pods
+				pods := slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)
+				for _, pod := range pods {
+					if err := fakeClients.AllNamespacesClient.Delete(context.TODO(), pod); err != nil && !apierrors.IsNotFound(err) {
+						require.NoError(t, err)
+					}
+				}
+
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
 
 				// then
 				require.NoError(t, err)
-				// Too long running pods are gone. All long running controllers are scaled down.
-				// Crashlooping pods are gone.
-				// The rest of the pods are still there and controllers are scaled up.
-				memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
-					PodsDoNotExist(podsRunningForTooLong.standalonePods).
-					PodsExist(podsTooEarlyToKill.standalonePods).
-					PodsExist(noise.standalonePods).
-					PodsDoNotExist(podsCrashLooping.standalonePods).
-					DaemonSetDoesNotExist(podsRunningForTooLong.daemonSet).
-					DaemonSetExists(podsTooEarlyToKill.daemonSet).
-					DaemonSetExists(noise.daemonSet).
-					JobDoesNotExist(podsRunningForTooLong.job).
-					JobExists(podsTooEarlyToKill.job).
-					JobExists(noise.job).
-					DeploymentScaledDown(podsRunningForTooLong.deployment).
-					DeploymentScaledDown(podsRunningForTooLong.integration).
-					DeploymentScaledDown(podsRunningForTooLong.kameletBinding).
-					DeploymentScaledDown(podsCrashLooping.deployment).
-					DeploymentScaledUp(podsTooEarlyToKill.deployment).
-					DeploymentScaledUp(podsTooEarlyToKill.integration).
-					DeploymentScaledUp(podsTooEarlyToKill.kameletBinding).
-					DeploymentScaledUp(noise.deployment).
-					DeploymentScaledUp(noise.integration).
-					DeploymentScaledUp(noise.kameletBinding).
-					ReplicaSetScaledDown(podsRunningForTooLong.replicaSet).
-					ReplicaSetScaledUp(podsTooEarlyToKill.replicaSet).
-					ReplicaSetScaledUp(noise.replicaSet).
-					DeploymentConfigScaledDown(podsRunningForTooLong.deploymentConfig).
-					DeploymentConfigScaledUp(podsTooEarlyToKill.deploymentConfig).
-					DeploymentConfigScaledUp(noise.deploymentConfig).
-					ReplicationControllerScaledDown(podsRunningForTooLong.replicationController).
-					ReplicationControllerScaledUp(podsTooEarlyToKill.replicationController).
-					ReplicationControllerScaledUp(noise.replicationController).
-					StatefulSetScaledDown(podsRunningForTooLong.statefulSet).
-					StatefulSetScaledUp(podsTooEarlyToKill.statefulSet).
-					StatefulSetScaledUp(noise.statefulSet).
-					StatefulSetScaledUp(podsCrashLoopingWithinThreshold.statefulSet).
-					VMStopped(podsRunningForTooLong.vmStopCallCounter).
-					VMRunning(podsTooEarlyToKill.vmStopCallCounter).
-					VMRunning(noise.vmStopCallCounter)
-
-				// Only tracks pods that have not been deleted
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					TracksPods(append(podsTooEarlyToKill.allPods, podsCrashLoopingWithinThreshold.allPods...)).
+				memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
+				// no pods being tracked -> requeue after idler timeout
 				assert.True(t, res.Requeue)
-				assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/24)
-
-				t.Run("Third Reconcile. Stop tracking deleted pods.", func(t *testing.T) {
-					//when
-					res, err := reconciler.Reconcile(context.TODO(), req)
-
-					// then
-					require.NoError(t, err)
-					// Tracking existing pods only.
-					memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-						TracksPods(slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)). // controlledPods are being tracked again because in unit tests scaling down doesn't delete pods
-						HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-
-					assert.True(t, res.Requeue)
-					assert.Empty(t, res.RequeueAfter) // controlledPods are being tracked again and scheduled to be scaled down because in unit tests scaling down doesn't delete pods
-
-					t.Run("No pods. requeue after idler timeout.", func(t *testing.T) {
-						//given
-						// cleanup remaining pods
-						pods := slices.Concat(podsTooEarlyToKill.allPods, podsRunningForTooLong.controlledPods, podsCrashLoopingWithinThreshold.allPods, podsCrashLooping.controlledPods)
-						for _, pod := range pods {
-							err := allCl.Delete(context.TODO(), pod)
-							require.NoError(t, err)
-						}
-
-						//when
-						res, err := reconciler.Reconcile(context.TODO(), req)
-
-						// then
-						require.NoError(t, err)
-						// No pods tracked
-						memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-							TracksPods([]*corev1.Pod{}).
-							HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-
-						// no pods being tracked -> requeue after idler timeout
-						assert.True(t, res.Requeue)
-						assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-					})
-				})
+				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 			})
 		})
 
@@ -340,13 +269,10 @@ func TestEnsureIdling(t *testing.T) {
 			}
 			t.Run("with VM", func(t *testing.T) {
 				// given
-				reconciler, req, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-				payloads := preparePayloads(t, reconciler, idler.Name, "", startTimes)
-				preparePayloadCrashloopingPodsWithinThreshold(t, clientSetForReconciler(reconciler), idler.Name, "inThreshRestarts-", startTimes)
-				preparePayloadCrashloopingAboveThreshold(t, clientSetForReconciler(reconciler), idler.Name, "restartCount-")
-				// start tracking
-				_, err := reconciler.Reconcile(context.TODO(), req)
-				require.NoError(t, err)
+				reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+				payloads := preparePayloads(t, fakeClients, idler.Name, "", startTimes)
+				preparePayloadCrashloopingPodsWithinThreshold(t, fakeClients, idler.Name, "inThreshRestarts-", startTimes)
+				preparePayloadCrashloopingAboveThreshold(t, fakeClients, idler.Name, "restartCount-")
 
 				//when
 				res, err := reconciler.Reconcile(context.TODO(), req)
@@ -380,25 +306,18 @@ func TestEnsureIdling(t *testing.T) {
 
 		t.Run("one error won't affect other pods", func(t *testing.T) {
 			// given
-			reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-			toKill := preparePayloads(t, reconciler, idler.Name, "tokill-", expiredStartTimes(idler.Spec.TimeoutSeconds))
-
-			// to start tracking
-			_, err := reconciler.Reconcile(context.TODO(), req)
-			require.NoError(t, err)
-			allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-				if reflect.TypeOf(obj) == reflect.TypeOf(&appsv1.ReplicaSet{}) {
-					return fmt.Errorf("some error")
-				}
-				return allCl.Client.Patch(ctx, obj, patch, opts...)
-			}
+			reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+			toKill := preparePayloads(t, fakeClients, idler.Name, "tokill-", expiredStartTimes(idler.Spec.TimeoutSeconds))
+			fakeClients.DynamicClient.PrependReactor("patch", "replicasets", func(action clienttest.Action) (bool, runtime.Object, error) {
+				return true, nil, fmt.Errorf("some error")
+			})
 
 			// when
-			_, err = reconciler.Reconcile(context.TODO(), req)
+			_, err := reconciler.Reconcile(context.TODO(), req)
 
 			// then
 			require.Error(t, err)
-			memberoperatortest.AssertThatInIdleableCluster(t, allCl, dynamicClient).
+			memberoperatortest.AssertThatInIdleableCluster(t, fakeClients).
 				// not idled
 				ReplicaSetScaledUp(toKill.replicaSet).
 				// idled
@@ -406,23 +325,15 @@ func TestEnsureIdling(t *testing.T) {
 				DaemonSetDoesNotExist(toKill.daemonSet).
 				JobDoesNotExist(toKill.job).
 				DeploymentScaledDown(toKill.deployment).
-				DeploymentScaledDown(toKill.integration).
-				DeploymentScaledDown(toKill.kameletBinding).
+				ScaleSubresourceScaledDown(toKill.integration).
+				ScaleSubresourceScaledDown(toKill.kameletBinding).
 				DeploymentConfigScaledDown(toKill.deploymentConfig).
 				ReplicationControllerScaledDown(toKill.replicationController).
 				StatefulSetScaledDown(toKill.statefulSet).
-				VMStopped(toKill.vmStopCallCounter)
+				VMStopped(toKill.vmStopCallCounter).
+				AAPIdled(toKill.aap)
 
-			var beingTracked []*corev1.Pod
-			for _, pod := range toKill.controlledPods {
-				if pod.OwnerReferences[0].Name == toKill.replicaSet.Name {
-					beingTracked = append(beingTracked, pod)
-				}
-			}
-
-			// Only tracks pods that have not been deleted
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				TracksPods(beingTracked).
+			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 		})
 	})
@@ -442,20 +353,19 @@ func TestEnsureIdling(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		preparePayloads(t, fakeClients, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
-		// first reconcile to track pods
+		// when
+		// first reconcile should delete pods and create notification
 		res, err := reconciler.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-		assert.True(t, res.Requeue)
-		assert.Equal(t, 0, int(res.RequeueAfter))
 
-		// second reconcile should delete pods and create notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
 		//then
 		require.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
+		assert.True(t, res.Requeue)
+		// something was idled, expect the next reconcile in 5% of the timeout
+		assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
+		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 		//check the notification is actually created
 		hostCl, _ := reconciler.GetHostCluster()
@@ -469,89 +379,25 @@ func TestEnsureIdling(t *testing.T) {
 		require.Equal(t, "alex@test.com", notification.Spec.Recipient)
 		require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
 
-		// third reconcile should not create a notification
-		res, err = reconciler.Reconcile(context.TODO(), req)
-		//then
-		require.NoError(t, err)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+		t.Run("second reconcile doesn't create notification", func(t *testing.T) {
+			// when
+			res, err = reconciler.Reconcile(context.TODO(), req)
 
-		err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
-			Namespace: test.HostOperatorNs,
-			Name:      "alex-stage-idled",
-		}, notification)
-		require.NoError(t, err)
-		require.Equal(t, notificationCreationTime, notification.CreationTimestamp)
-	})
-}
+			//then
+			require.NoError(t, err)
+			assert.True(t, res.Requeue)
+			// pods (exceeding the timeout) are still running, expect the next reconcile in 5% of the timeout
+			assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
+			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
+				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
-func TestAAPIdlerIsCalled(t *testing.T) {
-
-	t.Run("pods without startTime", func(t *testing.T) {
-		// given
-		idler := &toolchainv1alpha1.Idler{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "alex-stage",
-				Labels: map[string]string{
-					toolchainv1alpha1.SpaceLabelKey: "alex",
-				},
-			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds},
-		}
-		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", []string{"dev"}, []string{"alex"})
-		mur := newMUR("alex")
-
-		fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
-		runningAAP := newAAP(t, false, "running-test", idler.Name)
-		dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, aapGVK, runningAAP)
-
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		reconciler.DynamicClient = dynamicClient
-		reconciler.DiscoveryClient = fakeDiscovery
-
-		// clientSet needed to create the owning resources in the dynamic client
-		clients := clientSet{
-			allNamespacesClient: reconciler.AllNamespacesClient,
-			dynamicClient:       dynamicClient,
-			createOwnerObjects: func(ctx context.Context, object client.Object) error {
-				return createObjectWithDynamicClient(t, dynamicClient, object, func(kind schema.GroupVersionKind, object client.Object) {
-					if kind.Kind == "Deployment" {
-						require.NoError(t, controllerutil.SetOwnerReference(runningAAP, object, scheme.Scheme))
-					}
-				})
-			},
-		}
-
-		startTimes := payloadStartTimes{
-			// to make it expired for AAP workload, but not for normal one
-			defaultStartTime: time.Now().Add(-time.Duration(aapTimeoutSeconds(idler.Spec.TimeoutSeconds)+1) * time.Second),
-			// not expired
-			vmStartTime: time.Now(),
-		}
-		podsRunningForTooLong := preparePayloadsWithCreateFunc(t, clients, idler.Name, "long-", startTimes)
-
-		// when
-		res, err := reconciler.Reconcile(context.TODO(), req)
-
-		// then
-		require.NoError(t, err)
-		assert.True(t, res.Requeue)
-
-		// the workload resources should all exist, we cannot verify the other resources as they are in the dynamic client
-		// and this logic uses allNamespacesClient by default
-		memberoperatortest.AssertThatInIdleableCluster(t, reconciler.AllNamespacesClient, dynamicClient).PodsExist(podsRunningForTooLong.standalonePods)
-
-		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled approx to the 1/12th of the timeout
-		assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/12)
-		// idler tracks all pods
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-			TracksPods(podsRunningForTooLong.allPods).
-			// aap idler idled the AAP CR and sent the notification
-			HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
-		// hack to verify that he AAP CR is idled
-		aapIdler, _ := prepareAAPIdler(t, idler)
-		aapIdler.dynamicClient = dynamicClient
-		assertAAPsIdled(t, aapIdler, idler.Name, runningAAP.GetName())
+			err = hostCl.Client.Get(context.TODO(), types.NamespacedName{
+				Namespace: test.HostOperatorNs,
+				Name:      "alex-stage-idled",
+			}, notification)
+			require.NoError(t, err)
+			require.Equal(t, notificationCreationTime, notification.CreationTimestamp)
+		})
 	})
 }
 
@@ -567,7 +413,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				TimeoutSeconds: 0,
 			},
 		}
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -575,7 +421,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.IdlerNoDeactivation())
+		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).HasConditions(memberoperatortest.IdlerNoDeactivation())
 	})
 
 	t.Run("Fail if Idler.Spec.TimeoutSec is invalid", func(t *testing.T) {
@@ -588,7 +434,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 				TimeoutSeconds: -1,
 			},
 		}
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler)
 
 		// when
 		res, err := reconciler.Reconcile(context.TODO(), req)
@@ -596,7 +442,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.Equal(t, reconcile.Result{}, res)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("timeoutSeconds should be bigger than 0"))
+		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).HasConditions(memberoperatortest.FailedToIdle("timeoutSeconds should be bigger than 0"))
 	})
 
 	t.Run("Fail if can't list pods", func(t *testing.T) {
@@ -608,8 +454,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 		}
 
-		reconciler, req, cl, allCl, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-		allCl.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		fakeClients.AllNamespacesClient.MockList = func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			pl := &corev1.PodList{}
 			if reflect.TypeOf(list) == reflect.TypeOf(pl) && len(opts) == 1 {
 				return errors.New("can't list pods")
@@ -623,7 +469,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		// then
 		require.EqualError(t, err, "failed to ensure idling 'john-dev': can't list pods")
 		assert.Equal(t, reconcile.Result{}, res)
-		memberoperatortest.AssertThatIdler(t, idler.Name, cl).HasConditions(memberoperatortest.FailedToIdle("can't list pods"))
+		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).HasConditions(memberoperatortest.FailedToIdle("can't list pods"))
 	})
 
 	t.Run("Fail if can't access payloads", func(t *testing.T) {
@@ -642,186 +488,29 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		err = vmi.UnmarshalJSON(virtualmachineinstanceJSON)
 		require.NoError(t, err)
 
-		t.Run("can't get controllers because of general error", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessible runtime.Object, errMsg string) {
-				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
+		t.Run("can't delete pod", func(t *testing.T) {
+			// given
+			reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, &idler)
+			preparePayloads(t, fakeClients, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
 
-				get := allCl.MockGet
-				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
-						return errors.New(errMsg)
-					}
-					return allCl.Client.Get(ctx, key, obj, opts...)
-				}
-
-				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
-				copy(originalReactions, dynamicCl.ReactionChain)
-				defer func() {
-					dynamicCl.ReactionChain = originalReactions
-				}()
-				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
-					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
-					dynamicCl.PrependReactor("get", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New(errMsg)
-					})
-				}
-
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
-				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
+			dlt := fakeClients.AllNamespacesClient.MockDelete
+			defer func() { fakeClients.AllNamespacesClient.MockDelete = dlt }()
+			fakeClients.AllNamespacesClient.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+				return errors.New("can't delete pod")
 			}
 
-			assertCanNotGetObject(&appsv1.Deployment{}, "can't get deployment")
-			assertCanNotGetObject(&appsv1.ReplicaSet{}, "can't get replicaset")
-			assertCanNotGetObject(&appsv1.DaemonSet{}, "can't get daemonset")
-			assertCanNotGetObject(&batchv1.Job{}, "can't get job")
-			assertCanNotGetObject(&appsv1.StatefulSet{}, "can't get statefulset")
-			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{}, "can't get deploymentconfig")
-			assertCanNotGetObject(&corev1.ReplicationController{}, "can't get replicationcontroller")
-			assertCanNotGetObject(vm, "can't get virtualmachine")
-			assertCanNotGetObject(vmi, "can't get virtualmachineinstance")
-		})
+			//when
+			res, err := reconciler.Reconcile(context.TODO(), req)
 
-		t.Run("can't get controllers because not found", func(t *testing.T) {
-			assertCanNotGetObject := func(inaccessible runtime.Object) {
-				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
-
-				get := allCl.MockGet
-				defer func() { allCl.MockGet = get }()
-				allCl.MockGet = func(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
-						return apierrors.NewNotFound(schema.GroupResource{
-							Group:    "",
-							Resource: reflect.TypeOf(obj).Name(),
-						}, key.Name)
-					}
-					return allCl.Client.Get(ctx, key, obj, opts...)
-				}
-
-				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
-				copy(originalReactions, dynamicCl.ReactionChain)
-				defer func() {
-					dynamicCl.ReactionChain = originalReactions
-				}()
-				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
-					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
-					dynamicCl.PrependReactor("get", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, apierrors.NewNotFound(schema.GroupResource{
-							Group:    "",
-							Resource: resource,
-						}, inaccessible.(*unstructured.Unstructured).GetName())
-					})
-				}
-
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.NoError(t, err) // 'NotFound' errors are ignored!
-				// no other pods being tracked
-				assert.True(t, res.Requeue)
-				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).ContainsCondition(memberoperatortest.Running())
-			}
-
-			assertCanNotGetObject(&appsv1.Deployment{})
-			assertCanNotGetObject(&appsv1.ReplicaSet{})
-			assertCanNotGetObject(&appsv1.DaemonSet{})
-			assertCanNotGetObject(&batchv1.Job{})
-			assertCanNotGetObject(&appsv1.StatefulSet{})
-			assertCanNotGetObject(&openshiftappsv1.DeploymentConfig{})
-			assertCanNotGetObject(&corev1.ReplicationController{})
-			assertCanNotGetObject(vm)
-			assertCanNotGetObject(vmi)
-		})
-
-		t.Run("can't update controllers", func(t *testing.T) {
-			assertCanNotUpdateObject := func(inaccessible runtime.Object, errMsg string) {
-				// given
-				reconciler, req, cl, allCl, dynamicCl := prepareReconcileWithPodsRunningTooLong(t, idler)
-				gock.Off()
-				// mock stop call
-				mockStopVMCalls(".*", ".*", http.StatusInternalServerError)
-
-				update := allCl.MockUpdate
-				defer func() { allCl.MockUpdate = update }()
-				allCl.MockPatch = func(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
-						return errors.New(errMsg)
-					}
-					return allCl.Client.Patch(ctx, obj, patch, opts...)
-				}
-
-				// dynamic client for vms
-				originalReactions := make([]clienttest.Reactor, len(dynamicCl.ReactionChain))
-				copy(originalReactions, dynamicCl.ReactionChain)
-				defer func() {
-					dynamicCl.ReactionChain = originalReactions
-				}()
-				if reflect.TypeOf(inaccessible) == reflect.TypeOf(&unstructured.Unstructured{}) {
-					resource := strings.ToLower(inaccessible.(*unstructured.Unstructured).GetKind()) + "s"
-					dynamicCl.PrependReactor("patch", resource, func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-						return true, nil, errors.New(errMsg)
-					})
-				}
-
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
-				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
-			}
-
-			assertCanNotUpdateObject(&appsv1.Deployment{}, "can't update deployment")
-			assertCanNotUpdateObject(&appsv1.ReplicaSet{}, "can't update replicaset")
-			assertCanNotUpdateObject(&appsv1.StatefulSet{}, "can't update statefulset")
-			assertCanNotUpdateObject(&openshiftappsv1.DeploymentConfig{}, "can't update deploymentconfig")
-			assertCanNotUpdateObject(&corev1.ReplicationController{}, "can't update replicationcontroller")
-			assertCanNotUpdateObject(vm, "an error on the server (\"\") has prevented the request from succeeding (put virtualmachines.authentication.k8s.io alex-stage-virtualmachine)")
-		})
-
-		t.Run("can't delete payloads", func(t *testing.T) {
-			assertCanNotDeleteObject := func(inaccessible runtime.Object, errMsg string) {
-				// given
-				reconciler, req, cl, allCl, _ := prepareReconcileWithPodsRunningTooLong(t, idler)
-
-				dlt := allCl.MockDelete
-				defer func() { allCl.MockDelete = dlt }()
-				allCl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-					if reflect.TypeOf(obj) == reflect.TypeOf(inaccessible) {
-						return errors.New(errMsg)
-					}
-					return allCl.Client.Delete(ctx, obj, opts...)
-				}
-
-				//when
-				res, err := reconciler.Reconcile(context.TODO(), req)
-
-				// then
-				require.ErrorContains(t, err, fmt.Sprintf("failed to ensure idling 'alex-stage': %s", errMsg))
-				assert.Equal(t, reconcile.Result{}, res)
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
-			}
-
-			assertCanNotDeleteObject(&appsv1.DaemonSet{}, "can't delete daemonset")
-			assertCanNotDeleteObject(&batchv1.Job{}, "can't delete job")
-			assertCanNotDeleteObject(&corev1.Pod{}, "can't delete pod")
+			// then
+			require.ErrorContains(t, err, "failed to ensure idling 'alex-stage': can't delete pod")
+			assert.Equal(t, reconcile.Result{}, res)
+			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
+				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
 		})
 	})
 
-	t.Run("Fail if cannot update notification creation failed status", func(t *testing.T) {
+	t.Run("Fail if cannot update notification creation doesn't affect idling of other pods", func(t *testing.T) {
 		// given
 		idler := &toolchainv1alpha1.Idler{
 			ObjectMeta: metav1.ObjectMeta{
@@ -835,177 +524,32 @@ func TestEnsureIdlingFailed(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"john"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "john", "advanced", "abcde11", namespaces, usernames)
-		reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
-		preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
-
-		// when
-		// first reconcile to start tracking pods
-		_, err := reconciler.Reconcile(context.TODO(), req)
-		require.NoError(t, err)
-
-		// second reconcile to delete pods and create notification
-		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+		reconciler, req, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet) // not adding mur
+		toKill := preparePayloads(t, fakeClients, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds))
+		fakeClients.DefaultClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return fmt.Errorf("cannot set status to fail")
 		}
-		_, err = reconciler.Reconcile(context.TODO(), req)
+		// when
+		_, err := reconciler.Reconcile(context.TODO(), req)
 
 		// then
-		// since no mur, error should have been wrapped as status update, but status update fails
-		require.EqualError(t, err, "failed to ensure idling 'john-dev': cannot set status to fail")
+		// error is not wrapped since it's returned by the final update of the status
+		require.EqualError(t, err, "cannot set status to fail")
+		memberoperatortest.AssertThatInIdleableCluster(t, fakeClients).
+			// idled
+			PodsDoNotExist(toKill.standalonePods).
+			DaemonSetDoesNotExist(toKill.daemonSet).
+			JobDoesNotExist(toKill.job).
+			ReplicaSetScaledDown(toKill.replicaSet).
+			DeploymentScaledDown(toKill.deployment).
+			ScaleSubresourceScaledDown(toKill.integration).
+			ScaleSubresourceScaledDown(toKill.kameletBinding).
+			DeploymentConfigScaledDown(toKill.deploymentConfig).
+			ReplicationControllerScaledDown(toKill.replicationController).
+			StatefulSetScaledDown(toKill.statefulSet).
+			VMStopped(toKill.vmStopCallCounter).
+			AAPIdled(toKill.aap)
 	})
-
-	t.Run("aap idler failures", func(t *testing.T) {
-		idler := &toolchainv1alpha1.Idler{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "john-dev",
-			},
-			Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: TestIdlerTimeOutSeconds * 100},
-		}
-
-		t.Run("aap idler init failed", func(t *testing.T) {
-			// given
-			reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-			fakeDiscovery := newFakeDiscoveryClient(noAAPResourceList(t)...)
-			fakeDiscovery.ServerPreferredResourcesError = fmt.Errorf("some error")
-			reconciler.DiscoveryClient = fakeDiscovery
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.True(t, res.Requeue)
-			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				HasConditions(memberoperatortest.FailedToIdle("failed to init aap idler 'john-dev': some error"))
-		})
-
-		t.Run("aap idler execution failed", func(t *testing.T) {
-			// given
-			reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
-			dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, aapGVK)
-			dynamicClient.PrependReactor("list", "ansibleautomationplatforms", func(action clienttest.Action) (handled bool, ret runtime.Object, err error) {
-				return true, nil, fmt.Errorf("some list error")
-			})
-			fakeDiscovery := newFakeDiscoveryClient(withAAPResourceList(t)...)
-			reconciler.DynamicClient = dynamicClient
-			reconciler.DiscoveryClient = fakeDiscovery
-
-			// when
-			res, err := reconciler.Reconcile(context.TODO(), req)
-
-			// then
-			require.NoError(t, err)
-			assert.True(t, res.Requeue)
-			assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
-			memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-				HasConditions(memberoperatortest.FailedToIdle("failed to ensure aap idling 'john-dev': some list error"))
-		})
-	})
-}
-
-func TestAppNameTypeForControllers(t *testing.T) {
-
-	idler := &toolchainv1alpha1.Idler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "alex-stage",
-			Labels: map[string]string{
-				toolchainv1alpha1.SpaceLabelKey: "alex",
-			},
-		},
-		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 60},
-	}
-	namespaces := []string{"dev", "stage"}
-	usernames := []string{"alex"}
-	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-	mur := newMUR("alex")
-	reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-	plds := preparePayloads(t, reconciler, idler.Name, "", freshStartTimes(idler.Spec.TimeoutSeconds))
-
-	tests := map[string]struct {
-		ownerKind       string
-		ownerName       string
-		expectedAppType string
-		expectedAppName string
-	}{
-		"Deployment": {
-			// We are testing the case with a nested controllers (Deployment -> ReplicaSet -> Pod) here,
-			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
-			ownerKind:       "ReplicaSet",
-			ownerName:       fmt.Sprintf("%s-replicaset", plds.deployment.Name),
-			expectedAppType: "Deployment",
-			expectedAppName: plds.deployment.Name,
-		},
-		"ReplicaSet": {
-			ownerKind:       "ReplicaSet",
-			ownerName:       plds.replicaSet.Name,
-			expectedAppType: "ReplicaSet",
-			expectedAppName: plds.replicaSet.Name,
-		},
-		"DaemonSet": {
-			ownerKind:       "DaemonSet",
-			ownerName:       plds.daemonSet.Name,
-			expectedAppType: "DaemonSet",
-			expectedAppName: plds.daemonSet.Name,
-		},
-		"StatefulSet": {
-			ownerKind:       "StatefulSet",
-			ownerName:       plds.statefulSet.Name,
-			expectedAppType: "StatefulSet",
-			expectedAppName: plds.statefulSet.Name,
-		},
-		"DeploymentConfig": {
-			// We are testing the case with a nested controllers (DeploymentConfig -> ReplicationController -> Pod) here,
-			// so we the pod's owner is ReplicaSet but the expected scaled app is the parent Deployment.
-			ownerKind:       "ReplicationController",
-			ownerName:       fmt.Sprintf("%s-replicationcontroller", plds.deploymentConfig.Name),
-			expectedAppType: "DeploymentConfig",
-			expectedAppName: plds.deploymentConfig.Name,
-		},
-		"ReplicationController": {
-			ownerKind:       "ReplicationController",
-			ownerName:       plds.replicationController.Name,
-			expectedAppType: "ReplicationController",
-			expectedAppName: plds.replicationController.Name,
-		},
-		"Job": {
-			ownerKind:       "Job",
-			ownerName:       plds.job.Name,
-			expectedAppType: "Job",
-			expectedAppName: plds.job.Name,
-		},
-		"VirtualMachineInstance": {
-			ownerKind:       "VirtualMachineInstance",
-			ownerName:       plds.virtualmachineinstance.GetName(),
-			expectedAppType: "VirtualMachine",
-			expectedAppName: plds.virtualmachine.GetName(),
-		},
-	}
-
-	for k, tc := range tests {
-		t.Run(k, func(t *testing.T) {
-			//given
-			p := func() *corev1.Pod {
-				for _, pod := range plds.controlledPods {
-					for _, owner := range pod.OwnerReferences {
-						if owner.Kind == tc.ownerKind && owner.Name == tc.ownerName {
-							return pod
-						}
-					}
-				}
-				return nil
-			}()
-
-			//when
-			appType, appName, deletedByController, err := reconciler.scaleControllerToZero(context.TODO(), p.ObjectMeta)
-
-			//then
-			require.NoError(t, err)
-			require.True(t, deletedByController)
-			require.Equal(t, tc.expectedAppType, appType)
-			require.Equal(t, tc.expectedAppName, appName)
-		})
-	}
 }
 
 func TestNotificationAppNameTypeForPods(t *testing.T) {
@@ -1023,80 +567,62 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 	usernames := []string{"feny"}
 	nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "feny", "advanced", "abcde11", namespaces, usernames)
 	mur := newMUR("feny")
-	var pname string
 	testpod := map[string]struct {
-		pcond                       []corev1.PodCondition
+		preparePayload              func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string)
 		expectedAppType             string
 		expectedNotificationCreated bool
-		controllerOwned             bool
 	}{
-		"Individual-Completed-Pod": {
-			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}},
+		"Individual completed pod": {
 			expectedAppType:             "Pod",
 			expectedNotificationCreated: false,
-			controllerOwned:             false,
+			preparePayload: func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string) {
+				pod := newPod(t, fakeClients, idler.Name, expiredStartTimes(idler.Spec.TimeoutSeconds), corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"})
+				return pod, pod.Name
+			},
 		},
-		"Individual-NonCompleted-Pod": {
-			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: ""}},
+		"Individual nonCompleted pod": {
 			expectedAppType:             "Pod",
 			expectedNotificationCreated: true,
-			controllerOwned:             false,
+			preparePayload: func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string) {
+				pod := newPod(t, fakeClients, idler.Name, expiredStartTimes(idler.Spec.TimeoutSeconds), corev1.PodCondition{Type: "Ready"})
+				return pod, pod.Name
+			},
 		},
-		"Controlled-Completed-Pod": {
-			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}},
+		"Controlled by deployment": {
 			expectedAppType:             "Deployment",
 			expectedNotificationCreated: true,
-			controllerOwned:             true,
+			preparePayload: func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string) {
+				plds := preparePayloads(t, fakeClients, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
+				return plds.getFirstControlledPod(fmt.Sprintf("%s-replicaset", plds.deployment.Name)), plds.deployment.Name
+			},
 		},
-		"Controlled-NonCompleted-Pod": {
-			pcond:                       []corev1.PodCondition{{Type: "Ready", Reason: ""}},
-			expectedAppType:             "Deployment",
+		"Controlled by VM": {
+			expectedAppType:             "VirtualMachine",
 			expectedNotificationCreated: true,
-			controllerOwned:             true,
-		},
-		"Controlled-Pod-nocondition": {
-			expectedAppType:             "Deployment",
-			expectedNotificationCreated: true,
-			controllerOwned:             true,
-		},
-		"Controlled-Pod-multiplecondition": {
-			pcond: []corev1.PodCondition{{Type: "Ready", Reason: ""},
-				{Type: "Initiated"},
-				{Type: "ContainersReady"}},
-			expectedAppType:             "Deployment",
-			expectedNotificationCreated: true,
-			controllerOwned:             true,
+			preparePayload: func(fakeClients *memberoperatortest.FakeClientSet) (*corev1.Pod, string) {
+				plds := preparePayloads(t, fakeClients, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
+				return plds.getFirstControlledPod(plds.virtualmachineinstance.GetName()), plds.virtualmachine.GetName()
+			},
 		},
 	}
 
 	for pt, tcs := range testpod {
 		t.Run(pt, func(t *testing.T) {
-			reconciler, req, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-			idlerTimeoutPlusOneSecondAgo := time.Now().Add(-time.Duration(idler.Spec.TimeoutSeconds+1) * time.Second)
+			reconciler, _, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+			ownerIdler := newOwnerIdler(idler, reconciler)
+			pod, appName := tcs.preparePayload(fakeClients)
 
-			if tcs.controllerOwned {
-				preparePayloads(t, reconciler, idler.Name, "todelete-", expiredStartTimes(idler.Spec.TimeoutSeconds), tcs.pcond...)
-			} else {
-				p := preparePayloadsSinglePod(t, reconciler, idler.Name, "todelete-", idlerTimeoutPlusOneSecondAgo, tcs.pcond...).standalonePods[0]
-				pname = p.Name
-			}
+			// when
+			err := reconciler.deletePodsAndCreateNotification(context.TODO(), *pod, idler.DeepCopy(), ownerIdler)
 
-			// first reconcile to track pods
-			res, err := reconciler.Reconcile(context.TODO(), req)
-			require.NoError(t, err)
-			assert.True(t, res.Requeue)
-
-			// second reconcile should delete pods and create notification
-			res, err = reconciler.Reconcile(context.TODO(), req)
 			//then
 			require.NoError(t, err)
-
 			if tcs.expectedNotificationCreated {
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
+				memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
+					HasConditions(memberoperatortest.IdlerNotificationCreated())
 			} else {
-				memberoperatortest.AssertThatIdler(t, idler.Name, cl).
-					HasConditions(memberoperatortest.Running())
+				memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
+					HasConditions()
 			}
 			//check the notification is actually created
 			hostCl, _ := reconciler.GetHostCluster()
@@ -1110,9 +636,7 @@ func TestNotificationAppNameTypeForPods(t *testing.T) {
 				require.Equal(t, "feny@test.com", notification.Spec.Recipient)
 				require.Equal(t, "idled", notification.Labels[toolchainv1alpha1.NotificationTypeLabelKey])
 				require.Equal(t, tcs.expectedAppType, notification.Spec.Context["AppType"])
-				if !tcs.controllerOwned {
-					require.Equal(t, pname, notification.Spec.Context["AppName"])
-				}
+				require.Equal(t, appName, notification.Spec.Context["AppName"])
 			} else {
 				require.EqualError(t, err, "notifications.toolchain.dev.openshift.com \"feny-stage-idled\" not found")
 			}
@@ -1137,7 +661,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -1175,7 +699,7 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -1192,8 +716,8 @@ func TestCreateNotification(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, cl, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
-		cl.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+		reconciler, _, fakeClients := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		fakeClients.DefaultClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 			return errors.New("can't update condition")
 		}
 		//when
@@ -1201,13 +725,13 @@ func TestCreateNotification(t *testing.T) {
 
 		//then
 		require.EqualError(t, err, "can't update condition")
-		err = cl.Get(context.TODO(), types.NamespacedName{Name: idler.Name}, idler)
+		err = fakeClients.DefaultClient.Get(context.TODO(), types.NamespacedName{Name: idler.Name}, idler)
 		require.NoError(t, err)
 		_, found := condition.FindConditionByType(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated)
 		require.False(t, found)
 
 		// second reconcile will not create the notification again but set the status
-		cl.MockStatusUpdate = nil
+		fakeClients.DefaultClient.MockStatusUpdate = nil
 		err = reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.NoError(t, err)
 		require.True(t, condition.IsTrue(idler.Status.Conditions, toolchainv1alpha1.IdlerTriggeredNotificationCreated))
@@ -1218,7 +742,7 @@ func TestCreateNotification(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
@@ -1234,7 +758,7 @@ func TestCreateNotification(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		mur.Spec.PropagatedClaims.Email = ""
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "no email found for the user in MURs")
@@ -1247,7 +771,7 @@ func TestCreateNotification(t *testing.T) {
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
 		mur.Spec.PropagatedClaims.Email = "invalid-email-address"
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		//when
 		err := reconciler.createNotification(context.TODO(), idler, "testPodName", "testapptype")
 		require.EqualError(t, err, "unable to create Notification CR from Idler: The specified recipient [invalid-email-address] is not a valid email address: mail: missing '@' or angle-addr")
@@ -1272,7 +796,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
 		mur := newMUR("alex")
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -1291,7 +815,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		mur := newMUR("alex")
 		mur2 := newMUR("brian")
 		mur3 := newMUR("charlie")
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet, mur, mur2, mur3)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -1306,7 +830,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 
 	t.Run("unable to get NSTemplateSet", func(t *testing.T) {
 		//given
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -1320,7 +844,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 		namespaces := []string{"dev", "stage"}
 		usernames := []string{"alex"}
 		nsTmplSet := newNSTmplSet(test.MemberOperatorNs, "alex", "advanced", "abcde11", namespaces, usernames)
-		reconciler, _, _, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
+		reconciler, _, _ := prepareReconcile(t, idler.Name, getHostCluster, idler, nsTmplSet)
 		hostCluster, _ := reconciler.GetHostCluster()
 		//when
 		emails, err := reconciler.getUserEmailsFromMURs(context.TODO(), hostCluster, idler)
@@ -1331,7 +855,7 @@ func TestGetUserEmailFromMUR(t *testing.T) {
 }
 
 type payloads struct {
-	// standalonePods are pods which are supposed to be tracked and also deleted directly by the Idler controller
+	// standalonePods are pods which are supposed to be directly deleted by the Idler controller
 	// if run for too long
 	standalonePods []*corev1.Pod
 	// controlledPods are pods which are managed by Deployment/ReplicaSet/etc controllers and not supposed to be deleted
@@ -1340,18 +864,31 @@ type payloads struct {
 	// standalonePods + controlledPods
 	allPods []*corev1.Pod
 
-	deployment             *appsv1.Deployment
-	integration            *appsv1.Deployment
-	kameletBinding         *appsv1.Deployment
-	replicaSet             *appsv1.ReplicaSet
-	daemonSet              *appsv1.DaemonSet
-	statefulSet            *appsv1.StatefulSet
-	deploymentConfig       *openshiftappsv1.DeploymentConfig
-	replicationController  *corev1.ReplicationController
-	job                    *batchv1.Job
-	virtualmachine         *unstructured.Unstructured
-	vmStopCallCounter      *int
-	virtualmachineinstance *unstructured.Unstructured
+	deployment                *appsv1.Deployment
+	integration               *unstructured.Unstructured
+	kameletBinding            *unstructured.Unstructured
+	replicaSet                *appsv1.ReplicaSet
+	replicaSetsWithDeployment []*appsv1.ReplicaSet
+	daemonSet                 *appsv1.DaemonSet
+	statefulSet               *appsv1.StatefulSet
+	deploymentConfig          *openshiftappsv1.DeploymentConfig
+	replicationController     *corev1.ReplicationController
+	job                       *batchv1.Job
+	virtualmachine            *unstructured.Unstructured
+	vmStopCallCounter         *int
+	virtualmachineinstance    *unstructured.Unstructured
+	aap                       *unstructured.Unstructured
+}
+
+func (p payloads) getFirstControlledPod(ownerName string) *corev1.Pod {
+	for _, pod := range p.controlledPods {
+		for _, owner := range pod.OwnerReferences {
+			if owner.Name == ownerName {
+				return pod
+			}
+		}
+	}
+	return nil
 }
 
 type payloadStartTimes struct {
@@ -1359,28 +896,32 @@ type payloadStartTimes struct {
 	vmStartTime      time.Time
 }
 
-func preparePayloads(t *testing.T, r *Reconciler, namespace, namePrefix string, startTimes payloadStartTimes, conditions ...corev1.PodCondition) payloads {
-	return preparePayloadsWithCreateFunc(t, clientSetForReconciler(r), namespace, namePrefix, startTimes, conditions...)
-}
-
-type createFunc func(context.Context, client.Object) error
-type clientSet struct {
-	createOwnerObjects  createFunc
-	allNamespacesClient client.Client
-	dynamicClient       dynamic.Interface
-}
-
-func clientSetForReconciler(r *Reconciler) clientSet {
-	return clientSet{
-		allNamespacesClient: r.AllNamespacesClient,
-		dynamicClient:       r.DynamicClient,
-		createOwnerObjects: func(ctx context.Context, object client.Object) error {
-			return r.AllNamespacesClient.Create(ctx, object)
+func createDeployment(t *testing.T, clients *memberoperatortest.FakeClientSet, namespace, namePrefix, nameSuffix string, owner client.Object) (*appsv1.Deployment, *appsv1.ReplicaSet) {
+	replicas := int32(3)
+	d := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s%s%s", namePrefix, namespace, nameSuffix),
+			Namespace: namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
 		},
 	}
+	if owner != nil {
+		require.NoError(t, controllerutil.SetOwnerReference(owner, d, scheme.Scheme))
+	}
+	createObjectWithDynamicClient(t, clients.DynamicClient, d)
+	rs := &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", d.Name), Namespace: namespace},
+		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
+	}
+	err := controllerutil.SetControllerReference(d, rs, scheme.Scheme)
+	require.NoError(t, err)
+	createObjectWithDynamicClient(t, clients.DynamicClient, rs)
+	return d, rs
 }
 
-func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, namePrefix string, startTimes payloadStartTimes, conditions ...corev1.PodCondition) payloads {
+func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, namespace, namePrefix string, startTimes payloadStartTimes) payloads {
 	var sTime *metav1.Time
 	if !startTimes.defaultStartTime.IsZero() {
 		sTime = &metav1.Time{Time: startTimes.defaultStartTime}
@@ -1388,126 +929,82 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	replicas := int32(3)
 
 	// Deployment
-	d := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deployment", namePrefix, namespace), Namespace: namespace},
-		Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
-	}
-	err := clients.createOwnerObjects(context.TODO(), d)
-	require.NoError(t, err)
-	rs := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", d.Name), Namespace: namespace},
-		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
-	}
-	err = controllerutil.SetControllerReference(d, rs, scheme.Scheme)
-	require.NoError(t, err)
-	err = clients.createOwnerObjects(context.TODO(), rs)
-	require.NoError(t, err)
-	controlledPods := createPods(t, clients.allNamespacesClient, rs, sTime, make([]*corev1.Pod, 0, 3), noRestart(), conditions...)
+	d, rs := createDeployment(t, clients, namespace, namePrefix, "-deployment", nil)
+	replicaSetsWithDeployment := []*appsv1.ReplicaSet{rs}
+	controlledPods := createPods(t, clients.AllNamespacesClient, rs, sTime, make([]*corev1.Pod, 0, 3), noRestart())
+
+	// create evicted pods owned by the ReplicaSet, they should be deleted if timeout is reached
+	standalonePods := createPodsWithSuffix(t, "-evicted", clients.AllNamespacesClient, rs, make([]*corev1.Pod, 0, 3),
+		corev1.PodStatus{StartTime: sTime, Reason: "Evicted"})
+
+	camelInt := &unstructured.Unstructured{}
+	camelInt.SetAPIVersion("camel.apache.org/v1")
+	camelInt.SetKind("Integration")
+	camelInt.SetNamespace(namespace)
+	camelInt.SetName(fmt.Sprintf("%s%s-integration", namePrefix, namespace))
+	createObjectWithDynamicClient(t, clients.DynamicClient, camelInt)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
-	integration := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s%s-integration-deployment", namePrefix, namespace),
-			Namespace: namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "camel.apache.org/v1",
-					Kind:       "Integration",
-					Name:       fmt.Sprintf("%s%s-integration", namePrefix, namespace),
-				},
-			},
-		},
-		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
-	}
-	err = clients.createOwnerObjects(context.TODO(), integration)
-	require.NoError(t, err)
-	integrationRS := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", integration.Name), Namespace: namespace},
-		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
-	}
-	err = controllerutil.SetControllerReference(integration, integrationRS, scheme.Scheme)
-	require.NoError(t, err)
-	err = clients.createOwnerObjects(context.TODO(), integrationRS)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, integrationRS, sTime, controlledPods, noRestart())
+	_, integrationRS := createDeployment(t, clients, namespace, namePrefix, "-integration-deployment", camelInt)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, integrationRS)
+	controlledPods = createPods(t, clients.AllNamespacesClient, integrationRS, sTime, controlledPods, noRestart())
+
+	camelBinding := &unstructured.Unstructured{}
+	camelBinding.SetAPIVersion("camel.apache.org/v1alpha1")
+	camelBinding.SetKind("KameletBinding")
+	camelBinding.SetNamespace(namespace)
+	camelBinding.SetName(fmt.Sprintf("%s%s-binding", namePrefix, namespace))
+	createObjectWithDynamicClient(t, clients.DynamicClient, camelBinding)
 
 	// Deployment with Camel K integration as an owner reference and a scale sub resource
-	binding := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s%s-binding-deployment", namePrefix, namespace),
-			Namespace: namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "camel.apache.org/v1alpha1",
-					Kind:       "KameletBinding",
-					Name:       fmt.Sprintf("%s%s-binding", namePrefix, namespace),
-				},
-			},
-		},
-		Spec: appsv1.DeploymentSpec{Replicas: &replicas},
-	}
-	err = clients.createOwnerObjects(context.TODO(), binding)
-	require.NoError(t, err)
-	bindingRS := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", binding.Name), Namespace: namespace},
-		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
-	}
-	err = controllerutil.SetControllerReference(binding, bindingRS, scheme.Scheme)
-	require.NoError(t, err)
-	err = clients.createOwnerObjects(context.TODO(), bindingRS)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, bindingRS, sTime, controlledPods, noRestart())
+	_, bindingRS := createDeployment(t, clients, namespace, namePrefix, "-binding-deployment", camelBinding)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, bindingRS)
+	controlledPods = createPods(t, clients.AllNamespacesClient, bindingRS, sTime, controlledPods, noRestart())
 
 	// Standalone ReplicaSet
 	standaloneRs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-replicaset", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
 	}
-	err = clients.createOwnerObjects(context.TODO(), standaloneRs)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, standaloneRs, sTime, controlledPods, noRestart())
+	createObjectWithDynamicClient(t, clients.DynamicClient, standaloneRs)
+	controlledPods = createPods(t, clients.AllNamespacesClient, standaloneRs, sTime, controlledPods, noRestart())
 
 	// DaemonSet
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-daemonset", namePrefix, namespace), Namespace: namespace},
 	}
-	err = clients.createOwnerObjects(context.TODO(), ds)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, ds, sTime, controlledPods, noRestart())
+	createObjectWithDynamicClient(t, clients.DynamicClient, ds)
+	controlledPods = createPods(t, clients.AllNamespacesClient, ds, sTime, controlledPods, noRestart())
 
 	// Job
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-job", namePrefix, namespace), Namespace: namespace},
 	}
-	err = clients.createOwnerObjects(context.TODO(), job)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, job, sTime, controlledPods, noRestart())
+	createObjectWithDynamicClient(t, clients.DynamicClient, job)
+	controlledPods = createPods(t, clients.AllNamespacesClient, job, sTime, controlledPods, noRestart())
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-statefulset", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	err = clients.createOwnerObjects(context.TODO(), sts)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, sts, sTime, controlledPods, noRestart())
+	createObjectWithDynamicClient(t, clients.DynamicClient, sts)
+	controlledPods = createPods(t, clients.AllNamespacesClient, sts, sTime, controlledPods, noRestart())
 
 	// DeploymentConfig
 	dc := &openshiftappsv1.DeploymentConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deploymentconfig", namePrefix, namespace), Namespace: namespace},
 		Spec:       openshiftappsv1.DeploymentConfigSpec{Replicas: replicas, Paused: true},
 	}
-	err = clients.createOwnerObjects(context.TODO(), dc)
-	require.NoError(t, err)
+	createObjectWithDynamicClient(t, clients.DynamicClient, dc)
 	rc := &corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicationcontroller", dc.Name), Namespace: namespace},
 		Spec:       corev1.ReplicationControllerSpec{Replicas: &replicas},
 	}
-	err = controllerutil.SetControllerReference(dc, rc, scheme.Scheme)
+	err := controllerutil.SetControllerReference(dc, rc, scheme.Scheme)
 	require.NoError(t, err)
-	err = clients.createOwnerObjects(context.TODO(), rc)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, rc, sTime, controlledPods, noRestart())
+	createObjectWithDynamicClient(t, clients.DynamicClient, rc)
+	controlledPods = createPods(t, clients.AllNamespacesClient, rc, sTime, controlledPods, noRestart())
 
 	// VirtualMachine
 	vm := &unstructured.Unstructured{}
@@ -1515,8 +1012,7 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	require.NoError(t, err)
 	vm.SetName(fmt.Sprintf("%s%s-virtualmachine", namePrefix, namespace))
 	vm.SetNamespace(namespace)
-	_, err = clients.dynamicClient.Resource(vmGVR).Namespace(namespace).Create(context.TODO(), vm, metav1.CreateOptions{})
-	require.NoError(t, err)
+	createObjectWithDynamicClient(t, clients.DynamicClient, vm)
 
 	// mock stop call
 	stopCallCounter := mockStopVMCalls(namespace, vm.GetName(), http.StatusAccepted)
@@ -1530,26 +1026,32 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 	vmi.SetNamespace(namespace)
 	err = controllerutil.SetControllerReference(vm, vmi, scheme.Scheme) // vm controls vmi
 	require.NoError(t, err)
-	_, err = clients.dynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Create(context.TODO(), vmi, metav1.CreateOptions{})
-	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, vmi, &vmstartTime, controlledPods, noRestart()) // vmi controls pod
+	createObjectWithDynamicClient(t, clients.DynamicClient, vmi)
+	controlledPods = createPods(t, clients.AllNamespacesClient, vmi, &vmstartTime, controlledPods, noRestart()) // vmi controls pod
 
 	// create completed pods owned by the VM, they should be deleted if timeout is reached
-	standalonePods := createPodsWithSuffix(t, "-completed", clients.allNamespacesClient, vmi, &vmstartTime,
-		make([]*corev1.Pod, 0, 3), noRestart(), corev1.PodCondition{Type: "Ready", Reason: "PodCompleted"})
+	standalonePods = createPodsWithSuffix(t, "-completed", clients.AllNamespacesClient, vmi, standalonePods,
+		corev1.PodStatus{StartTime: &vmstartTime, Conditions: []corev1.PodCondition{{Type: "Ready", Reason: "PodCompleted"}}})
 
 	// Standalone ReplicationController
 	standaloneRC := &corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-replicationcontroller", namePrefix, namespace), Namespace: namespace},
 		Spec:       corev1.ReplicationControllerSpec{Replicas: &replicas},
 	}
-	err = clients.createOwnerObjects(context.TODO(), standaloneRC)
+	createObjectWithDynamicClient(t, clients.DynamicClient, standaloneRC)
 	require.NoError(t, err)
-	controlledPods = createPods(t, clients.allNamespacesClient, standaloneRC, sTime, controlledPods, noRestart())
+	controlledPods = createPods(t, clients.AllNamespacesClient, standaloneRC, sTime, controlledPods, noRestart())
+
+	// AAP
+	aapObject := newAAP(t, false, fmt.Sprintf("%s%s-aap", namePrefix, namespace), namespace)
+	createObjectWithDynamicClient(t, clients.DynamicClient, aapObject)
+	_, aapRs := createDeployment(t, clients, namespace, namePrefix, "-aap-deployment", aapObject)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, aapRs)
+	controlledPods = createPods(t, clients.AllNamespacesClient, aapRs, sTime, controlledPods, noRestart())
 
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
-	// which is not a tracked controller such as Deployment or ReplicaSet.
+	// which is not a supported owner such as Deployment or ReplicaSet.
 	idler := &toolchainv1alpha1.Idler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s%s-somename", namePrefix, namespace),
@@ -1557,7 +1059,9 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 		},
 		Spec: toolchainv1alpha1.IdlerSpec{TimeoutSeconds: 30},
 	}
-	standalonePods = slices.Concat(standalonePods, createPods(t, clients.allNamespacesClient, idler, sTime, make([]*corev1.Pod, 0, 3), noRestart()))
+	createObjectWithDynamicClient(t, clients.DynamicClient, idler)
+	require.NoError(t, err)
+	standalonePods = slices.Concat(standalonePods, createPods(t, clients.AllNamespacesClient, idler, sTime, make([]*corev1.Pod, 0, 3), noRestart()))
 
 	// Pods with no owner.
 	for i := 0; i < 3; i++ {
@@ -1574,27 +1078,36 @@ func preparePayloadsWithCreateFunc(t *testing.T, clients clientSet, namespace, n
 		}
 		require.NoError(t, err)
 		standalonePods = append(standalonePods, pod)
-		err = clients.allNamespacesClient.Create(context.TODO(), pod)
+		err = clients.AllNamespacesClient.Create(context.TODO(), pod)
 		require.NoError(t, err)
 	}
 
 	return payloads{
-		standalonePods:         standalonePods,
-		controlledPods:         controlledPods,
-		allPods:                append(standalonePods, controlledPods...),
-		deployment:             d,
-		integration:            integration,
-		kameletBinding:         binding,
-		replicaSet:             standaloneRs,
-		daemonSet:              ds,
-		statefulSet:            sts,
-		deploymentConfig:       dc,
-		replicationController:  standaloneRC,
-		job:                    job,
-		virtualmachine:         vm,
-		vmStopCallCounter:      stopCallCounter,
-		virtualmachineinstance: vmi,
+		standalonePods:            standalonePods,
+		controlledPods:            controlledPods,
+		allPods:                   append(standalonePods, controlledPods...),
+		deployment:                d,
+		integration:               camelInt,
+		kameletBinding:            camelBinding,
+		replicaSet:                standaloneRs,
+		replicaSetsWithDeployment: replicaSetsWithDeployment,
+		daemonSet:                 ds,
+		statefulSet:               sts,
+		deploymentConfig:          dc,
+		replicationController:     standaloneRC,
+		job:                       job,
+		virtualmachine:            vm,
+		vmStopCallCounter:         stopCallCounter,
+		virtualmachineinstance:    vmi,
+		aap:                       aapObject,
 	}
+}
+
+func newAAP(t *testing.T, idled bool, name, namespace string) *unstructured.Unstructured {
+	formatted := fmt.Sprintf(aap, name, namespace, idled)
+	aap := &unstructured.Unstructured{}
+	require.NoError(t, aap.UnmarshalJSON([]byte(formatted)))
+	return aap
 }
 
 func mockStopVMCalls(namespace, name string, reply int) *int {
@@ -1616,26 +1129,19 @@ func mockStopVMCalls(namespace, name string, reply int) *int {
 	return stopCallCounter
 }
 
-func preparePayloadsSinglePod(t *testing.T, r *Reconciler, namespace, namePrefix string, startTime time.Time, conditions ...corev1.PodCondition) payloads {
-	sTime := metav1.NewTime(startTime)
+func newPod(t *testing.T, fakeClients *memberoperatortest.FakeClientSet, namespace string, startTimes payloadStartTimes, conditions ...corev1.PodCondition) *corev1.Pod {
+	sTime := &metav1.Time{Time: startTimes.defaultStartTime}
 
-	// Pods with no owner.
-	standalonePods := make([]*corev1.Pod, 0, 1)
-	for i := 0; i < 1; i++ {
-		pod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-pod-%d", namePrefix, namespace, i), Namespace: namespace},
-			Status:     corev1.PodStatus{StartTime: &sTime, Conditions: conditions},
-		}
-		standalonePods = append(standalonePods, pod)
-		err := r.AllNamespacesClient.Create(context.TODO(), pod)
-		require.NoError(t, err)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-standalone-pod", namespace), Namespace: namespace},
+		Status:     corev1.PodStatus{StartTime: sTime, Conditions: conditions},
 	}
-	return payloads{
-		standalonePods: standalonePods,
-	}
+	err := fakeClients.AllNamespacesClient.Create(context.TODO(), pod)
+	require.NoError(t, err)
+	return pod
 }
 
-func preparePayloadCrashloopingAboveThreshold(t *testing.T, clientSet clientSet, namespace, namePrefix string) payloads {
+func preparePayloadCrashloopingAboveThreshold(t *testing.T, clientSet *memberoperatortest.FakeClientSet, namespace, namePrefix string) payloads {
 	standalonePods := make([]*corev1.Pod, 0, 1)
 	startTime := metav1.Now()
 	replicas := int32(3)
@@ -1650,7 +1156,7 @@ func preparePayloadCrashloopingAboveThreshold(t *testing.T, clientSet clientSet,
 			{RestartCount: RestartCountWithinThresholdContainer2},
 		}},
 	}
-	err := clientSet.allNamespacesClient.Create(context.TODO(), pod)
+	err := clientSet.AllNamespacesClient.Create(context.TODO(), pod)
 	require.NoError(t, err)
 	standalonePods = append(standalonePods, pod)
 	// Deployment
@@ -1658,17 +1164,15 @@ func preparePayloadCrashloopingAboveThreshold(t *testing.T, clientSet clientSet,
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-deployment", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.DeploymentSpec{Replicas: &replicas},
 	}
-	err = clientSet.createOwnerObjects(context.TODO(), d)
-	require.NoError(t, err)
+	createObjectWithDynamicClient(t, clientSet.DynamicClient, d)
 	rs := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-replicaset", d.Name), Namespace: namespace},
 		Spec:       appsv1.ReplicaSetSpec{Replicas: &replicas},
 	}
 	err = controllerutil.SetControllerReference(d, rs, scheme.Scheme)
 	require.NoError(t, err)
-	err = clientSet.createOwnerObjects(context.TODO(), rs)
-	require.NoError(t, err)
-	controlledPods := createPods(t, clientSet.allNamespacesClient, rs, &startTime, make([]*corev1.Pod, 0, 3), restartingOverThreshold())
+	createObjectWithDynamicClient(t, clientSet.DynamicClient, rs)
+	controlledPods := createPods(t, clientSet.AllNamespacesClient, rs, &startTime, make([]*corev1.Pod, 0, 3), restartingOverThreshold())
 
 	allPods := append(standalonePods, controlledPods...)
 	return payloads{
@@ -1679,7 +1183,7 @@ func preparePayloadCrashloopingAboveThreshold(t *testing.T, clientSet clientSet,
 	}
 }
 
-func preparePayloadCrashloopingPodsWithinThreshold(t *testing.T, clientSet clientSet, namespace, namePrefix string, times payloadStartTimes) payloads {
+func preparePayloadCrashloopingPodsWithinThreshold(t *testing.T, clientSet *memberoperatortest.FakeClientSet, namespace, namePrefix string, times payloadStartTimes) payloads {
 	startTime := metav1.NewTime(times.defaultStartTime)
 	replicas := int32(3)
 	controlledPods := make([]*corev1.Pod, 0, 3)
@@ -1688,9 +1192,8 @@ func preparePayloadCrashloopingPodsWithinThreshold(t *testing.T, clientSet clien
 		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-statefulset", namePrefix, namespace), Namespace: namespace},
 		Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
 	}
-	err := clientSet.createOwnerObjects(context.TODO(), sts)
-	require.NoError(t, err)
-	controlledPods = createPods(t, clientSet.allNamespacesClient, sts, &startTime, controlledPods, restartingUnderThreshold())
+	createObjectWithDynamicClient(t, clientSet.DynamicClient, sts)
+	controlledPods = createPods(t, clientSet.AllNamespacesClient, sts, &startTime, controlledPods, restartingUnderThreshold())
 	return payloads{
 		controlledPods: controlledPods,
 		statefulSet:    sts,
@@ -1719,79 +1222,37 @@ func restartingUnderThreshold() []corev1.ContainerStatus {
 	}
 }
 
-func createPods(t *testing.T, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
-	return createPodsWithSuffix(t, "", allNamespacesClient, owner, startTime, podsToTrack, restartStatus, conditions...)
+func createPods(t *testing.T, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, createdPods []*corev1.Pod, restartStatus []corev1.ContainerStatus) []*corev1.Pod {
+	return createPodsWithSuffix(t, "", allNamespacesClient, owner, createdPods, corev1.PodStatus{StartTime: startTime, ContainerStatuses: restartStatus})
 }
 
-func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, startTime *metav1.Time, podsToTrack []*corev1.Pod, restartStatus []corev1.ContainerStatus, conditions ...corev1.PodCondition) []*corev1.Pod {
+func createPodsWithSuffix(t *testing.T, suffix string, allNamespacesClient client.Client, owner metav1.Object, createdPods []*corev1.Pod, podStatus corev1.PodStatus) []*corev1.Pod {
 	for i := 0; i < 3; i++ {
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pod-%d%s", owner.GetName(), i, suffix), Namespace: owner.GetNamespace()},
-			Status:     corev1.PodStatus{StartTime: startTime, Conditions: conditions, ContainerStatuses: restartStatus},
+			Status:     podStatus,
 		}
 		err := controllerutil.SetControllerReference(owner, pod, scheme.Scheme)
 		require.NoError(t, err)
-		podsToTrack = append(podsToTrack, pod)
+		createdPods = append(createdPods, pod)
 		err = allNamespacesClient.Create(context.TODO(), pod)
 		require.NoError(t, err)
 	}
-	return podsToTrack
+	return createdPods
 }
 
-func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...client.Object) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
+func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeClient client.Client) cluster.GetHostClusterFunc, initIdlerObjs ...client.Object) (*Reconciler, reconcile.Request, *memberoperatortest.FakeClientSet) {
 	s := scheme.Scheme
 	err := apis.AddToScheme(s)
 	require.NoError(t, err)
 
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
-	dynamicClient := fakedynamic.NewSimpleDynamicClient(s)
+	dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
 
-	fakeDiscovery := fakeclientset.NewSimpleClientset().Discovery()
+	fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 
-	scalesClient := fakescale.FakeScaleClient{}
-	scalesClient.AddReactor("patch", "*", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
-		action := rawAction.(clienttest.PatchAction) // nolint: forcetypeassert
-
-		// update owned deployment
-		d := &appsv1.Deployment{}
-		err := allNamespacesClient.Get(context.TODO(), types.NamespacedName{Name: action.GetName() + "-deployment", Namespace: action.GetNamespace()}, d)
-		if err != nil {
-			return false, nil, err
-		}
-		err = allNamespacesClient.Patch(context.TODO(), d, client.RawPatch(types.MergePatchType, action.GetPatch()))
-		if err != nil {
-			return false, nil, err
-		}
-
-		return false, nil, nil
-	})
-
-	// Mock internal server error for Camel K integrations in order to replicate default behavior with missing spec.replicas field
-	scalesClient.AddReactor("get", "integrations", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
-		return true, nil, &apierrors.StatusError{
-			ErrStatus: metav1.Status{
-				Message: "Internal error occurred: the spec replicas field \".spec.replicas\" does not exist",
-				Reason:  metav1.StatusReasonInternalError,
-				Code:    http.StatusInternalServerError,
-			},
-		}
-	})
-
-	// Mock proper scale resource for Camel K KameletBinding resources
-	scalesClient.AddReactor("get", "kameletbindings", func(rawAction clienttest.Action) (bool, runtime.Object, error) {
-		action := rawAction.(clienttest.GetAction) // nolint: forcetypeassert
-		obj := &autoscalingv1.Scale{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      action.GetName(),
-				Namespace: action.GetNamespace(),
-			},
-			Spec: autoscalingv1.ScaleSpec{
-				Replicas: 3,
-			},
-		}
-		return true, obj, nil
-	})
+	scalesClient := &fakescale.FakeScaleClient{}
 
 	restClient, err := test.NewRESTClient("dummy-token", apiEndpoint)
 	require.NoError(t, err)
@@ -1806,23 +1267,17 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 		DynamicClient:       dynamicClient,
 		DiscoveryClient:     fakeDiscovery,
 		RestClient:          restClient,
-		ScalesClient:        &scalesClient,
+		ScalesClient:        scalesClient,
 		Scheme:              s,
 		GetHostCluster:      getHostClusterFunc(fakeClient),
 		Namespace:           test.MemberOperatorNs,
 	}
-	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, fakeClient, allNamespacesClient, dynamicClient
-}
-
-// prepareReconcileWithPodsRunningTooLong prepares a reconcile with an Idler which already tracking pods running for too long
-func prepareReconcileWithPodsRunningTooLong(t *testing.T, idler toolchainv1alpha1.Idler) (*Reconciler, reconcile.Request, *test.FakeClient, *test.FakeClient, *fakedynamic.FakeDynamicClient) {
-	reconciler, req, cl, allCl, dynamicClient := prepareReconcile(t, idler.Name, getHostCluster, &idler)
-	payloads := preparePayloads(t, reconciler, idler.Name, "", expiredStartTimes(idler.Spec.TimeoutSeconds))
-	//start tracking pods, so the Idler status is filled with the tracked pods
-	_, err := reconciler.Reconcile(context.TODO(), req)
-	require.NoError(t, err)
-	memberoperatortest.AssertThatIdler(t, idler.Name, cl).TracksPods(payloads.allPods)
-	return reconciler, req, cl, allCl, dynamicClient
+	return r, reconcile.Request{NamespacedName: test.NamespacedName(test.MemberOperatorNs, name)}, &memberoperatortest.FakeClientSet{
+		DefaultClient:       fakeClient,
+		AllNamespacesClient: allNamespacesClient,
+		DynamicClient:       dynamicClient,
+		ScalesClient:        scalesClient,
+	}
 }
 
 func getHostCluster(fakeClient client.Client) cluster.GetHostClusterFunc {
@@ -1918,3 +1373,60 @@ var virtualmachineJSON = []byte(`{
 		"running": true
 	}
 }`)
+
+func createObjectWithDynamicClient(t *testing.T, dynamicClient dynamic.Interface, object client.Object) {
+	// get GVK and GVR
+	kinds, _, err := scheme.Scheme.ObjectKinds(object)
+	require.NoError(t, err)
+	kind := kinds[0]
+	resource, _ := meta.UnsafeGuessKindToResource(kind)
+
+	// convert to unstructured.Unstructured
+	object.GetObjectKind().SetGroupVersionKind(kind)
+	tmp, err := json.Marshal(object)
+	require.NoError(t, err)
+	unstructuredObj := &unstructured.Unstructured{}
+	err = unstructuredObj.UnmarshalJSON(tmp)
+	require.NoError(t, err)
+	// create
+	_, err = dynamicClient.Resource(resource).Namespace(object.GetNamespace()).Create(context.TODO(), unstructuredObj, metav1.CreateOptions{})
+	require.NoError(t, err)
+}
+
+var (
+	aapHeader = `{
+  "apiVersion": "aap.ansible.com/v1alpha1",
+  "kind": "AnsibleAutomationPlatform",
+  "metadata": {
+    "labels": {
+      "app.kubernetes.io/managed-by": "aap-operator"
+    },
+    "name": "%s",
+    "namespace": "%s"
+  }`
+
+	aap = aapHeader + `,
+  "spec": {
+    "eda": {
+      "api": {
+        "replicas": 1,
+        "resource_requirements": {
+          "limits": {
+            "cpu": "500m"
+          }
+        }
+      }
+    },
+    "idle_aap": %t,
+    "no_log": false
+  },
+  "status": {
+    "conditions": {
+      "message": "",
+      "reason": "",
+      "status": "True",
+      "type": "Successful"
+    }
+  }
+}`
+)

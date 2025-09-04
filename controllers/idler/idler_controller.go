@@ -24,10 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	"github.com/redhat-cop/operator-utils/pkg/util"
-	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,13 +42,7 @@ const (
 	vmSubresourceURLFmt = "/apis/subresources.kubevirt.io/%s"
 )
 
-var SupportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
-	schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithKind("Integration"):          schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithResource("integrations"),
-	schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
-}
-
 var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
-var vmInstanceGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachineinstances"}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
@@ -131,33 +122,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 		return reconcile.Result{}, r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, err,
 			"failed to ensure idling '%s'", idler.Name)
 	}
-	aapIdlerFailed := false
-	if aapIdler, err := newAAPIdler(r.AllNamespacesClient, r.DynamicClient, r.DiscoveryClient, r.notify); err != nil {
-		err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to init aap idler '%s': %w", idler.Name, err), "")
-		logger.Error(err, "init AAP idler failed")
-		aapIdlerFailed = true
-	} else {
-		aapRequeueAfter, err := aapIdler.ensureAnsiblePlatformIdling(ctx, idler)
-		if err != nil {
-			err := r.wrapErrorWithStatusUpdate(ctx, idler, r.setStatusFailed, fmt.Errorf("failed to ensure aap idling '%s': %w", idler.Name, err), "")
-			logger.Error(err, "AAP idler execution failed")
-			aapIdlerFailed = true
-		}
-		if aapRequeueAfter != 0 {
-			requeueAfter = shorterDuration(requeueAfter, aapRequeueAfter)
-		}
-	}
-
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
 		Requeue:      true,
 		RequeueAfter: requeueAfter,
 	}
-	if aapIdlerFailed {
-		// Do not return any errors if the AAP idler failed. We just log the error (above), update the Idler CR status and move on.
-		return result, nil
-	}
 	return result, r.setStatusReady(ctx, idler)
+}
+
+func getTimeout(idler *toolchainv1alpha1.Idler, pod corev1.Pod) int32 {
+	timeoutSeconds := idler.Spec.TimeoutSeconds
+	if isOwnedByVM(pod.ObjectMeta) {
+		// use 1/12th of the timeout for VMs to have more aggressive idling to decrease
+		// the infra costs because VMs consume much more resources
+		timeoutSeconds = timeoutSeconds / 12
+	}
+	return timeoutSeconds
 }
 
 func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.Idler) (time.Duration, error) {
@@ -166,50 +146,39 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 	if err := r.AllNamespacesClient.List(ctx, podList, client.InNamespace(idler.Name)); err != nil {
 		return 0, err
 	}
+	ownerIdler := newOwnerIdler(idler, r)
 	requeueAfter := time.Duration(idler.Spec.TimeoutSeconds) * time.Second
-	newStatusPods := make([]toolchainv1alpha1.Pod, 0, 10)
 	var idleErrors []error
 	for _, pod := range podList.Items {
 		podLogger := log.FromContext(ctx).WithValues("pod_name", pod.Name, "pod_phase", pod.Status.Phase)
 		podCtx := log.IntoContext(ctx, podLogger)
-		timeoutSeconds := idler.Spec.TimeoutSeconds
-		if isOwnedByVM(pod.ObjectMeta) {
-			// use 1/12th of the timeout for VMs to have more aggressive idling to decrease
-			// the infra costs because VMs consume much more resources
-			timeoutSeconds = timeoutSeconds / 12
-		}
-		if trackedPod := findPodByName(idler, pod.Name); trackedPod != nil {
-			// check the restart count for the trackedPod
+
+		timeoutSeconds := getTimeout(idler, pod)
+		if pod.Status.StartTime != nil {
+			// check the restart count for the pod
 			restartCount := getHighestRestartCount(pod.Status)
 			if restartCount > restartThreshold {
 				podLogger.Info("Pod is restarting too often. Killing the pod", "restart_count", restartCount)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
+				err := r.deletePodsAndCreateNotification(podCtx, pod, idler, ownerIdler)
 				if err == nil {
 					continue
 				}
 				idleErrors = append(idleErrors, err)
 				podLogger.Error(err, "failed to kill the pod")
 			}
-			// Already tracking this pod. Check the timeout.
-			if time.Now().After(trackedPod.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
-				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", trackedPod.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
+			// Check the start time
+			if time.Now().After(pod.Status.StartTime.Add(time.Duration(timeoutSeconds) * time.Second)) {
+				podLogger.Info("Pod running for too long. Killing the pod.", "start_time", pod.Status.StartTime.Format("2006-01-02T15:04:05Z"), "timeout_seconds", timeoutSeconds)
 				// Check if it belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
-				err := deletePodsAndCreateNotification(podCtx, pod, r, idler)
+				err := r.deletePodsAndCreateNotification(podCtx, pod, idler, ownerIdler)
 				if err == nil {
+					requeueAfter = shorterDuration(requeueAfter, time.Duration(float32(timeoutSeconds)*0.05)*time.Second)
 					continue
 				}
 				idleErrors = append(idleErrors, err)
 				podLogger.Error(err, "failed to kill the pod")
 			}
-			newStatusPods = append(newStatusPods, *trackedPod) // keep tracking
-
-		} else if pod.Status.StartTime != nil { // Ignore pods without StartTime
-			podLogger.Info("New pod detected. Start tracking.")
-			newStatusPods = append(newStatusPods, toolchainv1alpha1.Pod{
-				Name:      pod.Name,
-				StartTime: *pod.Status.StartTime,
-			})
 		}
 		// calculate the next reconcile
 		if pod.Status.StartTime != nil {
@@ -220,9 +189,6 @@ func (r *Reconciler) ensureIdling(ctx context.Context, idler *toolchainv1alpha1.
 			// if not already scheduled to an earlier time
 			requeueAfter = shorterDuration(requeueAfter, time.Duration(timeoutSeconds)*time.Second)
 		}
-	}
-	if err := r.updateStatusPods(ctx, idler, newStatusPods); err != nil {
-		idleErrors = append(idleErrors, err)
 	}
 	return requeueAfter, errors.Join(idleErrors...)
 }
@@ -242,7 +208,7 @@ func shorterDuration(first, second time.Duration) time.Duration {
 // Check if the pod belongs to a controller (Deployment, DeploymentConfig, etc) and scale it down to zero.
 // if it is a standalone pod, delete it.
 // Send notification if the deleted pod was managed by a controller, was a standalone pod that was not completed or was crashlooping
-func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *Reconciler, idler *toolchainv1alpha1.Idler) error {
+func (r *Reconciler) deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, idler *toolchainv1alpha1.Idler, ownerIdler *ownerIdler) error {
 	logger := log.FromContext(podCtx)
 	isCompleted := false
 	for _, podCond := range pod.Status.Conditions {
@@ -251,12 +217,18 @@ func deletePodsAndCreateNotification(podCtx context.Context, pod corev1.Pod, r *
 			break
 		}
 	}
-	appType, appName, deletedByController, err := r.scaleControllerToZero(podCtx, pod.ObjectMeta)
+	appType, appName, err := ownerIdler.scaleOwnerToZero(podCtx, &pod)
 	if err != nil {
+		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
+			return nil
+		}
 		return err
 	}
-	if !deletedByController || isCompleted { // Pod not managed by a controller or completed pod. We can just delete the pod.
-		logger.Info("Deleting pod without controller")
+	// when appType is empty, then it no known controller was found
+	deletedByController := appType != ""
+	isEvicted := pod.Status.Reason == "Evicted"
+	if !deletedByController || isCompleted || isEvicted { // Pod not managed by a controller, or completed or evicted pod. We can just delete the pod.
+		logger.Info("Deleting pod", "managed-by-controller", deletedByController, "completed", isCompleted, "evicted", isEvicted)
 		if err := r.AllNamespacesClient.Delete(podCtx, &pod); err != nil {
 			return err
 		}
@@ -293,7 +265,7 @@ func (r *Reconciler) notify(ctx context.Context, idler *toolchainv1alpha1.Idler,
 		logger.Error(err, "failed to create Notification")
 		if err = r.setStatusIdlerNotificationCreationFailed(ctx, idler, err.Error()); err != nil {
 			logger.Error(err, "failed to set status IdlerNotificationCreationFailed")
-		} // not returning error to continue tracking remaining pods
+		} // not returning error to continue processing remaining pods
 	}
 }
 
@@ -379,305 +351,6 @@ func (r *Reconciler) getUserEmailsFromMURs(ctx context.Context, hostCluster *clu
 		logger.Info("Idler does not have any owner label", "idler_name", idler.Name)
 	}
 	return emails, nil
-}
-
-// scaleControllerToZero checks if the object has an owner controller (Deployment, ReplicaSet, etc)
-// and scales the owner down to zero and returns "true".
-// Otherwise, returns "false".
-// It also returns the parent controller type and name or empty strings if there is no parent controller.
-func (r *Reconciler) scaleControllerToZero(ctx context.Context, meta metav1.ObjectMeta) (string, string, bool, error) {
-	log.FromContext(ctx).Info("Scaling controller to zero", "name", meta.Name)
-	owners := meta.GetOwnerReferences()
-	for _, owner := range owners {
-		if owner.Controller != nil && *owner.Controller {
-			switch owner.Kind {
-			case "Deployment":
-				return r.scaleDeploymentToZero(ctx, meta.Namespace, owner)
-			case "ReplicaSet":
-				return r.scaleReplicaSetToZero(ctx, meta.Namespace, owner)
-			case "DaemonSet":
-				return r.deleteDaemonSet(ctx, meta.Namespace, owner) // Nothing to scale down. Delete instead.
-			case "StatefulSet":
-				return r.scaleStatefulSetToZero(ctx, meta.Namespace, owner)
-			case "DeploymentConfig":
-				return r.scaleDeploymentConfigToZero(ctx, meta.Namespace, owner)
-			case "ReplicationController":
-				return r.scaleReplicationControllerToZero(ctx, meta.Namespace, owner)
-			case "Job":
-				return r.deleteJob(ctx, meta.Namespace, owner) // Nothing to scale down. Delete instead.
-			case "VirtualMachineInstance":
-				return r.stopVirtualMachine(ctx, meta.Namespace, owner) // Nothing to scale down. Stop instead.
-			}
-		}
-	}
-	return "", "", false, nil
-}
-
-func (r *Reconciler) scaleDeploymentToZero(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("Scaling deployment to zero", "name", owner.Name)
-	d := &appsv1.Deployment{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, d); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	zero := int32(0)
-	for _, deploymentOwner := range d.OwnerReferences {
-		if supportedScaleResource := getSupportedScaleResource(deploymentOwner); supportedScaleResource != nil {
-			patch := []byte(`{"spec":{"replicas":0}}`)
-			_, err := r.ScalesClient.Scales(d.Namespace).Patch(ctx, *supportedScaleResource, deploymentOwner.Name, types.MergePatchType, patch, metav1.PatchOptions{})
-			if err != nil {
-				if !apierrors.IsNotFound(err) {
-					return "", "", false, err
-				}
-			} else {
-				logger.Info("Deployment scaled to zero using scale sub resource", "name", d.Name)
-				return owner.Kind, owner.Name, true, nil
-			}
-		}
-	}
-
-	patched := d.DeepCopy()
-	patched.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(d)); err != nil {
-		return "", "", false, err
-	}
-	logger.Info("Deployment scaled to zero", "name", d.Name)
-	return owner.Kind, owner.Name, true, nil
-}
-
-func getSupportedScaleResource(ownerReference metav1.OwnerReference) *schema.GroupVersionResource {
-	if ownerGVK, err := schema.ParseGroupVersion(ownerReference.APIVersion); err == nil {
-		for groupVersionKind, groupVersionResource := range SupportedScaleResources {
-			if groupVersionKind.String() == ownerGVK.WithKind(ownerReference.Kind).String() {
-				return &groupVersionResource
-			}
-		}
-	}
-
-	return nil
-}
-
-func (r *Reconciler) scaleReplicaSetToZero(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("Scaling replica set to zero", "name", owner.Name)
-	rs := &appsv1.ReplicaSet{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, rs); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Info("replica set is not found; ignoring: it might be already deleted")
-			return owner.Kind, owner.Name, true, nil
-		}
-		logger.Error(err, "error deleting rs")
-		return "", "", false, err
-	}
-
-	appType, appName, deletedByController, err := r.scaleControllerToZero(ctx, rs.ObjectMeta) // Check if the ReplicaSet has another controller which owns it (i.g. Deployment)
-	if err != nil {
-		return "", "", false, err
-	}
-	if !deletedByController {
-		// There is no controller that owns the ReplicaSet. Scale the ReplicaSet to zero.
-		zero := int32(0)
-		patched := rs.DeepCopy()
-		patched.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rs)); err != nil {
-			return "", "", false, err
-		}
-		logger.Info("ReplicaSet scaled to zero", "name", rs.Name)
-		appType = owner.Kind
-		appName = owner.Name
-	}
-	return appType, appName, true, nil
-}
-
-func (r *Reconciler) deleteDaemonSet(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	ds := &appsv1.DaemonSet{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, ds); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	if err := r.AllNamespacesClient.Delete(ctx, ds); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	log.FromContext(ctx).Info("DaemonSet deleted", "name", ds.Name)
-	return owner.Kind, owner.Name, true, nil
-}
-
-func (r *Reconciler) scaleStatefulSetToZero(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	s := &appsv1.StatefulSet{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, s); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	zero := int32(0)
-	patched := s.DeepCopy()
-	patched.Spec.Replicas = &zero
-	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(s)); err != nil {
-		return "", "", false, err
-	}
-	log.FromContext(ctx).Info("StatefulSet scaled to zero", "name", s.Name)
-	return owner.Kind, owner.Name, true, nil
-}
-
-func (r *Reconciler) scaleDeploymentConfigToZero(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	dc := &openshiftappsv1.DeploymentConfig{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, dc); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	patched := dc.DeepCopy()
-	patched.Spec.Replicas = 0
-	patched.Spec.Paused = false
-	if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(dc)); err != nil {
-		return "", "", false, err
-	}
-	log.FromContext(ctx).Info("DeploymentConfig scaled to zero", "name", dc.Name)
-	return owner.Kind, owner.Name, true, nil
-}
-
-func (r *Reconciler) scaleReplicationControllerToZero(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	rc := &corev1.ReplicationController{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, rc); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	appType, appName, deletedByController, err := r.scaleControllerToZero(ctx, rc.ObjectMeta) // Check if the ReplicationController has another controller which owns it (i.g. DeploymentConfig)
-	if err != nil {
-		return "", "", false, err
-	}
-	if !deletedByController {
-		// There is no controller who owns the ReplicationController. Scale the ReplicationController to zero.
-		zero := int32(0)
-		patched := rc.DeepCopy()
-		patched.Spec.Replicas = &zero
-		if err := r.AllNamespacesClient.Patch(ctx, patched, client.MergeFrom(rc)); err != nil {
-			return "", "", false, err
-		}
-		log.FromContext(ctx).Info("ReplicationController scaled to zero", "name", rc.Name)
-		appType = owner.Kind
-		appName = owner.Name
-	}
-	return appType, appName, true, nil
-}
-
-func (r *Reconciler) deleteJob(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	logger := log.FromContext(ctx)
-	j := &batchv1.Job{}
-	if err := r.AllNamespacesClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: owner.Name}, j); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			logger.Info("job not found")
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	// see https://github.com/kubernetes/kubernetes/issues/20902#issuecomment-321484735
-	// also, this may be needed for the e2e tests if the call to `client.Delete` comes too quickly after creating the job,
-	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
-	propagationPolicy := metav1.DeletePropagationBackground
-
-	if err := r.AllNamespacesClient.Delete(ctx, j, &client.DeleteOptions{
-		PropagationPolicy: &propagationPolicy,
-	}); err != nil {
-		if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-			return owner.Kind, owner.Name, true, nil
-		}
-		return "", "", false, err
-	}
-	logger.Info("Job deleted", "name", j.Name)
-	return owner.Kind, owner.Name, true, nil
-}
-
-func (r *Reconciler) stopVirtualMachine(ctx context.Context, namespace string, owner metav1.OwnerReference) (string, string, bool, error) {
-	logger := log.FromContext(ctx)
-	// get the virtualmachineinstance info from the owner reference
-	vmInstance, err := r.DynamicClient.Resource(vmInstanceGVR).Namespace(namespace).Get(ctx, owner.Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-		logger.Info("VirtualMachineInstance not found", "name", owner.Name)
-		return owner.Kind, owner.Name, true, nil
-	}
-	if err != nil {
-		return "", "", false, err
-	}
-
-	// get virtualmachineinstance owner reference (virtualmachine)
-	vmInstanceOwners := vmInstance.GetOwnerReferences()
-	vmiOwnerIndex := -1
-	for i, vmInstanceOwner := range vmInstanceOwners {
-		if vmInstanceOwner.Controller != nil && *vmInstanceOwner.Controller && vmInstanceOwner.Kind == "VirtualMachine" {
-			vmiOwnerIndex = i
-			break
-		}
-	}
-
-	if vmiOwnerIndex == -1 {
-		return "", "", false, fmt.Errorf("VirtualMachineInstance '%s' is missing a VirtualMachine owner reference", vmInstance.GetName())
-	}
-
-	// get the virtualmachine resource
-	vm, err := r.DynamicClient.Resource(vmGVR).Namespace(namespace).Get(ctx, vmInstanceOwners[vmiOwnerIndex].Name, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) { // Ignore not found errors. Can happen if the parent controller has been deleted. The Garbage Collector should delete the pods shortly.
-		logger.Info("VirtualMachine not found")
-		return owner.Kind, owner.Name, true, nil
-	}
-	if err != nil {
-		return "", "", false, err
-	}
-
-	err = r.RestClient.Put().
-		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
-		Namespace(vm.GetNamespace()).
-		Resource("virtualmachines").
-		Name(vm.GetName()).
-		SubResource("stop").
-		Do(ctx).
-		Error()
-	if err != nil {
-		return "", "", false, err
-	}
-
-	logger.Info("VirtualMachine stopped", "name", vm.GetName())
-	return vm.GetKind(), vm.GetName(), true, nil
-}
-
-func findPodByName(idler *toolchainv1alpha1.Idler, name string) *toolchainv1alpha1.Pod {
-	for _, pod := range idler.Status.Pods {
-		if pod.Name == name {
-			return &pod
-		}
-	}
-	return nil
-}
-
-// updateStatusPods updates the status pods to the new ones but only if something changed. Order is ignored.
-func (r *Reconciler) updateStatusPods(ctx context.Context, idler *toolchainv1alpha1.Idler, newPods []toolchainv1alpha1.Pod) error {
-	nothingChanged := len(idler.Status.Pods) == len(newPods)
-	if nothingChanged {
-		for _, newPod := range newPods {
-			if findPodByName(idler, newPod.Name) == nil {
-				// New untracked Pod!
-				nothingChanged = false
-				break
-			}
-		}
-	}
-	if nothingChanged {
-		return nil
-	}
-	idler.Status.Pods = newPods
-	return r.Client.Status().Update(ctx, idler)
 }
 
 type statusUpdater func(ctx context.Context, idler *toolchainv1alpha1.Idler, message string) error

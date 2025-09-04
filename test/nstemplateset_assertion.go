@@ -100,7 +100,7 @@ func (a *NSTemplateSetAssertion) HasStatusSpaceRolesRevisionsSet() *NSTemplateSe
 func (a *NSTemplateSetAssertion) HasStatusSpaceRolesRevisionsValue(expectedSpaceRoles []toolchainv1alpha1.NSTemplateSetSpaceRole) *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
-	assert.Equal(a.t, expectedSpaceRoles, a.nsTmplSet.Status.SpaceRoles, "expected space roles to match")
+	assert.ElementsMatch(a.t, expectedSpaceRoles, a.nsTmplSet.Status.SpaceRoles, "expected space roles to match")
 	return a
 }
 

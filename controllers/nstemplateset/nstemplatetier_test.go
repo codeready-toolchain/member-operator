@@ -2,21 +2,19 @@ package nstemplateset
 
 import (
 	"context"
-	"sync"
+	"errors"
 	"testing"
-
-	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
+	commonconfig "github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 )
@@ -110,10 +108,27 @@ func TestGetTierTemplate(t *testing.T) {
 	cl := testcommon.NewFakeClient(t, basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage, other)
 	ctx := context.TODO()
 
+	t.Run("fetch ttr successfully and add it to the tiertemplate object", func(t *testing.T) {
+		// given
+		ttRev := createTierTemplateRevision("basic-clusterresources-aa11bb22")
+		ttRev.Labels = map[string]string{
+			toolchainv1alpha1.TierLabelKey:        "basic",
+			toolchainv1alpha1.TemplateRefLabelKey: "basic-clusterresources-aa11bb22",
+		}
+		ctx := context.TODO()
+		cl := testcommon.NewFakeClient(t, ttRev, basicTierCluster)
+		hostCluster := test.NewHostClientGetter(cl, nil)
+		//when
+		ttrTmpl, err := getTierTemplate(ctx, hostCluster, "basic-clusterresources-aa11bb22")
+
+		//then
+		require.NoError(t, err)
+		assert.Equal(t, ttrTmpl.ttr, ttRev)
+
+	})
 	t.Run("return code for basic tier", func(t *testing.T) {
 		// given
-		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-		defer resetCache()
+		hostCluster := test.NewHostClientGetter(cl, nil)
 		// when
 		tierTmpl, err := getTierTemplate(ctx, hostCluster, "basic-code-abcdef")
 
@@ -124,8 +139,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 	t.Run("return dev for advanced tier", func(t *testing.T) {
 		// given
-		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-		defer resetCache()
+		hostCluster := test.NewHostClientGetter(cl, nil)
 		// when
 		tierTmpl, err := getTierTemplate(ctx, hostCluster, "advanced-dev-789012")
 
@@ -136,8 +150,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 	t.Run("return cluster type for basic tier", func(t *testing.T) {
 		// given
-		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-		defer resetCache()
+		hostCluster := test.NewHostClientGetter(cl, nil)
 		// when
 		tierTmpl, err := getTierTemplate(ctx, hostCluster, "basic-clusterresources-aa11bb22")
 
@@ -146,95 +159,21 @@ func TestGetTierTemplate(t *testing.T) {
 		assertThatTierTemplateIsSameAs(t, basicTierCluster, tierTmpl)
 	})
 
-	t.Run("test cache", func(t *testing.T) {
-		// given
-		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-		defer resetCache()
-		_, err := getTierTemplate(ctx, hostCluster, "basic-code-abcdef")
-		require.NoError(t, err)
-
-		t.Run("return cached TierTemplate even when for the second call doesn't exist", func(t *testing.T) {
-
-			emptyHost := test.NewGetHostCluster(testcommon.NewFakeClient(t), true, apiv1.ConditionTrue)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, emptyHost, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-
-		t.Run("return cached TierTemplate even when the host cluster was removed", func(t *testing.T) {
-			// given
-			noCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, noCluster, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-
-		t.Run("return cached TierTemplate even when the host cluster is not ready", func(t *testing.T) {
-			// given
-			noCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, noCluster, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-
-		t.Run("return cached TierTemplate even when the host cluster is not ready", func(t *testing.T) {
-			// given
-			noCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-
-			// when
-			tierTmpl, err := getTierTemplate(ctx, noCluster, "basic-code-abcdef")
-
-			// then
-			require.NoError(t, err)
-			assertThatTierTemplateIsSameAs(t, basicTierCode, tierTmpl)
-		})
-	})
-
 	t.Run("failures", func(t *testing.T) {
-		// given - no matter if one TierTemplate is cached
-		hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-		defer resetCache()
-		_, err := getTierTemplate(ctx, hostCluster, "basic-code-abcdef")
-		require.NoError(t, err)
 
 		t.Run("host cluster not available", func(t *testing.T) {
 			// given
-			hostCluster := test.NewGetHostCluster(cl, false, apiv1.ConditionFalse)
-			resetCache()
+			hostCluster := test.NewHostClientGetter(cl, errors.New("some error"))
 			// when
 			_, err := getTierTemplate(ctx, hostCluster, "advanced-dev-789012")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "unable to connect to the host cluster: unknown cluster")
-		})
-
-		t.Run("host cluster not ready", func(t *testing.T) {
-			// given
-			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-			defer resetCache()
-			// when
-			_, err := getTierTemplate(ctx, hostCluster, "advanced-dev-789012")
-			// then
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "the host cluster is not ready")
+			assert.Contains(t, err.Error(), "unable to connect to the host cluster: some error")
 		})
 
 		t.Run("unknown templateRef", func(t *testing.T) {
 			// given
-			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-			defer resetCache()
+			hostCluster := test.NewHostClientGetter(cl, nil)
 			// when
 			_, err := getTierTemplate(ctx, hostCluster, "unknown")
 			// then
@@ -244,8 +183,7 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("tier in another namespace", func(t *testing.T) {
 			// given
-			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-			defer resetCache()
+			hostCluster := test.NewHostClientGetter(cl, nil)
 			// when
 			_, err := getTierTemplate(ctx, hostCluster, "other-other-other")
 			// then
@@ -255,55 +193,14 @@ func TestGetTierTemplate(t *testing.T) {
 
 		t.Run("templateRef is not provided", func(t *testing.T) {
 			// given
-			hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-			defer resetCache()
+			hostCluster := test.NewHostClientGetter(cl, nil)
 			// when
 			_, err := getTierTemplate(ctx, hostCluster, "")
 			// then
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate resource")
+			assert.Contains(t, err.Error(), "templateRef is not provided - it's not possible to fetch related TierTemplate/TierTemplateRevision resource")
 		})
 	})
-
-	t.Run("test multiple retrievals in parallel", func(t *testing.T) {
-		// given
-		defer resetCache()
-		var latch sync.WaitGroup
-		latch.Add(1)
-		var waitForFinished sync.WaitGroup
-
-		for _, tierTemplate := range []*toolchainv1alpha1.TierTemplate{basicTierCode, basicTierDev, basicTierStage, basicTierCluster, advancedTierCode, advancedTierDev, advancedTierStage} {
-			for i := 0; i < 1000; i++ {
-				waitForFinished.Add(1)
-				go func(tierTemplate *toolchainv1alpha1.TierTemplate) {
-					// given
-					defer waitForFinished.Done()
-					latch.Wait()
-					hostCluster := test.NewGetHostCluster(cl, true, apiv1.ConditionTrue)
-					if _, ok := tierTemplatesCache.get(tierTemplate.Name); ok {
-						hostCluster = test.NewGetHostCluster(cl, true, apiv1.ConditionFalse)
-					}
-
-					// when
-					retrievedTierTemplate, err := getTierTemplate(ctx, hostCluster, tierTemplate.Name)
-
-					// then
-					assert.NoError(t, err) // require must only be used in the goroutine running the test function (testifylint)
-					assertThatTierTemplateIsSameAs(t, tierTemplate, retrievedTierTemplate)
-				}(tierTemplate)
-			}
-		}
-
-		// when
-		latch.Done()
-
-		// then
-		waitForFinished.Wait()
-	})
-}
-
-func resetCache() {
-	tierTemplatesCache = newTierTemplateCache()
 }
 
 func assertThatTierTemplateIsSameAs(t *testing.T, expected *toolchainv1alpha1.TierTemplate, actual *tierTemplate) {

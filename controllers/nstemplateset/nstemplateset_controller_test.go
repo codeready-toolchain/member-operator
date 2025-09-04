@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -31,7 +32,6 @@ import (
 )
 
 func TestReconcileAddFinalizer(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -73,11 +73,9 @@ func TestReconcileAddFinalizer(t *testing.T) {
 				DoesNotHaveFinalizer()
 		})
 	})
-
 }
 
 func TestReconcileProvisionOK(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -445,7 +443,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
 			HasResource("exec-pods", &rbacv1.Role{})
 
-		//second reconcile adds owner label to role in stage namespace
+		// second reconcile adds owner label to role in stage namespace
 		res, err = r.Reconcile(context.TODO(), req)
 		// then
 		require.NoError(t, err)
@@ -489,7 +487,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 
-		//second reconcile adds owner label to rolebinding in stage namespace
+		// second reconcile adds owner label to rolebinding in stage namespace
 		res, err = r.Reconcile(context.TODO(), req)
 		// then
 		require.NoError(t, err)
@@ -527,7 +525,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 		AssertThatNamespace(t, spacename+"-stage", fakeClient).
 			HasResource("crtadmin-pods", &rbacv1.RoleBinding{})
 
-		//second reconcile adds owner label to rolebinding in stage namespace
+		// second reconcile adds owner label to rolebinding in stage namespace
 		res, err = r.Reconcile(context.TODO(), req)
 		// then
 		require.NoError(t, err)
@@ -573,7 +571,7 @@ func TestReconcileProvisionOK(t *testing.T) {
 			HasResource("crtadmin-view", &rbacv1.RoleBinding{}).
 			HasResource("exec-pods", &rbacv1.Role{})
 
-		//second reconcile adds owner label to role in stage namespace
+		// second reconcile adds owner label to role in stage namespace
 		res, err = r.Reconcile(context.TODO(), req)
 		// then
 		require.NoError(t, err)
@@ -606,7 +604,6 @@ func TestReconcileProvisionOK(t *testing.T) {
 }
 
 func TestProvisionTwoUsers(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "john"
@@ -625,7 +622,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.Equal(t, reconcile.Result{}, res)
+		assert.Equal(t, reconcile.Result{Requeue: true}, res)
 		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasSpecNamespaces("dev").
@@ -642,7 +639,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			assert.Equal(t, reconcile.Result{}, res)
+			assert.Equal(t, reconcile.Result{Requeue: true}, res)
 			AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 				HasFinalizer().
 				HasSpecNamespaces("dev").
@@ -659,7 +656,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 				// then
 				require.NoError(t, err)
-				assert.Equal(t, reconcile.Result{}, res)
+				assert.Equal(t, reconcile.Result{Requeue: true}, res)
 				AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 					HasFinalizer().
 					HasSpecNamespaces("dev").
@@ -676,7 +673,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 				// then
 				require.NoError(t, err)
-				assert.Equal(t, reconcile.Result{}, res)
+				assert.Equal(t, reconcile.Result{Requeue: true}, res)
 				AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 					HasConditions(Provisioning())
 				AssertThatCluster(t, fakeClient).
@@ -744,7 +741,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 							// then
 							require.NoError(t, err)
-							assert.Equal(t, reconcile.Result{}, res)
+							assert.Equal(t, reconcile.Result{Requeue: true}, res)
 							AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
 								HasFinalizer().
 								HasSpecNamespaces("dev").
@@ -761,7 +758,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 								// then
 								require.NoError(t, err)
-								assert.Equal(t, reconcile.Result{}, res)
+								assert.Equal(t, reconcile.Result{Requeue: true}, res)
 								AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
 									HasFinalizer().
 									HasSpecNamespaces("dev").
@@ -778,7 +775,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 									// then
 									require.NoError(t, err)
-									assert.Equal(t, reconcile.Result{}, res)
+									assert.Equal(t, reconcile.Result{Requeue: true}, res)
 									AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
 										HasFinalizer().
 										HasSpecNamespaces("dev").
@@ -794,7 +791,7 @@ func TestProvisionTwoUsers(t *testing.T) {
 
 									// then
 									require.NoError(t, err)
-									assert.Equal(t, reconcile.Result{}, res)
+									assert.Equal(t, reconcile.Result{Requeue: true}, res)
 									AssertThatNSTemplateSet(t, namespaceName, joeUsername, fakeClient).
 										HasConditions(Provisioning())
 									AssertThatCluster(t, fakeClient).
@@ -857,7 +854,6 @@ func TestProvisionTwoUsers(t *testing.T) {
 }
 
 func TestReconcilePromotion(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -867,7 +863,6 @@ func TestReconcilePromotion(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("upgrade from basic to advanced tier", func(t *testing.T) {
-
 		t.Run("create ClusterResourceQuota", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"))
@@ -959,7 +954,6 @@ func TestReconcilePromotion(t *testing.T) {
 							WithLabel(toolchainv1alpha1.TierLabelKey, "advanced")) // created
 
 					t.Run("delete redundant namespace", func(t *testing.T) {
-
 						// when - should delete the -stage namespace
 						_, err := r.Reconcile(context.TODO(), req)
 
@@ -1040,7 +1034,6 @@ func TestReconcilePromotion(t *testing.T) {
 }
 
 func TestReconcileUpdate(t *testing.T) {
-
 	logf.SetLogger(zap.New(zap.UseDevMode(true)))
 	// given
 	spacename := "johnsmith"
@@ -1050,7 +1043,6 @@ func TestReconcileUpdate(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("upgrade from abcde11 to abcde12 as part of the advanced tier", func(t *testing.T) {
-
 		t.Run("update ClusterResourceQuota", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
@@ -1173,7 +1165,6 @@ func TestReconcileUpdate(t *testing.T) {
 				}
 
 				t.Run("delete redundant namespace", func(t *testing.T) {
-
 					// when - should delete the -stage namespace
 					_, err := r.Reconcile(context.TODO(), req)
 
@@ -1529,7 +1520,7 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		result, err := r.Reconcile(context.TODO(), req)
 		// then
 		require.EqualError(t, err, "failed to delete cluster resource 'for-johnsmith': mock error")
-		require.Empty(t, result)
+		require.Equal(t, controllerruntime.Result{Requeue: true}, result)
 	})
 
 	t.Run("NSTemplateSet deletion errors when namespace is not deleted in 1 min", func(t *testing.T) {
@@ -1560,29 +1551,26 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// first reconcile, deletion is triggered
 		result, err := r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
-		require.True(t, result.Requeue)
 		require.Equal(t, time.Second, result.RequeueAfter)
-		//then second reconcile to check if namespace has actually been deleted
+		// then second reconcile to check if namespace has actually been deleted
 		result, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
-		require.True(t, result.Requeue)
 		require.Equal(t, time.Second, result.RequeueAfter)
 
 		firstNSName := fmt.Sprintf("%s-dev", spacename)
 		secondNSName := fmt.Sprintf("%s-stage", spacename)
 		// get the first namespace and check that it has deletion timestamp
 		AssertThatNamespace(t, firstNSName, r.Client).HasDeletionTimestamp()
-		//second NS is not affected
+		// second NS is not affected
 		AssertThatNamespace(t, secondNSName, r.Client).HasNoDeletionTimestamp()
 		// get the NSTemplateSet resource again, check it is not deleted and its status
 		AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
 			HasFinalizer().
 			HasConditions(Terminating())
 
-		//reconcile to check there is no change, ns still exists
+		// reconcile to check there is no change, ns still exists
 		result, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
-		require.True(t, result.Requeue)
 		require.Equal(t, time.Second, result.RequeueAfter)
 
 		AssertThatNamespace(t, firstNSName, r.Client).HasDeletionTimestamp()
@@ -1603,7 +1591,6 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// deletion of firstNS would trigger another reconcile deleting secondNS
 		result, err = r.Reconcile(context.TODO(), req)
 		require.NoError(t, err)
-		require.True(t, result.Requeue)
 		require.Equal(t, time.Second, result.RequeueAfter)
 
 		// get the first namespace and check it IS deleted
@@ -1622,7 +1609,6 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		// Check that nsTemplateSet is gone as well
 		AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
 			DoesNotExist()
-
 	})
 }
 

@@ -59,15 +59,18 @@ func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster r
 	build := ctrl.NewControllerManagedBy(mgr).
 		For(&toolchainv1alpha1.NSTemplateSet{}, builder.WithPredicates(predicate.Or[runtimeclient.Object](predicate.GenerationChangedPredicate{}, predicate.AnnotationChangedPredicate{}))).
 		Watches(&corev1.Namespace{}, mapToOwnerByLabel).
+		// we're watching the roles and role bindings explicitly so that the users that accidentally lose access to their namespaces
+		// can get it restored as quickly as possible.
+		//
+		// We intentionally do not watch any other resources potentially created by the templates (including cluster-scoped resources).
+		// Instead, we rely on controller-runtime's/ periodic resync/reconcile of NSTemplateSets as configured via manager.Options.Cache.SyncPeriod.
+		//
+		// This is a reasonable thing to do because the users either don't have the write access to the resources that are part of the template at all (i.e.
+		// the users don't have write access to any cluster-scoped resources) or there is the assumption that there is not much potential harm
+		// when the users modify the (namespaced) resources from the template. As mentioned above, the notable exception are roles and bindings that can
+		// cause the user to lose the access to the namespace and therefore we DO watch those to reapply the template and restore the access as soon as possible.
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.Role{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{})).
 		WatchesRawSource(source.Kind[runtimeclient.Object](allNamespaceCluster.GetCache(), &rbac.RoleBinding{}, mapToOwnerByLabel, commonpredicates.LabelsAndGenerationPredicate{}))
-	// watch for all cluster resource kinds associated with an NSTemplateSet
-	for _, clusterResource := range clusterResourceKinds {
-		// only reconcile generation changes for cluster resources and only when the API group is present in the cluster
-		if apiGroupIsPresent(apiGroupList.Groups, clusterResource.gvk) {
-			build = build.Watches(clusterResource.object, mapToOwnerByLabel, builder.WithPredicates(commonpredicates.LabelsAndGenerationPredicate{}))
-		}
-	}
 
 	r.AllNamespacesClient = allNamespaceCluster.GetClient()
 	r.AvailableAPIGroups = apiGroupList.Groups
@@ -128,13 +131,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 
 	// we proceed with the cluster-scoped resources template, then all namespaces and finally space roles
-	// as we want ot be sure that cluster scoped resources such as quotas are set
+	// as we want to be sure that cluster-scoped resources such as quotas are set
 	// even before the namespaces exist
 	if createdOrUpdated, err := r.clusterResources.ensure(ctx, nsTmplSet); err != nil {
 		logger.Error(err, "failed to either provision or update cluster resources")
 		return reconcile.Result{}, err
 	} else if createdOrUpdated {
-		return reconcile.Result{}, nil // wait for cluster resources to be created
+		// we need to requeue to make sure we apply all cluster resources before continuing further
+		return reconcile.Result{Requeue: true}, nil // wait for cluster resources to be created
 	}
 	if err := r.status.updateStatusClusterResourcesRevisions(ctx, nsTmplSet); err != nil {
 		return reconcile.Result{}, err
@@ -208,7 +212,6 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 		}
 		// One or more namespaces may not yet be deleted. We can stop here.
 		return reconcile.Result{
-			Requeue:      true,
 			RequeueAfter: time.Second,
 		}, nil
 	}
@@ -216,7 +219,8 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user
 	deletedAny, err := r.clusterResources.delete(ctx, nsTmplSet)
 	if err != nil || deletedAny {
-		return reconcile.Result{}, err
+		// we need to check if there are some more cluster resources left
+		return reconcile.Result{Requeue: true}, err
 	}
 
 	// if nothing was to be deleted, then we can remove the finalizer and we're done

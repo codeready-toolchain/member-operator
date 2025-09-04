@@ -1,5 +1,5 @@
 # see go.mod
-CONTROLLER_GEN_VERSION=v0.16.5
+CONTROLLER_GEN_VERSION=v0.17.2
 KUSTOMIZE_VERSION=v5.4.3
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen

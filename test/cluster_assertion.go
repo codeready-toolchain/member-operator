@@ -50,6 +50,13 @@ func WithLabel(key, value string) ResourceOption {
 	}
 }
 
+func WithoutLabel(key string) ResourceOption {
+	return func(t test.T, obj client.Object) {
+		_, exists := obj.GetLabels()[key]
+		assert.False(t, exists)
+	}
+}
+
 func Containing(value string) ResourceOption {
 	return func(t test.T, obj client.Object) {
 		content, err := json.Marshal(obj)

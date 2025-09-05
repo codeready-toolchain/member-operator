@@ -1750,6 +1750,22 @@ func withClusterResources(revision string) nsTmplSetOption {
 	}
 }
 
+func withPreviouslyAppliedClusterResources(revision string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Status.ClusterResources = &toolchainv1alpha1.NSTemplateSetClusterResources{
+			TemplateRef: NewTierTemplateName(nsTmplSet.Spec.TierName, "clusterresources", revision),
+		}
+	}
+}
+
+func withPreviouslyAppliedClusterResourcesInTier(tierName, revision string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Status.ClusterResources = &toolchainv1alpha1.NSTemplateSetClusterResources{
+			TemplateRef: NewTierTemplateName(tierName, "clusterresources", revision),
+		}
+	}
+}
+
 func withSpaceRoles(roles map[string][]string) nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		nsTmplSet.Spec.SpaceRoles = make([]toolchainv1alpha1.NSTemplateSetSpaceRole, 0, len(roles))

@@ -228,7 +228,10 @@ func TestEnsureIdling(t *testing.T) {
 				VMRunning(noise.vmStopCallCounter).
 				AAPIdled(podsRunningForTooLong.aap).
 				AAPRunning(podsTooEarlyToKill.aap).
-				AAPRunning(noise.aap)
+				AAPRunning(noise.aap).
+				InferenceServiceDoesNotExist(podsRunningForTooLong.inferenceService).
+				InferenceServiceExists(podsTooEarlyToKill.inferenceService).
+				InferenceServiceExists(noise.inferenceService)
 
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
@@ -331,7 +334,8 @@ func TestEnsureIdling(t *testing.T) {
 				ReplicationControllerScaledDown(toKill.replicationController).
 				StatefulSetScaledDown(toKill.statefulSet).
 				VMStopped(toKill.vmStopCallCounter).
-				AAPIdled(toKill.aap)
+				AAPIdled(toKill.aap).
+				InferenceServiceDoesNotExist(toKill.inferenceService)
 
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
@@ -548,7 +552,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			ReplicationControllerScaledDown(toKill.replicationController).
 			StatefulSetScaledDown(toKill.statefulSet).
 			VMStopped(toKill.vmStopCallCounter).
-			AAPIdled(toKill.aap)
+			AAPIdled(toKill.aap).
+			InferenceServiceDoesNotExist(toKill.inferenceService)
 	})
 }
 
@@ -878,6 +883,8 @@ type payloads struct {
 	vmStopCallCounter         *int
 	virtualmachineinstance    *unstructured.Unstructured
 	aap                       *unstructured.Unstructured
+	servingRuntime            *unstructured.Unstructured
+	inferenceService          *unstructured.Unstructured
 }
 
 func (p payloads) getFirstControlledPod(ownerName string) *corev1.Pod {
@@ -922,7 +929,7 @@ func createDeployment(t *testing.T, clients *memberoperatortest.FakeClientSet, n
 }
 
 func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, namespace, namePrefix string, startTimes payloadStartTimes) payloads {
-	var sTime *metav1.Time
+	sTime := &metav1.Time{}
 	if !startTimes.defaultStartTime.IsZero() {
 		sTime = &metav1.Time{Time: startTimes.defaultStartTime}
 	}
@@ -1049,6 +1056,18 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 	replicaSetsWithDeployment = append(replicaSetsWithDeployment, aapRs)
 	controlledPods = createPods(t, clients.AllNamespacesClient, aapRs, sTime, controlledPods, noRestart())
 
+	// ServingRuntime and InferenceServices
+	servingRuntimeObject := newServingRuntime(fmt.Sprintf("%s%s-servingruntime", namePrefix, namespace), namespace)
+	createObjectWithDynamicClient(t, clients.DynamicClient, servingRuntimeObject)
+	_, servingRuntimeRs := createDeployment(t, clients, namespace, namePrefix, "-servingruntime-deployment", servingRuntimeObject)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, servingRuntimeRs)
+	controlledPods = createPods(t, clients.AllNamespacesClient, servingRuntimeRs, sTime, controlledPods, noRestart())
+
+	// Create InferenceServices with the same creationtimestamp as the pod startTime is
+	inferenceService := newInferenceService(fmt.Sprintf("%s%s-old-inferenceservice", namePrefix, namespace), namespace)
+	inferenceService.SetCreationTimestamp(*sTime)
+	createObjectWithDynamicClient(t, clients.DynamicClient, inferenceService)
+
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
 	// which is not a supported owner such as Deployment or ReplicaSet.
@@ -1100,6 +1119,8 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 		vmStopCallCounter:         stopCallCounter,
 		virtualmachineinstance:    vmi,
 		aap:                       aapObject,
+		servingRuntime:            servingRuntimeObject,
+		inferenceService:          inferenceService,
 	}
 }
 
@@ -1108,6 +1129,24 @@ func newAAP(t *testing.T, idled bool, name, namespace string) *unstructured.Unst
 	aap := &unstructured.Unstructured{}
 	require.NoError(t, aap.UnmarshalJSON([]byte(formatted)))
 	return aap
+}
+
+func newServingRuntime(name, namespace string) *unstructured.Unstructured {
+	servingRuntime := &unstructured.Unstructured{}
+	servingRuntime.SetAPIVersion("serving.kserve.io/v1alpha1")
+	servingRuntime.SetKind("ServingRuntime")
+	servingRuntime.SetName(name)
+	servingRuntime.SetNamespace(namespace)
+	return servingRuntime
+}
+
+func newInferenceService(name, namespace string) *unstructured.Unstructured {
+	inferenceService := &unstructured.Unstructured{}
+	inferenceService.SetAPIVersion("serving.kserve.io/v1beta1")
+	inferenceService.SetKind("InferenceService")
+	inferenceService.SetName(name)
+	inferenceService.SetNamespace(namespace)
+	return inferenceService
 }
 
 func mockStopVMCalls(namespace, name string, reply int) *int {
@@ -1248,7 +1287,8 @@ func prepareReconcile(t *testing.T, name string, getHostClusterFunc func(fakeCli
 
 	fakeClient := test.NewFakeClient(t, initIdlerObjs...)
 	allNamespacesClient := test.NewFakeClient(t)
-	dynamicClient := fakedynamic.NewSimpleDynamicClient(scheme.Scheme)
+	// Register custom list kinds for KServe resources
+	dynamicClient := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(scheme.Scheme, customListKinds)
 
 	fakeDiscovery := newFakeDiscoveryClient(allResourcesList(t)...)
 

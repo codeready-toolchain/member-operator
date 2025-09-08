@@ -52,5 +52,6 @@ CONTROLLER_GEN = $(PROJECT_DIR)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	GOBIN=$(PROJECT_DIR)/bin $(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen
 
+KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
 	GOBIN=$(PROJECT_DIR)/bin $(GO) install sigs.k8s.io/kustomize/kustomize/v5

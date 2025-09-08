@@ -68,6 +68,8 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
 		case "AnsibleAutomationPlatform":
 			err = i.idleAAP(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
+		case "ServingRuntime":
+			err = i.idleServingRuntime(ctx, ownerWithGVR) // Idle by deleting old InferenceService objects.
 		default:
 			continue // Skip unknown owner types
 		}
@@ -215,6 +217,53 @@ func (i *ownerIdler) stopVirtualMachine(ctx context.Context, objectWithGVR *obje
 
 	logger.Info("VirtualMachine stopped", "name", object.GetName())
 	return nil
+}
+
+// idleServingRuntime idles ServingRuntime by deleting InferenceService objects that exist for longer than the timeout
+func (i *ownerIdler) idleServingRuntime(ctx context.Context, objectWithGVR *objectWithGVR) error {
+	logger := log.FromContext(ctx)
+	namespace := objectWithGVR.object.GetNamespace()
+
+	logger.Info("Idling ServingRuntime by deleting old InferenceService objects", "name", objectWithGVR.object.GetName())
+
+	// Construct GVR for InferenceService objects
+	inferenceServiceGVR := schema.GroupVersionResource{
+		Group:    "serving.kserve.io",
+		Version:  "v1beta1",
+		Resource: "inferenceservices",
+	}
+
+	// List all InferenceService objects in the namespace
+	inferenceServiceList, err := i.dynamicClient.
+		Resource(inferenceServiceGVR).
+		Namespace(namespace).
+		List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list InferenceService objects: %w", err)
+	}
+
+	cutoffTime := time.Now().Add(-time.Duration(i.idler.Spec.TimeoutSeconds) * time.Second)
+	var deletionErrors []error
+
+	// Delete InferenceService objects that are older than the timeout
+	for _, inferenceService := range inferenceServiceList.Items {
+		creationTime := inferenceService.GetCreationTimestamp().Time
+		if creationTime.Before(cutoffTime) {
+			logger.Info("Deleting old InferenceService", "name", inferenceService.GetName(), "age", time.Since(creationTime))
+
+			err := i.dynamicClient.
+				Resource(inferenceServiceGVR).
+				Namespace(namespace).
+				Delete(ctx, inferenceService.GetName(), metav1.DeleteOptions{})
+			if err != nil {
+				deletionErrors = append(deletionErrors, err)
+			} else {
+				logger.Info("InferenceService deleted", "name", inferenceService.GetName())
+			}
+		}
+	}
+
+	return errors.Join(deletionErrors...)
 }
 
 type ownerFetcher struct {

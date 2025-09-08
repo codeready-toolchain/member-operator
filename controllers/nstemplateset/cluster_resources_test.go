@@ -150,7 +150,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
 			withNamespaces("abcde11", "dev"),
 			withClusterResources("abcde11"),
-			withPreviouslyAppliedClusterResources("abcde11"),
+			withStatusClusterResources("abcde11"),
 			withConditions(Provisioned()))
 		crq := newClusterResourceQuota(spacename, "advanced")
 		crb := newTektonClusterRoleBinding(spacename, "advanced")
@@ -234,7 +234,7 @@ func TestDeleteClusterResources(t *testing.T) {
 	namespaceName := "toolchain-member"
 	crq := newClusterResourceQuota(spacename, "advanced")
 	crb := newTektonClusterRoleBinding(spacename, "advanced")
-	nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"), withPreviouslyAppliedClusterResources("abcde11"))
+	nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "code"), withDeletionTs(), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
 
 	t.Run("deletes all cluster resources", func(t *testing.T) {
 		// given
@@ -252,7 +252,7 @@ func TestDeleteClusterResources(t *testing.T) {
 
 	t.Run("delete the second ClusterResourceQuota since the first one has deletion timestamp set", func(t *testing.T) {
 		// given
-		nsTmplSet := newNSTmplSet(namespaceName, spacename, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withPreviouslyAppliedClusterResources("abcde11"))
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
 		crq := newClusterResourceQuota(spacename, "withemptycrq", withFinalizer())
 		deletionTS := metav1.NewTime(time.Now())
 		crq.SetDeletionTimestamp(&deletionTS)
@@ -278,7 +278,7 @@ func TestDeleteClusterResources(t *testing.T) {
 			withNamespaces("abcde11", "dev", "code"),
 			withDeletionTs(),
 			withClusterResources("abcde11"),
-			withPreviouslyAppliedClusterResources("abcde11"),
+			withStatusClusterResources("abcde11"),
 			withNSTemplateSetFeatureAnnotation("feature-2"))
 		crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-2"), withName("feature-2-for-"+spacename))
 
@@ -350,7 +350,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "team",
 				withNamespaces("abcde11", "dev"),
 				withClusterResources("abcde11"),
-				withPreviouslyAppliedClusterResourcesInTier("advanced", "previousrevision"))
+				withStatusClusterResourcesInTier("advanced", "previousrevision"))
 			codeNs := newNamespace("advanced", spaceName, "code")
 			crq := newClusterResourceQuota(spaceName, "advanced")
 			emptyCrq := newClusterResourceQuota("empty", "advanced")
@@ -381,7 +381,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced",
 				withNamespaces("dev"),
 				withClusterResources("abcde11"),
-				withPreviouslyAppliedClusterResourcesInTier("withemptycrq", "previousrevision"))
+				withStatusClusterResourcesInTier("withemptycrq", "previousrevision"))
 			codeNs := newNamespace("advanced", spaceName, "code")
 			crq := newClusterResourceQuota(spaceName, "withemptycrq")
 			crq.Labels["disappearingLabel"] = "value"
@@ -416,7 +416,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					test.WithParams(spacename),
 				), "advanced", "clusterresources", "previousrevision")
 			require.NoError(t, err)
-			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "withemptycrq", withPreviouslyAppliedClusterResourcesInTier("advanced", "previousrevision"))
+			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "withemptycrq", withStatusClusterResourcesInTier("advanced", "previousrevision"))
 			crq := newClusterResourceQuota(spaceName, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, previousTierTemplate)
 
@@ -445,7 +445,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				spaceName,
 				"advanced",
 				withClusterResources("abcde11"),
-				withPreviouslyAppliedClusterResourcesInTier("team", "previousrevision"),
+				withStatusClusterResourcesInTier("team", "previousrevision"),
 				withNSTemplateSetFeatureAnnotation("feature-1"))
 			devNs := newNamespace("team", spaceName, "dev")
 			crq := newClusterResourceQuota(spaceName, "team")
@@ -478,7 +478,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				spaceName,
 				"team",
 				withClusterResources("abcde11"),
-				withPreviouslyAppliedClusterResourcesInTier("advanced", "previousrevision"),
+				withStatusClusterResourcesInTier("advanced", "previousrevision"),
 				withNSTemplateSetFeatureAnnotation("feature-1"))
 			devNs := newNamespace("advanced", spaceName, "dev")
 			crq := newClusterResourceQuota(spaceName, "advanced", withFeatureAnnotation("feature-1"), withName("feature-1-for-"+spaceName))
@@ -510,7 +510,7 @@ func TestPromoteClusterResources(t *testing.T) {
 
 			t.Run("no redundant cluster resources to be deleted for the given user", func(t *testing.T) {
 				// given
-				nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withConditions(Provisioned()), withClusterResources("abcde11"), withPreviouslyAppliedClusterResources("abcde11"))
+				nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withConditions(Provisioned()), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
 				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, idlerDev, idlerStage, anotherIdlerDev, anotherIdlerStage)
 
 				// when
@@ -540,7 +540,7 @@ func TestPromoteClusterResources(t *testing.T) {
 						test.WithParams(spacename),
 					), "advanced", "clusterresources", "previousrevision")
 				require.NoError(t, err)
-				nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withConditions(Provisioned()), withPreviouslyAppliedClusterResources("previousrevision"))
+				nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withConditions(Provisioned()), withStatusClusterResources("previousrevision"))
 				manager, cl := prepareClusterResourcesManager(t, anotherNsTmplSet, anotherCRQ, nsTmplSet, advancedCRQ, anotherCrb, crb, previousTierTemplate)
 
 				err = manager.ensure(ctx, nsTmplSet)
@@ -572,7 +572,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				withNamespaces("abcde11", "dev"),
 				withConditions(Updating()),
 				withClusterResources("abcde11"),
-				withPreviouslyAppliedClusterResourcesInTier("fail", "previousrevision"))
+				withStatusClusterResourcesInTier("fail", "previousrevision"))
 			crq := newClusterResourceQuota(spaceName, "fail")
 			crb := newTektonClusterRoleBinding(spaceName, "fail")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, previousTierTemplate)
@@ -601,7 +601,7 @@ func TestPromoteClusterResources(t *testing.T) {
 					test.WithParams(spacename),
 				), "advanced", "clusterresources", "previousrevision")
 			require.NoError(t, err)
-			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "basic", withNamespaces("abcde11", "dev"), withPreviouslyAppliedClusterResourcesInTier("advanced", "previousrevision"))
+			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "basic", withNamespaces("abcde11", "dev"), withStatusClusterResourcesInTier("advanced", "previousrevision"))
 			crq := newClusterResourceQuota(spaceName, "advanced")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, previousTierTemplate)
 			cl.MockDelete = func(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
@@ -640,7 +640,7 @@ func TestUpdateClusterResources(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"), withPreviouslyAppliedClusterResources("abcde11"))
+			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"), withStatusClusterResources("abcde11"))
 			codeNs := newNamespace("advanced", spaceName, "dev")
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, codeNs)
 
@@ -662,7 +662,7 @@ func TestUpdateClusterResources(t *testing.T) {
 				"advanced",
 				withNamespaces("abcde12", "dev"),
 				withClusterResources("abcde12"),
-				withPreviouslyAppliedClusterResources("abcde11"),
+				withStatusClusterResources("abcde11"),
 				withNSTemplateSetFeatureAnnotation("feature-1"))
 			codeNs := newNamespace("advanced", spaceName, "dev")
 			crqFeatured := newClusterResourceQuota(spaceName, "advanced", withName("feature-1-for-"+spaceName), withFeatureAnnotation("feature-1"))
@@ -685,7 +685,7 @@ func TestUpdateClusterResources(t *testing.T) {
 				"advanced",
 				withNamespaces("abcde11", "dev"),
 				withClusterResources("abcde11"),
-				withPreviouslyAppliedClusterResources("abcde12"),
+				withStatusClusterResources("abcde12"),
 				withNSTemplateSetFeatureAnnotation("feature-1"))
 			codeNs := newNamespace("advanced", spaceName, "dev")
 			crqFeatured := newClusterResourceQuota(spaceName,
@@ -708,7 +708,7 @@ func TestUpdateClusterResources(t *testing.T) {
 
 		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
 			// given
-			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withPreviouslyAppliedClusterResources("abcde12"))
+			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withStatusClusterResources("abcde12"))
 			crq := newClusterResourceQuota(spaceName, "advanced", withTemplateRefUsingRevision("abcde12"))
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
@@ -733,7 +733,7 @@ func TestUpdateClusterResources(t *testing.T) {
 					test.WithParams(spacename),
 				), "advanced", "clusterresources", "previousrevision")
 			require.NoError(t, err)
-			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withClusterResources("abcde11"), withConditions(Updating()), withPreviouslyAppliedClusterResources("previousrevision"))
+			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withClusterResources("abcde11"), withConditions(Updating()), withStatusClusterResources("previousrevision"))
 			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, previousTierTemplate)
 			cl.MockCreate = func(_ context.Context, _ client.Object, _ ...client.CreateOption) error {
 				return fmt.Errorf("some error")
@@ -799,7 +799,7 @@ func TestDeleteFeatureFromNSTemplateSet(t *testing.T) {
 		"advanced",
 		withNamespaces("abcde11", "dev"),
 		withClusterResources("abcde11"),
-		withPreviouslyAppliedClusterResources("previousrevision"),
+		withStatusClusterResources("previousrevision"),
 	) // The NSTemplateSet does not have the feature annotation (anymore)
 	codeNs := newNamespace("advanced", spaceName, "dev")
 	crqFeatured := newClusterResourceQuota(spaceName, "advanced", withName("feature-1-for-"+spaceName), withFeatureAnnotation("feature-1"))

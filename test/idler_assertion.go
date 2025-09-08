@@ -213,6 +213,15 @@ func (a *IdleablePayloadAssertion) getResourceFromDynamicClient(gvr schema.Group
 	require.NoError(a.t, err)
 }
 
+func (a *IdleablePayloadAssertion) assertResourceDeleted(gvr schema.GroupVersionResource, namespace, name string) {
+	_, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(namespace).
+		Get(context.TODO(), name, metav1.GetOptions{})
+	require.Error(a.t, err, "Resource %s should have been deleted", name)
+	assert.True(a.t, apierrors.IsNotFound(err))
+}
+
 func (a *IdleablePayloadAssertion) ReplicaSetScaledUp(replicaSet *appsv1.ReplicaSet) *IdleablePayloadAssertion {
 	r := &appsv1.ReplicaSet{}
 	gvr := appsv1.SchemeGroupVersion.WithResource("replicasets")
@@ -269,12 +278,7 @@ func (a *IdleablePayloadAssertion) DaemonSetExists(daemonSet *appsv1.DaemonSet) 
 
 func (a *IdleablePayloadAssertion) DaemonSetDoesNotExist(daemonSet *appsv1.DaemonSet) *IdleablePayloadAssertion {
 	gvr := appsv1.SchemeGroupVersion.WithResource("daemonsets")
-	_, err := a.dynamicClient.
-		Resource(gvr).
-		Namespace(daemonSet.Namespace).
-		Get(context.TODO(), daemonSet.Name, metav1.GetOptions{})
-	require.Error(a.t, err, "daemonSet %s still exists", daemonSet.Name)
-	assert.True(a.t, apierrors.IsNotFound(err))
+	a.assertResourceDeleted(gvr, daemonSet.GetNamespace(), daemonSet.GetName())
 	return a
 }
 
@@ -290,12 +294,7 @@ func (a *IdleablePayloadAssertion) JobExists(job *batchv1.Job) *IdleablePayloadA
 
 func (a *IdleablePayloadAssertion) JobDoesNotExist(job *batchv1.Job) *IdleablePayloadAssertion {
 	gvr := batchv1.SchemeGroupVersion.WithResource("jobs")
-	_, err := a.dynamicClient.
-		Resource(gvr).
-		Namespace(job.Namespace).
-		Get(context.TODO(), job.Name, metav1.GetOptions{})
-	require.Error(a.t, err, "job %s still exists", job.Name)
-	assert.True(a.t, apierrors.IsNotFound(err))
+	a.assertResourceDeleted(gvr, job.GetNamespace(), job.GetName())
 	return a
 }
 
@@ -344,5 +343,18 @@ func (a *IdleablePayloadAssertion) AAPRunning(aap *unstructured.Unstructured) *I
 	idled, _, err := unstructured.NestedBool(actualAAP.UnstructuredContent(), "spec", "idle_aap")
 	require.NoError(a.t, err)
 	assert.False(a.t, idled)
+	return a
+}
+
+var inferenceServiceGVR = schema.GroupVersionResource{Group: "serving.kserve.io", Version: "v1beta1", Resource: "inferenceservices"}
+
+func (a *IdleablePayloadAssertion) InferenceServiceDoesNotExist(inferenceService *unstructured.Unstructured) *IdleablePayloadAssertion {
+	a.assertResourceDeleted(inferenceServiceGVR, inferenceService.GetNamespace(), inferenceService.GetName())
+	return a
+}
+
+func (a *IdleablePayloadAssertion) InferenceServiceExists(inferenceService *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actualInferenceService := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(inferenceServiceGVR, inferenceService.GetNamespace(), inferenceService.GetName(), actualInferenceService)
 	return a
 }

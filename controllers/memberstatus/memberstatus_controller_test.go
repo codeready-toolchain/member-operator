@@ -455,7 +455,7 @@ func TestOverallStatusCondition(t *testing.T) {
 		memberStatus := newMemberStatus()
 		getHostClusterFunc := newGetHostClusterReady
 
-		t.Run("che not using tls with path", func(t *testing.T) {
+		t.Run("console not using tls with path", func(t *testing.T) {
 			// given
 			allNamespacesCl := test.NewFakeClient(t, consoleRoute())
 			reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, mockLastGitHubAPICall, defaultGitHubClient, append(nodeAndMetrics, memberOperatorDeployment, memberStatus)...)
@@ -472,7 +472,7 @@ func TestOverallStatusCondition(t *testing.T) {
 				HasRoutes("https://console.member-cluster/console/", routesAvailable())
 		})
 
-		t.Run("che and console without path", func(t *testing.T) {
+		t.Run("console without path", func(t *testing.T) {
 			// given
 			consoleRoute := consoleRoute()
 			consoleRoute.Spec.Path = ""

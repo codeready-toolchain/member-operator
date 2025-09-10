@@ -41,7 +41,6 @@ const (
 	hostConnectionTag statusComponentTag = "hostConnection"
 	resourceUsageTag  statusComponentTag = "resourceUsage"
 	routesTag         statusComponentTag = "routes"
-	cheTag            statusComponentTag = "che"
 
 	labelNodeRoleMaster          = "node-role.kubernetes.io/master"
 	labelNodeRoleWorker          = "node-role.kubernetes.io/worker"
@@ -273,7 +272,7 @@ func (r *Reconciler) loadCurrentResourceUsage(ctx context.Context, memberStatus 
 	return nil
 }
 
-// routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console and Che Dashboard URLs.
+// routesHandleStatus retrieves the public routes which should be exposed to the users. Such as Web Console URL.
 // Returns an error if at least one of the required routes are not available.
 func (r *Reconciler) routesHandleStatus(ctx context.Context, memberStatus *toolchainv1alpha1.MemberStatus, config membercfg.Configuration) error {
 	if memberStatus.Status.Routes == nil {
@@ -286,17 +285,6 @@ func (r *Reconciler) routesHandleStatus(ctx context.Context, memberStatus *toolc
 		return err
 	}
 	memberStatus.Status.Routes.ConsoleURL = consoleURL
-
-	cheURL, err := r.cheDashboardURL(ctx, config)
-	if err != nil {
-		if config.Che().IsRequired() {
-			errCondition := status.NewComponentErrorCondition(toolchainv1alpha1.ToolchainStatusMemberStatusCheRouteUnavailableReason, err.Error())
-			memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*errCondition}
-			return err
-		}
-		log.FromContext(ctx).Info("Che route is not available but not required. Ignoring.", "err", err.Error())
-	}
-	memberStatus.Status.Routes.CheDashboardURL = cheURL
 
 	readyCondition := status.NewComponentReadyCondition(toolchainv1alpha1.ToolchainStatusMemberStatusRoutesAvailableReason)
 	memberStatus.Status.Routes.Conditions = []toolchainv1alpha1.Condition{*readyCondition}
@@ -393,20 +381,6 @@ func (r *Reconciler) consoleURL(ctx context.Context, config membercfg.Configurat
 		return "", err
 	}
 	return sanitizeURL(fmt.Sprintf("https://%s/%s", route.Spec.Host, route.Spec.Path)), nil
-}
-
-func (r *Reconciler) cheDashboardURL(ctx context.Context, config membercfg.Configuration) (string, error) {
-	route := &routev1.Route{}
-	namespacedName := types.NamespacedName{Namespace: config.Che().Namespace(), Name: config.Che().RouteName()}
-	err := r.AllNamespacesClient.Get(ctx, namespacedName, route)
-	if err != nil {
-		return "", err
-	}
-	scheme := "https"
-	if route.Spec.TLS == nil || *route.Spec.TLS == (routev1.TLSConfig{}) {
-		scheme = "http"
-	}
-	return sanitizeURL(fmt.Sprintf("%s://%s/%s", scheme, route.Spec.Host, route.Spec.Path)), nil
 }
 
 func sanitizeURL(url string) string {

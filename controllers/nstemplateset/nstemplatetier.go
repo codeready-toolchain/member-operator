@@ -108,7 +108,7 @@ const (
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
 	if t.ttr != nil {
-		return t.processGoTemplates(params, filters...)
+		return t.processGoTemplate(params, filters...)
 	}
 	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
@@ -133,13 +133,13 @@ func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) ma
 }
 
 // processGoTemplates processes the Go templates
-func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+func (t *tierTemplate) processGoTemplate(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
-	var templatesToProcess []runtime.RawExtension
-	// If there are no filters, then all the templates are to be processed(parsed), No need to filter them first
-	templatesToProcess = t.ttr.Spec.TemplateObjects
+	var objectsToProcess []runtime.RawExtension
+	// If there are no filters, then all the objects are to be processed(parsed), No need to filter them first
+	objectsToProcess = t.ttr.Spec.TemplateObjects
 	if len(filters) > 0 {
-		// if there are filters provided, then populate Object field from raw template so the templateObjects can be filtered
+		// if there are filters provided, then populate Object field from raw object content so the templateObjects can be filtered
 		for i, rawObj := range t.ttr.Spec.TemplateObjects {
 			if rawObj.Object == nil {
 				var unStruct unstructured.Unstructured
@@ -149,14 +149,14 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 				t.ttr.Spec.TemplateObjects[i].Object = &unStruct
 			}
 		}
-		templatesToProcess = template.Filter(t.ttr.Spec.TemplateObjects, filters...)
+		objectsToProcess = template.Filter(t.ttr.Spec.TemplateObjects, filters...)
 	}
 
-	// Parse and execute the templates to process
-	objList := make([]runtimeclient.Object, 0, len(templatesToProcess))
+	// Parse and execute the objects to process
+	objList := make([]runtimeclient.Object, 0, len(objectsToProcess))
 	decoder := scheme.Codecs.UniversalDeserializer()
 
-	for i, rawExt := range templatesToProcess {
+	for i, rawExt := range objectsToProcess {
 		var b bytes.Buffer
 		unStructObj := &unstructured.Unstructured{}
 		strTemp := string(rawExt.Raw)

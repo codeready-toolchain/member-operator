@@ -132,7 +132,7 @@ func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) ma
 
 }
 
-// processGoTemplates processes the Go templates
+// processGoTemplate processes the Go template
 func (t *tierTemplate) processGoTemplate(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
 	var objectsToProcess []runtime.RawExtension

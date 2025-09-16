@@ -225,7 +225,7 @@ func TestProcessWithTTRTable(t *testing.T) {
 			templates:     []string{invalidJSONTemplate},
 			staticParams:  []toolchainv1alpha1.Parameter{},
 			runtimeParams: standardRuntimeParams,
-			expectedError: "unexpected end of JSON input",
+			expectedError: "couldn't get version/kind; json parse error",
 		},
 		{
 			name:          "missing required runtime parameter",

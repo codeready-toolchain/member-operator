@@ -331,7 +331,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-
 }
 
 func newRestClient(config *rest.Config) (*rest.RESTClient, error) {

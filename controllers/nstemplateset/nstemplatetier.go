@@ -1,19 +1,26 @@
 package nstemplateset
 
 import (
+	"bytes"
 	"context"
+	"maps"
+
 	"fmt"
 
-	"github.com/codeready-toolchain/member-operator/pkg/host"
-	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
+	gotemp "text/template"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
+	"github.com/codeready-toolchain/member-operator/pkg/host"
+	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/pkg/errors"
 	errs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -95,8 +102,15 @@ const (
 )
 
 // process processes the template inside of the tierTemplate object with the given parameters.
+// it first checks if tiertemplaterevision resource is present, and process its object and
+// if not present then it process the openshift template(current) logic
 // Optionally, it also filters the result to return a subset of the template objects.
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
+	if t.ttr != nil {
+		return t.processGoTemplate(params, filters...)
+	}
+	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
 	if err != nil {
 		return nil, err
@@ -104,4 +118,65 @@ func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string,
 	tmplProcessor := template.NewProcessor(scheme)
 	params[MemberOperatorNS] = ns // add (or enforce)
 	return tmplProcessor.Process(t.template.DeepCopy(), params, filters...)
+
+}
+
+// convert ttr parameters to a map
+func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) map[string]string {
+	staticParamMap := map[string]string{}
+	for _, params := range t.ttr.Spec.Parameters {
+		staticParamMap[params.Name] = params.Value
+	}
+	maps.Copy(staticParamMap, runtimeParam) // need to add dynamic parameters like space-name also
+	return staticParamMap
+
+}
+
+// processGoTemplate processes the Go template
+func (t *tierTemplate) processGoTemplate(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
+	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
+	var objectsToProcess []runtime.RawExtension
+	// If there are no filters, then all the objects are to be processed(parsed), No need to filter them first
+	objectsToProcess = t.ttr.Spec.TemplateObjects
+	if len(filters) > 0 {
+		// if there are filters provided, then populate Object field from raw object content so the templateObjects can be filtered
+		for i, rawObj := range t.ttr.Spec.TemplateObjects {
+			if rawObj.Object == nil {
+				var unStruct unstructured.Unstructured
+				if err := yaml.Unmarshal(rawObj.Raw, &unStruct); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal raw go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, string(rawObj.Raw))
+				}
+				t.ttr.Spec.TemplateObjects[i].Object = &unStruct
+			}
+		}
+		objectsToProcess = template.Filter(t.ttr.Spec.TemplateObjects, filters...)
+	}
+
+	// Parse and execute the objects to process
+	objList := make([]runtimeclient.Object, 0, len(objectsToProcess))
+	decoder := scheme.Codecs.UniversalDeserializer()
+
+	for i, rawExt := range objectsToProcess {
+		var b bytes.Buffer
+		unStructObj := &unstructured.Unstructured{}
+		strTemp := string(rawExt.Raw)
+
+		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+		}
+
+		if err := ttrTemp.Execute(&b, paramMap); err != nil {
+			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+		}
+
+		_, _, err = decoder.Decode(b.Bytes(), nil, unStructObj)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode executed go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+		}
+
+		objList = append(objList, unStructObj)
+	}
+
+	return objList, nil
 }

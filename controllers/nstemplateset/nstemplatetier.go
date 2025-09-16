@@ -19,6 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/kubernetes/scheme"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -106,7 +108,7 @@ const (
 func (t *tierTemplate) process(scheme *runtime.Scheme, params map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	//check if tiertemplaterevision is present then return the runtimeclient object of ttr
 	if t.ttr != nil {
-		return t.processGoTemplates(params, filters...)
+		return t.processGoTemplate(params, filters...)
 	}
 	// if ttr is not present then process the openshift template
 	ns, err := configuration.GetWatchNamespace()
@@ -130,15 +132,34 @@ func (t *tierTemplate) convertParametersToMap(runtimeParam map[string]string) ma
 
 }
 
-func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
-	objList := make([]runtimeclient.Object, 0, len(t.ttr.Spec.TemplateObjects))
-	rawExtObjList := make([]runtime.RawExtension, 0, len(t.ttr.Spec.TemplateObjects))
+// processGoTemplate processes the Go template
+func (t *tierTemplate) processGoTemplate(runtimeParams map[string]string, filters ...template.FilterFunc) ([]runtimeclient.Object, error) {
 	paramMap := t.convertParametersToMap(runtimeParams) // go execute requires parameters in form of map
+	var objectsToProcess []runtime.RawExtension
+	// If there are no filters, then all the objects are to be processed(parsed), No need to filter them first
+	objectsToProcess = t.ttr.Spec.TemplateObjects
+	if len(filters) > 0 {
+		// if there are filters provided, then populate Object field from raw object content so the templateObjects can be filtered
+		for i, rawObj := range t.ttr.Spec.TemplateObjects {
+			if rawObj.Object == nil {
+				var unStruct unstructured.Unstructured
+				if err := yaml.Unmarshal(rawObj.Raw, &unStruct); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal raw go template for object in tierTemplateRevision %q: %w; raw: %q", t.ttr.Name, err, string(rawObj.Raw))
+				}
+				t.ttr.Spec.TemplateObjects[i].Object = &unStruct
+			}
+		}
+		objectsToProcess = template.Filter(t.ttr.Spec.TemplateObjects, filters...)
+	}
 
-	for i := range t.ttr.Spec.TemplateObjects {
+	// Parse and execute the objects to process
+	objList := make([]runtimeclient.Object, 0, len(objectsToProcess))
+	decoder := scheme.Codecs.UniversalDeserializer()
+
+	for i, rawExt := range objectsToProcess {
 		var b bytes.Buffer
-		unStruct := unstructured.Unstructured{}
-		strTemp := string(t.ttr.Spec.TemplateObjects[i].Raw)
+		unStructObj := &unstructured.Unstructured{}
+		strTemp := string(rawExt.Raw)
 
 		ttrTemp, err := gotemp.New(t.ttr.Name).Option("missingkey=error").Parse(strTemp)
 		if err != nil {
@@ -149,28 +170,12 @@ func (t *tierTemplate) processGoTemplates(runtimeParams map[string]string, filte
 			return nil, fmt.Errorf("failed to execute go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
-		runObj, _, err := unstructured.UnstructuredJSONScheme.Decode(b.Bytes(), nil, &unStruct)
+		_, _, err = decoder.Decode(b.Bytes(), nil, unStructObj)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
+			return nil, fmt.Errorf("failed to decode executed go template for object %d in tierTemplateRevision %q: %w; raw: %q", i, t.ttr.Name, err, strTemp)
 		}
 
-		// Convert runObj to runtime.RawExtension
-		// runtime.RawExtension expects an Object field, not Raw bytes
-		rawExt := runtime.RawExtension{
-			Object: runObj,
-		}
-		rawExtObjList = append(rawExtObjList, rawExt)
-	}
-	// Apply filters if needed
-	filtered := template.Filter(rawExtObjList, filters...)
-
-	// Convert filtered RawExtensions back to runtime.Objects
-	for _, f := range filtered {
-		if clientObj, ok := f.Object.(runtimeclient.Object); ok {
-			objList = append(objList, clientObj)
-		} else {
-			return nil, fmt.Errorf("unable to cast object to client.Object: %+v", f.Object)
-		}
+		objList = append(objList, unStructObj)
 	}
 
 	return objList, nil

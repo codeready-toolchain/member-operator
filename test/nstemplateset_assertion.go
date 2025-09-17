@@ -160,8 +160,16 @@ func (a *NSTemplateSetAssertion) HasTierName(tierName string) *NSTemplateSetAsse
 func (a *NSTemplateSetAssertion) HasClusterResourcesTemplateRef(templateRef string) *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)
-	assert.NotNil(a.t, a.nsTmplSet.Spec.ClusterResources.TemplateRef)
+	assert.NotNil(a.t, a.nsTmplSet.Spec.ClusterResources)
 	assert.Equal(a.t, a.nsTmplSet.Spec.ClusterResources.TemplateRef, templateRef)
+	return a
+}
+
+func (a *NSTemplateSetAssertion) HasLastAppliedClusterResourcesTemplateRef(templateRef string) *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.NotNil(a.t, a.nsTmplSet.Status.ClusterResources)
+	assert.Equal(a.t, a.nsTmplSet.Status.ClusterResources.TemplateRef, templateRef)
 	return a
 }
 

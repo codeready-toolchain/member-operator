@@ -109,21 +109,12 @@ func (a *MemberStatusAssertion) HasMemoryUsage(usages ...AddUsage) *MemberStatus
 	return a
 }
 
-func (a *MemberStatusAssertion) HasRoutes(consoleURL, cheURL string, expCondition toolchainv1alpha1.Condition) *MemberStatusAssertion {
+func (a *MemberStatusAssertion) HasRoutes(consoleURL string, expCondition toolchainv1alpha1.Condition) *MemberStatusAssertion {
 	err := a.loadMemberStatus()
 	require.NoError(a.t, err)
 	require.NotNil(a.t, a.memberStatus.Status.Routes)
 	require.Equal(a.t, consoleURL, a.memberStatus.Status.Routes.ConsoleURL)
-	require.Equal(a.t, cheURL, a.memberStatus.Status.Routes.CheDashboardURL)
 	test.AssertConditionsMatch(a.t, a.memberStatus.Status.Routes.Conditions, expCondition)
-	return a
-}
-
-func (a *MemberStatusAssertion) HasCheConditions(expCondition toolchainv1alpha1.Condition) *MemberStatusAssertion {
-	err := a.loadMemberStatus()
-	require.NoError(a.t, err)
-	require.NotNil(a.t, a.memberStatus.Status.Che)
-	test.AssertConditionsMatch(a.t, a.memberStatus.Status.Che.Conditions, expCondition)
 	return a
 }
 

@@ -7,6 +7,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 
+	commonclient "github.com/codeready-toolchain/toolchain-common/pkg/client"
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -112,7 +113,7 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 		// by removing the new objects from the current objects, we are going to be left with the objects
 		// that should be removed from the cluster after we're done with this loop
 		for oldIdx, curObj := range currentObjects {
-			if curObj.GetName() == newObj.GetName() && curObj.GetNamespace() == newObj.GetNamespace() && curObj.GetObjectKind().GroupVersionKind() == newObj.GetObjectKind().GroupVersionKind() {
+			if commonclient.SameGVKandName(curObj, newObj) {
 				currentObjects = slices.Delete(currentObjects, oldIdx, oldIdx+1)
 				break
 			}

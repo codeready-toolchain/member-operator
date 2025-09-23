@@ -132,16 +132,14 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 
 	// what we're left with here is the list of currently existing objects that are no longer present in the template.
 	// we need to delete them
-	for _, obj := range currentObjects {
+	if len(currentObjects) > 0 {
 		if err := changeStatusIfNeeded(); err != nil {
 			return err
 		}
-		if err := r.Client.Delete(ctx, obj); err != nil {
-			if !errors.IsNotFound(err) {
-				err := fmt.Errorf("failed to delete the cluster resource %s, %s: %w", obj.GetName(), obj.GetObjectKind().GroupVersionKind().String(), err)
-				return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, failureStatusReason, err, "failure while syncing cluster resources")
-			}
-		}
+	}
+
+	if err := deleteObsoleteObjects(ctx, r.Client, currentObjects, nil); err != nil {
+		return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, failureStatusReason, err, "failure while syncing cluster resources")
 	}
 
 	return nil

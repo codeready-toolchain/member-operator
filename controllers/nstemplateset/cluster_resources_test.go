@@ -616,7 +616,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			AssertThatNSTemplateSet(t, namespaceName, spaceName, cl).
 				HasFinalizer().
 				HasConditions(UpdateFailed(
-					"failed to delete the cluster resource for-johnsmith, quota.openshift.io/v1, Kind=ClusterResourceQuota: some error"))
+					"failed to delete obsolete object 'for-johnsmith' of kind 'ClusterResourceQuota' in namespace '': some error"))
 			AssertThatCluster(t, cl).
 				HasResource("for-"+spaceName, &quotav1.ClusterResourceQuota{}).
 				HasResource(spaceName+"-tekton-view", &rbacv1.ClusterRoleBinding{})

@@ -6,6 +6,7 @@ LABEL author "KubeSaw <devsandbox@redhat.com>"
 ENV LANG=en_US.utf8 \
     GOPATH=/tmp/go \
     GOCACHE=/tmp/.cache \
+    PATH=$PATH:$GOPATH/bin \
     GIT_COMMITTER_NAME="KubeSaw" \
     GIT_COMMITTER_EMAIL=devsandbox@redhat.com \
     GOLANG_VERSION=go1.23.12 \

@@ -11,7 +11,6 @@ import (
 	errs "github.com/pkg/errors"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -187,7 +186,7 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 
 	for _, toDelete := range currentObjects {
 		var err error
-		if err = r.Client.Get(ctx, types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
+		if err = r.Client.Get(ctx, runtimeclient.ObjectKeyFromObject(toDelete), toDelete); err != nil && !errors.IsNotFound(err) {
 			return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusTerminatingFailed, err,
 				"failed to get the cluster resource '%s' (GVK '%s') while deleting cluster resources", toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 		}

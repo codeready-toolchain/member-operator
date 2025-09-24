@@ -367,7 +367,7 @@ func TestPromoteClusterResources(t *testing.T) {
 				HasConditions(Updating())
 			AssertThatCluster(t, cl).
 				HasResource("for-"+spaceName, &quotav1.ClusterResourceQuota{}).
-				HasNoResource("for-empty", &rbacv1.ClusterRoleBinding{})
+				HasNoResource("for-empty", &quotav1.ClusterResourceQuota{})
 		})
 
 		t.Run("promote from 1 tier to another", func(t *testing.T) {

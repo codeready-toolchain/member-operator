@@ -186,7 +186,8 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 	}
 
 	for _, toDelete := range currentObjects {
-		if err := r.Client.Get(ctx, types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
+		var err error
+		if err = r.Client.Get(ctx, types.NamespacedName{Name: toDelete.GetName()}, toDelete); err != nil && !errors.IsNotFound(err) {
 			return r.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.setStatusTerminatingFailed, err,
 				"failed to get the cluster resource '%s' (GVK '%s') while deleting cluster resources", toDelete.GetName(), toDelete.GetObjectKind().GroupVersionKind())
 		}
@@ -196,7 +197,7 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 		}
 
 		log.FromContext(ctx).Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
-		if err := r.Client.Delete(ctx, toDelete); err != nil && errors.IsNotFound(err) {
+		if err = r.Client.Delete(ctx, toDelete); err != nil && errors.IsNotFound(err) {
 			// ignore case where the resource did not exist anymore, move to the next one to delete
 			continue
 		} else if err != nil {

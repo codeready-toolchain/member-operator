@@ -1415,6 +1415,12 @@ func withNSTemplateSetFeatureAnnotation(feature string) nsTmplSetOption {
 	}
 }
 
+func withStatusFeatureToggles(features []string) nsTmplSetOption {
+	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
+		nsTmplSet.Status.FeatureToggles = features
+	}
+}
+
 func withDeletionTs() nsTmplSetOption {
 	return func(nsTmplSet *toolchainv1alpha1.NSTemplateSet) {
 		deletionTS := metav1.Now()

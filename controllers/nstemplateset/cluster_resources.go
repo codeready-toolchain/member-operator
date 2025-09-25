@@ -42,7 +42,7 @@ func (r *clusterResourcesManager) ensure(ctx context.Context, nsTmplSet *toolcha
 		oldTemplateRef = nsTmplSet.Status.ClusterResources.TemplateRef
 	}
 
-	if oldTemplateRef == newTemplateRef {
+	if oldTemplateRef == newTemplateRef && !featuresChanged(nsTmplSet) {
 		return nil
 	}
 

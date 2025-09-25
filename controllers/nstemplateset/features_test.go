@@ -98,6 +98,59 @@ func TestShouldCreate(t *testing.T) {
 	}
 }
 
+func TestFeaturesChanged(t *testing.T) {
+	for _, test := range []struct {
+		name           string
+		annoFeatures   string
+		statusFeatures []string
+		changed        bool
+	}{
+		{
+			name:    "should report no change when no features in either annos or status",
+			changed: false,
+		},
+		{
+			name:         "should report change when no features in status",
+			annoFeatures: "feature",
+			changed:      true,
+		},
+		{
+			name:           "should report change when no features in anno",
+			statusFeatures: []string{"feature"},
+			changed:        true,
+		},
+		{
+			name:           "should report no change when features equal",
+			statusFeatures: []string{"feature1", "feature2"},
+			annoFeatures:   "feature1,feature2",
+			changed:        false,
+		},
+		{
+			name:           "should report change when features differ in number",
+			statusFeatures: []string{"feature1", "feature2"},
+			annoFeatures:   "feature1",
+			changed:        true,
+		},
+		{
+			name:           "should report change when features differ",
+			statusFeatures: []string{"feature1", "feature2"},
+			annoFeatures:   "feature1,feature3",
+			changed:        true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// given
+			nsts := newNSTmplSet("default", "ns", "base", withNSTemplateSetFeatureAnnotation(test.annoFeatures), withStatusFeatureToggles(test.statusFeatures))
+
+			// when
+			changed := featuresChanged(nsts)
+
+			// then
+			assert.Equal(t, test.changed, changed)
+		})
+	}
+}
+
 func p(s string) *string {
 	return &s
 }

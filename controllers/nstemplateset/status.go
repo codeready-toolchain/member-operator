@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"slices"
 	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -108,28 +109,25 @@ func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Contex
 func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
 	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
+	// sort and deduplicate the list, so that the caller can use the "cleaned up" value
+	slices.Sort(featureAnnotationList)
+	featureAnnotationList = slices.Compact(featureAnnotationList)
 
-	if len(featureAnnotationList) != len(nsTmplSet.Status.FeatureToggles) {
-		return true, featureAnnotationList
-	}
+	statusFeatureList := nsTmplSet.Status.FeatureToggles
 
-	// the number of features is always going to be very small, say < 5, so there's no point
-	// in allocating a map or doing anything fancy. An O(n^2) nested for-loop is good enough.
+	// now that the features in annotation are sorted and deduplicated we can just loop through
+	// them and look for each one of them in the status features. Note that we cannot
+	// short-circuit on length, because the status feature list is potentially not deduplicated.
 
-	for _, a := range featureAnnotationList {
-		found := false
-		for _, b := range nsTmplSet.Status.FeatureToggles {
-			if a == b {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return true, featureAnnotationList
-		}
-	}
+	annosNotInStatus := slices.ContainsFunc(featureAnnotationList, func(f string) bool {
+		return !slices.Contains(statusFeatureList, f)
+	})
 
-	return false, featureAnnotationList
+	statusesNotInAnno := slices.ContainsFunc(statusFeatureList, func(f string) bool {
+		return !slices.Contains(featureAnnotationList, f)
+	})
+
+	return annosNotInStatus || statusesNotInAnno, featureAnnotationList
 }
 
 // clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset

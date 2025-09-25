@@ -108,20 +108,37 @@ func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Contex
 func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
 	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
-	// order is not important, so we are sorting the lists just for the sake of the comparison
-	transform := cmp.Transformer("Sort", func(in []int) []int {
-		out := append([]int(nil), in...) // Copy input to avoid mutating it
-		sort.Ints(out)
-		return out
-	})
-	return !cmp.Equal(featureAnnotationList, nsTmplSet.Status.FeatureToggles, transform), featureAnnotationList
+
+	if len(featureAnnotationList) != len(nsTmplSet.Status.FeatureToggles) {
+		return true, featureAnnotationList
+	}
+
+	// the number of features is always going to be very small, say < 5, so there's no point
+	// in allocating a map or doing anything fancy. An O(n^2) nested for-loop is good enough.
+
+	for _, a := range featureAnnotationList {
+		found := false
+		for _, b := range nsTmplSet.Status.FeatureToggles {
+			if a == b {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return true, featureAnnotationList
+		}
+	}
+
+	return false, featureAnnotationList
 }
 
 // clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset
 func clusterResourcesNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
-	return (nsTmplSet.Status.ClusterResources == nil && nsTmplSet.Spec.ClusterResources != nil) ||
-		(nsTmplSet.Status.ClusterResources != nil && nsTmplSet.Spec.ClusterResources == nil) ||
-		nsTmplSet.Status.ClusterResources.TemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef
+	if nsTmplSet.Status.ClusterResources != nil {
+		return nsTmplSet.Spec.ClusterResources == nil || nsTmplSet.Spec.ClusterResources.TemplateRef != nsTmplSet.Status.ClusterResources.TemplateRef
+	} else {
+		return nsTmplSet.Spec.ClusterResources != nil
+	}
 }
 
 func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

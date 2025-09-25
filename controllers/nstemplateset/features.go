@@ -24,3 +24,9 @@ func shouldCreate(toCreate runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NS
 	}
 	return slices.Contains(utils.SplitCommaSeparatedList(winners), feature)
 }
+
+// featuresChanged returns true if the features on the NSTemplateSet changed since the last time it was applied.
+func featuresChanged(nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
+	changed, _ := featureAnnotationNeedsUpdate(nsTmplSet)
+	return changed
+}

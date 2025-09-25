@@ -55,7 +55,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
 	})
 
-	t.Run("should create only CRQs and set status to provisioning", func(t *testing.T) {
+	t.Run("should create objects and set status to provisioning", func(t *testing.T) {
 		tests := []struct {
 			name            string
 			enabledFeatures string
@@ -168,6 +168,35 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasConditions(Provisioned())
 		AssertThatCluster(t, fakeClient).
 			HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
+			HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+			HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
+			HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
+	})
+
+	t.Run("should clean up resources from no longer active features", func(t *testing.T) {
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
+			withNSTemplateSetFeatureAnnotation("feature-2"),
+			withStatusFeatureToggles([]string{"feature-1"}),
+			withNamespaces("abcde11", "dev"),
+			withClusterResources("abcde11"),
+			withStatusClusterResources("abcde11"),
+			withConditions(Provisioned()))
+		crq := newClusterResourceQuota("feature-1-for-"+spacename, "advanced")
+		crb := newTektonClusterRoleBinding(fmt.Sprintf("feature-1-for-%s", spacename), "advanced")
+		idlerDev := newIdler(spacename, spacename+"-dev", "advanced")
+		idlerStage := newIdler(spacename, spacename+"-stage", "advanced")
+		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
+
+		// when
+		err := manager.ensure(ctx, nsTmplSet)
+
+		// then
+		require.NoError(t, err)
+		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+			HasFinalizer().
+			HasConditions(Updating())
+		AssertThatCluster(t, fakeClient).
+			HasNoResource("feature-1-for-"+spacename, &quotav1.ClusterResourceQuota{}).
 			HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 			HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
 			HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})

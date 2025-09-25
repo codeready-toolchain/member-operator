@@ -181,11 +181,9 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			withClusterResources("abcde11"),
 			withStatusClusterResources("abcde11"),
 			withConditions(Provisioned()))
-		crq := newClusterResourceQuota("feature-1-for-"+spacename, "advanced")
-		crb := newTektonClusterRoleBinding(fmt.Sprintf("feature-1-for-%s", spacename), "advanced")
-		idlerDev := newIdler(spacename, spacename+"-dev", "advanced")
-		idlerStage := newIdler(spacename, spacename+"-stage", "advanced")
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
+		crq := newClusterResourceQuota("", "advanced")
+		crq.Name = "feature-1-for-" + spacename // manually create the resource with the name matching the feature resource
+		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 		// when
 		err := manager.ensure(ctx, nsTmplSet)

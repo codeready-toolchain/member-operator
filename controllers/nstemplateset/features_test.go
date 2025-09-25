@@ -137,6 +137,12 @@ func TestFeaturesChanged(t *testing.T) {
 			annoFeatures:   "feature1,feature3",
 			changed:        true,
 		},
+		{
+			name:           "should detect duplicates",
+			statusFeatures: []string{"feature1", "feature2", "feature1"},
+			annoFeatures:   "feature2,feature1",
+			changed:        false,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// given

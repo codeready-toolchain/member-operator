@@ -157,7 +157,6 @@ func TestUpdateStatus(t *testing.T) {
 	})
 
 	t.Run("status update failures", func(t *testing.T) {
-
 		t.Run("failed to update status during deletion", func(t *testing.T) {
 			// given an NSTemplateSet resource which is being deleted and whose finalizer was not removed yet
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "basic", withDeletionTs(), withClusterResources("abcde11"), withNamespaces("abcde11", "dev", "code"))
@@ -217,6 +216,7 @@ func TestUpdateStatus(t *testing.T) {
 			HasConditions(conditions...)
 	})
 }
+
 func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 	logger := zap.New(zap.UseDevMode(true))
 	log.SetLogger(logger)
@@ -272,4 +272,72 @@ func TestUpdateStatusToProvisionedWhenPreviouslyWasSetToFailed(t *testing.T) {
 			HasFinalizer().
 			HasConditions(Provisioned())
 	})
+}
+
+func TestFeatureAnnotationNeedsUpdate(t *testing.T) {
+	for _, test := range []struct {
+		name            string
+		annoFeatures    string
+		statusFeatures  []string
+		changed         bool
+		featuresToApply []string
+	}{
+		{
+			name:            "should report no change when no features in either annos or status",
+			changed:         false,
+			featuresToApply: []string{},
+		},
+		{
+			name:            "should report change when no features in status",
+			annoFeatures:    "feature",
+			changed:         true,
+			featuresToApply: []string{"feature"},
+		},
+		{
+			name:            "should report change when no features in anno",
+			statusFeatures:  []string{"feature"},
+			changed:         true,
+			featuresToApply: []string{},
+		},
+		{
+			name:            "should report no change when features equal",
+			statusFeatures:  []string{"feature1", "feature2"},
+			annoFeatures:    "feature1,feature2",
+			changed:         false,
+			featuresToApply: []string{"feature1", "feature2"},
+		},
+		{
+			name:            "should report change when features differ in number",
+			statusFeatures:  []string{"feature1", "feature2"},
+			annoFeatures:    "feature1",
+			changed:         true,
+			featuresToApply: []string{"feature1"},
+		},
+		{
+			name:            "should report change when features differ",
+			statusFeatures:  []string{"feature1", "feature2"},
+			annoFeatures:    "feature1,feature3",
+			changed:         true,
+			featuresToApply: []string{"feature1", "feature3"},
+		},
+		{
+			name:            "should detect duplicates",
+			statusFeatures:  []string{"feature1", "feature2", "feature1"},
+			annoFeatures:    "feature2,feature2,feature1,feature1",
+			changed:         false,
+			featuresToApply: []string{"feature1", "feature2"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// given
+			nsts := newNSTmplSet("default", "ns", "base", withNSTemplateSetFeatureAnnotation(test.annoFeatures), withStatusFeatureToggles(test.statusFeatures))
+
+			// when
+			changed, featuresToApply := featureAnnotationNeedsUpdate(nsts)
+
+			// then
+			assert.Equal(t, test.changed, changed)
+			assert.Equal(t, test.featuresToApply, featuresToApply)
+		})
+	}
 }

@@ -289,8 +289,7 @@ spec:
                     type: object
                 type: object
               routes:
-                description: Routes/URLs of the cluster, such as Console and Che Dashboard
-                  URLs
+                description: Routes/URLs of the cluster, such as Console
                 properties:
                   conditions:
                     description: |-

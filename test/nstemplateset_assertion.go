@@ -180,6 +180,13 @@ func (a *NSTemplateSetAssertion) HasClusterResourcesNil() *NSTemplateSetAssertio
 	return a
 }
 
+func (a *NSTemplateSetAssertion) HasStatusClusterResourcesNil() *NSTemplateSetAssertion {
+	err := a.loadNSTemplateSet()
+	require.NoError(a.t, err)
+	assert.Nil(a.t, a.nsTmplSet.Status.ClusterResources)
+	return a
+}
+
 func (a *NSTemplateSetAssertion) HasNamespaceTemplateRefs(templateRefs ...string) *NSTemplateSetAssertion {
 	err := a.loadNSTemplateSet()
 	require.NoError(a.t, err)

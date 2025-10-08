@@ -665,7 +665,7 @@ func TestUpdateClusterResources(t *testing.T) {
 	crq := newClusterResourceQuota(spaceName, "advanced")
 
 	t.Run("success", func(t *testing.T) {
-		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
+		t.Run("update from abcde11 revision to abcde12 revision as part of the advanced tier by updating CRQ and by deleting CRB", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withNamespaces("abcde12", "dev"), withClusterResources("abcde12"), withStatusClusterResources("abcde11"))
 			codeNs := newNamespace("advanced", spaceName, "dev")

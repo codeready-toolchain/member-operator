@@ -728,7 +728,7 @@ func TestReconcilePromotion(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("upgrade from basic to advanced tier", func(t *testing.T) {
-		t.Run("create ClusterResourceQuota", func(t *testing.T) {
+		t.Run("create cluster-scoped resources", func(t *testing.T) {
 			// given
 			previousClusterTemplate := newTierTemplate("basic", "clusterresources", "abcde11")
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withStatusClusterResourcesInTier("basic", "abcde11"))
@@ -834,7 +834,7 @@ func TestReconcileUpdate(t *testing.T) {
 	t.Cleanup(restore)
 
 	t.Run("upgrade from abcde11 to abcde12 as part of the advanced tier", func(t *testing.T) {
-		t.Run("update ClusterResourceQuota", func(t *testing.T) {
+		t.Run("syncs cluster-scoped resources", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
 				withNamespaces("abcde12", "dev"),

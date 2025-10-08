@@ -42,8 +42,10 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		// given
 		manager, failingClient := prepareClusterResourcesManager(t, nsTmplSet)
 
+		// when
 		err := manager.ensure(ctx, nsTmplSet)
 
+		// then
 		require.NoError(t, err)
 		AssertThatNSTemplateSet(t, namespaceName, spacename, failingClient).
 			HasFinalizer().
@@ -129,48 +131,50 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 		}
 	})
 
-	t.Run("should not create ClusterResource objects when the field is nil", func(t *testing.T) {
-		// given
-		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"))
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
+	t.Run("should not do anything when template refs match", func(t *testing.T) {
+		t.Run("when templaterefs are set", func(t *testing.T) {
+			// given
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
+				withNamespaces("abcde11", "dev"),
+				withClusterResources("abcde11"),
+				withStatusClusterResources("abcde11"),
+				withConditions(Provisioned()))
+			crq := newClusterResourceQuota(spacename, "advanced")
+			crb := newTektonClusterRoleBinding(spacename, "advanced")
+			idlerDev := newIdler(spacename, spacename+"-dev", "advanced")
+			idlerStage := newIdler(spacename, spacename+"-stage", "advanced")
+			manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
 
-		// when
-		err := manager.ensure(ctx, nsTmplSet)
+			// when
+			err := manager.ensure(ctx, nsTmplSet)
 
-		// then
-		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
-			HasFinalizer().
-			HasSpecNamespaces("dev").
-			HasNoConditions()
-	})
+			// then
+			require.NoError(t, err)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+				HasFinalizer().
+				HasConditions(Provisioned())
+			AssertThatCluster(t, fakeClient).
+				HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
+				HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
+				HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
+				HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
+		})
 
-	t.Run("should not do anything when all cluster resources are already created", func(t *testing.T) {
-		// given
-		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced",
-			withNamespaces("abcde11", "dev"),
-			withClusterResources("abcde11"),
-			withStatusClusterResources("abcde11"),
-			withConditions(Provisioned()))
-		crq := newClusterResourceQuota(spacename, "advanced")
-		crb := newTektonClusterRoleBinding(spacename, "advanced")
-		idlerDev := newIdler(spacename, spacename+"-dev", "advanced")
-		idlerStage := newIdler(spacename, spacename+"-stage", "advanced")
-		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq, crb, idlerDev, idlerStage)
+		t.Run("when no templateref set", func(t *testing.T) {
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"))
+			manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet)
 
-		// when
-		err := manager.ensure(ctx, nsTmplSet)
+			// when
+			err := manager.ensure(ctx, nsTmplSet)
 
-		// then
-		require.NoError(t, err)
-		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
-			HasFinalizer().
-			HasConditions(Provisioned())
-		AssertThatCluster(t, fakeClient).
-			HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}).
-			HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
-			HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
-			HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
+			// then
+			require.NoError(t, err)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
+				HasFinalizer().
+				HasClusterResourcesNil().
+				HasStatusClusterResourcesNil().
+				HasNoConditions()
+		})
 	})
 
 	t.Run("should clean up resources from no longer active features", func(t *testing.T) {
@@ -181,7 +185,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			withClusterResources("abcde11"),
 			withStatusClusterResources("abcde11"),
 			withConditions(Provisioned()))
-		crq := newClusterResourceQuota("", "advanced")
+		crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-1"), withName("feature-1-for-"+spacename))
 		crq.Name = "feature-1-for-" + spacename // manually create the resource with the name matching the feature resource
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
@@ -194,7 +198,7 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			HasFinalizer().
 			HasConditions(Updating())
 		AssertThatCluster(t, fakeClient).
-			HasNoResource("feature-1-for-"+spacename, &quotav1.ClusterResourceQuota{}).
+			HasNoResource(crq.Name, &quotav1.ClusterResourceQuota{}).
 			HasResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{}).
 			HasResource(spacename+"-dev", &toolchainv1alpha1.Idler{}).
 			HasResource(spacename+"-stage", &toolchainv1alpha1.Idler{})
@@ -223,7 +227,7 @@ func TestEnsureClusterResourcesFail(t *testing.T) {
 
 		// then
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to retrieve the TierTemplate for the to-be-applied cluster resources with the name 'fail-clusterresources-abcde11'")
+		assert.Contains(t, err.Error(), "failed to process the template for the to-be-applied cluster resources with the name 'fail-clusterresources-abcde11'")
 		AssertThatNSTemplateSet(t, namespaceName, spacename, fakeClient).
 			HasFinalizer().
 			HasConditions(UnableToProvisionClusterResources(
@@ -277,12 +281,12 @@ func TestDeleteClusterResources(t *testing.T) {
 			HasNoResource(spacename+"-tekton-view", &rbacv1.ClusterRoleBinding{})
 	})
 
-	t.Run("delete the second ClusterResourceQuota since the first one has deletion timestamp set", func(t *testing.T) {
+	t.Run("skips objects with deletion timestamp set", func(t *testing.T) {
 		// given
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "withemptycrq", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
 		crq := newClusterResourceQuota(spacename, "withemptycrq", withFinalizer())
 		deletionTS := metav1.NewTime(time.Now())
-		crq.SetDeletionTimestamp(&deletionTS)
+		crq.SetDeletionTimestamp(&deletionTS) // this is ok, because crq has a finalizer
 		emptyCrq := newClusterResourceQuota("empty", "withemptycrq")
 		emptyCrq.Labels[toolchainv1alpha1.SpaceLabelKey] = spacename
 		manager, cl := prepareClusterResourcesManager(t, nsTmplSet, crq, emptyCrq)
@@ -293,8 +297,8 @@ func TestDeleteClusterResources(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		AssertThatCluster(t, cl).
-			HasResource("for-"+spacename, &quotav1.ClusterResourceQuota{}, HasDeletionTimestamp()).
-			HasNoResource("for-empty", &quotav1.ClusterResourceQuota{})
+			HasResource(crq.Name, &quotav1.ClusterResourceQuota{}, HasDeletionTimestamp()).
+			HasNoResource(emptyCrq.Name, &quotav1.ClusterResourceQuota{})
 	})
 
 	t.Run("delete ClusterResourceQuota for enabled feature", func(t *testing.T) {
@@ -409,7 +413,6 @@ func TestPromoteClusterResources(t *testing.T) {
 				withNamespaces("dev"),
 				withClusterResources("abcde11"),
 				withStatusClusterResourcesInTier("withemptycrq", "previousrevision"))
-			codeNs := newNamespace("advanced", spaceName, "code")
 			crq := newClusterResourceQuota(spaceName, "withemptycrq")
 			crq.Labels["disappearingLabel"] = "value"
 			crq.Spec.Quota.Hard["limits.cpu"] = resource.MustParse("100m")
@@ -417,7 +420,7 @@ func TestPromoteClusterResources(t *testing.T) {
 			crb.Labels["disappearingLabel"] = "value"
 			emptyCrq := newClusterResourceQuota(spaceName, "withemptycrq")
 			emptyCrq.Name = "for-empty"
-			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, codeNs, previousTierTemplate)
+			manager, cl := prepareClusterResourcesManager(t, nsTmplSet, emptyCrq, crq, crb, previousTierTemplate)
 
 			// when
 			err = manager.ensure(ctx, nsTmplSet)

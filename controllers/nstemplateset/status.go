@@ -2,6 +2,7 @@ package nstemplateset
 
 import (
 	"context"
+	"slices"
 	"sort"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -108,20 +109,34 @@ func (r *statusManager) updateStatusClusterResourcesRevisions(ctx context.Contex
 func featureAnnotationNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) (bool, []string) {
 	featureAnnotation := nsTmplSet.Annotations[toolchainv1alpha1.FeatureToggleNameAnnotationKey]
 	featureAnnotationList := utils.SplitCommaSeparatedList(featureAnnotation)
-	// order is not important, so we are sorting the lists just for the sake of the comparison
-	transform := cmp.Transformer("Sort", func(in []int) []int {
-		out := append([]int(nil), in...) // Copy input to avoid mutating it
-		sort.Ints(out)
-		return out
+	// sort and deduplicate the list, so that the caller can use the "cleaned up" value
+	slices.Sort(featureAnnotationList)
+	featureAnnotationList = slices.Compact(featureAnnotationList)
+
+	statusFeatureList := nsTmplSet.Status.FeatureToggles
+
+	// now that the features in annotation are sorted and deduplicated we can just loop through
+	// them and look for each one of them in the status features. Note that we cannot
+	// short-circuit on length, because the status feature list is potentially not deduplicated.
+
+	annosNotInStatus := slices.ContainsFunc(featureAnnotationList, func(f string) bool {
+		return !slices.Contains(statusFeatureList, f)
 	})
-	return !cmp.Equal(featureAnnotationList, nsTmplSet.Status.FeatureToggles, transform), featureAnnotationList
+
+	statusesNotInAnno := slices.ContainsFunc(statusFeatureList, func(f string) bool {
+		return !slices.Contains(featureAnnotationList, f)
+	})
+
+	return annosNotInStatus || statusesNotInAnno, featureAnnotationList
 }
 
 // clusterResourcesNeedsUpdate checks if there is a drift between the cluster resources set in the spec and the status of the nstemplateset
 func clusterResourcesNeedsUpdate(nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
-	return (nsTmplSet.Status.ClusterResources == nil && nsTmplSet.Spec.ClusterResources != nil) ||
-		(nsTmplSet.Status.ClusterResources != nil && nsTmplSet.Spec.ClusterResources == nil) ||
-		nsTmplSet.Status.ClusterResources.TemplateRef != nsTmplSet.Spec.ClusterResources.TemplateRef
+	if nsTmplSet.Status.ClusterResources != nil {
+		return nsTmplSet.Spec.ClusterResources == nil || nsTmplSet.Spec.ClusterResources.TemplateRef != nsTmplSet.Status.ClusterResources.TemplateRef
+	} else {
+		return nsTmplSet.Spec.ClusterResources != nil
+	}
 }
 
 func (r *statusManager) updateStatusNamespacesRevisions(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {

@@ -733,7 +733,7 @@ func TestUpdateClusterResources(t *testing.T) {
 					WithLabel("toolchain.dev.openshift.com/templateref", "advanced-clusterresources-abcde11"))
 		})
 
-		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by updating CRQ", func(t *testing.T) {
+		t.Run("update from abcde12 revision to abcde11 revision as part of the advanced tier by updating CRQ and creating CRB", func(t *testing.T) {
 			// given
 			nsTmplSet := newNSTmplSet(namespaceName, spaceName, "advanced", withNamespaces("abcde11", "dev"), withClusterResources("abcde11"), withStatusClusterResources("abcde12"))
 			crq := newClusterResourceQuota(spaceName, "advanced", withTemplateRefUsingRevision("abcde12"))

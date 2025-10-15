@@ -186,7 +186,6 @@ func TestEnsureClusterResourcesOK(t *testing.T) {
 			withStatusClusterResources("abcde11"),
 			withConditions(Provisioned()))
 		crq := newClusterResourceQuota(spacename, "advanced", withFeatureAnnotation("feature-1"), withName("feature-1-for-"+spacename))
-		crq.Name = "feature-1-for-" + spacename // manually create the resource with the name matching the feature resource
 		manager, fakeClient := prepareClusterResourcesManager(t, nsTmplSet, crq)
 
 		// when

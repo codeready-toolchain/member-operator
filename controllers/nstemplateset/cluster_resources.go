@@ -169,6 +169,7 @@ type objectApplier struct {
 }
 
 func newObjectApplier(r *clusterResourcesManager, nstt *toolchainv1alpha1.NSTemplateSet, currentObjects []runtimeclient.Object, newTierTemplate *tierTemplate) *objectApplier {
+	// if there's no clusterresources templateref mentioned in the tiertemplate's status, it was never deployed before.
 	firstDeployment := nstt.Status.ClusterResources == nil || nstt.Status.ClusterResources.TemplateRef == ""
 	var failureStatusReason statusUpdater
 

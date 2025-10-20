@@ -234,14 +234,16 @@ func (oa *objectApplier) Apply(ctx context.Context, obj runtimeclient.Object) er
 }
 
 func (oa *objectApplier) Cleanup(ctx context.Context) error {
-	// what we're left with here is the list of currently existing objects that are no longer present in the template.
-	// we need to delete them
 	if len(oa.currentObjects) > 0 {
+		// we'll be making changes to the cluster, because there are still some unprocessed objects.
+		// let's reflect that in the status, if it was not yet updated.
 		if err := oa.changeStatusIfNeeded(ctx); err != nil {
 			return err
 		}
 	}
 
+	// what we're left with here is the list of currently existing objects that are no longer present in the template.
+	// we need to delete them
 	if err := deleteObsoleteObjects(ctx, oa.r.Client, oa.currentObjects, nil); err != nil {
 		return oa.r.wrapErrorWithStatusUpdate(ctx, oa.nstt, oa.failureStatusReason, err, "failure while syncing cluster resources")
 	}

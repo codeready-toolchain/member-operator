@@ -248,13 +248,20 @@ func (oa *objectApplier) Cleanup(ctx context.Context) error {
 		}
 	}
 
-	// what we're left with here is the list of currently existing objects that are no longer present in the template.
-	// we need to delete them
-	if err := deleteObsoleteObjects(ctx, oa.r.Client, oa.currentObjects, nil); err != nil {
+	// Filter out cluster resources
+	objectsToDelete := []runtimeclient.Object{}
+	for _, obj := range oa.currentObjects {
+		if shouldDeleteClusterResource(ctx, obj, oa.nstt) {
+			objectsToDelete = append(objectsToDelete, obj)
+		}
+	}
+
+	if err := deleteObsoleteObjects(ctx, oa.r.Client, objectsToDelete, nil); err != nil {
 		return oa.r.wrapErrorWithStatusUpdate(ctx, oa.nstt, oa.failureStatusReason, err, "failure while syncing cluster resources")
 	}
 
 	return nil
+
 }
 
 // shouldDeleteClusterResource checks if cluster resource is owned by the same namespace as the NSTemplateSet

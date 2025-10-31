@@ -103,6 +103,9 @@ func (r *clusterResourcesManager) apply(ctx context.Context, nsTmplSet *toolchai
 		toolchainv1alpha1.TemplateRefLabelKey: tierTemplate.templateRef,
 		toolchainv1alpha1.TierLabelKey:        tierTemplate.tierName,
 		toolchainv1alpha1.ProviderLabelKey:    toolchainv1alpha1.ProviderLabelValue,
+		// ClusterOwnerLabelKey is used to identify the cluster owner namespace of the cluster resource
+		// NSTemplateSet namespace points to the cluster owner namespace
+		toolchainv1alpha1.ClusterOwnerLabelKey: nsTmplSet.Namespace,
 	}
 	// Note: we don't set an owner reference between the NSTemplateSet (namespaced resource) and the cluster-wide resources
 	// because a namespaced resource (NSTemplateSet) cannot be the owner of a cluster resource (the GC will delete the child resource, considering it is an orphan resource)
@@ -138,6 +141,11 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 		// ignore cluster resource that are already flagged for deletion
 		if errors.IsNotFound(err) || util.IsBeingDeleted(toDelete) {
 			continue
+		}
+
+		// Check if cluster resource is owned by the target cluster owner namespace (NSTemplateSet namespace)
+		if !shouldDeleteClusterResource(ctx, toDelete, nsTmplSet) {
+			continue // Cluster resource is not owned by the target cluster owner namespace (NSTemplateSet namespace), skip it
 		}
 
 		log.FromContext(ctx).Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
@@ -242,11 +250,45 @@ func (oa *objectApplier) Cleanup(ctx context.Context) error {
 		}
 	}
 
-	// what we're left with here is the list of currently existing objects that are no longer present in the template.
-	// we need to delete them
-	if err := deleteObsoleteObjects(ctx, oa.r.Client, oa.currentObjects, nil); err != nil {
+	// Filter out cluster resources
+	objectsToDelete := []runtimeclient.Object{}
+	for _, obj := range oa.currentObjects {
+		if shouldDeleteClusterResource(ctx, obj, oa.nstt) {
+			objectsToDelete = append(objectsToDelete, obj)
+		}
+	}
+
+	if err := deleteObsoleteObjects(ctx, oa.r.Client, objectsToDelete, nil); err != nil {
 		return oa.r.wrapErrorWithStatusUpdate(ctx, oa.nstt, oa.failureStatusReason, err, "failure while syncing cluster resources")
 	}
 
 	return nil
+
+}
+
+// shouldDeleteClusterResource checks if cluster resource is owned by the target cluster owner namespace (NSTemplateSet namespace)
+func shouldDeleteClusterResource(ctx context.Context, obj runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
+	logger := log.FromContext(ctx)
+	ownerNamespace := obj.GetLabels()[toolchainv1alpha1.ClusterOwnerLabelKey]
+
+	// MIGRATION: Old resources without owner label - assume ownership for backward compatibility
+	if ownerNamespace == "" {
+		logger.Info("cluster resource has no owner label - assuming ownership for migration",
+			"kind", obj.GetObjectKind().GroupVersionKind().Kind,
+			"name", obj.GetName())
+		return true
+	}
+
+	// Check if cluster resource is owned by the target cluster owner namespace (NSTemplateSet namespace)
+	if ownerNamespace == nsTmplSet.Namespace {
+		return true
+	}
+
+	// Owned by different namespace - skip deletion
+	logger.Info("skipping deletion of cluster resource - not owned by the same namespace as the NSTemplateSet",
+		"kind", obj.GetObjectKind().GroupVersionKind().Kind,
+		"name", obj.GetName(),
+		"owner_namespace", ownerNamespace,
+		"current_namespace", nsTmplSet.Namespace)
+	return false
 }

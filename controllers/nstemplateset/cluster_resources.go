@@ -143,9 +143,9 @@ func (r *clusterResourcesManager) delete(ctx context.Context, nsTmplSet *toolcha
 			continue
 		}
 
-		// Check if cluster resource is owned by the cluster owner namespace
+		// Check if cluster resource is owned by the target cluster owner namespace (NSTemplateSet namespace)
 		if !shouldDeleteClusterResource(ctx, toDelete, nsTmplSet) {
-			continue // Cluster resource is not owned by the cluster owner namespace, skip it
+			continue // Cluster resource is not owned by the target cluster owner namespace (NSTemplateSet namespace), skip it
 		}
 
 		log.FromContext(ctx).Info("deleting cluster resource", "name", toDelete.GetName(), "kind", toDelete.GetObjectKind().GroupVersionKind().Kind)
@@ -266,7 +266,7 @@ func (oa *objectApplier) Cleanup(ctx context.Context) error {
 
 }
 
-// shouldDeleteClusterResource checks if cluster resource is owned by the cluster owner namespace
+// shouldDeleteClusterResource checks if cluster resource is owned by the target cluster owner namespace (NSTemplateSet namespace)
 func shouldDeleteClusterResource(ctx context.Context, obj runtimeclient.Object, nsTmplSet *toolchainv1alpha1.NSTemplateSet) bool {
 	logger := log.FromContext(ctx)
 	ownerNamespace := obj.GetLabels()[toolchainv1alpha1.ClusterOwnerLabelKey]
@@ -279,8 +279,7 @@ func shouldDeleteClusterResource(ctx context.Context, obj runtimeclient.Object, 
 		return true
 	}
 
-	// Check if cluster resource is owned by the same namespace as the NSTemplateSet
-	// NSTemplateSet namespace points to the cluster owner namespace
+	// Check if cluster resource is owned by the target cluster owner namespace (NSTemplateSet namespace)
 	if ownerNamespace == nsTmplSet.Namespace {
 		return true
 	}

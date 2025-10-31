@@ -128,3 +128,5 @@ require (
 go 1.23.0
 
 toolchain go1.23.12
+
+replace github.com/codeready-toolchain/api => github.com/rsoaresd/api v0.0.0-20251031113148-f990a908d571

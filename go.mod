@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20251008084914-06282b83d4cd
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20251006132314-2591ebe0bdb1
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20251103123811-4066619e5740
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
 	// using latest commit from 'github.com/openshift/api branch release-4.19'
@@ -21,8 +21,6 @@ require (
 	sigs.k8s.io/controller-tools v0.17.3
 	sigs.k8s.io/kustomize/kustomize/v5 v5.5.0
 )
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/matousjobanek/toolchain-common v0.0.0-20251024095217-5f242bff2abd
 
 require (
 	github.com/go-bindata/go-bindata/v3 v3.1.3

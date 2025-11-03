@@ -1215,6 +1215,69 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		require.Equal(t, controllerruntime.Result{}, result)
 	})
 
+	t.Run("cluster resources status is cleared after successful deletion", func(t *testing.T) {
+		t.Run("with namespaces - status cleared and NSTemplateSet remains", func(t *testing.T) {
+			// given an NSTemplateSet resource with cluster resources and namespaces
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev"), withDeletionTs(), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
+			crq := newClusterResourceQuota(spacename, "advanced")
+			devNS := newNamespace("advanced", spacename, "dev", withTemplateRefUsingRevision("abcde11"))
+			r, _ := prepareController(t, nsTmplSet, crq, devNS)
+			req := newReconcileRequest(namespaceName, spacename)
+
+			// when reconcile is triggered
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			// verify that the cluster resources status has been cleared but NSTemplateSet still exists
+			AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
+				HasStatusClusterResourcesNil().
+				HasConditions(Terminating())
+		})
+
+		t.Run("without namespaces - status cleared and NSTemplateSet deleted", func(t *testing.T) {
+			// given an NSTemplateSet resource with cluster resources but no namespaces
+			nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withDeletionTs(), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
+			crq := newClusterResourceQuota(spacename, "advanced")
+			r, _ := prepareController(t, nsTmplSet, crq)
+			req := newReconcileRequest(namespaceName, spacename)
+
+			// when reconcile is triggered
+			_, err := r.Reconcile(context.TODO(), req)
+
+			// then
+			require.NoError(t, err)
+			// verify that the NSTemplateSet is completely deleted (including finalizer removal)
+			AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
+				DoesNotExist()
+			// verify cluster resources are also deleted
+			AssertThatCluster(t, r.Client).HasNoResource("for-"+spacename, &quotav1.ClusterResourceQuota{})
+		})
+	})
+
+	t.Run("failed to clear cluster resources status", func(t *testing.T) {
+		// given an NSTemplateSet resource with cluster resources
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withDeletionTs(), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
+		crq := newClusterResourceQuota(spacename, "advanced")
+		r, fakeClient := prepareController(t, nsTmplSet, crq)
+		req := newReconcileRequest(namespaceName, spacename)
+
+		// mock status update failure for clearing cluster resources
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+			if nsTmplSet, ok := obj.(*toolchainv1alpha1.NSTemplateSet); ok && nsTmplSet.Status.ClusterResources == nil {
+				return fmt.Errorf("mock status update error")
+			}
+			return fakeClient.Client.Status().Update(ctx, obj, opts...)
+		}
+
+		// when reconcile is triggered
+		result, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.EqualError(t, err, "failed to clear ClusterResources status: mock status update error")
+		require.Equal(t, controllerruntime.Result{}, result)
+	})
+
 	t.Run("NSTemplateSet deletion errors when namespace is not deleted in 1 min", func(t *testing.T) {
 		// given an NSTemplateSet resource and 1 active user namespaces ("dev")
 		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withNamespaces("abcde11", "dev", "stage"), withDeletionTs(), withClusterResources("abcde11"))

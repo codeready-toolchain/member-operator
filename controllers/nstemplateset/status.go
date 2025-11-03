@@ -290,3 +290,12 @@ func (r *statusManager) setStatusTerminatingFailed(ctx context.Context, nsTmplSe
 			Message: message,
 		})
 }
+
+// clearStatusClusterResources sets the ClusterResources status to nil
+func (r *statusManager) clearStatusClusterResources(ctx context.Context, nsTmplSet *toolchainv1alpha1.NSTemplateSet) error {
+	if nsTmplSet.Status.ClusterResources != nil {
+		nsTmplSet.Status.ClusterResources = nil
+		return r.Client.Status().Update(ctx, nsTmplSet)
+	}
+	return nil
+}

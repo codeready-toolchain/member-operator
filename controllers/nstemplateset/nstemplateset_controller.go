@@ -200,6 +200,17 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 	}
 	spacename := nsTmplSet.GetName()
 
+	// delete cluster resources first
+	err := r.clusterResources.delete(ctx, nsTmplSet)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// clear the ClusterResources status after successful deletion
+	if err := r.status.clearStatusClusterResources(ctx, nsTmplSet); err != nil {
+		return reconcile.Result{}, r.status.wrapErrorWithStatusUpdate(ctx, nsTmplSet, r.status.setStatusTerminatingFailed, err, "failed to clear ClusterResources status")
+	}
+
 	// delete all namespace one by one
 	allDeleted, err := r.namespaces.ensureDeleted(ctx, nsTmplSet)
 	// when err, status Update will not trigger reconcile, sending returning error.
@@ -214,12 +225,6 @@ func (r *Reconciler) deleteNSTemplateSet(ctx context.Context, nsTmplSet *toolcha
 		return reconcile.Result{
 			RequeueAfter: time.Second,
 		}, nil
-	}
-
-	// if no namespace was to be deleted, then we can proceed with the cluster resources associated with the user
-	err = r.clusterResources.delete(ctx, nsTmplSet)
-	if err != nil {
-		return reconcile.Result{}, err
 	}
 
 	// if nothing was to be deleted, then we can remove the finalizer and we're done

@@ -1162,7 +1162,8 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 			AssertThatNamespace(t, firstNSName, r.Client).DoesNotExist()
 			// get the NSTemplateSet resource again and check its status
 			AssertThatNSTemplateSet(t, namespaceName, spacename, r.Client).
-				HasFinalizer(). // the finalizer should NOT have been removed yet
+				HasFinalizer().                 // the finalizer should NOT have been removed yet
+				HasStatusClusterResourcesNil(). // the cluster resources status should be cleared
 				HasConditions(Terminating())
 
 			t.Run("reconcile after first user namespace deletion triggers deletion of the second namespace", func(t *testing.T) {
@@ -1212,6 +1213,28 @@ func TestDeleteNSTemplateSet(t *testing.T) {
 		result, err := r.Reconcile(context.TODO(), req)
 		// then
 		require.EqualError(t, err, "failed to delete cluster resource 'for-johnsmith': mock error")
+		require.Equal(t, controllerruntime.Result{}, result)
+	})
+	t.Run("failed to clear cluster resources status", func(t *testing.T) {
+		// given an NSTemplateSet resource with cluster resources
+		nsTmplSet := newNSTmplSet(namespaceName, spacename, "advanced", withDeletionTs(), withClusterResources("abcde11"), withStatusClusterResources("abcde11"))
+		crq := newClusterResourceQuota(spacename, "advanced")
+		r, fakeClient := prepareController(t, nsTmplSet, crq)
+		req := newReconcileRequest(namespaceName, spacename)
+
+		// mock status update failure for clearing cluster resources
+		fakeClient.MockStatusUpdate = func(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+			if nsTmplSet, ok := obj.(*toolchainv1alpha1.NSTemplateSet); ok && nsTmplSet.Status.ClusterResources == nil {
+				return fmt.Errorf("mock status update error")
+			}
+			return fakeClient.Client.Status().Update(ctx, obj, opts...)
+		}
+
+		// when reconcile is triggered
+		result, err := r.Reconcile(context.TODO(), req)
+
+		// then
+		require.EqualError(t, err, "failed to clear ClusterResources status: mock status update error")
 		require.Equal(t, controllerruntime.Result{}, result)
 	})
 

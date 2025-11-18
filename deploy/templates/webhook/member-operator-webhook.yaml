@@ -97,7 +97,7 @@ objects:
       app: member-operator-webhook
       toolchain.dev.openshift.com/provider: codeready-toolchain
   spec:
-    replicas: 1
+    replicas: 3
     selector:
       matchLabels:
         app: member-operator-webhook

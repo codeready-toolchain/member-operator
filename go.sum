@@ -24,6 +24,8 @@ github.com/codeready-toolchain/api v0.0.0-20251008084914-06282b83d4cd h1:A6WOUwl
 github.com/codeready-toolchain/api v0.0.0-20251008084914-06282b83d4cd/go.mod h1:TiQ/yNv3cGL4nxo3fgRtcHyYYuRf+nAgs6B1IAqvxOU=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20251103123811-4066619e5740 h1:cGl01Gakj69am0LopGJjWGpzcCngRqhcaFon/e90hMA=
 github.com/codeready-toolchain/toolchain-common v0.0.0-20251103123811-4066619e5740/go.mod h1:5i7k9O0yVftzJwsjSjJjoXMYtUPkiirVsEswuaC8/5I=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20251125180949-6ed5aeed75e4 h1:OZd7C6PZMc3BL5CD2NAHxWc1VKtuSjRUJtvEuFBVDEE=
+github.com/codeready-toolchain/toolchain-common v0.0.0-20251125180949-6ed5aeed75e4/go.mod h1:5i7k9O0yVftzJwsjSjJjoXMYtUPkiirVsEswuaC8/5I=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

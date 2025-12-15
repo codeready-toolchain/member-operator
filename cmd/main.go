@@ -7,6 +7,7 @@ import (
 	goruntime "runtime"
 	"time"
 
+	"github.com/codeready-toolchain/member-operator/pkg/constants"
 	"github.com/codeready-toolchain/member-operator/pkg/host"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -224,9 +225,10 @@ func main() {
 
 	// Setup all Controllers
 	if err = (&toolchainclusterresources.Reconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Templates: &deploy.ToolchainClusterTemplateFS,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		Templates:    &deploy.ToolchainClusterTemplateFS,
+		FieldManager: constants.MemberOperatorFieldManager,
 	}).SetupWithManager(mgr, namespace); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ToolchainClusterResources")
 		os.Exit(1)

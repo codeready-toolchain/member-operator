@@ -3,8 +3,9 @@ package useraccount
 import (
 	"context"
 	"fmt"
-	rbac "k8s.io/api/rbac/v1"
 	"time"
+
+	rbac "k8s.io/api/rbac/v1"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	commoncontroller "github.com/codeready-toolchain/toolchain-common/controllers"
@@ -64,7 +65,7 @@ type Reconciler struct {
 // and what is in the UserAccount.Spec
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
+// Result.Requeue > 0 is true, otherwise upon completion it will remove the work from the queue.
 func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("reconciling UserAccount")

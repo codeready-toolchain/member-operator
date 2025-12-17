@@ -128,7 +128,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, res.Requeue)
+		assert.Greater(t, res.RequeueAfter, 0*time.Second)
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).HasConditions(memberoperatortest.Running())
 	})
@@ -150,7 +150,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, res.Requeue)
+		assert.Greater(t, res.RequeueAfter, 0*time.Second)
 		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled to the 1/12th of the timeout
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second/12, res.RequeueAfter)
 	})
@@ -236,7 +236,7 @@ func TestEnsureIdling(t *testing.T) {
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
-			assert.True(t, res.Requeue)
+			assert.Greater(t, res.RequeueAfter, 0*time.Second)
 			// something was idled, expect the next reconcile in 5% of the timeout
 			assertRequeueTimeInDelta(t, res.RequeueAfter, int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))
 
@@ -259,7 +259,7 @@ func TestEnsureIdling(t *testing.T) {
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 				// no pods being tracked -> requeue after idler timeout
-				assert.True(t, res.Requeue)
+				assert.Greater(t, res.RequeueAfter, 0*time.Second)
 				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 			})
 		})
@@ -282,7 +282,7 @@ func TestEnsureIdling(t *testing.T) {
 
 				// then
 				require.NoError(t, err)
-				assert.True(t, res.Requeue)
+				assert.Greater(t, res.RequeueAfter, 0*time.Second)
 				// with VMs, it needs to be approx one twelfth of the idler timeout plus-minus one second
 				assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/12)
 
@@ -300,7 +300,7 @@ func TestEnsureIdling(t *testing.T) {
 
 					// then
 					require.NoError(t, err)
-					assert.True(t, res.Requeue)
+					assert.Greater(t, res.RequeueAfter, 0*time.Second)
 					// without VMs, it needs to be approx the idler timeout plus-minus one second
 					assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds)
 				})
@@ -366,7 +366,7 @@ func TestEnsureIdling(t *testing.T) {
 
 		//then
 		require.NoError(t, err)
-		assert.True(t, res.Requeue)
+		assert.Greater(t, res.RequeueAfter, 0*time.Second)
 		// something was idled, expect the next reconcile in 5% of the timeout
 		assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
@@ -389,7 +389,7 @@ func TestEnsureIdling(t *testing.T) {
 
 			//then
 			require.NoError(t, err)
-			assert.True(t, res.Requeue)
+			assert.Greater(t, res.RequeueAfter, 0*time.Second)
 			// pods (exceeding the timeout) are still running, expect the next reconcile in 5% of the timeout
 			assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).

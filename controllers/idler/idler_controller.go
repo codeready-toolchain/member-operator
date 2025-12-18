@@ -125,7 +125,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
-		Requeue:      true,
 		RequeueAfter: requeueAfter,
 	}
 	return result, r.setStatusReady(ctx, idler)

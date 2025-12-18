@@ -138,7 +138,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	if ok && readyCond.Reason == toolchainv1alpha1.UserAccountUpdatingReason && time.Since(readyCond.LastTransitionTime.Time) <= time.Second {
 		// then don't do anything and just postpone the next reconcile
 		return ctrl.Result{
-			Requeue:      true,
 			RequeueAfter: time.Second,
 		}, nil
 	}

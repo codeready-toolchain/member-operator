@@ -157,6 +157,18 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 		}
 	},
+	"DataVolume": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.dataVolume.GetName(),
+			expectedAppName: plds.dataVolume.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DataVolumeExists(plds.dataVolume)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.DataVolumeDoesNotExist(plds.dataVolume)
+			},
+		}
+	},
 	"VirtualMachine": func(plds payloads) payloadTestConfig {
 		return payloadTestConfig{
 			podOwnerName:    plds.virtualmachineinstance.GetName(),
@@ -428,10 +440,16 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 	require.NoError(t, apis.AddToScheme(scheme.Scheme))
 	noAAPResources := []*metav1.APIResourceList{
 		{
-			GroupVersion: vmGVR.GroupVersion().String(),
+			GroupVersion: "kubevirt.io/v1",
 			APIResources: []metav1.APIResource{
 				{Name: "virtualmachineinstances", Namespaced: true, Kind: "VirtualMachineInstance"},
 				{Name: "virtualmachines", Namespaced: true, Kind: "VirtualMachine"},
+			},
+		},
+		{
+			GroupVersion: "cdi.kubevirt.io/v1beta1",
+			APIResources: []metav1.APIResource{
+				{Name: "datavolumes", Namespaced: true, Kind: "DataVolume"},
 			},
 		},
 	}

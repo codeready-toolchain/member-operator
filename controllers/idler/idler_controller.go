@@ -13,7 +13,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/condition"
 	notify "github.com/codeready-toolchain/toolchain-common/pkg/notification"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/scale"
@@ -41,8 +40,6 @@ const (
 	aapRestartThreshold = restartThreshold - 1
 	vmSubresourceURLFmt = "/apis/subresources.kubevirt.io/%s"
 )
-
-var vmGVR = schema.GroupVersionResource{Group: "kubevirt.io", Version: "v1", Resource: "virtualmachines"}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr manager.Manager, allNamespaceCluster runtimeCluster.Cluster) error {
@@ -74,7 +71,7 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments;daemonsets;replicasets;statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances;datavolumes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices;servingruntimes,verbs=get;list;watch;create;update;patch;delete
 
 // needed to stop the VMs - we need to make a PUT request for the "stop" subresource. Kubernetes internally classifies these as either create or update

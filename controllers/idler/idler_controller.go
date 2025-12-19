@@ -71,7 +71,8 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments;daemonsets;replicasets;statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps.openshift.io,resources=deploymentconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances;datavolumes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines;virtualmachineinstances,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=cdi.kubevirt.io,resources=datavolumes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices;servingruntimes,verbs=get;list;watch;create;update;patch;delete
 
 // needed to stop the VMs - we need to make a PUT request for the "stop" subresource. Kubernetes internally classifies these as either create or update

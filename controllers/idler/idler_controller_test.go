@@ -1003,7 +1003,13 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 	dv.SetName(fmt.Sprintf("%s%s-datavolume", namePrefix, namespace))
 	dv.SetNamespace(namespace)
 	createObjectWithDynamicClient(t, clients.DynamicClient, dv)
-	controlledPods = createPods(t, clients.AllNamespacesClient, dv, sTime, controlledPods, noRestart())
+	// PersistentVolumeClaim owned by DataVolume
+	dvPvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pvc", dv.GetName()), Namespace: namespace},
+	}
+	require.NoError(t, controllerutil.SetControllerReference(dv, dvPvc, scheme.Scheme))
+	createObjectWithDynamicClient(t, clients.DynamicClient, dvPvc)
+	controlledPods = createPods(t, clients.AllNamespacesClient, dvPvc, sTime, controlledPods, noRestart())
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{

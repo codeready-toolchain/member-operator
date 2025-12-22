@@ -159,7 +159,9 @@ var testConfigs = map[string]createTestConfigFunc{
 	},
 	"DataVolume": func(plds payloads) payloadTestConfig {
 		return payloadTestConfig{
-			podOwnerName:    plds.dataVolume.GetName(),
+			// We are testing the case with nested controllers (DataVolume -> PersistentVolumeClaim -> Pod) here,
+			// so the pod's owner is PersistentVolumeClaim but the expected scaled app is the parent DataVolume.
+			podOwnerName:    fmt.Sprintf("%s-pvc", plds.dataVolume.GetName()),
 			expectedAppName: plds.dataVolume.GetName(),
 			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
 				assertion.DataVolumeExists(plds.dataVolume)

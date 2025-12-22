@@ -60,7 +60,7 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 		switch ownerKind {
 		case "Deployment", "ReplicaSet", "Integration", "KameletBinding", "StatefulSet", "ReplicationController":
 			err = i.scaleToZero(ctx, ownerWithGVR)
-		case "DaemonSet", "Job":
+		case "DaemonSet", "Job", "DataVolume":
 			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
 		case "DeploymentConfig":
 			err = i.scaleDeploymentConfigToZero(ctx, ownerWithGVR)

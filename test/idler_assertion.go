@@ -298,6 +298,22 @@ func (a *IdleablePayloadAssertion) JobDoesNotExist(job *batchv1.Job) *IdleablePa
 	return a
 }
 
+var dataVolumeGVR = schema.GroupVersionResource{Group: "cdi.kubevirt.io", Version: "v1beta1", Resource: "datavolumes"}
+
+func (a *IdleablePayloadAssertion) DataVolumeExists(dataVolume *unstructured.Unstructured) *IdleablePayloadAssertion {
+	_, err := a.dynamicClient.
+		Resource(dataVolumeGVR).
+		Namespace(dataVolume.GetNamespace()).
+		Get(context.TODO(), dataVolume.GetName(), metav1.GetOptions{})
+	require.NoError(a.t, err)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) DataVolumeDoesNotExist(dataVolume *unstructured.Unstructured) *IdleablePayloadAssertion {
+	a.assertResourceDeleted(dataVolumeGVR, dataVolume.GetNamespace(), dataVolume.GetName())
+	return a
+}
+
 func (a *IdleablePayloadAssertion) StatefulSetScaledDown(statefulSet *appsv1.StatefulSet) *IdleablePayloadAssertion {
 	s := &appsv1.StatefulSet{}
 	gvr := appsv1.SchemeGroupVersion.WithResource("statefulsets")

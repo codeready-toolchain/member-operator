@@ -12,9 +12,21 @@ podman-image: build
 	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile -t ${IMAGE} .
 	$(Q)podman build --platform ${IMAGE_PLATFORM} -f build/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
 
+## Build the operator's image with Delve on it so that it is ready to attach a
+## debugger to it.
+podman-image-debug: build-debug
+	$(Q) podman build --platform ${IMAGE_PLATFORM} --build-arg GOLANG_VERSION="$$(go version | awk '{print $$3}')" --file build/Dockerfile.debug --tag ${IMAGE} .
+	$(Q) podman build --platform ${IMAGE_PLATFORM} --build-arg GOLANG_VERSION="$$(go version | awk '{print $$3}')" --file build/Dockerfile.webhook.debug --tag ${WEBHOOK_IMAGE} .
+
 .PHONY: podman-push
 ## Push the binary image to quay.io registry
 podman-push: check-namespace podman-image
+	$(Q)podman push ${IMAGE}
+	$(Q)podman push ${WEBHOOK_IMAGE}
+
+.PHONY: podman-push-debug
+## Push the image with the debugger in it to the repository.
+podman-push-debug: check-namespace podman-image-debug
 	$(Q)podman push ${IMAGE}
 	$(Q)podman push ${WEBHOOK_IMAGE}
 

@@ -1,8 +1,8 @@
 module github.com/codeready-toolchain/member-operator
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20260108101803-54d23a1b4f3c
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20260108104612-94ad63d02d50
+	github.com/codeready-toolchain/api v0.0.0-20260108115150-4c6695ed18de
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20260108121619-9d154db88508
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
 	// using latest commit from 'github.com/openshift/api branch release-4.20'
@@ -125,6 +125,6 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
 
-go 1.24.0
+go 1.24.4
 
 toolchain go1.24.11

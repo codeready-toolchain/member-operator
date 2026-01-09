@@ -87,7 +87,7 @@ type Reconciler struct {
 // and what is in the Idler.Spec
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
+// Result.RequeueAfter > 0 is true, otherwise upon completion it will remove the work from the queue.
 func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("new reconcile loop")
@@ -123,7 +123,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.
 	}
 	logger.Info("requeueing for next pod to check", "after_seconds", requeueAfter.Seconds())
 	result := reconcile.Result{
-		Requeue:      true,
 		RequeueAfter: requeueAfter,
 	}
 	return result, r.setStatusReady(ctx, idler)

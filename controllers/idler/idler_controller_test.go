@@ -128,7 +128,6 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, res.Requeue)
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).HasConditions(memberoperatortest.Running())
 	})
@@ -150,7 +149,6 @@ func TestEnsureIdling(t *testing.T) {
 
 		// then
 		require.NoError(t, err)
-		assert.True(t, res.Requeue)
 		// the pods (without startTime) contain also a VM pod, so the next reconcile will be scheduled to the 1/12th of the timeout
 		assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second/12, res.RequeueAfter)
 	})
@@ -200,6 +198,9 @@ func TestEnsureIdling(t *testing.T) {
 				JobDoesNotExist(podsRunningForTooLong.job).
 				JobExists(podsTooEarlyToKill.job).
 				JobExists(noise.job).
+				DataVolumeDoesNotExist(podsRunningForTooLong.dataVolume).
+				DataVolumeExists(podsTooEarlyToKill.dataVolume).
+				DataVolumeExists(noise.dataVolume).
 				DeploymentScaledDown(podsRunningForTooLong.deployment).
 				ScaleSubresourceScaledDown(podsRunningForTooLong.integration).
 				ScaleSubresourceScaledDown(podsRunningForTooLong.kameletBinding).
@@ -236,7 +237,6 @@ func TestEnsureIdling(t *testing.T) {
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
-			assert.True(t, res.Requeue)
 			// something was idled, expect the next reconcile in 5% of the timeout
 			assertRequeueTimeInDelta(t, res.RequeueAfter, int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))
 
@@ -259,7 +259,6 @@ func TestEnsureIdling(t *testing.T) {
 					HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
 
 				// no pods being tracked -> requeue after idler timeout
-				assert.True(t, res.Requeue)
 				assert.Equal(t, time.Duration(idler.Spec.TimeoutSeconds)*time.Second, res.RequeueAfter)
 			})
 		})
@@ -282,7 +281,6 @@ func TestEnsureIdling(t *testing.T) {
 
 				// then
 				require.NoError(t, err)
-				assert.True(t, res.Requeue)
 				// with VMs, it needs to be approx one twelfth of the idler timeout plus-minus one second
 				assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds/12)
 
@@ -300,7 +298,6 @@ func TestEnsureIdling(t *testing.T) {
 
 					// then
 					require.NoError(t, err)
-					assert.True(t, res.Requeue)
 					// without VMs, it needs to be approx the idler timeout plus-minus one second
 					assertRequeueTimeInDelta(t, res.RequeueAfter, idler.Spec.TimeoutSeconds)
 				})
@@ -327,6 +324,7 @@ func TestEnsureIdling(t *testing.T) {
 				PodsDoNotExist(toKill.standalonePods).
 				DaemonSetDoesNotExist(toKill.daemonSet).
 				JobDoesNotExist(toKill.job).
+				DataVolumeDoesNotExist(toKill.dataVolume).
 				DeploymentScaledDown(toKill.deployment).
 				ScaleSubresourceScaledDown(toKill.integration).
 				ScaleSubresourceScaledDown(toKill.kameletBinding).
@@ -366,7 +364,6 @@ func TestEnsureIdling(t *testing.T) {
 
 		//then
 		require.NoError(t, err)
-		assert.True(t, res.Requeue)
 		// something was idled, expect the next reconcile in 5% of the timeout
 		assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
 		memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
@@ -389,7 +386,6 @@ func TestEnsureIdling(t *testing.T) {
 
 			//then
 			require.NoError(t, err)
-			assert.True(t, res.Requeue)
 			// pods (exceeding the timeout) are still running, expect the next reconcile in 5% of the timeout
 			assert.Equal(t, time.Duration(int32(float32(idler.Spec.TimeoutSeconds)*0.05/12))*time.Second, res.RequeueAfter)
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
@@ -544,6 +540,7 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			PodsDoNotExist(toKill.standalonePods).
 			DaemonSetDoesNotExist(toKill.daemonSet).
 			JobDoesNotExist(toKill.job).
+			DataVolumeDoesNotExist(toKill.dataVolume).
 			ReplicaSetScaledDown(toKill.replicaSet).
 			DeploymentScaledDown(toKill.deployment).
 			ScaleSubresourceScaledDown(toKill.integration).
@@ -879,6 +876,7 @@ type payloads struct {
 	deploymentConfig          *openshiftappsv1.DeploymentConfig
 	replicationController     *corev1.ReplicationController
 	job                       *batchv1.Job
+	dataVolume                *unstructured.Unstructured
 	virtualmachine            *unstructured.Unstructured
 	vmStopCallCounter         *int
 	virtualmachineinstance    *unstructured.Unstructured
@@ -989,6 +987,21 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 	}
 	createObjectWithDynamicClient(t, clients.DynamicClient, job)
 	controlledPods = createPods(t, clients.AllNamespacesClient, job, sTime, controlledPods, noRestart())
+
+	// DataVolume
+	dv := &unstructured.Unstructured{}
+	dv.SetAPIVersion("cdi.kubevirt.io/v1beta1")
+	dv.SetKind("DataVolume")
+	dv.SetName(fmt.Sprintf("%s%s-datavolume", namePrefix, namespace))
+	dv.SetNamespace(namespace)
+	createObjectWithDynamicClient(t, clients.DynamicClient, dv)
+	// PersistentVolumeClaim owned by DataVolume
+	dvPvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-pvc", dv.GetName()), Namespace: namespace},
+	}
+	require.NoError(t, controllerutil.SetControllerReference(dv, dvPvc, scheme.Scheme))
+	createObjectWithDynamicClient(t, clients.DynamicClient, dvPvc)
+	controlledPods = createPods(t, clients.AllNamespacesClient, dvPvc, sTime, controlledPods, noRestart())
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
@@ -1115,6 +1128,7 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 		deploymentConfig:          dc,
 		replicationController:     standaloneRC,
 		job:                       job,
+		dataVolume:                dv,
 		virtualmachine:            vm,
 		vmStopCallCounter:         stopCallCounter,
 		virtualmachineinstance:    vmi,

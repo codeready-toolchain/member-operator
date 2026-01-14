@@ -8,6 +8,7 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/owners"
+	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -54,13 +55,16 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 	var topOwnerKind, topOwnerName string
 	var errToReturn error
 	for _, ownerWithGVR := range owners {
+		if util.IsBeingDeleted(ownerWithGVR.Object) {
+			continue
+		}
 		owner := ownerWithGVR.Object
 		ownerKind := owner.GetObjectKind().GroupVersionKind().Kind
 
 		switch ownerKind {
 		case "Deployment", "ReplicaSet", "Integration", "KameletBinding", "StatefulSet", "ReplicationController":
 			err = i.scaleToZero(ctx, ownerWithGVR)
-		case "DaemonSet", "Job", "DataVolume":
+		case "DaemonSet", "Job", "DataVolume", "PersistentVolumeClaim":
 			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
 		case "DeploymentConfig":
 			err = i.scaleDeploymentConfigToZero(ctx, ownerWithGVR)

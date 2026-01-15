@@ -877,6 +877,7 @@ type payloads struct {
 	replicationController     *corev1.ReplicationController
 	job                       *batchv1.Job
 	dataVolume                *unstructured.Unstructured
+	persistentVolumeClaim     *corev1.PersistentVolumeClaim
 	virtualmachine            *unstructured.Unstructured
 	vmStopCallCounter         *int
 	virtualmachineinstance    *unstructured.Unstructured
@@ -1002,6 +1003,13 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 	require.NoError(t, controllerutil.SetControllerReference(dv, dvPvc, scheme.Scheme))
 	createObjectWithDynamicClient(t, clients.DynamicClient, dvPvc)
 	controlledPods = createPods(t, clients.AllNamespacesClient, dvPvc, sTime, controlledPods, noRestart())
+
+	// Standalone PersistentVolumeClaim
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s%s-persistentvolumeclaim", namePrefix, namespace), Namespace: namespace},
+	}
+	createObjectWithDynamicClient(t, clients.DynamicClient, pvc)
+	controlledPods = createPods(t, clients.AllNamespacesClient, pvc, sTime, controlledPods, noRestart())
 
 	// StatefulSet
 	sts := &appsv1.StatefulSet{
@@ -1129,6 +1137,7 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 		replicationController:     standaloneRC,
 		job:                       job,
 		dataVolume:                dv,
+		persistentVolumeClaim:     pvc,
 		virtualmachine:            vm,
 		vmStopCallCounter:         stopCallCounter,
 		virtualmachineinstance:    vmi,

@@ -314,6 +314,22 @@ func (a *IdleablePayloadAssertion) DataVolumeDoesNotExist(dataVolume *unstructur
 	return a
 }
 
+func (a *IdleablePayloadAssertion) PersistentVolumeClaimExists(pvc *corev1.PersistentVolumeClaim) *IdleablePayloadAssertion {
+	gvr := corev1.SchemeGroupVersion.WithResource("persistentvolumeclaims")
+	_, err := a.dynamicClient.
+		Resource(gvr).
+		Namespace(pvc.Namespace).
+		Get(context.TODO(), pvc.Name, metav1.GetOptions{})
+	require.NoError(a.t, err)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) PersistentVolumeClaimDoesNotExist(pvc *corev1.PersistentVolumeClaim) *IdleablePayloadAssertion {
+	gvr := corev1.SchemeGroupVersion.WithResource("persistentvolumeclaims")
+	a.assertResourceDeleted(gvr, pvc.GetNamespace(), pvc.GetName())
+	return a
+}
+
 func (a *IdleablePayloadAssertion) StatefulSetScaledDown(statefulSet *appsv1.StatefulSet) *IdleablePayloadAssertion {
 	s := &appsv1.StatefulSet{}
 	gvr := appsv1.SchemeGroupVersion.WithResource("statefulsets")

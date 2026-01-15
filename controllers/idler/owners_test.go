@@ -14,6 +14,7 @@ import (
 	"github.com/codeready-toolchain/member-operator/test"
 	"github.com/codeready-toolchain/toolchain-common/pkg/owners"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
+	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/h2non/gock.v1"
 	corev1 "k8s.io/api/core/v1"
@@ -168,6 +169,18 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
 				assertion.DataVolumeDoesNotExist(plds.dataVolume)
+			},
+		}
+	},
+	"PersistentVolumeClaim": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			podOwnerName:    plds.persistentVolumeClaim.Name,
+			expectedAppName: plds.persistentVolumeClaim.Name,
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.PersistentVolumeClaimExists(plds.persistentVolumeClaim)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.PersistentVolumeClaimDoesNotExist(plds.persistentVolumeClaim)
 			},
 		}
 	},
@@ -390,6 +403,52 @@ func TestAppNameTypeForControllers(t *testing.T) {
 		}
 		require.Equal(t, "ReplicaSet", appType)
 		require.Equal(t, testConfig.podOwnerName, appName)
+	})
+
+	t.Run("owners that are being deleted are skipped", func(t *testing.T) {
+		for kind, createTestConfig := range testConfigs {
+			t.Run(kind, func(t *testing.T) {
+				//given
+				ownerIdler, fakeClients, _, _, pod := setup(t, createTestConfig, false)
+				owners, err := ownerIdler.ownerFetcher.GetOwners(context.TODO(), pod)
+				if !apierrors.IsNotFound(err) {
+					require.NoError(t, err)
+				}
+				// mark the first owner as already being deleted
+				if len(owners) != 0 {
+					topOwner := owners[0].Object
+					now := metav1.Now()
+					topOwner.SetDeletionTimestamp(&now)
+					// we need to set dummy finalizer so it stays in the fake client and doesn't get deleted
+					util.AddFinalizer(topOwner, "dummy-finalizer")
+					_, err := fakeClients.DynamicClient.
+						Resource(*owners[0].GVR).
+						Namespace(topOwner.GetNamespace()).
+						Update(context.TODO(), topOwner, metav1.UpdateOptions{})
+					require.NoError(t, err)
+				}
+
+				//when
+				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
+
+				//then
+				require.NoError(t, err)
+				// when there is more than one owner, then it should try to idle
+				// the second known owner (we don't support VirtualMachineInstance so we skip this one)
+				// in all other cases, there is nothing to idle, so it will return empty string
+				// which would mean that the controller should delete the pod
+				if len(owners) > 1 && kind != "VirtualMachine" {
+					require.Equal(t, owners[1].Object.GetKind(), appType)
+					require.Equal(t, owners[1].Object.GetName(), appName)
+				} else {
+					require.Empty(t, appType)
+					require.Empty(t, appName)
+				}
+
+				// let's verify that the second owner is scaled down
+				assertOtherOwners(t, ownerIdler, pod, true)
+			})
+		}
 	})
 }
 

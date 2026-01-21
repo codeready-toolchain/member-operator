@@ -70,7 +70,7 @@ type Reconciler struct {
 //+kubebuilder:rbac:groups=toolchain.dev.openshift.com,resources=memberstatuses/finalizers,verbs=update
 
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
-//+kubebuilder:rbac:groups=metrics.k8s.io,resources=*,verbs=get;list;watch
+//+kubebuilder:rbac:groups=metrics.k8s.io,resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch
 
 // Reconcile reads the state of toolchain member cluster components and updates the MemberStatus resource with information useful for observation or troubleshooting

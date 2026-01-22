@@ -1,0 +1,27 @@
+name: upload-coverage
+on:
+  workflow_run:
+    workflows: [ test-with-coverage ]
+    types: [ completed ]
+
+jobs:
+  upload-coverage:
+    if: >
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build/output/coverage/coverage.txt
+          fail_ci_if_error: true
+

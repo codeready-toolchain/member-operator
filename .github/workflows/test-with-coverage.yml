@@ -18,10 +18,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: generate
-        run: |
-          make generate
-    
       - name: Test
         run: |
           make test-with-coverage

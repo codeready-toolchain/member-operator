@@ -25,5 +25,6 @@ jobs:
           # The 'files' attribute consists of 'coverage/coverage.txt'.
           # The 'coverage' directory is created upon the download of the coverage artifact from previous step (it creates a directory with the name of the artifact).
           files: coverage/coverage.txt
+          flags: unittests # optional
           fail_ci_if_error: true
 

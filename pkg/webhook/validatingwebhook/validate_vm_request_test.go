@@ -129,6 +129,21 @@ func TestHandleValidateVMAdmissionRequest(t *testing.T) {
 			require.NoError(t, err)
 			test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 		})
+
+		t.Run("sandbox user trying to UPDATE a VM resource without username in cloudInit is allowed", func(t *testing.T) {
+			// cloudInit is NOT validated on UPDATE
+			// when
+			resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMAdmissionRequestJSON("Manual", false))))
+
+			// then
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			defer func() {
+				require.NoError(t, resp.Body.Close())
+			}()
+			require.NoError(t, err)
+			test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		})
 	})
 }
 

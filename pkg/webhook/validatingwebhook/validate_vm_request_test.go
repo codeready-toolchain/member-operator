@@ -180,7 +180,7 @@ type VMAdmReviewTmplParams struct {
 
 // createVMAdmissionRequestJSON returns an AdmissionReview JSON template for a VirtualMachine.
 // runStrategy is the RunStrategy to set in the VM spec; if empty, the field is omitted.
-// cloudInitUsername is the username to include in the cloudInit userData; if empty, the user field is omitted.
+// withCloudInitUsername is a boolean flag to indicate if the username should be included in the cloudInit userData; if false, the user field is omitted.
 func createVMAdmissionRequestJSON(runStrategy string, withCloudInitUsername bool) string {
 	runStrategyField := ""
 	if runStrategy != "" {
@@ -272,6 +272,7 @@ func TestValidateCloudInitUsername(t *testing.T) {
 		// then
 		require.EqualError(t, err, "failed to get volumes from VirtualMachine: .spec.template.spec.volumes accessor error: not-a-slice is of the type string, expected []interface{}")
 	})
+
 	t.Run("no volumes in spec", func(t *testing.T) {
 		// given
 		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}

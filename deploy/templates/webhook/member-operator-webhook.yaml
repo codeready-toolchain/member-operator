@@ -290,7 +290,7 @@ objects:
           port: 443
       matchPolicy: Equivalent
       rules:
-        - operations: ["UPDATE"]
+        - operations: ["CREATE", "UPDATE"]
           apiGroups: ["kubevirt.io"]
           apiVersions: ["*"]
           resources: ["virtualmachines"]

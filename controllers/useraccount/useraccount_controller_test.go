@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierros "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -523,7 +524,13 @@ func TestReconcile(t *testing.T) {
 				// Check that the noise resources are not deleted
 				for key, obj := range []client.Object{&corev1.ConfigMap{}, &rbac.Role{}, &rbac.RoleBinding{}} {
 					AssertObject(t, cl, UserSettingNS, noiseResourceName, obj, func() {
-						assert.Equal(t, noiseObjects[key], obj)
+						// Normalize fields that differ between the original and the fake client's Get result:
+						// the fake client populates ResourceVersion on stored objects, and since v0.22 no longer
+						// populates TypeMeta on Get results for typed objects.
+						expected := noiseObjects[key].DeepCopyObject().(client.Object)
+						expected.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{})
+						expected.SetResourceVersion(obj.GetResourceVersion())
+						assert.Equal(t, expected, obj)
 					})
 				}
 

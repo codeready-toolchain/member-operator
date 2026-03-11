@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	rbac "k8s.io/api/rbac/v1"
@@ -21,9 +22,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 const (
@@ -56,7 +60,7 @@ func TestDeployWebhook(t *testing.T) {
 	s := setScheme(t)
 	t.Run("when created", func(t *testing.T) {
 		// given
-		fakeClient := test.NewFakeClient(t)
+		fakeClient := test.NewFakeClientWithManagedFields(t)
 
 		// when
 		err := Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
@@ -68,28 +72,42 @@ func TestDeployWebhook(t *testing.T) {
 
 	t.Run("when updated", func(t *testing.T) {
 		// given
+		// First deploy the webhook via SSA (just like production) to establish managed fields.
+		fakeClient := test.NewFakeClientWithManagedFields(t)
+		require.NoError(t, Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc))
+
+		// Now simulate drift by modifying the stored objects.
+		// After each Update, fix the managed fields to match what a real API server
+		// would produce. The fake client doesn't update managed fields on regular
+		// Updates, but the SSA migration relies on them being accurate.
 		prioClass := &schedulingv1.PriorityClass{}
-		unmarshalObj(t, priorityClass(), prioClass)
+		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "sandbox-users-pods"}, prioClass))
 		prioClass.Labels = map[string]string{}
 		prioClass.Value = 10
+		require.NoError(t, fakeClient.Update(context.TODO(), prioClass))
+		simulateUpdateManagedFields(t, fakeClient, prioClass)
 
 		serviceObj := &v1.Service{}
-		unmarshalObj(t, service(test.MemberOperatorNs), serviceObj)
+		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "member-operator-webhook", Namespace: test.MemberOperatorNs}, serviceObj))
 		serviceObj.Spec.Ports[0].Port = 8080
 		serviceObj.Spec.Selector = nil
+		require.NoError(t, fakeClient.Update(context.TODO(), serviceObj))
+		simulateUpdateManagedFields(t, fakeClient, serviceObj)
 
 		deploymentObj := &appsv1.Deployment{}
-		unmarshalObj(t, deployment(test.MemberOperatorNs, saname, "quay.io/some/cool:unknown"), deploymentObj)
+		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "member-operator-webhook", Namespace: test.MemberOperatorNs}, deploymentObj))
 		deploymentObj.Spec.Template.Spec.Containers[0].Command = []string{"./some-dummy"}
 		deploymentObj.Spec.Template.Spec.Containers[0].VolumeDevices = nil
+		require.NoError(t, fakeClient.Update(context.TODO(), deploymentObj))
+		simulateUpdateManagedFields(t, fakeClient, deploymentObj)
 
 		mutWbhConf := &admv1.MutatingWebhookConfiguration{}
-		unmarshalObj(t, mutatingWebhookConfig(test.MemberOperatorNs, base64.StdEncoding.EncodeToString([]byte("cool-ca"))), mutWbhConf)
+		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "member-operator-webhook-" + test.MemberOperatorNs}, mutWbhConf))
 		mutWbhConf.Webhooks[0].Rules = nil
+		require.NoError(t, fakeClient.Update(context.TODO(), mutWbhConf))
+		simulateUpdateManagedFields(t, fakeClient, mutWbhConf)
 
-		fakeClient := test.NewFakeClient(t, prioClass, serviceObj, deploymentObj, mutWbhConf)
-
-		// when
+		// when - re-deploy should correct the drift
 		err := Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
 
 		// then
@@ -99,7 +117,7 @@ func TestDeployWebhook(t *testing.T) {
 
 	t.Run("when creation fails", func(t *testing.T) {
 		// given
-		fakeClient := test.NewFakeClient(t)
+		fakeClient := test.NewFakeClientWithManagedFields(t)
 		fakeClient.MockCreate = func(ctx context.Context, obj runtimeclient.Object, opts ...runtimeclient.CreateOption) error {
 			return fmt.Errorf("some error")
 		}
@@ -240,4 +258,37 @@ func clusterRole(namespace string) string {
 
 func clusterRoleBinding(namespace string) string {
 	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRoleBinding", "metadata": {"name": "webhook-rolebinding-%[1]s"},"roleRef": {"apiGroup": "rbac.authorization.k8s.io","kind": "ClusterRole","name": "webhook-role-%[1]s"},"subjects": [{"kind": "ServiceAccount","name": "member-operator-webhook-sa","namespace": "%[1]s"}]}`, namespace)
+}
+
+// simulateUpdateManagedFields works around the fake client not updating managed
+// fields on regular Update calls. It re-applies the current object state via SSA
+// from the default Kubernetes user agent (which produces accurate FieldsV1), then
+// changes the operation from Apply to Update so that SSA migration picks it up.
+func simulateUpdateManagedFields(t *testing.T, fakeClient *test.FakeClient, obj runtimeclient.Object) {
+	t.Helper()
+	defaultUA := strings.Split(rest.DefaultKubernetesUserAgent(), "/")[0]
+
+	// Re-read the object to get the current state
+	current := obj.DeepCopyObject().(runtimeclient.Object)
+	require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(obj), current))
+
+	// SSA Apply the current state from the default UA to get accurate managed fields.
+	// Set GVK since fake client Get doesn't populate TypeMeta in controller-runtime v0.22+.
+	gvk, err := apiutil.GVKForObject(current, fakeClient.Scheme())
+	require.NoError(t, err)
+	current.GetObjectKind().SetGroupVersionKind(gvk)
+	current.SetManagedFields(nil)
+	require.NoError(t, fakeClient.Client.Patch(context.TODO(), current, runtimeclient.Apply,
+		runtimeclient.FieldOwner(defaultUA), runtimeclient.ForceOwnership))
+
+	// Change the operation from Apply to Update so SSA migration recognizes it.
+	require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKeyFromObject(obj), current))
+	mf := current.GetManagedFields()
+	for i := range mf {
+		if mf[i].Manager == defaultUA && mf[i].Operation == metav1.ManagedFieldsOperationApply {
+			mf[i].Operation = metav1.ManagedFieldsOperationUpdate
+		}
+	}
+	current.SetManagedFields(mf)
+	require.NoError(t, fakeClient.Update(context.TODO(), current))
 }

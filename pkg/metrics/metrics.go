@@ -11,8 +11,12 @@ var log = logf.Log.WithName("toolchain_metrics")
 
 // gauge with labels
 var (
-	// MemberOperatorVersionGaugeVec reflects the current version of the member-operator (via the `version` label)
-	MemberOperatorVersionGaugeVec *prometheus.GaugeVec
+	// MemberOperatorVersionGaugeVec reflects the current short commit of the member-operator (via the `version` label)
+	MemberOperatorVersionGaugeVec *prometheus.GaugeVec // DEPRECATED: use MemberOperatorShortCommitGaugeVec instead
+	// MemberOperatorShortCommitGaugeVec reflects the current short git commit of the member-operator (via the `commit` label)
+	MemberOperatorShortCommitGaugeVec *prometheus.GaugeVec
+	// MemberOperatorCommitGaugeVec reflects the current full git commit of the member-operator (via the `commit` label)
+	MemberOperatorCommitGaugeVec *prometheus.GaugeVec
 )
 
 // collections
@@ -28,7 +32,13 @@ const metricsPrefix = "sandbox_"
 
 func initMetrics() {
 	log.Info("initializing custom metrics")
-	MemberOperatorVersionGaugeVec = newGaugeVec("member_operator_version", "Current version of the member operator", "commit")
+	MemberOperatorVersionGaugeVec = newGaugeVec("member_operator_version", "Current short commit of the member operator", "commit")
+	MemberOperatorShortCommitGaugeVec = newGaugeVec("member_operator_short_commit", "Current short commit of the member operator", "commit")
+	MemberOperatorCommitGaugeVec = newGaugeVec("member_operator_commit", "Current full commit of the member operator", "commit")
+	// expose the MemberOperatorVersionGaugeVec metric (static ie, 1 value per build/deployment)
+	MemberOperatorVersionGaugeVec.WithLabelValues(version.Commit[0:7]).Set(1)
+	MemberOperatorShortCommitGaugeVec.WithLabelValues(version.Commit[0:7]).SetToCurrentTime() // automatically set the value to the current time, so that the highest value is the current commit
+	MemberOperatorCommitGaugeVec.WithLabelValues(version.Commit).SetToCurrentTime()           // automatically set the value to the current time, so that the highest value is the current commit
 	log.Info("custom metrics initialized")
 }
 
@@ -53,9 +63,6 @@ func RegisterCustomMetrics() {
 	for _, v := range allGaugeVecs {
 		k8smetrics.Registry.MustRegister(v)
 	}
-
-	// expose the MemberOperatorVersionGaugeVec metric (static ie, 1 value per build/deployment)
-	MemberOperatorVersionGaugeVec.WithLabelValues(version.Commit[0:7]).Set(1)
 
 	log.Info("custom metrics registered")
 }

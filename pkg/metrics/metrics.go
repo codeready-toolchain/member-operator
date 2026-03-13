@@ -36,9 +36,9 @@ func initMetrics() {
 	MemberOperatorShortCommitGaugeVec = newGaugeVec("member_operator_short_commit", "Current short commit of the member operator", "commit")
 	MemberOperatorCommitGaugeVec = newGaugeVec("member_operator_commit", "Current full commit of the member operator", "commit")
 	// expose the MemberOperatorVersionGaugeVec metric (static ie, 1 value per build/deployment)
-	shortCommit := ""
-	if len(shortCommit) > 7 {
-		shortCommit = shortCommit[0:7]
+	shortCommit := version.Commit
+	if len(version.Commit) > 7 {
+		shortCommit = version.Commit[0:7]
 	}
 	MemberOperatorVersionGaugeVec.WithLabelValues(shortCommit).Set(1)
 	MemberOperatorShortCommitGaugeVec.WithLabelValues(shortCommit).SetToCurrentTime() // automatically set the value to the current time, so that the highest value is the current commit

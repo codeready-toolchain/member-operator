@@ -64,11 +64,14 @@ rules:
   - get
   - list
   - watch
+# The "delete" verb is required for the registration service to be able to
+# delete user namespaces. Check SANDBOX-1067 for more information.
 - apiGroups:
   - ""
   resources:
   - "namespaces"
   verbs:
+  - "delete"
   - "get"
   - "list"
   - "watch"

@@ -85,27 +85,27 @@ func TestDeployWebhook(t *testing.T) {
 		prioClass.Labels = map[string]string{}
 		prioClass.Value = 10
 		require.NoError(t, fakeClient.Update(context.TODO(), prioClass))
-		simulateUpdateManagedFields(t, fakeClient, prioClass)
+		replaceManagedFieldsWithUpdate(t, fakeClient, prioClass)
 
 		serviceObj := &v1.Service{}
 		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "member-operator-webhook", Namespace: test.MemberOperatorNs}, serviceObj))
 		serviceObj.Spec.Ports[0].Port = 8080
 		serviceObj.Spec.Selector = nil
 		require.NoError(t, fakeClient.Update(context.TODO(), serviceObj))
-		simulateUpdateManagedFields(t, fakeClient, serviceObj)
+		replaceManagedFieldsWithUpdate(t, fakeClient, serviceObj)
 
 		deploymentObj := &appsv1.Deployment{}
 		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "member-operator-webhook", Namespace: test.MemberOperatorNs}, deploymentObj))
 		deploymentObj.Spec.Template.Spec.Containers[0].Command = []string{"./some-dummy"}
 		deploymentObj.Spec.Template.Spec.Containers[0].VolumeDevices = nil
 		require.NoError(t, fakeClient.Update(context.TODO(), deploymentObj))
-		simulateUpdateManagedFields(t, fakeClient, deploymentObj)
+		replaceManagedFieldsWithUpdate(t, fakeClient, deploymentObj)
 
 		mutWbhConf := &admv1.MutatingWebhookConfiguration{}
 		require.NoError(t, fakeClient.Get(context.TODO(), runtimeclient.ObjectKey{Name: "member-operator-webhook-" + test.MemberOperatorNs}, mutWbhConf))
 		mutWbhConf.Webhooks[0].Rules = nil
 		require.NoError(t, fakeClient.Update(context.TODO(), mutWbhConf))
-		simulateUpdateManagedFields(t, fakeClient, mutWbhConf)
+		replaceManagedFieldsWithUpdate(t, fakeClient, mutWbhConf)
 
 		// when - re-deploy should correct the drift
 		err := Webhook(context.TODO(), fakeClient, s, test.MemberOperatorNs, imgLoc)
@@ -260,11 +260,15 @@ func clusterRoleBinding(namespace string) string {
 	return fmt.Sprintf(`{"apiVersion": "rbac.authorization.k8s.io/v1","kind": "ClusterRoleBinding", "metadata": {"name": "webhook-rolebinding-%[1]s"},"roleRef": {"apiGroup": "rbac.authorization.k8s.io","kind": "ClusterRole","name": "webhook-role-%[1]s"},"subjects": [{"kind": "ServiceAccount","name": "member-operator-webhook-sa","namespace": "%[1]s"}]}`, namespace)
 }
 
-// simulateUpdateManagedFields works around the fake client not updating managed
+// replaceManagedFieldsWithUpdate works around the fake client not updating managed
 // fields on regular Update calls. It re-applies the current object state via SSA
 // from the default Kubernetes user agent (which produces accurate FieldsV1), then
 // changes the operation from Apply to Update so that SSA migration picks it up.
-func simulateUpdateManagedFields(t *testing.T, fakeClient *test.FakeClient, obj runtimeclient.Object) {
+//
+// NOTE: This is not a universal solution to the problem. The true update call truly merges
+// the update managed fields with the previous state of it. This is not done here for the simplicity's
+// sake.
+func replaceManagedFieldsWithUpdate(t *testing.T, fakeClient *test.FakeClient, obj runtimeclient.Object) {
 	t.Helper()
 	defaultUA := strings.Split(rest.DefaultKubernetesUserAgent(), "/")[0]
 

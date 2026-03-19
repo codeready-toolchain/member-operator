@@ -1,33 +1,58 @@
-package metrics
+package metrics_test
 
 import (
 	"testing"
+	"time"
+
+	"github.com/codeready-toolchain/member-operator/pkg/metrics"
+	"github.com/codeready-toolchain/member-operator/version"
 
 	promtestutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
-	k8smetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-func TestInitGaugeVec(t *testing.T) {
-	// given
-	m := newGaugeVec("test_gauge_vec", "test gauge description", "cluster_name")
+func TestResetMetrics(t *testing.T) {
+	t.Run("when commit is longer than 7 characters", func(t *testing.T) {
+		// given
+		version.Commit = "short12-34567890"
+		metrics.Reset()
+		defer metrics.Reset()
+		now := time.Now()
 
-	// when
-	m.WithLabelValues("member-1").Set(1)
-	m.WithLabelValues("member-2").Set(2)
+		// when
+		metrics.Reset()
 
-	// then
-	assert.InDelta(t, float64(1), promtestutil.ToFloat64(m.WithLabelValues("member-1")), 0.01)
-	assert.InDelta(t, float64(2), promtestutil.ToFloat64(m.WithLabelValues("member-2")), 0.01)
-}
+		// then
+		assert.InDelta(t, float64(now.Unix()), promtestutil.ToFloat64(metrics.MemberOperatorShortCommitGaugeVec.WithLabelValues("short12")), float64(time.Minute.Seconds()))
+		assert.InDelta(t, float64(now.Unix()), promtestutil.ToFloat64(metrics.MemberOperatorCommitGaugeVec.WithLabelValues("short12-34567890")), float64(time.Minute.Seconds()))
+	})
+	t.Run("when commit is shorter than 7 characters", func(t *testing.T) {
+		// given
+		version.Commit = "short"
+		metrics.Reset()
+		defer metrics.Reset()
+		now := time.Now()
 
-func TestRegisterCustomMetrics(t *testing.T) {
-	// when
-	RegisterCustomMetrics()
+		// when
+		metrics.Reset()
 
-	// then
-	// verify all metrics were registered successfully
-	for _, m := range allGaugeVecs {
-		assert.True(t, k8smetrics.Registry.Unregister(m))
-	}
+		// then
+		assert.InDelta(t, float64(now.Unix()), promtestutil.ToFloat64(metrics.MemberOperatorShortCommitGaugeVec.WithLabelValues("short")), float64(time.Minute.Seconds()))
+		assert.InDelta(t, float64(now.Unix()), promtestutil.ToFloat64(metrics.MemberOperatorCommitGaugeVec.WithLabelValues("short")), float64(time.Minute.Seconds()))
+	})
+
+	t.Run("when commit is empty", func(t *testing.T) {
+		// given
+		version.Commit = ""
+		metrics.Reset()
+		defer metrics.Reset()
+		now := time.Now()
+
+		// when
+		metrics.Reset()
+
+		// then
+		assert.InDelta(t, float64(now.Unix()), promtestutil.ToFloat64(metrics.MemberOperatorShortCommitGaugeVec.WithLabelValues("")), float64(time.Minute.Seconds()))
+		assert.InDelta(t, float64(now.Unix()), promtestutil.ToFloat64(metrics.MemberOperatorCommitGaugeVec.WithLabelValues("")), float64(time.Minute.Seconds()))
+	})
 }

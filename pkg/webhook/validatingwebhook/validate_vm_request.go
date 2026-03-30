@@ -14,6 +14,7 @@ import (
 )
 
 const manualRunStrategy = "Manual"
+const maxTerminationGracePeriodSeconds = int64(180)
 
 type VMRequestValidator struct {
 	Client runtimeClient.Client
@@ -78,6 +79,12 @@ func (v VMRequestValidator) validate(body []byte) []byte {
 		}
 	}
 
+	// validate terminationGracePeriodSeconds for both CREATE and UPDATE
+	if err := validateTerminationGracePeriodSeconds(unstructuredRequestObj); err != nil {
+		log.Error(err, "terminationGracePeriodSeconds validation failed", "VirtualMachine", unstructuredRequestObj)
+		return denyAdmissionRequest(admReview, errors.Errorf("this is a Dev Sandbox enforced restriction. %s", err.Error()))
+	}
+
 	// the user is configuring a VM without the 'runStrategy' configured or with it configured to Manual, allowing the request.
 	return allowAdmissionRequest(admReview)
 }
@@ -126,6 +133,28 @@ func validateCloudInitUsername(unstructuredRequestObj *unstructured.Unstructured
 	}
 
 	return errors.New("no username configured in cloudInit volume")
+}
+
+// validateTerminationGracePeriodSeconds checks that the terminationGracePeriodSeconds is not greater than the max allowed value
+func validateTerminationGracePeriodSeconds(unstructuredRequestObj *unstructured.Unstructured) error {
+	val, found, err := unstructured.NestedFieldNoCopy(unstructuredRequestObj.Object, "spec", "template", "spec", "terminationGracePeriodSeconds")
+	if err != nil {
+		return errors.Wrap(err, "failed to get terminationGracePeriodSeconds from VirtualMachine")
+	}
+	if !found {
+		return nil
+	}
+
+	gracePeriod, ok := val.(int64)
+	if !ok {
+		return errors.New("terminationGracePeriodSeconds has an invalid type")
+	}
+
+	if gracePeriod > maxTerminationGracePeriodSeconds {
+		return errors.Errorf("terminationGracePeriodSeconds cannot be greater than %d", maxTerminationGracePeriodSeconds)
+	}
+
+	return nil
 }
 
 // hasUsername checks if the userData contains a 'user' field

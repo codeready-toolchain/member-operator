@@ -532,7 +532,7 @@ func TestValidateTerminationGracePeriodSeconds(t *testing.T) {
 		require.EqualError(t, err, "terminationGracePeriodSeconds cannot be greater than 180")
 	})
 
-	t.Run("NestedFieldNoCopy error - allowed", func(t *testing.T) {
+	t.Run("NestedFieldNoCopy error - denied", func(t *testing.T) {
 		// given - spec.template.spec is set to a string instead of a map, causing NestedFieldNoCopy to return an error
 		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
 		require.NoError(t, unstructured.SetNestedField(obj.Object, "not-a-map", "spec", "template", "spec"))
@@ -541,7 +541,7 @@ func TestValidateTerminationGracePeriodSeconds(t *testing.T) {
 		err := validateTerminationGracePeriodSeconds(obj)
 
 		// then
-		require.NoError(t, err)
+		require.EqualError(t, err, "failed to get terminationGracePeriodSeconds from VirtualMachine: .spec.template.spec.terminationGracePeriodSeconds accessor error: not-a-map is of the type string, expected map[string]interface{}")
 	})
 
 	t.Run("invalid type - denied", func(t *testing.T) {

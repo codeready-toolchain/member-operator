@@ -138,7 +138,10 @@ func validateCloudInitUsername(unstructuredRequestObj *unstructured.Unstructured
 // validateTerminationGracePeriodSeconds checks that the terminationGracePeriodSeconds is not greater than the max allowed value
 func validateTerminationGracePeriodSeconds(unstructuredRequestObj *unstructured.Unstructured) error {
 	val, found, err := unstructured.NestedFieldNoCopy(unstructuredRequestObj.Object, "spec", "template", "spec", "terminationGracePeriodSeconds")
-	if err != nil || !found {
+	if err != nil {
+		return errors.Wrap(err, "failed to get terminationGracePeriodSeconds from VirtualMachine")
+	}
+	if !found {
 		return nil
 	}
 

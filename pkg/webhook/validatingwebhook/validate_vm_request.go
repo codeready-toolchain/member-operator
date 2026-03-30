@@ -145,13 +145,8 @@ func validateTerminationGracePeriodSeconds(unstructuredRequestObj *unstructured.
 		return nil
 	}
 
-	var gracePeriod int64
-	switch v := val.(type) {
-	case int64:
-		gracePeriod = v
-	case float64:
-		gracePeriod = int64(v)
-	default:
+	gracePeriod, ok := val.(int64)
+	if !ok {
 		return errors.New("terminationGracePeriodSeconds has an invalid type")
 	}
 

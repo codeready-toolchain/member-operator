@@ -145,6 +145,65 @@ func TestHandleValidateVMAdmissionRequest(t *testing.T) {
 			test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
 		})
 	})
+
+	t.Run("terminationGracePeriodSeconds validation", func(t *testing.T) {
+
+		t.Run("sandbox user trying to CREATE a VM with terminationGracePeriodSeconds greater than 180 is denied", func(t *testing.T) {
+			// when
+			resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMAdmissionRequestJSONWithGracePeriod("Manual", true, 300))))
+
+			// then
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			defer func() {
+				require.NoError(t, resp.Body.Close())
+			}()
+			require.NoError(t, err)
+			test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. terminationGracePeriodSeconds cannot be greater than 180", "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		})
+
+		t.Run("sandbox user trying to UPDATE a VM with terminationGracePeriodSeconds greater than 180 is denied", func(t *testing.T) {
+			// when
+			resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"UPDATE", "johnsmith"}, createVMAdmissionRequestJSONWithGracePeriod("Manual", true, 300))))
+
+			// then
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			defer func() {
+				require.NoError(t, resp.Body.Close())
+			}()
+			require.NoError(t, err)
+			test.VerifyRequestBlocked(t, body, "this is a Dev Sandbox enforced restriction. terminationGracePeriodSeconds cannot be greater than 180", "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		})
+
+		t.Run("sandbox user trying to CREATE a VM with terminationGracePeriodSeconds equal to 180 is allowed", func(t *testing.T) {
+			// when
+			resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMAdmissionRequestJSONWithGracePeriod("Manual", true, 180))))
+
+			// then
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			defer func() {
+				require.NoError(t, resp.Body.Close())
+			}()
+			require.NoError(t, err)
+			test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		})
+
+		t.Run("sandbox user trying to CREATE a VM without terminationGracePeriodSeconds is allowed", func(t *testing.T) {
+			// when
+			resp, err := http.Post(ts.URL, "application/json", bytes.NewBuffer(newCreateVMAdmissionRequest(t, VMAdmReviewTmplParams{"CREATE", "johnsmith"}, createVMAdmissionRequestJSONWithGracePeriod("Manual", true, -1))))
+
+			// then
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			defer func() {
+				require.NoError(t, resp.Body.Close())
+			}()
+			require.NoError(t, err)
+			test.VerifyRequestAllowed(t, body, "b6ae2ab4-782b-11ee-b962-0242ac120002")
+		})
+	})
 }
 
 func newVMRequestValidator(t *testing.T) *VMRequestValidator {
@@ -182,6 +241,12 @@ type VMAdmReviewTmplParams struct {
 // runStrategy is the RunStrategy to set in the VM spec; if empty, the field is omitted.
 // withCloudInitUsername is a boolean flag to indicate if the username should be included in the cloudInit userData; if false, the user field is omitted.
 func createVMAdmissionRequestJSON(runStrategy string, withCloudInitUsername bool) string {
+	return createVMAdmissionRequestJSONWithGracePeriod(runStrategy, withCloudInitUsername, -1)
+}
+
+// createVMAdmissionRequestJSONWithGracePeriod is like createVMAdmissionRequestJSON but also allows setting
+// terminationGracePeriodSeconds in spec.template.spec. Pass -1 to omit the field.
+func createVMAdmissionRequestJSONWithGracePeriod(runStrategy string, withCloudInitUsername bool, terminationGracePeriodSeconds int) string {
 	runStrategyField := ""
 	if runStrategy != "" {
 		runStrategyField = fmt.Sprintf(`"runStrategy": "%s",`, runStrategy)
@@ -189,6 +254,10 @@ func createVMAdmissionRequestJSON(runStrategy string, withCloudInitUsername bool
 	userField := ""
 	if withCloudInitUsername {
 		userField = "user: cloud-user\\n"
+	}
+	terminationGracePeriodField := ""
+	if terminationGracePeriodSeconds >= 0 {
+		terminationGracePeriodField = fmt.Sprintf(`"terminationGracePeriodSeconds": %d,`, terminationGracePeriodSeconds)
 	}
 	return fmt.Sprintf(`{
     "kind": "AdmissionReview",
@@ -235,6 +304,7 @@ func createVMAdmissionRequestJSON(runStrategy string, withCloudInitUsername bool
                 %s
                 "template": {
                     "spec": {
+                        %s
                         "volumes": [
                             {
                                 "name": "cloudinitdisk",
@@ -256,7 +326,7 @@ func createVMAdmissionRequestJSON(runStrategy string, withCloudInitUsername bool
             "fieldValidation": "Ignore"
         }
     }
-}`, runStrategyField, userField)
+}`, runStrategyField, terminationGracePeriodField, userField)
 }
 
 func TestValidateCloudInitUsername(t *testing.T) {
@@ -398,6 +468,92 @@ func TestValidateCloudInitUsername(t *testing.T) {
 
 		// then
 		require.EqualError(t, err, "no username configured in cloudInit volume")
+	})
+}
+
+func TestValidateTerminationGracePeriodSeconds(t *testing.T) {
+
+	t.Run("not set - allowed", func(t *testing.T) {
+		// given
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("set to 180 - allowed", func(t *testing.T) {
+		// given
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		require.NoError(t, unstructured.SetNestedField(obj.Object, int64(180), "spec", "template", "spec", "terminationGracePeriodSeconds"))
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("set to 0 - allowed", func(t *testing.T) {
+		// given
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		require.NoError(t, unstructured.SetNestedField(obj.Object, int64(0), "spec", "template", "spec", "terminationGracePeriodSeconds"))
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.NoError(t, err)
+	})
+
+	t.Run("set to 181 - denied", func(t *testing.T) {
+		// given
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		require.NoError(t, unstructured.SetNestedField(obj.Object, int64(181), "spec", "template", "spec", "terminationGracePeriodSeconds"))
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.EqualError(t, err, "terminationGracePeriodSeconds cannot be greater than 180")
+	})
+
+	t.Run("set to 3600 - denied", func(t *testing.T) {
+		// given
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		require.NoError(t, unstructured.SetNestedField(obj.Object, int64(3600), "spec", "template", "spec", "terminationGracePeriodSeconds"))
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.EqualError(t, err, "terminationGracePeriodSeconds cannot be greater than 180")
+	})
+
+	t.Run("NestedFieldNoCopy error - denied", func(t *testing.T) {
+		// given - spec.template.spec is set to a string instead of a map, causing NestedFieldNoCopy to return an error
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		require.NoError(t, unstructured.SetNestedField(obj.Object, "not-a-map", "spec", "template", "spec"))
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.EqualError(t, err, "failed to get terminationGracePeriodSeconds from VirtualMachine: .spec.template.spec.terminationGracePeriodSeconds accessor error: not-a-map is of the type string, expected map[string]interface{}")
+	})
+
+	t.Run("invalid type - denied", func(t *testing.T) {
+		// given
+		obj := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		require.NoError(t, unstructured.SetNestedField(obj.Object, "not-a-number", "spec", "template", "spec", "terminationGracePeriodSeconds"))
+
+		// when
+		err := validateTerminationGracePeriodSeconds(obj)
+
+		// then
+		require.EqualError(t, err, "terminationGracePeriodSeconds has an invalid type")
 	})
 }
 

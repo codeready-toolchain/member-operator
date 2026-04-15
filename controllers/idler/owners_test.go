@@ -450,6 +450,46 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("first owner idled but remaining owners being deleted and pod exceeds 110% timeout triggers pod deletion", func(t *testing.T) {
+		for kind, createTestConfig := range testConfigs {
+			t.Run(kind, func(t *testing.T) {
+				// given
+				ownerIdler, fakeClients, testConfig, _, pod := setup(t, createTestConfig, true)
+				pod.Status.StartTime = &metav1.Time{Time: time.Now().Add(-time.Duration(float64(3600)*1.15) * time.Second)}
+				allOwners, err := ownerIdler.ownerFetcher.GetOwners(context.TODO(), pod)
+				require.NoError(t, err)
+
+				// mark all owners except the first as being deleted
+				for i := 1; i < len(allOwners); i++ {
+					owner := allOwners[i].Object
+					now := metav1.Now()
+					owner.SetDeletionTimestamp(&now)
+					util.AddFinalizer(owner, "dummy-finalizer")
+					_, err := fakeClients.DynamicClient.
+						Resource(*allOwners[i].GVR).
+						Namespace(owner.GetNamespace()).
+						Update(context.TODO(), owner, metav1.UpdateOptions{})
+					require.NoError(t, err)
+				}
+
+				// when
+				appType, appName, err := ownerIdler.scaleOwnerToZero(context.TODO(), pod)
+
+				// then
+				require.NoError(t, err)
+				if len(allOwners) > 1 {
+					// For multi-owner chains: the first owner was processed but all remaining are being deleted
+					require.Empty(t, appType)
+					require.Empty(t, appName)
+				} else {
+					// For single-owner chains: the one owner was processed successfully, so normal return.
+					require.Equal(t, kind, appType)
+					require.Equal(t, testConfig.expectedAppName, appName)
+				}
+			})
+		}
+	})
 }
 
 func assertOtherOwners(t *testing.T, ownerIdler *ownerIdler, pod *corev1.Pod, secondOwnerIdled bool) {

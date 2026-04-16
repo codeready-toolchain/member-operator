@@ -52,10 +52,13 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
 	}
 
+	timeoutSeconds := getTimeout(i.idler, *pod)
 	var topOwnerKind, topOwnerName string
+	attempted := false
 	var errToReturn error
 	for _, ownerWithGVR := range owners {
 		if util.IsBeingDeleted(ownerWithGVR.Object) {
+			attempted = false
 			continue
 		}
 		owner := ownerWithGVR.Object
@@ -78,6 +81,7 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 			continue // Skip unknown owner types
 		}
 
+		attempted = true
 		// Store the first processed owner's info and preserve its error
 		if topOwnerKind == "" {
 			topOwnerKind = ownerKind
@@ -90,11 +94,16 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 		}
 
 		// If no error occurred and the pod doesn't run for longer than 105% of the idler timeout, return immediately after the first owner was idled
-		timeoutSeconds := getTimeout(i.idler, *pod)
 		if err == nil && !time.Now().After(pod.Status.StartTime.Add(time.Duration(float64(timeoutSeconds)*1.05)*time.Second)) {
 			return topOwnerKind, topOwnerName, nil
 		}
 		logger.Info("Scaling the first known owner down either failed or the pod has been running for longer than 105% of the idler timeout. Scaling the next known owner.")
+	}
+	// attempted helps us to catch the case when idling of the top-level owner (eg. VM) didn't have any effect
+	// and all other known owners are already being deleted - in this case, and when it's running for more than 110%
+	// of the idler timeout, we should return empty string to trigger deletion of the pod
+	if !attempted && time.Now().After(pod.Status.StartTime.Add(time.Duration(float64(timeoutSeconds)*1.10)*time.Second)) {
+		return "", "", errToReturn
 	}
 
 	// Return the first processed owner's info (or empty if none were processed), and the list of errors (if any happened)

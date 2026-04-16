@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/go-logr/logr"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/toolchain-common/pkg/owners"
@@ -51,6 +54,8 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 	if err != nil {
 		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
 	}
+
+	logOwnershipChain(logger, owners, pod)
 
 	timeoutSeconds := getTimeout(i.idler, *pod)
 	var topOwnerKind, topOwnerName string
@@ -277,4 +282,22 @@ func (i *ownerIdler) idleServingRuntime(ctx context.Context, objectWithGVR *owne
 	}
 
 	return errors.Join(deletionErrors...)
+}
+
+func logOwnershipChain(logger logr.Logger, ownerChain []*owners.ObjectWithGVR, pod *corev1.Pod) {
+	if len(ownerChain) == 0 {
+		logger.Info("No ownership chain, it's a standalone pod")
+		return
+	}
+	chain := make([]string, 0, len(ownerChain)+1)
+	for _, o := range ownerChain {
+		gvk := o.Object.GetObjectKind().GroupVersionKind()
+		if gvk.Group != "" {
+			chain = append(chain, fmt.Sprintf("%s/%s.%s", o.Object.GetName(), gvk.Kind, gvk.Group))
+		} else {
+			chain = append(chain, fmt.Sprintf("%s/%s", o.Object.GetName(), gvk.Kind))
+		}
+	}
+	chain = append(chain, fmt.Sprintf("%s/Pod", pod.Name))
+	logger.Info("Ownership chain", "chain", strings.Join(chain, " -> "))
 }

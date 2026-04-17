@@ -1,0 +1,12 @@
+inheritance: true
+knowledge_base:
+  linked_repositories:
+    - repository: 'codeready-toolchain/toolchain-common'
+      instructions: >
+        toolchain-common contains shared controllers, utilities, and libraries used by member-operator.
+
+        When reviewing member-operator changes:
+        - Check if member-operator is using deprecated or outdated patterns from toolchain-common when newer/better utilities exist.
+        - Verify behavioral assumptions — if member-operator expects specific return values or side effects from toolchain-common functions, check if that behavior is actually implemented.
+        - If member-operator duplicates logic that already exists in toolchain-common (pkg/cluster, pkg/condition, pkg/configuration, pkg/status), suggest using the shared implementation instead.
+        - Flag if member-operator is making assumptions about toolchain-common's internal state or behavior that isn't documented or guaranteed.

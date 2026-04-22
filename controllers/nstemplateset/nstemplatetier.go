@@ -14,7 +14,6 @@ import (
 	"github.com/codeready-toolchain/toolchain-common/pkg/configuration"
 	"github.com/codeready-toolchain/toolchain-common/pkg/template"
 	templatev1 "github.com/openshift/api/template/v1"
-	"github.com/pkg/errors"
 	errs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,7 +79,7 @@ func getToolchainTierTemplate(ctx context.Context, getHostClient host.ClientGett
 		Name:      templateRef,
 	}, tierTemplate)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to retrieve the TierTemplate '%s' from 'Host' cluster", templateRef)
+		return nil, fmt.Errorf("unable to retrieve the TierTemplate '%s' from 'Host' cluster: %w", templateRef, err)
 	}
 	return tierTemplate, nil
 }

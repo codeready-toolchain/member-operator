@@ -2,6 +2,7 @@ package validatingwebhook
 
 import (
 	"context"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -49,7 +50,7 @@ func (v SSPRequestValidator) validate(ctx context.Context, body []byte) []byte {
 		// sanitize the body
 		escapedBody := html.EscapeString(string(body))
 		log.Error(err, "unable to deserialize the admission review object", "body", escapedBody)
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
+		return denyAdmissionRequest(admReview, fmt.Errorf("unable to deserialize the admission review object - body: %v: %w", escapedBody, err))
 	}
 	//check if the requesting user is a sandbox user
 	requestingUser := &userv1.User{}

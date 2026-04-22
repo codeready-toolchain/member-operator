@@ -66,13 +66,13 @@ func vmMutator(admReview admissionv1.AdmissionReview) *admissionv1.AdmissionResp
 	vmPatchItems, cloudInitConfigErr = ensureVolumeConfig(unstructuredRequestObj, vmPatchItems)
 	if cloudInitConfigErr != nil {
 		vmLogger.Error(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(cloudInitConfigErr, "failed to update volume configuration for VirtualMachine"))
+		return responseWithError(admReview.Request.UID, fmt.Errorf("failed to update volume configuration for VirtualMachine: %w", cloudInitConfigErr))
 	}
 
 	patchContent, err := json.Marshal(vmPatchItems)
 	if err != nil {
 		vmLogger.Error(err, "failed to marshal patch items for VirtualMachine", "AdmissionReview", admReview, "Patch-Items", vmPatchItems)
-		return responseWithError(admReview.Request.UID, errors.Wrapf(err, "failed to marshal patch items for VirtualMachine"))
+		return responseWithError(admReview.Request.UID, fmt.Errorf("failed to marshal patch items for VirtualMachine: %w", err))
 	}
 	resp.Patch = patchContent
 
@@ -84,7 +84,7 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 	volumes, volumesFound, err := unstructured.NestedSlice(unstructuredRequestObj.Object, "spec", "template", "spec", "volumes")
 	if err != nil {
 		vmLogger.Error(err, "failed to decode VirtualMachine resource", "VirtualMachine", unstructuredRequestObj)
-		return patchItems, errors.Wrapf(err, "failed to decode VirtualMachine")
+		return patchItems, fmt.Errorf("failed to decode VirtualMachine: %w", err)
 	}
 
 	if !volumesFound {
@@ -120,7 +120,7 @@ func ensureVolumeConfig(unstructuredRequestObj *unstructured.Unstructured, patch
 					// userData is defined, append the ssh key
 					updatedUserData, err := addSSHKeysToUserData(userData.(string), sshKeys)
 					if err != nil {
-						return patchItems, errors.Wrapf(err, "failed to add ssh key to userData")
+						return patchItems, fmt.Errorf("failed to add ssh key to userData: %w", err)
 					}
 					cloudInitConfig["userData"] = updatedUserData
 				} else {

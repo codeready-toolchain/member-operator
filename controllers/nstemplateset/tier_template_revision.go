@@ -6,7 +6,6 @@ import (
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/host"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -24,7 +23,7 @@ func getTierTemplateRevision(ctx context.Context, getHostClient host.ClientGette
 		Name:      templateRef,
 	}, tierTemplateRevision)
 	if err != nil {
-		return nil, errors.Wrapf(err, "unable to retrieve the TierTemplateRevision '%s' from 'Host' cluster", templateRef)
+		return nil, fmt.Errorf("unable to retrieve the TierTemplateRevision '%s' from 'Host' cluster: %w", templateRef, err)
 	}
 	return tierTemplateRevision, nil
 }

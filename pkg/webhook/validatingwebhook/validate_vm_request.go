@@ -1,6 +1,7 @@
 package validatingwebhook
 
 import (
+	"fmt"
 	"html"
 	"io"
 	"net/http"
@@ -49,7 +50,7 @@ func (v VMRequestValidator) validate(body []byte) []byte {
 		// sanitize the body
 		escapedBody := html.EscapeString(string(body))
 		log.Error(err, "unable to deserialize the admission review object", "body", escapedBody)
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
+		return denyAdmissionRequest(admReview, fmt.Errorf("unable to deserialize the admission review object - body: %v: %w", escapedBody, err))
 	}
 
 	unstructuredRequestObj := &unstructured.Unstructured{}

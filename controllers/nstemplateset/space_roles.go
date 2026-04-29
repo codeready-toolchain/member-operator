@@ -3,6 +3,7 @@ package nstemplateset
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
@@ -110,7 +111,7 @@ func (r *spaceRolesManager) getSpaceRolesObjects(ctx context.Context, ns *corev1
 				Username:  username,
 			})
 			if err != nil {
-				return nil, errors.Wrapf(err, "failed to process space roles template '%s' for the user '%s' in namespace '%s'", spaceRole.TemplateRef, username, ns.Name)
+				return nil, fmt.Errorf("failed to process space roles template '%s' for the user '%s' in namespace '%s': %w", spaceRole.TemplateRef, username, ns.Name, err)
 			}
 			spaceRoleObjects = append(spaceRoleObjects, objs...)
 		}

@@ -12,7 +12,6 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 
 	userv1 "github.com/openshift/api/user/v1"
-	"github.com/pkg/errors"
 	admissionv1 "k8s.io/api/admission/v1"
 	rbac "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -51,7 +50,7 @@ func (v RoleBindingRequestValidator) validate(ctx context.Context, body []byte) 
 		//sanitize the body
 		escapedBody := html.EscapeString(string(body))
 		log.Error(err, "unable to deserialize the admission review object", "body", escapedBody)
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to deserialize the admission review object - body: %v", escapedBody))
+		return denyAdmissionRequest(admReview, fmt.Errorf("unable to deserialize the admission review object - body: %v: %w", escapedBody, err))
 	}
 	// let's unmarshal the object to be sure that it's a rolebinding
 	rb := rbac.RoleBinding{}
@@ -60,7 +59,7 @@ func (v RoleBindingRequestValidator) validate(ctx context.Context, body []byte) 
 			err = fmt.Errorf("request Object is not a rolebinding")
 		}
 		log.Error(err, "unable unmarshal rolebinding json object", "AdmissionReview", admReview)
-		return denyAdmissionRequest(admReview, errors.Wrapf(err, "unable to unmarshal object or object is not a rolebinding - raw request object: %v", admReview.Request.Object.Raw))
+		return denyAdmissionRequest(admReview, fmt.Errorf("unable to unmarshal object or object is not a rolebinding - raw request object: %v: %w", admReview.Request.Object.Raw, err))
 	}
 	requestingUsername := admReview.Request.UserInfo.Username
 	// allow admission request if the user is a system user
@@ -84,7 +83,7 @@ func (v RoleBindingRequestValidator) validate(ctx context.Context, body []byte) 
 			//check if the requesting user is a sandbox user
 			if requestingUser.GetLabels()[toolchainv1alpha1.ProviderLabelKey] == toolchainv1alpha1.ProviderLabelValue {
 				log.Info("sandbox user is trying to create a rolebinding giving wider access", "AdmissionReview", admReview)
-				return denyAdmissionRequest(admReview, errors.Wrapf(fmt.Errorf("please create a rolebinding for a specific user or service account to avoid this error"), "this is a Dev Sandbox enforced restriction. you are trying to create a rolebinding giving access to a larger audience, i.e : %v and requesting user: %+v", sub.Name, requestingUser.Labels))
+				return denyAdmissionRequest(admReview, fmt.Errorf("this is a Dev Sandbox enforced restriction. you are trying to create a rolebinding giving access to a larger audience, i.e : %v and requesting user: %+v: %w", sub.Name, requestingUser.Labels, fmt.Errorf("please create a rolebinding for a specific user or service account to avoid this error")))
 			}
 			//At this point, it is clear the user isn't a sandbox user, allow request
 			break

@@ -378,6 +378,26 @@ func (a *IdleablePayloadAssertion) AAPRunning(aap *unstructured.Unstructured) *I
 	return a
 }
 
+var clawGVR = schema.GroupVersionResource{Group: "claw.sandbox.redhat.com", Version: "v1alpha1", Resource: "claws"}
+
+func (a *IdleablePayloadAssertion) ClawIdled(claw *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actualClaw := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(clawGVR, claw.GetNamespace(), claw.GetName(), actualClaw)
+	idled, _, err := unstructured.NestedBool(actualClaw.UnstructuredContent(), "spec", "idle")
+	require.NoError(a.t, err)
+	assert.True(a.t, idled)
+	return a
+}
+
+func (a *IdleablePayloadAssertion) ClawRunning(claw *unstructured.Unstructured) *IdleablePayloadAssertion {
+	actualClaw := &unstructured.Unstructured{}
+	a.getResourceFromDynamicClient(clawGVR, claw.GetNamespace(), claw.GetName(), actualClaw)
+	idled, _, err := unstructured.NestedBool(actualClaw.UnstructuredContent(), "spec", "idle")
+	require.NoError(a.t, err)
+	assert.False(a.t, idled)
+	return a
+}
+
 var inferenceServiceGVR = schema.GroupVersionResource{Group: "serving.kserve.io", Version: "v1beta1", Resource: "inferenceservices"}
 
 func (a *IdleablePayloadAssertion) InferenceServiceDoesNotExist(inferenceService *unstructured.Unstructured) *IdleablePayloadAssertion {

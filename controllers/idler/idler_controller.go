@@ -83,6 +83,8 @@ type Reconciler struct {
 // There are other AAP resource kinds which are involved in the Pod -> ... -> AnsibleAutomationPlatform ownership chain. We need to be able to get/list them.
 //+kubebuilder:rbac:groups=aap.ansible.com,resources=*,verbs=get;list
 
+//+kubebuilder:rbac:groups=claw.sandbox.redhat.com,resources=claws,verbs=get;list;patch
+
 // Reconcile reads that state of the cluster for an Idler object and makes changes based on the state read
 // and what is in the Idler.Spec
 // Note:

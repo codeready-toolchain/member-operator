@@ -80,6 +80,8 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
 		case "AnsibleAutomationPlatform":
 			err = i.idleAAP(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
+		case "Claw":
+			err = i.idleClaw(ctx, ownerWithGVR)
 		case "ServingRuntime":
 			err = i.idleServingRuntime(ctx, ownerWithGVR) // Idle by deleting old InferenceService objects.
 		default:
@@ -175,6 +177,33 @@ func (i *ownerIdler) idleAAP(ctx context.Context, objectWithGVR *owners.ObjectWi
 	}
 
 	logger.Info("AAP idled", "name", aapName)
+	return nil
+}
+
+// idleClaw idles a Claw instance if not already idled
+func (i *ownerIdler) idleClaw(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
+	clawName := objectWithGVR.Object.GetName()
+	logger := log.FromContext(ctx).WithValues("name", clawName)
+	idled, _, err := unstructured.NestedBool(objectWithGVR.Object.UnstructuredContent(), "spec", "idle")
+	if err != nil {
+		logger.Error(err, "Failed to parse Claw CR to get the spec.idle field")
+	}
+	if idled {
+		logger.Info("Claw CR is already idled")
+		return nil
+	}
+	logger.Info("Idling Claw")
+
+	patch := []byte(`{"spec":{"idle":true}}`)
+	_, err = i.dynamicClient.
+		Resource(*objectWithGVR.GVR).
+		Namespace(objectWithGVR.Object.GetNamespace()).
+		Patch(ctx, clawName, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil {
+		return err
+	}
+
+	logger.Info("Claw idled", "name", clawName)
 	return nil
 }
 

@@ -232,7 +232,10 @@ func TestEnsureIdling(t *testing.T) {
 				AAPRunning(noise.aap).
 				InferenceServiceDoesNotExist(podsRunningForTooLong.inferenceService).
 				InferenceServiceExists(podsTooEarlyToKill.inferenceService).
-				InferenceServiceExists(noise.inferenceService)
+				InferenceServiceExists(noise.inferenceService).
+				ClawIdled(podsRunningForTooLong.claw).
+				ClawRunning(podsTooEarlyToKill.claw).
+				ClawRunning(noise.claw)
 
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				HasConditions(memberoperatortest.Running(), memberoperatortest.IdlerNotificationCreated())
@@ -333,7 +336,8 @@ func TestEnsureIdling(t *testing.T) {
 				StatefulSetScaledDown(toKill.statefulSet).
 				VMStopped(toKill.vmStopCallCounter).
 				AAPIdled(toKill.aap).
-				InferenceServiceDoesNotExist(toKill.inferenceService)
+				InferenceServiceDoesNotExist(toKill.inferenceService).
+				ClawIdled(toKill.claw)
 
 			memberoperatortest.AssertThatIdler(t, idler.Name, fakeClients).
 				ContainsCondition(memberoperatortest.FailedToIdle(strings.Split(err.Error(), ": ")[1]))
@@ -550,7 +554,8 @@ func TestEnsureIdlingFailed(t *testing.T) {
 			StatefulSetScaledDown(toKill.statefulSet).
 			VMStopped(toKill.vmStopCallCounter).
 			AAPIdled(toKill.aap).
-			InferenceServiceDoesNotExist(toKill.inferenceService)
+			InferenceServiceDoesNotExist(toKill.inferenceService).
+			ClawIdled(toKill.claw)
 	})
 }
 
@@ -884,6 +889,7 @@ type payloads struct {
 	aap                       *unstructured.Unstructured
 	servingRuntime            *unstructured.Unstructured
 	inferenceService          *unstructured.Unstructured
+	claw                      *unstructured.Unstructured
 }
 
 func (p payloads) getFirstControlledPod(ownerName string) *corev1.Pod {
@@ -1089,6 +1095,13 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 	inferenceService.SetCreationTimestamp(*sTime)
 	createObjectWithDynamicClient(t, clients.DynamicClient, inferenceService)
 
+	// Claw
+	clawObject := newClaw(fmt.Sprintf("%s%s-claw", namePrefix, namespace), namespace)
+	createObjectWithDynamicClient(t, clients.DynamicClient, clawObject)
+	_, clawRs := createDeployment(t, clients, namespace, namePrefix, "-claw-deployment", clawObject)
+	replicaSetsWithDeployment = append(replicaSetsWithDeployment, clawRs)
+	controlledPods = createPods(t, clients.AllNamespacesClient, clawRs, sTime, controlledPods, noRestart())
+
 	// Pods with unknown owner. They are subject of direct management by the Idler.
 	// It doesn't have to be Idler. We just need any object as the owner of the pods
 	// which is not a supported owner such as Deployment or ReplicaSet.
@@ -1144,6 +1157,7 @@ func preparePayloads(t *testing.T, clients *memberoperatortest.FakeClientSet, na
 		aap:                       aapObject,
 		servingRuntime:            servingRuntimeObject,
 		inferenceService:          inferenceService,
+		claw:                      clawObject,
 	}
 }
 
@@ -1152,6 +1166,16 @@ func newAAP(t *testing.T, idled bool, name, namespace string) *unstructured.Unst
 	aap := &unstructured.Unstructured{}
 	require.NoError(t, aap.UnmarshalJSON([]byte(formatted)))
 	return aap
+}
+
+func newClaw(name, namespace string) *unstructured.Unstructured {
+	claw := &unstructured.Unstructured{}
+	claw.SetAPIVersion("claw.sandbox.redhat.com/v1alpha1")
+	claw.SetKind("Claw")
+	claw.SetName(name)
+	claw.SetNamespace(namespace)
+	unstructured.SetNestedField(claw.Object, false, "spec", "idle") //nolint:errcheck
+	return claw
 }
 
 func newServingRuntime(name, namespace string) *unstructured.Unstructured {

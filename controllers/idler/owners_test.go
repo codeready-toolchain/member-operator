@@ -225,6 +225,19 @@ var testConfigs = map[string]createTestConfigFunc{
 			},
 		}
 	},
+	"Claw": func(plds payloads) payloadTestConfig {
+		return payloadTestConfig{
+			// Claw -> Deployment -> ReplicaSet -> Pod
+			podOwnerName:    fmt.Sprintf("%s-deployment-replicaset", plds.claw.GetName()),
+			expectedAppName: plds.claw.GetName(),
+			ownerScaledUp: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ClawRunning(plds.claw)
+			},
+			ownerScaledDown: func(assertion *test.IdleablePayloadAssertion) {
+				assertion.ClawIdled(plds.claw)
+			},
+		}
+	},
 }
 
 var customListKinds = map[schema.GroupVersionResource]string{
@@ -594,6 +607,12 @@ func allResourcesList(t *testing.T) []*metav1.APIResourceList {
 			GroupVersion: "serving.kserve.io/v1beta1",
 			APIResources: []metav1.APIResource{
 				{Name: "inferenceservices", Namespaced: true, Kind: "InferenceService"},
+			},
+		},
+		&metav1.APIResourceList{
+			GroupVersion: "claw.sandbox.redhat.com/v1alpha1",
+			APIResources: []metav1.APIResource{
+				{Name: "claws", Namespaced: true, Kind: "Claw"},
 			},
 		},
 	)

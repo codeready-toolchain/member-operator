@@ -23,6 +23,25 @@ $(OUT_DIR)/operator:
 		-o $(OUT_DIR)/bin/member-operator-webhook \
 		cmd/webhook/main.go
 
+.PHONY: build-debug
+## Build the operator's image with Delve on it so that it is ready to attach a
+## debugger to it.
+build-debug:
+	@echo "building member-operator in ${GO_PACKAGE_PATH}"
+	$(Q)go version
+	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
+		go build ${V_FLAG} \
+		-gcflags "all=-N -l" \
+		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
+		-o $(OUT_DIR)/bin/member-operator \
+		./cmd/main.go
+	$(Q)CGO_ENABLED=0 GOARCH=${goarch} GOOS=linux \
+		go build ${V_FLAG} \
+		-gcflags "all=-N -l" \
+		-ldflags "-X ${GO_PACKAGE_PATH}/version.Commit=${GIT_COMMIT_ID} -X ${GO_PACKAGE_PATH}/version.BuildTime=${BUILD_TIME}" \
+		-o $(OUT_DIR)/bin/member-operator-webhook \
+		cmd/webhook/main.go
+
 .PHONY: vendor
 vendor:
 	$(Q)go mod vendor

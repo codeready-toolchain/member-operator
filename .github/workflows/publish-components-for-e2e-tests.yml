@@ -28,6 +28,7 @@ jobs:
         ref: ${{github.event.pull_request.head.ref}}
         repository: ${{github.event.pull_request.head.repo.full_name}}
         fetch-depth: 0
+        allow-unsafe-pr-checkout: true
 
     # If the workflow was triggered based on comment, then we need to get the information about the PR
     # Is executed only for comment events

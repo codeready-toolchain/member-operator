@@ -101,7 +101,7 @@ func TestOverallStatusCondition(t *testing.T) {
 
 	t.Run("All components ready", func(t *testing.T) {
 		// given
-		prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+		prodConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("prod"), testconfig.MemberStatus())
 		githubSecret := test.CreateSecret("github", test.MemberOperatorNs, map[string][]byte{
 			"accessToken": []byte("abcd1234"),
 		})
@@ -516,7 +516,7 @@ func TestOverallStatusCondition(t *testing.T) {
 			t.Run("when environment is not prod", func(t *testing.T) {
 				// given
 				// we set dev as environment
-				devConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("dev"), testconfig.MemberStatus().GitHubSecretRef("github").GitHubSecretAccessTokenKey("accessToken"))
+				devConfig := commonconfig.NewMemberOperatorConfigWithReset(t, testconfig.MemberEnvironment("dev"), testconfig.MemberStatus())
 				reconciler, req, fakeClient := prepareReconcile(t, requestName, getHostClusterFunc, allNamespacesCl, append(nodeAndMetrics, memberOperatorDeployment, memberStatus, devConfig, githubSecret)...)
 
 				// when

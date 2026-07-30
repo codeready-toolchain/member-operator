@@ -173,7 +173,6 @@ func (r *Reconciler) memberOperatorHandleStatus(ctx context.Context, memberStatu
 		Version:        version.Version,
 		Revision:       version.Commit,
 		BuildTimestamp: version.BuildTime,
-		RevisionCheck:  memberStatus.Status.MemberOperator.RevisionCheck, // let's copy the last revision check object if any
 	}
 
 	// Look up status of member deployment

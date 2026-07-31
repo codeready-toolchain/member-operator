@@ -130,4 +130,4 @@ go 1.24.4
 
 toolchain go1.24.13
 
-replace github.com/codeready-toolchain/toolchain-common => github.com/alexeykazakov/toolchain-common v0.0.0-20260731003042-167942898495
+replace github.com/codeready-toolchain/toolchain-common => ../toolchain-common

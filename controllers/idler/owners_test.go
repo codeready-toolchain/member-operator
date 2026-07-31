@@ -574,10 +574,7 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 		})
 	}
 
-	for gvk, gvr := range map[schema.GroupVersionKind]schema.GroupVersionResource{
-		schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithKind("Integration"):          schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithResource("integrations"),
-		schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
-	} {
+	for gvk, gvr := range commonidler.SupportedScaleResources {
 		noAAPResources = append(noAAPResources, &metav1.APIResourceList{
 			GroupVersion: gvr.GroupVersion().String(),
 			APIResources: []metav1.APIResource{

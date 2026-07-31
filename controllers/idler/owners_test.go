@@ -517,16 +517,20 @@ func assertOtherOwners(t *testing.T, ownerIdler *ownerIdler, pod *corev1.Pod, se
 			// then set the start index for all other owners not idled at 2
 			notIdledOwnersStartIndex = 2
 		}
-		// check that all other owners are not idled
-		for i := notIdledOwnersStartIndex; i < len(ownerChain)-1; i++ {
+		// check that all other owners are not idled (including the immediate owner when it has replicas)
+		for i := notIdledOwnersStartIndex; i < len(ownerChain); i++ {
 			assertReplicas(t, ownerChain[i].Object, 3)
 		}
 	}
 }
 
 func assertReplicas(t *testing.T, object *unstructured.Unstructured, expReplicas int64) {
-	replicas, _, err := unstructured.NestedInt64(object.UnstructuredContent(), "spec", "replicas")
+	replicas, found, err := unstructured.NestedInt64(object.UnstructuredContent(), "spec", "replicas")
 	require.NoError(t, err)
+	if !found {
+		// Skip owners without a replicas field (e.g. VirtualMachineInstance).
+		return
+	}
 	require.Equal(t, expReplicas, replicas)
 }
 

@@ -3,41 +3,29 @@ package idler
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
-
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
-	"github.com/codeready-toolchain/toolchain-common/pkg/owners"
+	commonidler "github.com/codeready-toolchain/toolchain-common/pkg/idler"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/scale"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type ownerIdler struct {
-	idler         *toolchainv1alpha1.Idler
-	ownerFetcher  *owners.OwnerFetcher
-	dynamicClient dynamic.Interface
-	scalesClient  scale.ScalesGetter
-	restClient    rest.Interface
+	idler   *toolchainv1alpha1.Idler
+	actions *commonidler.Idler
 }
 
 func newOwnerIdler(idler *toolchainv1alpha1.Idler, reconciler *Reconciler) *ownerIdler {
 	return &ownerIdler{
-		idler:         idler,
-		ownerFetcher:  owners.NewOwnerFetcher(reconciler.DiscoveryClient, reconciler.DynamicClient),
-		dynamicClient: reconciler.DynamicClient,
-		scalesClient:  reconciler.ScalesClient,
-		restClient:    reconciler.RestClient,
+		idler: idler,
+		actions: commonidler.New(
+			reconciler.DiscoveryClient,
+			reconciler.DynamicClient,
+			reconciler.ScalesClient,
+			reconciler.RestClient,
+		),
 	}
 }
 
@@ -50,14 +38,15 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 	logger := log.FromContext(ctx)
 	logger.Info("Scaling owner to zero")
 
-	owners, err := i.ownerFetcher.GetOwners(ctx, pod)
+	owners, err := i.actions.OwnerFetcher().GetOwners(ctx, pod)
 	if err != nil {
 		logger.Error(err, "failed to find all owners, try to idle the workload with information that is available")
 	}
 
-	logOwnershipChain(logger, owners, pod)
+	commonidler.LogOwnershipChain(logger, owners, pod)
 
 	timeoutSeconds := getTimeout(i.idler, *pod)
+	opts := commonidler.Options{TimeoutSeconds: i.idler.Spec.TimeoutSeconds}
 	var topOwnerKind, topOwnerName string
 	attempted := false
 	var errToReturn error
@@ -69,22 +58,8 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 		owner := ownerWithGVR.Object
 		ownerKind := owner.GetObjectKind().GroupVersionKind().Kind
 
-		switch ownerKind {
-		case "Deployment", "ReplicaSet", "Integration", "KameletBinding", "StatefulSet", "ReplicationController":
-			err = i.scaleToZero(ctx, ownerWithGVR)
-		case "DaemonSet", "Job", "DataVolume", "PersistentVolumeClaim":
-			err = i.deleteResource(ctx, ownerWithGVR) // Nothing to scale down. Delete instead.
-		case "DeploymentConfig":
-			err = i.scaleDeploymentConfigToZero(ctx, ownerWithGVR)
-		case "VirtualMachine":
-			err = i.stopVirtualMachine(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
-		case "AnsibleAutomationPlatform":
-			err = i.idleAAP(ctx, ownerWithGVR) // Nothing to scale down. Stop instead.
-		case "Claw":
-			err = i.idleClaw(ctx, ownerWithGVR)
-		case "ServingRuntime":
-			err = i.idleServingRuntime(ctx, ownerWithGVR) // Idle by deleting old InferenceService objects.
-		default:
+		err = i.actions.IdleOwner(ctx, ownerWithGVR, opts)
+		if errors.Is(err, commonidler.ErrUnsupportedKind) {
 			continue // Skip unknown owner types
 		}
 
@@ -115,218 +90,4 @@ func (i *ownerIdler) scaleOwnerToZero(ctx context.Context, pod *corev1.Pod) (str
 
 	// Return the first processed owner's info (or empty if none were processed), and the list of errors (if any happened)
 	return topOwnerKind, topOwnerName, errToReturn
-}
-
-var supportedScaleResources = map[schema.GroupVersionKind]schema.GroupVersionResource{
-	schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithKind("Integration"):          schema.GroupVersion{Group: "camel.apache.org", Version: "v1"}.WithResource("integrations"),
-	schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithKind("KameletBinding"): schema.GroupVersion{Group: "camel.apache.org", Version: "v1alpha1"}.WithResource("kameletbindings"),
-}
-
-func (i *ownerIdler) scaleToZero(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	object := objectWithGVR.Object
-	logger := log.FromContext(ctx).WithValues("kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
-	logger.Info("Scaling controller owner to zero")
-
-	patch := []byte(`{"spec":{"replicas":0}}`)
-	for _, groupVersionResource := range supportedScaleResources {
-		if groupVersionResource.String() == objectWithGVR.GVR.String() {
-			logger.Info("Scaling controller owner to zero using the scale subresource")
-			_, err := i.scalesClient.Scales(object.GetNamespace()).Patch(ctx, *objectWithGVR.GVR, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
-			if err != nil {
-				return err
-			}
-			logger.Info("Controller owner scaled to zero using the scale subresource")
-			return nil
-		}
-	}
-
-	_, err := i.dynamicClient.
-		Resource(*objectWithGVR.GVR).
-		Namespace(object.GetNamespace()).
-		Patch(ctx, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		return err
-	}
-
-	logger.Info("Controller owner scaled to zero")
-	return nil
-}
-
-// idleAAP idles AAP instance if not already idled
-func (i *ownerIdler) idleAAP(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	aapName := objectWithGVR.Object.GetName()
-	logger := log.FromContext(ctx).WithValues("name", aapName)
-	idled, _, err := unstructured.NestedBool(objectWithGVR.Object.UnstructuredContent(), "spec", "idle_aap")
-	if err != nil {
-		logger.Error(err, "Failed to parse AAP CR to get the spec.idle_aap field")
-	}
-	if idled {
-		logger.Info("AAP CR is already idled")
-		return nil
-	}
-	logger.Info("Idling AAP")
-
-	// Patch the aap resource by setting spec.idle_aap to true in order to idle it
-	patch := []byte(`{"spec":{"idle_aap":true}}`)
-	_, err = i.dynamicClient.
-		Resource(*objectWithGVR.GVR).
-		Namespace(objectWithGVR.Object.GetNamespace()).
-		Patch(ctx, aapName, types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		return err
-	}
-
-	logger.Info("AAP idled", "name", aapName)
-	return nil
-}
-
-// idleClaw idles a Claw instance if not already idled
-func (i *ownerIdler) idleClaw(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	clawName := objectWithGVR.Object.GetName()
-	logger := log.FromContext(ctx).WithValues("name", clawName)
-	idled, _, err := unstructured.NestedBool(objectWithGVR.Object.UnstructuredContent(), "spec", "idle")
-	if err != nil {
-		logger.Error(err, "Failed to parse Claw CR to get the spec.idle field")
-	}
-	if idled {
-		logger.Info("Claw CR is already idled")
-		return nil
-	}
-	logger.Info("Idling Claw")
-
-	patch := []byte(`{"spec":{"idle":true}}`)
-	_, err = i.dynamicClient.
-		Resource(*objectWithGVR.GVR).
-		Namespace(objectWithGVR.Object.GetNamespace()).
-		Patch(ctx, clawName, types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		return err
-	}
-
-	logger.Info("Claw idled", "name", clawName)
-	return nil
-}
-
-func (i *ownerIdler) deleteResource(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	logger := log.FromContext(ctx)
-	object := objectWithGVR.Object
-	logger.Info("Deleting controller owner",
-		"kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
-	// see https://github.com/kubernetes/kubernetes/issues/20902#issuecomment-321484735
-	// also, this may be needed for the e2e tests if the call to `client.Delete` comes too quickly after creating the job,
-	// which may leave the job's pod running but orphan, hence causing a test failure (and making the test flaky)
-	propagationPolicy := metav1.DeletePropagationBackground
-
-	err := i.dynamicClient.
-		Resource(*objectWithGVR.GVR).
-		Namespace(object.GetNamespace()).
-		Delete(ctx, object.GetName(), metav1.DeleteOptions{PropagationPolicy: &propagationPolicy})
-	if err != nil {
-		return err
-	}
-
-	logger.Info("Controller owner deleted",
-		"kind", object.GetObjectKind().GroupVersionKind().Kind, "name", object.GetName())
-	return nil
-}
-
-func (i *ownerIdler) scaleDeploymentConfigToZero(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	logger := log.FromContext(ctx)
-	object := objectWithGVR.Object
-	logger.Info("Scaling DeploymentConfig to zero", "name", object.GetName())
-	patch := []byte(`{"spec":{"replicas":0,"paused":false}}`)
-	_, err := i.dynamicClient.
-		Resource(*objectWithGVR.GVR).
-		Namespace(object.GetNamespace()).
-		Patch(ctx, object.GetName(), types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		return err
-	}
-	log.FromContext(ctx).Info("DeploymentConfig scaled to zero", "name", object.GetName())
-	return nil
-}
-
-func (i *ownerIdler) stopVirtualMachine(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	logger := log.FromContext(ctx)
-	object := objectWithGVR.Object
-	logger.Info("Stopping VirtualMachine", "name", object.GetName())
-	err := i.restClient.Put().
-		AbsPath(fmt.Sprintf(vmSubresourceURLFmt, "v1")).
-		Namespace(object.GetNamespace()).
-		Resource("virtualmachines").
-		Name(object.GetName()).
-		SubResource("stop").
-		Do(ctx).
-		Error()
-	if err != nil {
-		return err
-	}
-
-	logger.Info("VirtualMachine stopped", "name", object.GetName())
-	return nil
-}
-
-// idleServingRuntime idles ServingRuntime by deleting InferenceService objects that exist for longer than the timeout
-func (i *ownerIdler) idleServingRuntime(ctx context.Context, objectWithGVR *owners.ObjectWithGVR) error {
-	logger := log.FromContext(ctx)
-	namespace := objectWithGVR.Object.GetNamespace()
-
-	logger.Info("Idling ServingRuntime by deleting old InferenceService objects", "name", objectWithGVR.Object.GetName())
-
-	// Construct GVR for InferenceService objects
-	inferenceServiceGVR := schema.GroupVersionResource{
-		Group:    "serving.kserve.io",
-		Version:  "v1beta1",
-		Resource: "inferenceservices",
-	}
-
-	// List all InferenceService objects in the namespace
-	inferenceServiceList, err := i.dynamicClient.
-		Resource(inferenceServiceGVR).
-		Namespace(namespace).
-		List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list InferenceService objects: %w", err)
-	}
-
-	cutoffTime := time.Now().Add(-time.Duration(i.idler.Spec.TimeoutSeconds) * time.Second)
-	var deletionErrors []error
-
-	// Delete InferenceService objects that are older than the timeout
-	for _, inferenceService := range inferenceServiceList.Items {
-		creationTime := inferenceService.GetCreationTimestamp().Time
-		if creationTime.Before(cutoffTime) {
-			logger.Info("Deleting old InferenceService", "name", inferenceService.GetName(), "age", time.Since(creationTime))
-
-			err := i.dynamicClient.
-				Resource(inferenceServiceGVR).
-				Namespace(namespace).
-				Delete(ctx, inferenceService.GetName(), metav1.DeleteOptions{})
-			if err != nil {
-				deletionErrors = append(deletionErrors, err)
-			} else {
-				logger.Info("InferenceService deleted", "name", inferenceService.GetName())
-			}
-		}
-	}
-
-	return errors.Join(deletionErrors...)
-}
-
-func logOwnershipChain(logger logr.Logger, ownerChain []*owners.ObjectWithGVR, pod *corev1.Pod) {
-	if len(ownerChain) == 0 {
-		logger.Info("No ownership chain, it's a standalone pod")
-		return
-	}
-	chain := make([]string, 0, len(ownerChain)+1)
-	for _, o := range ownerChain {
-		gvk := o.Object.GetObjectKind().GroupVersionKind()
-		if gvk.Group != "" {
-			chain = append(chain, fmt.Sprintf("%s/%s.%s", o.Object.GetName(), gvk.Kind, gvk.Group))
-		} else {
-			chain = append(chain, fmt.Sprintf("%s/%s", o.Object.GetName(), gvk.Kind))
-		}
-	}
-	chain = append(chain, fmt.Sprintf("%s/Pod", pod.Name))
-	logger.Info("Ownership chain", "chain", strings.Join(chain, " -> "))
 }

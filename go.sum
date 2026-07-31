@@ -6,8 +6,8 @@ github.com/Masterminds/semver/v3 v3.2.0 h1:3MEsd0SM6jqZojhjLWWeBY+Kcjy9i6MQAeY7Y
 github.com/Masterminds/semver/v3 v3.2.0/go.mod h1:qvl/7zhW3nngYb5+80sSMF+FG2BjYrf8m9wsX0PNOMQ=
 github.com/Masterminds/sprig/v3 v3.2.3 h1:eL2fZNezLomi0uOLqjQoN6BfsDD+fyLtgbJMAj9n6YA=
 github.com/Masterminds/sprig/v3 v3.2.3/go.mod h1:rXcFaZ2zZbLRJv/xSysmlgIM1u11eBaRMhvYXJNkGuM=
-github.com/alexeykazakov/toolchain-common v0.0.0-20260731182019-aaeb0c240c4b h1:3QeNigiNZ2Q9yki6nRsnf3pRr1MaYhEZM6lO2TrULoE=
-github.com/alexeykazakov/toolchain-common v0.0.0-20260731182019-aaeb0c240c4b/go.mod h1:j4xJuhNtqEuZW7VR6BB5V6h/oDJ0dIwSh5iijUSwwdM=
+github.com/alexeykazakov/toolchain-common v0.0.0-20260731184422-7532b5bb5367 h1:DHODWed8SauBSpkKVweSpACUbRLJxpkn09JqZujwqH4=
+github.com/alexeykazakov/toolchain-common v0.0.0-20260731184422-7532b5bb5367/go.mod h1:j4xJuhNtqEuZW7VR6BB5V6h/oDJ0dIwSh5iijUSwwdM=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=

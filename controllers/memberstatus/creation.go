@@ -20,6 +20,6 @@ func CreateOrUpdateResources(ctx context.Context, client client.Client, namespac
 		},
 		Spec: toolchainv1alpha1.MemberStatusSpec{},
 	}
-	cl := commonclient.NewSSAApplyClient(client, constants.MemberOperatorFieldManager)
+	cl := commonclient.NewServerSideApplyClient(client, constants.MemberOperatorFieldManager)
 	return cl.ApplyObject(ctx, memberStatus)
 }

@@ -22,6 +22,8 @@ require (
 	sigs.k8s.io/kustomize/kustomize/v5 v5.6.0
 )
 
+replace github.com/codeready-toolchain/toolchain-common => github.com/xcoulon/toolchain-common v0.0.0-20260803142641-2756b24ebace
+
 require (
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/google/uuid v1.6.0

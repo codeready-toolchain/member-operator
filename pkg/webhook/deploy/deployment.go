@@ -44,7 +44,7 @@ func Webhook(ctx context.Context, cl runtimeclient.Client, s *runtime.Scheme, na
 		return errs.Wrap(err, "cannot deploy webhook template")
 	}
 
-	applyClient := applycl.NewSSAApplyClient(cl, constants.MemberOperatorFieldManager)
+	applyClient := applycl.NewServerSideApplyClient(cl, constants.MemberOperatorFieldManager)
 	// create all objects that are within the template, and update only when the object has changed.
 	// if the object was either created or updated, then return and wait for another reconcile
 	if err := applyClient.Apply(ctx, objs); err != nil {

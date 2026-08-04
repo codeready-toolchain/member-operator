@@ -32,7 +32,7 @@ func Deploy(ctx context.Context, cl client.Client, s *runtime.Scheme, namespace 
 	}
 	logger := log.FromContext(ctx)
 
-	applyClient := applycl.NewSSAApplyClient(cl, constants.MemberOperatorFieldManager)
+	applyClient := applycl.NewServerSideApplyClient(cl, constants.MemberOperatorFieldManager)
 	// create all objects that are within the template, and update only when the object has changed.
 	for _, obj := range objs {
 		if err := applyClient.ApplyObject(ctx, obj); err != nil {

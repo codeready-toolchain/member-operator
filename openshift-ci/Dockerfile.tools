@@ -72,9 +72,10 @@ RUN curl -Lo ${GOLANG_VERSION}.linux-amd64.tar.gz https://dl.google.com/go/${GOL
 # Increase shared memory for browsers (recommended for Playwright)
 RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
 
-RUN mkdir -p ${GOPATH}/src/${GO_PACKAGE_PATH}/ ${GOCACHE} \
-    && chown -R 1001:0 ${GOPATH} ${GOCACHE} \
-    && chmod -R g+rwX ${GOPATH} ${GOCACHE}
+# ci-operator clonerefs writes under /go (src_root), independent of GOPATH.
+RUN mkdir -p /go "${GOPATH}/src/${GO_PACKAGE_PATH}/" "${GOCACHE}" \
+    && chown -R 1001:0 /go "${GOPATH}" "${GOCACHE}" \
+    && chmod -R g+rwX /go "${GOPATH}" "${GOCACHE}"
 
 USER 1001
 

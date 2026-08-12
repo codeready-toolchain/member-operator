@@ -6,7 +6,7 @@ toolchain go1.26.5
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20260807111559-e29da2fc346c
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20260807125728-33faed3f17f9
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20260812013954-e456d8ed8411
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
 	// using latest commit from 'github.com/openshift/api branch release-4.20'
@@ -123,5 +123,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
-
-replace github.com/codeready-toolchain/toolchain-common => github.com/alexeykazakov/toolchain-common v0.0.0-20260811000413-f4a126315c19

@@ -12,7 +12,7 @@ import (
 	toolchainv1alpha1 "github.com/codeready-toolchain/api/api/v1alpha1"
 	"github.com/codeready-toolchain/member-operator/pkg/apis"
 	"github.com/codeready-toolchain/member-operator/test"
-	"github.com/codeready-toolchain/toolchain-common/pkg/owners"
+	commonidler "github.com/codeready-toolchain/toolchain-common/pkg/idler"
 	testcommon "github.com/codeready-toolchain/toolchain-common/pkg/test"
 	"github.com/redhat-cop/operator-utils/pkg/util"
 	"github.com/stretchr/testify/require"
@@ -267,11 +267,8 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			},
 		}
 		ownerIdler := &ownerIdler{
-			idler:         idler,
-			ownerFetcher:  owners.NewOwnerFetcher(fakeDiscovery, dynamicClient),
-			dynamicClient: dynamicClient,
-			scalesClient:  scalesClient,
-			restClient:    restClient,
+			idler:   idler,
+			actions: commonidler.New(fakeDiscovery, dynamicClient, scalesClient, restClient),
 		}
 
 		// Calculate start time based on whether timeout should be exceeded
@@ -423,19 +420,19 @@ func TestAppNameTypeForControllers(t *testing.T) {
 			t.Run(kind, func(t *testing.T) {
 				//given
 				ownerIdler, fakeClients, _, _, pod := setup(t, createTestConfig, false)
-				owners, err := ownerIdler.ownerFetcher.GetOwners(context.TODO(), pod)
+				ownerChain, err := ownerIdler.actions.OwnerFetcher().GetOwners(context.TODO(), pod)
 				if !apierrors.IsNotFound(err) {
 					require.NoError(t, err)
 				}
 				// mark the first owner as already being deleted
-				if len(owners) != 0 {
-					topOwner := owners[0].Object
+				if len(ownerChain) != 0 {
+					topOwner := ownerChain[0].Object
 					now := metav1.Now()
 					topOwner.SetDeletionTimestamp(&now)
 					// we need to set dummy finalizer so it stays in the fake client and doesn't get deleted
 					util.AddFinalizer(topOwner, "dummy-finalizer")
 					_, err := fakeClients.DynamicClient.
-						Resource(*owners[0].GVR).
+						Resource(*ownerChain[0].GVR).
 						Namespace(topOwner.GetNamespace()).
 						Update(context.TODO(), topOwner, metav1.UpdateOptions{})
 					require.NoError(t, err)
@@ -450,9 +447,9 @@ func TestAppNameTypeForControllers(t *testing.T) {
 				// the second known owner (we don't support VirtualMachineInstance so we skip this one)
 				// in all other cases, there is nothing to idle, so it will return empty string
 				// which would mean that the controller should delete the pod
-				if len(owners) > 1 && kind != "VirtualMachine" {
-					require.Equal(t, owners[1].Object.GetKind(), appType)
-					require.Equal(t, owners[1].Object.GetName(), appName)
+				if len(ownerChain) > 1 && kind != "VirtualMachine" {
+					require.Equal(t, ownerChain[1].Object.GetKind(), appType)
+					require.Equal(t, ownerChain[1].Object.GetName(), appName)
 				} else {
 					require.Empty(t, appType)
 					require.Empty(t, appName)
@@ -470,7 +467,7 @@ func TestAppNameTypeForControllers(t *testing.T) {
 				// given
 				ownerIdler, fakeClients, testConfig, _, pod := setup(t, createTestConfig, true)
 				pod.Status.StartTime = &metav1.Time{Time: time.Now().Add(-time.Duration(float64(3600)*1.15) * time.Second)}
-				allOwners, err := ownerIdler.ownerFetcher.GetOwners(context.TODO(), pod)
+				allOwners, err := ownerIdler.actions.OwnerFetcher().GetOwners(context.TODO(), pod)
 				require.NoError(t, err)
 
 				// mark all owners except the first as being deleted
@@ -506,30 +503,34 @@ func TestAppNameTypeForControllers(t *testing.T) {
 }
 
 func assertOtherOwners(t *testing.T, ownerIdler *ownerIdler, pod *corev1.Pod, secondOwnerIdled bool) {
-	owners, err := ownerIdler.ownerFetcher.GetOwners(context.TODO(), pod)
+	ownerChain, err := ownerIdler.actions.OwnerFetcher().GetOwners(context.TODO(), pod)
 	if !apierrors.IsNotFound(err) {
 		require.NoError(t, err)
 	}
 	// if there are more owners than one
-	if len(owners) > 1 {
+	if len(ownerChain) > 1 {
 		// by default, all other owners shouldn't be idled
 		notIdledOwnersStartIndex := 1
 		if secondOwnerIdled {
 			// if the second owner is supposed to be idled
-			assertReplicas(t, owners[1].Object, 0)
+			assertReplicas(t, ownerChain[1].Object, 0)
 			// then set the start index for all other owners not idled at 2
 			notIdledOwnersStartIndex = 2
 		}
-		// check that all other owners are not idled
-		for i := notIdledOwnersStartIndex; i < len(owners)-1; i++ {
-			assertReplicas(t, owners[i].Object, 3)
+		// check that all other owners are not idled (including the immediate owner when it has replicas)
+		for i := notIdledOwnersStartIndex; i < len(ownerChain); i++ {
+			assertReplicas(t, ownerChain[i].Object, 3)
 		}
 	}
 }
 
 func assertReplicas(t *testing.T, object *unstructured.Unstructured, expReplicas int64) {
-	replicas, _, err := unstructured.NestedInt64(object.UnstructuredContent(), "spec", "replicas")
+	replicas, found, err := unstructured.NestedInt64(object.UnstructuredContent(), "spec", "replicas")
 	require.NoError(t, err)
+	if !found {
+		// Skip owners without a replicas field (e.g. VirtualMachineInstance).
+		return
+	}
 	require.Equal(t, expReplicas, replicas)
 }
 
@@ -577,7 +578,7 @@ func noAAPResourceList(t *testing.T) []*metav1.APIResourceList {
 		})
 	}
 
-	for gvk, gvr := range supportedScaleResources {
+	for gvk, gvr := range commonidler.SupportedScaleResources {
 		noAAPResources = append(noAAPResources, &metav1.APIResourceList{
 			GroupVersion: gvr.GroupVersion().String(),
 			APIResources: []metav1.APIResource{

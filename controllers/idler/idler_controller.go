@@ -38,7 +38,6 @@ const (
 	restartThreshold = 50
 	// Keep the AAP pod restart threshold lower than the default so the AAP idler kicks in before the main idler.
 	aapRestartThreshold = restartThreshold - 1
-	vmSubresourceURLFmt = "/apis/subresources.kubevirt.io/%s"
 )
 
 // SetupWithManager sets up the controller with the Manager.

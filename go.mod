@@ -2,7 +2,7 @@ module github.com/codeready-toolchain/member-operator
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.10
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20260807111559-e29da2fc346c

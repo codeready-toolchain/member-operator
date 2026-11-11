@@ -1,42 +1,37 @@
 module github.com/codeready-toolchain/member-operator
 
-go 1.26.0
-
-toolchain go1.26.5
+go 1.27.4
 
 require (
 	github.com/codeready-toolchain/api v0.0.0-20260807111559-e29da2fc346c
 	github.com/codeready-toolchain/toolchain-common v0.0.0-20260812013954-e456d8ed8411
+	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
+	github.com/google/uuid v1.6.0
 	// using latest commit from 'github.com/openshift/api branch release-4.20'
 	github.com/openshift/api v0.0.0-20251202204302-1cb53e34ca33
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/client_golang v1.22.0
 	github.com/redhat-cop/operator-utils v1.3.8
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	gopkg.in/h2non/gock.v1 v1.0.14
 	k8s.io/api v0.33.4
+	k8s.io/apiextensions-apiserver v0.33.4
+	k8s.io/apimachinery v0.33.4
 	k8s.io/client-go v0.33.4
+	k8s.io/code-generator v0.33.4
+	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.130.1
+	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
+	k8s.io/kubectl v0.33.4
 	k8s.io/metrics v0.33.4
+	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/controller-tools v0.18.0
 	sigs.k8s.io/kustomize/kustomize/v5 v5.6.0
-)
-
-require (
-	github.com/go-bindata/go-bindata/v3 v3.1.3
-	github.com/google/uuid v1.6.0
-	github.com/prometheus/client_golang v1.22.0
-	k8s.io/apiextensions-apiserver v0.33.4
-	k8s.io/apimachinery v0.33.4
-	k8s.io/code-generator v0.33.4
-	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
-	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
-	k8s.io/kubectl v0.33.4
-	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/yaml v1.4.0
 )
 

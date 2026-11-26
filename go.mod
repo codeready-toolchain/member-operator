@@ -2,11 +2,11 @@ module github.com/codeready-toolchain/member-operator
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.27.4
 
 require (
-	github.com/codeready-toolchain/api v0.0.0-20260807111559-e29da2fc346c
-	github.com/codeready-toolchain/toolchain-common v0.0.0-20260812013954-e456d8ed8411
+	github.com/codeready-toolchain/api v0.0.0-20261124082612-04e0e4655cee
+	github.com/codeready-toolchain/toolchain-common v0.0.0-20261124090041-0bbe82c4969f
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
 	// using latest commit from 'github.com/openshift/api branch release-4.20'
@@ -96,17 +96,17 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f // indirect
-	golang.org/x/mod v0.37.0 // indirect
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/term v0.46.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
-	golang.org/x/tools v0.47.0 // indirect
+	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/tools/go/expect v0.1.0-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
